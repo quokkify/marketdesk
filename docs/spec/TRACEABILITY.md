@@ -28,7 +28,7 @@ Status vocabulary:
 | §15 | Responsive behavior | Partial | Desktop collapse and mobile drawer behavior in `Sidebar.tsx`/`TopBar.tsx` | Route/navigation tests; deployed required-width evidence pending | Shell delivery: #171; per-screen gaps remain |
 | §16 | Accessibility | Partial | Shell controls have native buttons, accessible names and tooltip context in `TopBar.tsx`/`Sidebar.tsx` | Typecheck and shell contract tests; full focus/contrast run pending | Shell delivery: #171; per-screen gaps remain |
 | §17 | Dark theme | Partial | `src/frontend/theme`, `src/frontend/state/slices/uiSlice.ts`; global toggle retained in contextual shell | Live dark-theme audit 2026-07-16; persistence code review | Shell delivery: #171; appearance gap: #146 |
-| §18 | Delivery and assets | Partial | `docs/design`, `docs/design/screenshots` | `npm run verify:spec`; curated screenshots present | Open gaps: #171, #174 |
+| §18 | Delivery and assets | Partial | [`docs/design`](https://github.com/quokkify/marketdesk/tree/main/docs/design), [curated screenshots](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk) | `npm run verify:spec`; curated screenshots hosted in the organization profile | Open gaps: #171, #174 |
 
 ## Cross-cutting product decisions
 
@@ -43,9 +43,9 @@ Status vocabulary:
 | Screen | Canonical visual state | Route/code | Minimum verification before closing |
 | --- | --- | --- | --- |
 | Dashboard | Companion Dashboard | `/`, `DashboardPage.tsx` | populated and empty dashboard; real quick actions; light/dark/narrow evidence |
-| Products | `screenshots/products.png` | `/products`, `ProductsPage.tsx` | server search/filter/sort, tabs/counts, list/card, selection/bulk, pagination |
+| Products | [curated screenshot](https://raw.githubusercontent.com/quokkify/.github/main/assets/projects/marketdesk/products.png) | `/products`, `ProductsPage.tsx` | server search/filter/sort, tabs/counts, list/card, selection/bulk, pagination |
 | New product | Companion six-step wizard | `/products?newProduct=1`, `ProductWizardForm.tsx` | upload/reorder/cover, field validation, AI review path, marketplace readiness, final review/publish |
-| Analytics | `screenshots/analytics.png` | `/analytics`, `AnalyticsPage.tsx` | canonical KPI mapping, date/marketplace controls, charts, export, empty/error states |
+| Analytics | [curated screenshot](https://raw.githubusercontent.com/quokkify/.github/main/assets/projects/marketdesk/analytics.png) | `/analytics`, `AnalyticsPage.tsx` | canonical KPI mapping, date/marketplace controls, charts, export, empty/error states |
 | Hermes AI | Companion Hermes AI | `/hermes`, `HermesActivityPage.tsx` | truthful metrics, configure path, typed event icons, approve/dismiss/view populated flow |
 | Marketplaces | Companion Marketplaces | `/marketplaces`, `MarketplacesPage.tsx` | honest OLX + roadmap grid, summary, brand assets, connect/sync/error states |
 | Settings | Companion Settings sections | `/settings`, `SettingsPage.tsx` | every section backed by a real contract or approved disabled deviation; save/cancel/reload |
