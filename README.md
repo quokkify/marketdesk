@@ -2,6 +2,10 @@
 
 A workspace-scoped platform for managing products, listings, marketplace state, analytics, and Hermes-assisted decisions. OLX is the only validated live marketplace integration today; other channels remain explicit roadmap surfaces.
 
+Project status: [prototype](.github/project-status.yml) · active implementation · not ready for production · current release `marketdesk-v0.19.2`.
+
+Documentation showcase copies are hosted in [quokkify/.github](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk); runtime-required brand assets remain under `public/`. To update the project scaffold, run `copier update --trust` and review the generated diff before committing.
+
 ## Overview
 
 MarketDesk is an integrated product and listing management system designed to simplify multi-marketplace operations. It provides:
@@ -98,10 +102,10 @@ Static design artifacts live under `docs/design/` and are excluded from Docker b
 
 - `docs/design/MarketDesk PRD.dc.html` — product requirements document
 - `docs/design/MarketDesk.dc.html` — high-fidelity navigable design prototype
-- `docs/design/screenshots/` — curated screenshots for visual reference:
-  - [Products](docs/design/screenshots/products.png)
-  - [Analytics](docs/design/screenshots/analytics.png)
-  - [Dark theme](docs/design/screenshots/dark.png)
+- `quokkify/.github` — curated screenshots for visual reference:
+  - [Products](https://raw.githubusercontent.com/quokkify/.github/main/assets/projects/marketdesk/products.png)
+  - [Analytics](https://raw.githubusercontent.com/quokkify/.github/main/assets/projects/marketdesk/analytics.png)
+  - [Dark theme](https://raw.githubusercontent.com/quokkify/.github/main/assets/projects/marketdesk/dark.png)
 - `docs/design/_ds/`, `doc-page.js`, `support.js` — local runtime/design-system assets required by the HTML docs
 
 Read [`docs/spec/README.md`](docs/spec/README.md) for the authoritative source hierarchy. The original PRD remains the product behavior and acceptance contract; [`ARCHITECTURE.md`](ARCHITECTURE.md) is the canonical architecture, while [`ARCHITECTURE_AMENDMENTS.md`](ARCHITECTURE_AMENDMENTS.md) is only its historical review/decision record. [`docs/spec/PRODUCT.md`](docs/spec/PRODUCT.md) records current maturity and approved deviations, and [`docs/spec/TRACEABILITY.md`](docs/spec/TRACEABILITY.md) maps requirements and cross-cutting decisions to implementation evidence and active issues.

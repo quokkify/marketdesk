@@ -1,9 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "github>ylazakovich/renovate-config//presets/npm/default",
-    "github>ylazakovich/renovate-config//presets/docker/default",
-    "github>ylazakovich/renovate-config//presets/github-actions/default"
+    "github>quokkify/renovate-presets//presets/npm/default",
+    "github>quokkify/renovate-presets//presets/docker/default",
+    "github>quokkify/renovate-presets//presets/github-actions/default"
   ],
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",

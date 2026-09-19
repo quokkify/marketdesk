@@ -1,0 +1,13 @@
+schema_version: 1
+project: marketdesk
+maturity: prototype
+implementation: active
+production_readiness: not-ready
+supported_runtime:
+  application: Node.js 22+ / TypeScript / React
+  services: PostgreSQL 18 / Redis 8 / Docker Compose
+current_release: marketdesk-v0.19.2
+known_gaps:
+  - Marketplace surfaces beyond the guarded OLX integration remain unfinished roadmap work.
+  - Production deployment is environment-specific and is not certified by this repository.
+next_milestone: Finish the remaining marketplace surfaces and complete a production-readiness review.
