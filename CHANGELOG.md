@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.3](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.19.2...marketdesk-v0.19.3) (2026-09-21)
+
+
+### 🧹 Chores
+
+* **deps:** lock file maintenance ([#282](https://github.com/quokkify/marketdesk/issues/282)) ([9778018](https://github.com/quokkify/marketdesk/commit/97780185893451b9a673b204ab56c2eb6d9d7303))
+* standardize project metadata and showcase links ([5746274](https://github.com/quokkify/marketdesk/commit/574627482ebba81c218540acec4c08eae8464b99))
+
 ## [0.19.2](https://github.com/ylazakovich/marketdesk/compare/marketdesk-v0.19.1...marketdesk-v0.19.2) (2026-07-23)
 
 
