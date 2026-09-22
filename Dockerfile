@@ -1,7 +1,7 @@
 ARG MARKETDESK_RELEASE_TAG=""
 
 # Stage 1: Dependencies and build (needs devDependencies for tsc + vite).
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN rm -f .tsbuildinfo && npm run build
 RUN npm prune --omit=dev
 
 # Stage 2: Runtime
-FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
 
 ARG MARKETDESK_RELEASE_TAG
 
