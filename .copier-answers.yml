@@ -1,6 +1,6 @@
-_commit: v2.21.5
+_commit: v2.21.6
 _src_path: https://github.com/quokkify/project-toolkit.git
-allure_report: false
+allure_report: true
 components:
   - type: node
     path: .
@@ -14,4 +14,4 @@ renovate_presets:
   - github-actions
   - javascript
   - docker
-toolkit_version: v2.21.5
+toolkit_version: v2.21.6
