@@ -1,36 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
+    "github>quokkify/renovate-presets//presets/base",
+    "github>quokkify/renovate-presets//presets/github-actions/default",
     "github>quokkify/renovate-presets//presets/npm/default",
-    "github>quokkify/renovate-presets//presets/docker/default",
-    "github>quokkify/renovate-presets//presets/github-actions/default"
-  ],
-  "semanticCommits": "enabled",
-  "semanticCommitType": "chore",
-  "semanticCommitScope": "deps",
-  "enabledManagers": [
-    "npm",
-    "docker-compose",
-    "dockerfile",
-    "github-actions",
-    "custom.regex"
-  ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^\\.github\\/actions\\/setup-node\\/action\\.ya?ml$/"],
-      "matchStrings": [
-        "node-version:[\\s\\S]*?default:\\s*\"(?<currentValue>[0-9]+)\""
-      ],
-      "datasourceTemplate": "node-version",
-      "depNameTemplate": "node",
-      "versioningTemplate": "node"
-    }
-  ],
-  "packageRules": [
-    {
-      "matchUpdateTypes": ["minor", "patch", "digest"],
-      "groupName": "minor and patch updates"
-    }
+    "github>quokkify/renovate-presets//presets/docker/default"
   ]
 }
