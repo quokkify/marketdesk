@@ -51,6 +51,7 @@ import {
 import { ProductImageUploader } from './ProductImageUploader.js';
 import type { UploadedProductImage } from './ProductImageUploader.js';
 import { wizardPhaseAt, wizardStepIndex } from '../../workflows/publicationJourneyContract.js';
+import { advancePublicationJourney } from '../../workflows/publicationJourneyGraph.js';
 import {
   BelowCostConfirmationAlert,
   useBelowCostConfirmation,
@@ -378,7 +379,6 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
 
   const handleNext = async () => {
     if (!validateStep(activeStep)) return;
-    const { advancePublicationJourney } = await import('../../workflows/publicationJourneyGraph.js');
     const next = await advancePublicationJourney(
       { phase: wizardPhaseAt(activeStep) },
       { type: 'next', validated: true },
@@ -390,7 +390,6 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
     setErrors({});
     setMarketplaceError(null);
     if (activeStep === 0) return;
-    const { advancePublicationJourney } = await import('../../workflows/publicationJourneyGraph.js');
     const previous = await advancePublicationJourney(
       { phase: wizardPhaseAt(activeStep) },
       { type: 'back' },

@@ -156,9 +156,13 @@ export class ListingController {
     }
     const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
     if (query.length < 2 || query.length > 80) return next(new ValidationError('Category search must contain 2–80 characters'));
-    const resolver = await this.deps.olxTaxonomyResolver(marketplace.id);
-    if (!resolver.search) return next(new ServiceUnavailableError('OLX category search is unavailable'));
-    ok(res, await resolver.search(query));
+    try {
+      const resolver = await this.deps.olxTaxonomyResolver(marketplace.id);
+      if (!resolver.search) return next(new ServiceUnavailableError('OLX category search is unavailable'));
+      ok(res, await resolver.search(query));
+    } catch {
+      next(new ServiceUnavailableError('OLX category search is temporarily unavailable'));
+    }
   };
 
   list = async (req: Request, res: Response): Promise<void> => {

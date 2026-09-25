@@ -1002,6 +1002,19 @@ describe('Presentation API', () => {
       expect((await listingRepo.findById('listing-preview'))?.status).toBe('draft');
     });
 
+    it('reports a temporary OLX category search failure as service unavailable', async () => {
+      const { app, listingRepo } = await buildTestApp({
+        olxTaxonomyResolver: async () => ({
+          verify: async () => { throw new Error('not used'); },
+          search: async () => { throw new Error('OLX API unavailable'); },
+        }),
+      });
+      await seedPreviewListing(listingRepo);
+      const res = await auth(request(app).get('/api/listings/listing-preview/marketplace-categories?query=widgets'));
+      expect(res.status).toBe(503);
+      expect(res.body.error.message).toBe('OLX category search is temporarily unavailable');
+    });
+
     it('returns publish preview without publishing or enqueueing', async () => {
       const { app, listingRepo } = await buildTestApp();
       await seedPreviewListing(listingRepo);

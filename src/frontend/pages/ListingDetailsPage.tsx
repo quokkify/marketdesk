@@ -471,6 +471,7 @@ const ListingDetailsPage: React.FC = () => {
   const publicationReviewOpen = useRef(false);
   const submissionInFlight = useRef(false);
   const recheckRequestIdentity = useRef(0);
+  const improvementRequestIdentity = useRef(0);
 
   const listingItems = listings.data ?? [];
   const listingMarketplaceIds = new Set(listingItems.map((listing) => listing.marketplaceId));
@@ -592,13 +593,15 @@ const ListingDetailsPage: React.FC = () => {
   };
 
   const handleProposeImprovements = async () => {
+    const requestIdentity = ++improvementRequestIdentity.current;
     setImprovements(null);
     try {
       const result = await proposeImprovements({
         productId, listingId: primaryListing?.id,
       }).unwrap();
-      setImprovements(result);
+      if (requestIdentity === improvementRequestIdentity.current) setImprovements(result);
     } catch (err) {
+      if (requestIdentity !== improvementRequestIdentity.current) return;
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -634,7 +637,9 @@ const ListingDetailsPage: React.FC = () => {
 
   useEffect(() => {
     recheckRequestIdentity.current += 1;
+    improvementRequestIdentity.current += 1;
     setRecheckResult(null);
+    setImprovements(null);
     setAnalysisState({ status: 'idle' });
   }, [productId, principalCacheKey]);
 
@@ -926,7 +931,7 @@ const ListingDetailsPage: React.FC = () => {
           </Button>
         }
       >
-        {improvements && (improvements.productUpdatedAt !== p.updatedAt ||
+        {improvements && (improvements.productId !== p.id || improvements.productUpdatedAt !== p.updatedAt ||
           (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt)) ? (
           <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
         ) : improvements ? (

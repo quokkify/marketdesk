@@ -82,6 +82,9 @@ class InMemoryAuthStore implements IAuthUserStore {
 
 interface Ctx {
   app: ReturnType<typeof buildApp>;
+  listingRepo: InMemoryListingRepository;
+  marketplaceRepo: InMemoryMarketplaceRepository;
+  taxonomySearch: jest.Mock;
   productBId: string;
   listingBId: string;
   marketplaceBId: string;
@@ -101,6 +104,9 @@ async function build(): Promise<Ctx> {
   const aiProvider = new StubAIProvider();
   const idGenerator = idFactory('id');
   const authStore = new InMemoryAuthStore();
+  const taxonomySearch = jest.fn(async () => [
+    { providerCategoryId: '2000', name: 'Widgets', path: ['Home', 'Widgets'] },
+  ]);
 
   for (const id of [WS_A, WS_B]) {
     workspaceRepo.items.set(
@@ -246,6 +252,10 @@ async function build(): Promise<Ctx> {
     productRepo,
     listingRepo,
     marketplaceRepo,
+    olxTaxonomyResolver: async () => ({
+      verify: async () => { throw new Error('not used'); },
+      search: taxonomySearch,
+    }),
     workspaceRepo,
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore: authStore,
@@ -256,6 +266,9 @@ async function build(): Promise<Ctx> {
 
   return {
     app: buildApp(deps, { enableRateLimit: false }),
+    listingRepo,
+    marketplaceRepo,
+    taxonomySearch,
     productBId: productB.id,
     listingBId: listingB.id,
     marketplaceBId: marketplaceB.id,
@@ -322,10 +335,24 @@ describe('IDOR: workspace A cannot reach workspace B resources (S2)', () => {
   });
 
   it('GET /listings/:idB/marketplace-categories -> 404 (no cross-tenant taxonomy lookup)', async () => {
-    const { app, listingBId } = await build();
+    const { app, listingBId, listingRepo, marketplaceRepo, taxonomySearch } = await build();
+    const marketplaceA = unwrap(Marketplace.create({
+      id: 'mkt-a', workspaceId: WS_A, key: 'olx', name: 'OLX-A', connected: true,
+    }));
+    marketplaceRepo.items.set(marketplaceA.id, marketplaceA);
+    const listingA = unwrap(Listing.create({
+      id: 'lst-a', productId: 'prod-a', marketplaceId: marketplaceA.id,
+      price: money(20), status: 'draft',
+    }));
+    listingRepo.items.set(listingA.id, listingA);
+    listingRepo.listingWorkspaces.set(listingA.id, WS_A);
+    const own = await authA(request(app).get(`/api/listings/${listingA.id}/marketplace-categories?query=projektor`));
+    expect(own.status).toBe(200);
+    expect(taxonomySearch).toHaveBeenCalledTimes(1);
     const res = await authA(request(app).get(`/api/listings/${listingBId}/marketplace-categories?query=projektor`));
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(taxonomySearch).toHaveBeenCalledTimes(1);
   });
 
   it('GET /marketplaces/:idB -> 404', async () => {
