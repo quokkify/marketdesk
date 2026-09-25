@@ -10,6 +10,7 @@ import {
   createProductSchema,
   productAIDraftSchema,
   productRecheckSchema,
+  productImprovementSchema,
   updateProductSchema,
 } from '../validation/schemas';
 
@@ -21,6 +22,7 @@ export function createProductRoutes(controller: ProductController): Router {
   router.get('/:id', asyncHandler(controller.get));
   router.patch('/:id', validateBody(updateProductSchema), asyncHandler(controller.update));
   router.post('/:id/recheck', validateBody(productRecheckSchema), asyncHandler(controller.recheck));
+  router.post('/:id/improvements', validateBody(productImprovementSchema), asyncHandler(controller.proposeImprovements));
   router.delete('/:id', asyncHandler(controller.remove));
   router.get('/:id/listings', asyncHandler(controller.getListings));
   router.post('/:id/listings', validateBody(createListingSchema), asyncHandler(controller.createListing));

@@ -50,6 +50,8 @@ import {
 } from './ProductFields.js';
 import { ProductImageUploader } from './ProductImageUploader.js';
 import type { UploadedProductImage } from './ProductImageUploader.js';
+import { wizardPhaseAt, wizardStepIndex } from '../../workflows/publicationJourneyContract.js';
+import { advancePublicationJourney } from '../../workflows/publicationJourneyGraph.js';
 import {
   BelowCostConfirmationAlert,
   useBelowCostConfirmation,
@@ -375,15 +377,24 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
     setErrors({});
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!validateStep(activeStep)) return;
-    setActiveStep((s) => s + 1);
+    const next = await advancePublicationJourney(
+      { phase: wizardPhaseAt(activeStep) },
+      { type: 'next', validated: true },
+    );
+    setActiveStep(wizardStepIndex(next.phase));
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     setErrors({});
     setMarketplaceError(null);
-    setActiveStep((s) => Math.max(0, s - 1));
+    if (activeStep === 0) return;
+    const previous = await advancePublicationJourney(
+      { phase: wizardPhaseAt(activeStep) },
+      { type: 'back' },
+    );
+    setActiveStep(wizardStepIndex(previous.phase));
   };
 
   const handleFinish = () => {
@@ -679,8 +690,8 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
               </Typography>
             </Box>
             <Alert severity="info">
-              Creating saves a draft product. Marketplace publishing remains a separate confirmation
-              step.
+              Creating saves the product and opens a marketplace listing draft for review.
+              Publishing still requires a separate confirmation.
             </Alert>
           </Stack>
         )}

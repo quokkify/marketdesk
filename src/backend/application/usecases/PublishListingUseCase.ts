@@ -5,7 +5,9 @@
 // call and finalizes the listing via ListingService with the returned external id.
 
 import { Result, Ok, Err } from '../../domain/shared/Result';
+import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import {
+  DomainError,
   NotFoundError,
   InvalidStateError,
   GuardrailViolationError,
@@ -23,6 +25,17 @@ import type { PublishListingDTO } from '../dto/PublishListingDTO';
 import type { MarketplaceAccountRepository } from '../services/MarketplaceOAuthService';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
 import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
+
+const PreflightState = Annotation.Root({
+  input: Annotation<PublishListingDTO>(),
+  listing: Annotation<Listing | undefined>(),
+  product: Annotation<Product | undefined>(),
+  marketplace: Annotation<Marketplace | undefined>(),
+  operationId: Annotation<string | undefined>(),
+});
+
+type PreflightGraphState = typeof PreflightState.State;
+export const PUBLICATION_PREFLIGHT_GRAPH_VERSION = 'publication-preflight@1';
 
 export interface PublishEligibility {
   canPublish: boolean;
@@ -68,86 +81,102 @@ export class PublishListingUseCase {
     private readonly olxQuota?: OlxPublicationQuotaService,
   ) {}
 
-  async execute(input: PublishListingDTO): Promise<Result<Listing>> {
-    const listing = await this.listingRepo.findById(input.listingId);
-    if (!listing) {
-      return Err(new NotFoundError(`Listing not found: ${input.listingId}`));
-    }
-
-    const mode = input.mode ?? 'publish';
-    const relistable = listing.status === 'expired'
-      || (listing.status === 'error' && !listing.marketplaceListingId);
-    if (mode === 'relist' && !relistable) {
-      return Err(new InvalidStateError(
-        `Cannot relist a listing in ${listing.status} status while it may still reference an existing marketplace advert`,
-      ));
-    }
-
-    const product = await this.productRepo.findById(listing.productId);
-    if (!product) {
-      return Err(new NotFoundError(`Product not found: ${listing.productId}`));
-    }
-
-    const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
-    if (!marketplace) {
-      return Err(new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`));
-    }
-
-    const eligibility = evaluatePublishEligibility(listing, product, marketplace);
-    if (!eligibility.canPublish) {
-      return Err(eligibility.error ?? new InvalidStateError(eligibility.warnings[0]));
-    }
-
-    if (this.marketplaceAccountRepo) {
-      const account = await this.marketplaceAccountRepo.findByMarketplaceId(marketplace.id);
-      if (!account || account.status !== 'connected') {
-        return Err(
-          new GuardrailViolationError(
-            `Marketplace ${marketplace.key} OAuth account must be connected before publishing`
-          )
-        );
-      }
-    }
-
-    const operationId = this.idGenerator();
-    if (marketplace.key === 'olx') {
-      const categoryDecision = evaluateOlxCategory(product, listing.marketplaceCategory);
-      if (!categoryDecision.allowed) {
-        return Err(new GuardrailViolationError(
-          categoryDecision.message ?? 'OLX category validation blocks publication',
-          { categoryDecision, marketplaceCategory: listing.marketplaceCategory },
-        ));
-      }
-      if (!this.olxQuota) {
-        return Err(
-          new GuardrailViolationError(
+  private preflightGraph() {
+    return new StateGraph(PreflightState)
+      .addNode('load', async (state: PreflightGraphState) => {
+        const listing = await this.listingRepo.findById(state.input.listingId);
+        if (!listing) throw new NotFoundError(`Listing not found: ${state.input.listingId}`);
+        const mode = state.input.mode ?? 'publish';
+        const relistable = listing.status === 'expired'
+          || (listing.status === 'error' && !listing.marketplaceListingId);
+        if (mode === 'relist' && !relistable) {
+          throw new InvalidStateError(
+            `Cannot relist a listing in ${listing.status} status while it may still reference an existing marketplace advert`,
+          );
+        }
+        const product = await this.productRepo.findById(listing.productId);
+        if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);
+        const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+        if (!marketplace) throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
+        return { listing, product, marketplace };
+      })
+      .addNode('eligibility', (state: PreflightGraphState) => {
+        const decision = evaluatePublishEligibility(state.listing!, state.product!, state.marketplace!);
+        if (!decision.canPublish) throw decision.error ?? new InvalidStateError(decision.warnings[0]);
+        return {};
+      })
+      .addNode('account', async (state: PreflightGraphState) => {
+        if (this.marketplaceAccountRepo) {
+          const account = await this.marketplaceAccountRepo.findByMarketplaceId(state.marketplace!.id);
+          if (!account || account.status !== 'connected') {
+            throw new GuardrailViolationError(
+              `Marketplace ${state.marketplace!.key} OAuth account must be connected before publishing`,
+            );
+          }
+        }
+        return {};
+      })
+      .addNode('category', (state: PreflightGraphState) => {
+        if (state.marketplace!.key === 'olx') {
+          const categoryDecision = evaluateOlxCategory(state.product!, state.listing!.marketplaceCategory);
+          if (!categoryDecision.allowed) {
+            throw new GuardrailViolationError(
+              categoryDecision.message ?? 'OLX category validation blocks publication',
+              { categoryDecision, marketplaceCategory: state.listing!.marketplaceCategory },
+            );
+          }
+        }
+        return { operationId: this.idGenerator() };
+      })
+      .addNode('quota', async (state: PreflightGraphState) => {
+        if (state.marketplace!.key !== 'olx') return {};
+        if (!this.olxQuota) {
+          throw new GuardrailViolationError(
             'OLX publication quota guard is unavailable; publication fails closed',
-            {
-              quotaDecision: {
-                applicable: true,
-                marketplaceKey: 'olx',
-                status: 'unknown',
-                decision: 'block',
-                reason: 'quota_guard_unavailable',
-                requiresOverride: true,
-              },
-            },
-          ),
-        );
-      }
-      const quotaDecision = await this.olxQuota.authorize({
-        operationId,
-        mode,
-        listing,
-        product,
-        marketplace,
-        actorId: input.actorId,
-        override: input.quotaOverride,
-      });
-      if (quotaDecision.decision === 'block') {
-        return Err(this.olxQuota.guardError(quotaDecision));
-      }
+            { quotaDecision: {
+              applicable: true,
+              marketplaceKey: 'olx',
+              status: 'unknown',
+              decision: 'block',
+              reason: 'quota_guard_unavailable',
+              requiresOverride: true,
+            } },
+          );
+        }
+        const decision = await this.olxQuota.authorize({
+          operationId: state.operationId!,
+          mode: state.input.mode ?? 'publish',
+          listing: state.listing!,
+          product: state.product!,
+          marketplace: state.marketplace!,
+          actorId: state.input.actorId,
+          override: state.input.quotaOverride,
+        });
+        if (decision.decision === 'block') throw this.olxQuota.guardError(decision);
+        return {};
+      })
+      .addEdge(START, 'load')
+      .addEdge('load', 'eligibility')
+      .addEdge('eligibility', 'account')
+      .addEdge('account', 'category')
+      .addEdge('category', 'quota')
+      .addEdge('quota', END)
+      .compile();
+  }
+
+  async execute(input: PublishListingDTO): Promise<Result<Listing>> {
+    let state: PreflightGraphState;
+    try {
+      state = await this.preflightGraph().invoke({ input });
+    } catch (error) {
+      if (error instanceof DomainError) return Err(error);
+      throw error;
     }
+    const listing = state.listing!;
+    const product = state.product!;
+    const marketplace = state.marketplace!;
+    const operationId = state.operationId!;
+    const mode = input.mode ?? 'publish';
     await this.publishQueue.enqueue(
       {
         operationId,
@@ -178,7 +207,11 @@ export class PublishListingUseCase {
       actorType: 'user',
       actorId: input.actorId,
       action: 'listing.publish_requested',
-      metadata: { marketplaceKey: marketplace.key, productId: product.id },
+      metadata: {
+        marketplaceKey: marketplace.key,
+        productId: product.id,
+        workflowVersion: PUBLICATION_PREFLIGHT_GRAPH_VERSION,
+      },
       createdAt: new Date(),
     });
 

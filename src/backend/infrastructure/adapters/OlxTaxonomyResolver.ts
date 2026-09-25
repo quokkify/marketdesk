@@ -33,6 +33,13 @@ interface OlxValidatedGraph {
 
 export interface OlxTrustedTaxonomyResolver {
   verify(providerCategoryId: string): Promise<MarketplaceCategoryMetadata>;
+  search?(query: string, limit?: number): Promise<OlxCategorySearchResult[]>;
+}
+
+export interface OlxCategorySearchResult {
+  providerCategoryId: string;
+  name: string;
+  path: string[];
 }
 
 /** Resolves category claims against the authenticated OLX Partner taxonomy API. */
@@ -100,6 +107,30 @@ export class OlxTaxonomyResolver implements OlxTrustedTaxonomyResolver {
       taxonomyVerifiedAt: verifiedAt.toISOString(),
       taxonomyStaleAt: new Date(verifiedAt.getTime() + this.ttlMs).toISOString(),
     };
+  }
+
+  async search(query: string, limit = 20): Promise<OlxCategorySearchResult[]> {
+    const normalized = query.trim().toLocaleLowerCase();
+    if (normalized.length < 2 || normalized.length > 80) throw new Error('Search must contain 2–80 characters');
+    const graph = await this.validatedFlatGraph();
+    if (!graph) throw new Error('OLX taxonomy is unavailable');
+    const candidates = [...graph.byId.entries()]
+      .filter(([id, node]) =>
+        !graph.parentsWithChildren.has(id) &&
+        this.leafStatus(node) === true &&
+        node.name?.toLocaleLowerCase().includes(normalized))
+      .sort(([idA, a], [idB, b]) => {
+        const startsA = a.name!.toLocaleLowerCase().startsWith(normalized) ? 0 : 1;
+        const startsB = b.name!.toLocaleLowerCase().startsWith(normalized) ? 0 : 1;
+        return startsA - startsB || a.name!.localeCompare(b.name!) || idA.localeCompare(idB);
+      })
+      .slice(0, Math.min(Math.max(limit, 1), 20));
+    const results: OlxCategorySearchResult[] = [];
+    for (const [id, node] of candidates) {
+      const path = await this.pathFromFlatTaxonomy(id, node.name!.trim());
+      if (path) results.push({ providerCategoryId: id, name: node.name!.trim(), path: path.names });
+    }
+    return results;
   }
 
   private unwrap(value: OlxCategoryNode | OlxEnvelope<OlxCategoryNode>): OlxCategoryNode {

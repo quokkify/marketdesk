@@ -7,6 +7,7 @@ import type { ProductApplicationService } from '../../../application/services/Pr
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
+import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
@@ -81,6 +82,7 @@ export class ProductController {
     private readonly marketplaceRepo: IMarketplaceRepository,
     private readonly idGenerator: () => string,
     private readonly productRecheck?: ProductRecheckService,
+    private readonly assistance?: ProductAssistanceGraph,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -121,6 +123,12 @@ export class ProductController {
   };
 
   generateAIDraft = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (this.assistance) {
+      try {
+        ok(res, await this.assistance.generateDraft(req.user!.workspaceId!, req.body));
+      } catch (error) { next(error); }
+      return;
+    }
     const result = await this.productAIDrafts.generateDraft({
       ...req.body,
       workspaceId: req.user!.workspaceId!,
@@ -145,16 +153,31 @@ export class ProductController {
   recheck = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!this.productRecheck) throw new ServiceUnavailableError('Product recheck is unavailable');
-      const result = await this.productRecheck.recheck({
+      const request = {
         productId: routeParam(req.params.id),
         listingId: String(req.body?.listingId ?? ''),
         workspaceId: req.user!.workspaceId!,
         actorId: req.user!.userId,
-      });
+      };
+      const result = this.assistance
+        ? await this.assistance.publicationReview(request)
+        : await this.productRecheck.recheck(request);
       ok(res, result);
     } catch (error) {
       next(error);
     }
+  };
+
+  proposeImprovements = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.assistance) throw new ServiceUnavailableError('Product assistance is unavailable');
+      const result = await this.assistance.proposeImprovements({
+        productId: routeParam(req.params.id),
+        workspaceId: req.user!.workspaceId!,
+        listingId: req.body.listingId,
+      });
+      ok(res, result);
+    } catch (error) { next(error); }
   };
 
   remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

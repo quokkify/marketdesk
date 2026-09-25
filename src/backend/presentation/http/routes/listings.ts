@@ -20,6 +20,13 @@ const categoryWriteLimiter: RequestHandler = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => req.user?.userId || ipKeyGenerator(req.ip || 'unknown'),
 });
+const categorySearchLimiter: RequestHandler = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.userId || ipKeyGenerator(req.ip || 'unknown'),
+});
 
 export function createListingRoutes(
   controller: ListingController,
@@ -29,6 +36,7 @@ export function createListingRoutes(
   router.get('/', asyncHandler(controller.list));
   router.get('/:id', asyncHandler(controller.get));
   router.get('/:id/price-history', asyncHandler(controller.priceHistory));
+  router.get('/:id/marketplace-categories', categorySearchLimiter, asyncHandler(controller.searchMarketplaceCategories));
   router.patch('/:id', sensitiveLimiter, asyncHandler(controller.update));
   router.put(
     '/:id/marketplace-category',
