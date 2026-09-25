@@ -16,3 +16,9 @@ The server uses LangGraph for the deterministic publication preflight: scoped da
 For OLX, the review dialog can search leaf categories by name from the authenticated provider taxonomy. Selection is verified against the current category detail and full path before it is saved to the listing. A fresh preview is fetched afterward. The seller must explicitly confirm the exact category; a quota override still needs the existing fee-risk checkbox and reason, and non-quota blockers cannot be overridden. Every publish/relist call runs the server checks again, so stale browser previews cannot grant permission.
 
 The graph is deliberately stateless between HTTP requests in this slice. The durable product, listing, quota operation and queued job stay in MarketDesk. Persistent LangGraph checkpoints, a versioned sales-agent recipe, buyer conversations and autonomous actions belong to later implementation tasks after the wider #290 concept is approved.
+
+## Product assistance graph
+
+`product-assistance@1` is a second backend LangGraph. It routes a seller request to one of three bounded actions: create an editable AI draft, run the guarded publication recheck, or propose product copy and price improvements. The graph calls the injected `IAIProvider`; production DI supplies the existing Hermes adapter, which authenticates to the Hermes API with `HERMES_API_KEY`. A future provider can implement the same port. Credentials never enter graph state.
+
+Copy and price output is review-only. The seller must use the existing product/listing editing controls to apply a suggestion; normal domain price rules and publication approval still apply. Improvement requests load product and listing with workspace scope and return observed update timestamps so the UI can hide stale proposals. This graph has no durable checkpoint, automatic edits, or automatic publication.

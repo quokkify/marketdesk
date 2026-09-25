@@ -300,6 +300,16 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
+export interface ProductImprovementSuggestions {
+  graphVersion: 'product-assistance@1';
+  productId: string;
+  productUpdatedAt: string;
+  listingUpdatedAt?: string;
+  reviewOnly: true;
+  copy: Array<{ field: 'title' | 'description'; proposedValue: string; rationale: string }>;
+  price?: { suggestedPrice: number; reasoning: string; confidence: 'high' | 'medium' | 'low' };
+}
+
 export type ProductAIDraftMode = 'photos' | 'title';
 
 export type ProductAIDraftFields = Partial<

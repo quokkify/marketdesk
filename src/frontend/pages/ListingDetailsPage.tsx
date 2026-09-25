@@ -21,6 +21,7 @@ import type {
   Marketplace,
   ProductCategoryProvenance,
   ProductRecheckResult,
+  ProductImprovementSuggestions,
 } from '@shared/types';
 import type {
   HermesRunInput,
@@ -30,6 +31,7 @@ import type {
 import {
   useProduct,
   useRecheckProduct,
+  useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
   useUpdateListing,
@@ -433,6 +435,7 @@ const ListingDetailsPage: React.FC = () => {
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
+  const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
@@ -445,6 +448,7 @@ const ListingDetailsPage: React.FC = () => {
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
+  const [improvements, setImprovements] = useState<ProductImprovementSuggestions | null>(null);
   const [priceListing, setPriceListing] = useState<Listing | null>(null);
   const [publishCandidate, setPublishCandidate] = useState<{
     listing: Listing;
@@ -583,6 +587,18 @@ const ListingDetailsPage: React.FC = () => {
       setRecheckResult(result);
     } catch (err) {
       if (requestIdentity !== recheckRequestIdentity.current) return;
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
+
+  const handleProposeImprovements = async () => {
+    setImprovements(null);
+    try {
+      const result = await proposeImprovements({
+        productId, listingId: primaryListing?.id,
+      }).unwrap();
+      setImprovements(result);
+    } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -896,6 +912,47 @@ const ListingDetailsPage: React.FC = () => {
             onEdit={() => setEditOpen(true)}
             onMarketplaceEdit={() => navigate('/marketplaces')}
           />
+        )}
+      </Card>
+
+      <Card
+        title="Product assistant"
+        subtitle="Hermes suggests text and price changes for your review"
+        sx={{ mb: 2 }}
+        action={
+          <Button variant="outlined" disabled={proposingImprovements}
+            onClick={() => void handleProposeImprovements()}>
+            {proposingImprovements ? 'Preparing suggestions…' : 'Suggest improvements'}
+          </Button>
+        }
+      >
+        {improvements && (improvements.productUpdatedAt !== p.updatedAt ||
+          (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt)) ? (
+          <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
+        ) : improvements ? (
+          <Stack spacing={1.5}>
+            {improvements.copy.map((suggestion, index) => (
+              <Box key={`${suggestion.field}-${index}`}>
+                <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
+                <Typography variant="body2">{suggestion.proposedValue}</Typography>
+                <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
+              </Box>
+            ))}
+            {improvements.price && (
+              <Box>
+                <Typography variant="subtitle2">Suggested price: {improvements.price.suggestedPrice} {currency}</Typography>
+                <Typography variant="body2">{improvements.price.reasoning}</Typography>
+              </Box>
+            )}
+            {improvements.copy.length === 0 && !improvements.price && (
+              <Typography variant="body2">No suggestions for this product.</Typography>
+            )}
+            <Alert severity="info">Suggestions are for review only. Edit the product or listing to apply them.</Alert>
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Ask Hermes for wording and price ideas. Nothing is changed automatically.
+          </Typography>
         )}
       </Card>
 
