@@ -19,6 +19,8 @@ import {
   useGetListingsQuery,
   useGetListingQuery,
   usePublishListingPreviewMutation,
+  useSearchOlxCategoriesMutation,
+  useSetListingMarketplaceCategoryMutation,
   usePublishListingMutation,
   useUpdateListingMutation,
   useRelistListingMutation,
@@ -91,6 +93,8 @@ export function useListings(params: ListingListParams = {}, options?: ListingsOp
 }
 export const useListing = useGetListingQuery;
 export const usePublishListingPreview = usePublishListingPreviewMutation;
+export const useSearchOlxCategories = useSearchOlxCategoriesMutation;
+export const useSetListingMarketplaceCategory = useSetListingMarketplaceCategoryMutation;
 export const usePublishListing = usePublishListingMutation;
 export const useUpdateListing = useUpdateListingMutation;
 export const useRelistListing = useRelistListingMutation;

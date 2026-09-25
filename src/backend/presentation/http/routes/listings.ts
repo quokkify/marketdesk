@@ -29,6 +29,7 @@ export function createListingRoutes(
   router.get('/', asyncHandler(controller.list));
   router.get('/:id', asyncHandler(controller.get));
   router.get('/:id/price-history', asyncHandler(controller.priceHistory));
+  router.get('/:id/marketplace-categories', categoryWriteLimiter, asyncHandler(controller.searchMarketplaceCategories));
   router.patch('/:id', sensitiveLimiter, asyncHandler(controller.update));
   router.put(
     '/:id/marketplace-category',

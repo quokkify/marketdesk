@@ -15,7 +15,7 @@ import type { IPriceHistoryReader } from '../../../application/ports/IPriceHisto
 import type { IPriceHistoryRecorder } from '../../../application/ports/IPriceHistoryRecorder';
 import type { IdGenerator } from '../../../application/ports/IdGenerator';
 import { Money } from '../../../domain/valueObjects/Money';
-import { NotFoundError } from '../../../domain/shared/DomainError';
+import { NotFoundError, ValidationError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { presentListing } from '../../../application/dto/presenters';
 import { evaluatePublishEligibility } from '../../../application/usecases/PublishListingUseCase';
 import type { OlxPublicationQuotaService } from '../../../application/services/OlxPublicationQuotaService';
@@ -135,7 +135,7 @@ export class ListingController {
     const marketplace = await this.deps.marketplaceRepo?.findByIdForWorkspace(
       listing.marketplaceId, req.user!.workspaceId!,
     );
-    if (!marketplace || marketplace.key !== 'olx' || !this.deps.olxTaxonomyResolver) {
+    if (!marketplace || marketplace.key !== 'olx' || !marketplace.isConnected() || !this.deps.olxTaxonomyResolver) {
       throw new NotFoundError('Trusted OLX taxonomy resolver is unavailable');
     }
     const resolver = await this.deps.olxTaxonomyResolver(marketplace.id);
@@ -143,6 +143,22 @@ export class ListingController {
     listing.recordMarketplaceCategory(verified);
     await this.listingRepo.save(listing);
     ok(res, presentListing(listing));
+  };
+
+  searchMarketplaceCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const listingId = routeParam(req.params.id);
+    const workspaceId = req.user!.workspaceId!;
+    const listing = await this.listingRepo.findByIdForWorkspace(listingId, workspaceId);
+    if (!listing) return next(new NotFoundError(`Listing not found: ${listingId}`));
+    const marketplace = await this.deps.marketplaceRepo?.findByIdForWorkspace(listing.marketplaceId, workspaceId);
+    if (!marketplace || marketplace.key !== 'olx' || !marketplace.isConnected() || !this.deps.olxTaxonomyResolver) {
+      return next(new NotFoundError('OLX taxonomy is unavailable for this listing'));
+    }
+    const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    if (query.length < 2 || query.length > 80) return next(new ValidationError('Category search must contain 2–80 characters'));
+    const resolver = await this.deps.olxTaxonomyResolver(marketplace.id);
+    if (!resolver.search) return next(new ServiceUnavailableError('OLX category search is unavailable'));
+    ok(res, await resolver.search(query));
   };
 
   list = async (req: Request, res: Response): Promise<void> => {

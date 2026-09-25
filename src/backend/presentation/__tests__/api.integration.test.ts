@@ -427,6 +427,7 @@ async function buildTestApp(
     categoryCorrectionOperationService?: CategoryCorrectionOperationService;
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
+    olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -460,6 +461,7 @@ async function buildTestApp(
       : (options.olxPublicationQuotaService ?? stubOlxPublicationQuotaService()),
     categoryCorrectionOperationService:
       options.categoryCorrectionOperationService ?? stubCategoryCorrectionOperationService(),
+    olxTaxonomyResolver: options.olxTaxonomyResolver,
     marketplaceOAuthReturnUrl: 'http://localhost:5173/marketplaces',
     workspaceRepo: workspaceRepo as IWorkspaceRepository,
     settingsRepo: new InMemorySettingsRepository(),
@@ -980,6 +982,26 @@ describe('Presentation API', () => {
   });
 
   describe('listings', () => {
+    it('searches scoped OLX leaf categories without changing the listing', async () => {
+      const search = jest.fn(async () => [
+        { providerCategoryId: '2000', name: 'Widgets', path: ['Home', 'Tools', 'Widgets'] },
+      ]);
+      const { app, listingRepo } = await buildTestApp({
+        olxTaxonomyResolver: async () => ({
+          verify: async () => { throw new Error('not used'); },
+          search,
+        }),
+      });
+      await seedPreviewListing(listingRepo);
+      const res = await auth(request(app).get('/api/listings/listing-preview/marketplace-categories?query=widgets'));
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([
+        { providerCategoryId: '2000', name: 'Widgets', path: ['Home', 'Tools', 'Widgets'] },
+      ]);
+      expect(search).toHaveBeenCalledWith('widgets');
+      expect((await listingRepo.findById('listing-preview'))?.status).toBe('draft');
+    });
+
     it('returns publish preview without publishing or enqueueing', async () => {
       const { app, listingRepo } = await buildTestApp();
       await seedPreviewListing(listingRepo);

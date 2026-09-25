@@ -321,6 +321,13 @@ describe('IDOR: workspace A cannot reach workspace B resources (S2)', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
+  it('GET /listings/:idB/marketplace-categories -> 404 (no cross-tenant taxonomy lookup)', async () => {
+    const { app, listingBId } = await build();
+    const res = await authA(request(app).get(`/api/listings/${listingBId}/marketplace-categories?query=projektor`));
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+  });
+
   it('GET /marketplaces/:idB -> 404', async () => {
     const { app, marketplaceBId } = await build();
     const res = await authA(request(app).get(`/api/marketplaces/${marketplaceBId}`));
