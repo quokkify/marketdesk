@@ -82,7 +82,7 @@
   "devDependencies": {
     "@babel/plugin-transform-runtime": "8.0.6",
     "@playwright/test": "^1.63.0",
-    "@swc/core": "1.15.46",
+    "@swc/core": "1.16.2",
     "@swc/jest": "0.2.39",
     "@types/bcryptjs": "3.0.0",
     "@types/compression": "1.8.1",
