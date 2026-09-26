@@ -1,1 +1,1 @@
-{"id":"7faf2aa6aea3ae7b5de338280772107e","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache returns null on a miss","name":"returns null on a miss","status":"passed","testResultsByEnv":{"default":"f25958d8ab3191e93b8af41589167177"}}
+{"id":"7faf2aa6aea3ae7b5de338280772107e","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache returns null on a miss","name":"returns null on a miss","status":"passed","testResultsByEnv":{"default":"a709ce48b0e0938dfffaa0124926128e"}}
