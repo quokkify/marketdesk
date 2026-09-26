@@ -1,0 +1,1 @@
+{"id":"061daf38b14401eea1c456f93f19ffbd","fullName":"hermes-marketdesk:src/frontend/state/slices/uiSlice.test.ts#theme preference semantics requires a neutral reset on login, logout, and principal replacement","name":"requires a neutral reset on login, logout, and principal replacement","status":"passed","testResultsByEnv":{"default":"1340ca138eb495d73856f85543c0e6c2"}}

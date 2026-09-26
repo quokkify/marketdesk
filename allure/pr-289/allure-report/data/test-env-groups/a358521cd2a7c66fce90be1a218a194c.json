@@ -1,0 +1,1 @@
+{"id":"a358521cd2a7c66fce90be1a218a194c","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#SyncMarketplaceHandler resolves the adapter by key and returns its sync results","name":"resolves the adapter by key and returns its sync results","status":"passed","testResultsByEnv":{"default":"aa2e46b9adbaba151371df1c38ee05c2"}}

@@ -1,0 +1,1 @@
+{"id":"90e47770793de1a064e65c46783c4889","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product price / description updates requires confirmation when cost becomes higher than selling price","name":"requires confirmation when cost becomes higher than selling price","status":"passed","testResultsByEnv":{"default":"728e539ded0a96d3d05eec0af61f957d"}}

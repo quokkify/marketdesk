@@ -1,0 +1,1 @@
+{"id":"5bb79e2f5c13485cf3937346d994aa73","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/OlxOAuthClient.test.ts#OlxOAuthClient does not expose provider bodies or client secrets in token errors","name":"does not expose provider bodies or client secrets in token errors","status":"passed","testResultsByEnv":{"default":"8261fb8e1b91dfdb54d725acedd046ed"}}

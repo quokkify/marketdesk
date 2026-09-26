@@ -1,0 +1,1 @@
+{"id":"f0ecb28e911117b2cf835b4e8c8b55f3","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent lifecycle transitions dismisses pending review and pending decision events only","name":"dismisses pending review and pending decision events only","status":"passed","testResultsByEnv":{"default":"e555d5a257af41fc241078fa9fee75ca"}}

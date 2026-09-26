@@ -1,0 +1,1 @@
+{"id":"1bfbae9e92d0c0d83379f36e32477b05","fullName":"hermes-marketdesk:src/backend/application/__tests__/ApproveHermesEventUseCase.test.ts#ApproveHermesEventUseCase persists failed when an application dependency throws","name":"persists failed when an application dependency throws","status":"passed","testResultsByEnv":{"default":"a1c499c9a7f49d54680fe601bd152689"}}

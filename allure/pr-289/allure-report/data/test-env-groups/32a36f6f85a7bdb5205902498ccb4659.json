@@ -1,0 +1,1 @@
+{"id":"32a36f6f85a7bdb5205902498ccb4659","fullName":"hermes-marketdesk:src/backend/presentation/http/controllers/__tests__/ProductController.test.ts#ProductController list parsing preserves commas inside JSON-encoded tag values","name":"preserves commas inside JSON-encoded tag values","status":"passed","testResultsByEnv":{"default":"55cdd5cb0f9e44d5ac7decdd2630b526"}}

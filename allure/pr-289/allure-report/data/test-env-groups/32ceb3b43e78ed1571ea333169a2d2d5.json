@@ -1,0 +1,1 @@
+{"id":"32ceb3b43e78ed1571ea333169a2d2d5","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions rejects wildcard-only CORS_ORIGIN in production","name":"rejects wildcard-only CORS_ORIGIN in production","status":"passed","testResultsByEnv":{"default":"b982c0deb19487e18e86c0265694bc95"}}

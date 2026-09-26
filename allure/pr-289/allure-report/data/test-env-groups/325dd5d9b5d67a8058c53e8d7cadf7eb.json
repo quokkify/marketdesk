@@ -1,0 +1,1 @@
+{"id":"325dd5d9b5d67a8058c53e8d7cadf7eb","fullName":"hermes-marketdesk:src/backend/config/__tests__/database.test.ts#databaseSslConfig always verifies the server certificate when TLS is enabled","name":"always verifies the server certificate when TLS is enabled","status":"passed","testResultsByEnv":{"default":"13469d431a9e0b0d00da7d5b3d62e092"}}

@@ -1,0 +1,1 @@
+{"id":"edf4501dbc71915dbb432745ceadbdd2","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode allows production to explicitly disable TLS for internal Compose PostgreSQL","name":"allows production to explicitly disable TLS for internal Compose PostgreSQL","status":"passed","testResultsByEnv":{"default":"4de17b24a4738d94b39ae701bdbb6543"}}

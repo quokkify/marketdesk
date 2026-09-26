@@ -1,0 +1,1 @@
+{"id":"14399a3a7dec26e771f7b9f73fb16de7","fullName":"hermes-marketdesk:src/backend/application/__tests__/MarketplaceOAuthService.test.ts#MarketplaceOAuthService removes app credentials only after clearing account tokens","name":"removes app credentials only after clearing account tokens","status":"passed","testResultsByEnv":{"default":"3689bfe17cfaee69d8287fd4fcc15a7d"}}
