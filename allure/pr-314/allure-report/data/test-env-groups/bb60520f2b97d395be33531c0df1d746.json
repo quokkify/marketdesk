@@ -1,0 +1,1 @@
+{"id":"bb60520f2b97d395be33531c0df1d746","fullName":"hermes-marketdesk:src/frontend/pages/MarketplacesPage.test.tsx#MarketplaceCard keeps unsupported realtime visible but disabled if returned by the API","name":"keeps unsupported realtime visible but disabled if returned by the API","status":"passed","testResultsByEnv":{"default":"91f7ca194f24b71515afaa98bb722b4f"}}

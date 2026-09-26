@@ -1,0 +1,1 @@
+{"id":"92759d43d83fa6c0981e206526d6bfca","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesDecisionEngine.test.ts#HermesDecisionEngine.determineAutonomy suggest_only sends everything to pending_review","name":"sends everything to pending_review","status":"passed","testResultsByEnv":{"default":"b016ae694383cb65c7d69dbbcca1aae9"}}

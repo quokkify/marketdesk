@@ -1,0 +1,1 @@
+{"id":"476ad9573ba19e61040ca96996d51cc7","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/__tests__/newRepositories.test.ts#AuthUserMapper maps snake_case columns to the AuthUserRecord shape","name":"maps snake_case columns to the AuthUserRecord shape","status":"passed","testResultsByEnv":{"default":"5877ce7c9c2c4a368494e82c0d2b7e7f"}}

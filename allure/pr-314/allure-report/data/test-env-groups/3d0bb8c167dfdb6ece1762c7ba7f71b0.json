@@ -1,0 +1,1 @@
+{"id":"3d0bb8c167dfdb6ece1762c7ba7f71b0","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/HermesCompletionClient.test.ts#HermesCompletionClient throws when a successful Hermes response is not JSON","name":"throws when a successful Hermes response is not JSON","status":"passed","testResultsByEnv":{"default":"d7b05a80e59f82d5a0242f447a6d87f9"}}

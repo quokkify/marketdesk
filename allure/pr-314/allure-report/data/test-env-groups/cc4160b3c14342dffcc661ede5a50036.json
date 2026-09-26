@@ -1,0 +1,1 @@
+{"id":"cc4160b3c14342dffcc661ede5a50036","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/notifiers.test.ts#createEmailProvider factory (C3) stubs quietly when no email credentials are configured","name":"stubs quietly when no email credentials are configured","status":"passed","testResultsByEnv":{"default":"dfe0ae6e1e2d99aba8a48c389bf2ea52"}}

@@ -1,0 +1,1 @@
+{"id":"15726f7576a30a2ce576c4c3e6816c63","fullName":"hermes-marketdesk:src/backend/__tests__/e2e/productFlow.e2e.test.ts#E2E product/listing/Hermes flow (in-memory, no DB) logs in and returns the current principal via /auth/me","name":"logs in and returns the current principal via /auth/me","status":"passed","testResultsByEnv":{"default":"a0b49e7c7f1206dddbb93500dd881cd9"}}

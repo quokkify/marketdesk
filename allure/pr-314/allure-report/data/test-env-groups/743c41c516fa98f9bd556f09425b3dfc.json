@@ -1,0 +1,1 @@
+{"id":"743c41c516fa98f9bd556f09425b3dfc","fullName":"hermes-marketdesk:src/backend/persistence/__tests__/migrationSql.test.ts#concurrent migration SQL parsing ignores DDL-shaped text in strings and dollar-quoted bodies","name":"ignores DDL-shaped text in strings and dollar-quoted bodies","status":"passed","testResultsByEnv":{"default":"615a039fd1cc3dd6b98a17ac7a243976"}}

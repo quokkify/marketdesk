@@ -1,0 +1,1 @@
+{"id":"18cc6d7747838dbe4396c8c07ce24059","fullName":"hermes-marketdesk:src/backend/domain/entities/__tests__/OlxPublicationQuota.test.ts#OlxPublicationQuota fails closed when evaluating an invalid current time","name":"fails closed when evaluating an invalid current time","status":"passed","testResultsByEnv":{"default":"d1c1733f751bf0e8f344211efda2c995"}}

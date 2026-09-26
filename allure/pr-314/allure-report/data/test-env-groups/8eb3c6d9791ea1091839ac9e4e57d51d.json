@@ -1,0 +1,1 @@
+{"id":"8eb3c6d9791ea1091839ac9e4e57d51d","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/idor.integration.test.ts#IDOR: workspace A cannot reach workspace B resources (S2) GET /products/:idB -> 404","name":"GET /products/:idB -> 404","status":"passed","testResultsByEnv":{"default":"d6b4cbb1293e26ff0b833795c4fa1793"}}

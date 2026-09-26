@@ -1,0 +1,1 @@
+{"id":"3b50cba2a50a23bd31fa25382ca22059","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/MarketplaceImportService.test.ts#MarketplaceImportService returns Result.Err when access token refresh fails","name":"returns Result.Err when access token refresh fails","status":"passed","testResultsByEnv":{"default":"d8b9a52cfae6b86d1d5ca1f3f59552e8"}}

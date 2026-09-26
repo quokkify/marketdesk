@@ -1,0 +1,1 @@
+{"id":"35b74312196f0978d3942aa21048f03b","fullName":"hermes-marketdesk:src/backend/presentation/http/controllers/__tests__/ProductController.test.ts#ProductController list parsing fails closed for malformed JSON arrays","name":"fails closed for malformed JSON arrays","status":"passed","testResultsByEnv":{"default":"9449a5baa4a10c06790bb4d29debacb7"}}

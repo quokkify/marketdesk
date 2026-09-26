@@ -1,0 +1,1 @@
+{"id":"1a914017092574026897c802aba6592c","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter marks messages stale when the thread metadata request fails","name":"marks messages stale when the thread metadata request fails","status":"passed","testResultsByEnv":{"default":"44f5110923641b114bc531144075e612"}}

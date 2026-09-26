@@ -1,0 +1,1 @@
+{"id":"391791b7786960cc86133d3283aec3a7","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent lifecycle transitions defines undo as applied -> reverting -> reverted","name":"defines undo as applied -> reverting -> reverted","status":"passed","testResultsByEnv":{"default":"e8d7b79edad262c9ea1d9162fab5074b"}}
