@@ -1,0 +1,1 @@
+{"id":"c19bab069e9d90abd5ad5014430429a1","fullName":"hermes-marketdesk:src/backend/application/__tests__/ProductImageUploadService.test.ts#ProductImageUploadService deletes only through the authenticated workspace scope","name":"deletes only through the authenticated workspace scope","status":"passed","testResultsByEnv":{"default":"1d2291959ce39ceebd628946f51b8fae"}}

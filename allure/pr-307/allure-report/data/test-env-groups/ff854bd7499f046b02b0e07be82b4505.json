@@ -1,0 +1,1 @@
+{"id":"ff854bd7499f046b02b0e07be82b4505","fullName":"hermes-marketdesk:src/backend/persistence/__tests__/migrationSql.test.ts#concurrent migration SQL parsing fails closed for unterminated strings","name":"fails closed for unterminated strings","status":"passed","testResultsByEnv":{"default":"74421dbb806d5e32976b67c8dcf0f25a"}}

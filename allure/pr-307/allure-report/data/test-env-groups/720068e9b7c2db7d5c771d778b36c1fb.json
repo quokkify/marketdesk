@@ -1,0 +1,1 @@
+{"id":"720068e9b7c2db7d5c771d778b36c1fb","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode rejects invalid mode true","name":"rejects invalid mode true","status":"passed","testResultsByEnv":{"default":"53ebf950082b57d3c702a9cda6e5fc3a"}}

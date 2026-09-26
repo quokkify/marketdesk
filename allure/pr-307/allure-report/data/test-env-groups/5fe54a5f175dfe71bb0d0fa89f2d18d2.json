@@ -1,0 +1,1 @@
+{"id":"5fe54a5f175dfe71bb0d0fa89f2d18d2","fullName":"hermes-marketdesk:src/backend/application/__tests__/PublishListingUseCase.test.ts#PublishListingUseCase rejects publishing when the marketplace is not connected","name":"rejects publishing when the marketplace is not connected","status":"passed","testResultsByEnv":{"default":"34fde81958d45c4d64cfd07811f8a46b"}}

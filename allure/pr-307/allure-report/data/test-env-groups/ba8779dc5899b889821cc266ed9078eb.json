@@ -1,0 +1,1 @@
+{"id":"ba8779dc5899b889821cc266ed9078eb","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter preserves sanitized provider validation details for a 400 response","name":"preserves sanitized provider validation details for a 400 response","status":"passed","testResultsByEnv":{"default":"a9d06d804a16af77174cb73d117580a6"}}

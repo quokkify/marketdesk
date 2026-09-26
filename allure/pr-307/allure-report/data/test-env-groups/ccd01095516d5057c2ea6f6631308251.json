@@ -1,0 +1,1 @@
+{"id":"ccd01095516d5057c2ea6f6631308251","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions allows same-origin/server-to-server requests with no Origin header","name":"allows same-origin/server-to-server requests with no Origin header","status":"passed","testResultsByEnv":{"default":"6592ed2480595087a15d1240ab687f6c"}}

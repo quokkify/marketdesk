@@ -1,0 +1,1 @@
+{"id":"132cd809c27dc85d101b156ba4cdd56e","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#SyncMarketplaceHandler records marketplace error when OLX credentials are unavailable","name":"records marketplace error when OLX credentials are unavailable","status":"passed","testResultsByEnv":{"default":"184387e09f60e4369f89b934dfc6da14"}}

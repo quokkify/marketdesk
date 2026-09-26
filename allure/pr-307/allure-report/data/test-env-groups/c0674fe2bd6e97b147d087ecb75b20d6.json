@@ -1,0 +1,1 @@
+{"id":"c0674fe2bd6e97b147d087ecb75b20d6","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product price / description updates rejects updating selling price below cost without confirmation","name":"rejects updating selling price below cost without confirmation","status":"passed","testResultsByEnv":{"default":"1541d734fef9960c5d8c046778495d78"}}

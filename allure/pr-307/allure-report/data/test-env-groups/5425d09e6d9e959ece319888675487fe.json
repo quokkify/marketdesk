@@ -1,0 +1,1 @@
+{"id":"5425d09e6d9e959ece319888675487fe","fullName":"hermes-marketdesk:src/backend/application/__tests__/ProductImageUploadService.test.ts#ProductImageUploadService fails fast for an invalid configured file-size limit","name":"fails fast for an invalid configured file-size limit","status":"passed","testResultsByEnv":{"default":"675224534a62f7d44f29212035d6de0d"}}

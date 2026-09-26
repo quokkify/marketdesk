@@ -1,0 +1,1 @@
+{"id":"6bf4812dca3d7cb1812bda81161f6383","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product category provenance refreshes provenance timestamps without reporting a category change","name":"refreshes provenance timestamps without reporting a category change","status":"passed","testResultsByEnv":{"default":"7ba4f09864a10d4e430f87f95e0d8e33"}}

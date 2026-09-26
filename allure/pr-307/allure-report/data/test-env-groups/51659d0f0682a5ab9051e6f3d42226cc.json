@@ -1,0 +1,1 @@
+{"id":"51659d0f0682a5ab9051e6f3d42226cc","fullName":"hermes-marketdesk:src/backend/infrastructure/eventBroker/__tests__/eventBroker.test.ts#EventPublisher (IEventPublisher) resolves void even though the broker returns an id","name":"resolves void even though the broker returns an id","status":"passed","testResultsByEnv":{"default":"e35329d6ff9137d800bfc71ca2dcaa12"}}

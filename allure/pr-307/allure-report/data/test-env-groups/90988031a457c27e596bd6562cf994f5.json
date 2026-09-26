@@ -1,0 +1,1 @@
+{"id":"90988031a457c27e596bd6562cf994f5","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects flat taxonomy with a missing parent","name":"rejects flat taxonomy with a missing parent","status":"passed","testResultsByEnv":{"default":"851358f4d467c57bf8d6cbff7c184e4e"}}

@@ -1,0 +1,1 @@
+{"id":"b6d9615785912becc91c09d2f0e8ce94","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/FetchMarketplaceHttpClient.test.ts#FetchMarketplaceHttpClient normalizes non-2xx responses into HttpError","name":"normalizes non-2xx responses into HttpError","status":"passed","testResultsByEnv":{"default":"b6bfb5594c36b53a0cf3a879b647f197"}}

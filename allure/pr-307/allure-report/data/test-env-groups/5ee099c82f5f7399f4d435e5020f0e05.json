@@ -1,0 +1,1 @@
+{"id":"5ee099c82f5f7399f4d435e5020f0e05","fullName":"hermes-marketdesk:src/frontend/state/api/settingsApi.test.ts#settings API contract uses principal-scoped routes without caller supplied workspace or user ids","name":"uses principal-scoped routes without caller supplied workspace or user ids","status":"passed","testResultsByEnv":{"default":"04888c2303962634ba639aff96bcb4b1"}}
