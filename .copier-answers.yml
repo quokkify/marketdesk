@@ -6,7 +6,8 @@ allure_external_artifact_min_count: 1
 allure_external_artifact_prefix: allure-results-
 allure_external_workflow_name: Validate
 allure_external_workflow_path: .github/workflows/validate.yml
-allure_publish_pages: false
+allure_publish_pages: true
+allure_pages_url: https://quokkify.github.io/marketdesk
 allure_report: true
 codeql: true
 codeql_languages: []
