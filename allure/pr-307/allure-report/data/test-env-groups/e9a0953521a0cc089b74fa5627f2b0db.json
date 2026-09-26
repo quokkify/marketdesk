@@ -1,1 +1,1 @@
-{"id":"e9a0953521a0cc089b74fa5627f2b0db","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache deletes a key","name":"deletes a key","status":"passed","testResultsByEnv":{"default":"ff8f3b9ecff97eb0c58aa08546353bba"}}
+{"id":"e9a0953521a0cc089b74fa5627f2b0db","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache deletes a key","name":"deletes a key","status":"passed","testResultsByEnv":{"default":"a6ad9ff775e67c9a4e25b2815bb31971"}}
