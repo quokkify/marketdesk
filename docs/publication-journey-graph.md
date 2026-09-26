@@ -22,3 +22,7 @@ The graph is deliberately stateless between HTTP requests in this slice. The dur
 `product-assistance@1` is a second backend LangGraph. It routes a seller request to one of three bounded actions: create an editable AI draft, run the guarded publication recheck, or propose product copy and price improvements. The graph calls the injected `IAIProvider`; production DI supplies the existing Hermes adapter, which authenticates to the Hermes API with `HERMES_API_KEY`. A future provider can implement the same port. Credentials never enter graph state.
 
 Copy and price output is review-only. The seller must use the existing product/listing editing controls to apply a suggestion; normal domain price rules and publication approval still apply. Improvement requests load product and listing with workspace scope and return observed update timestamps so the UI can hide stale proposals. This graph has no durable checkpoint, automatic edits, or automatic publication.
+
+## Offline experiment lifecycle
+
+The next implementation slice provides [versioned local experiment bundles and decision drafts](sales-agent-experiments.md) for the product assistance improvement route. It runs synthetic fixtures through the real graph, records node lifecycle and provider calls, and evaluates contract/security regression gates. It adds no durable workflow checkpoint or production autonomy.
