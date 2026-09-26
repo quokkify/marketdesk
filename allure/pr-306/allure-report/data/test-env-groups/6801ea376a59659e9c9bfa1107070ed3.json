@@ -1,0 +1,1 @@
+{"id":"6801ea376a59659e9c9bfa1107070ed3","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API products rejects duplicate listing creation for the same marketplace","name":"rejects duplicate listing creation for the same marketplace","status":"passed","testResultsByEnv":{"default":"a6c23d0e51c2bf715a85a94be508d049"}}

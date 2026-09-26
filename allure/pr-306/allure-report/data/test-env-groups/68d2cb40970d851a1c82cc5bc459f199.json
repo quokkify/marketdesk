@@ -1,0 +1,1 @@
+{"id":"68d2cb40970d851a1c82cc5bc459f199","fullName":"hermes-marketdesk:src/backend/application/__tests__/ApproveHermesEventUseCase.test.ts#ApproveHermesEventUseCase rejects approving an event that is not pending_review","name":"rejects approving an event that is not pending_review","status":"passed","testResultsByEnv":{"default":"8736dbcebcc478e461fa0dce0bfd88cd"}}

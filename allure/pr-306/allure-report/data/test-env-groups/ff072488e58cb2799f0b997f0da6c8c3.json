@@ -1,0 +1,1 @@
+{"id":"ff072488e58cb2799f0b997f0da6c8c3","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent creation invariants creates a valid price event as pending_review by default","name":"creates a valid price event as pending_review by default","status":"passed","testResultsByEnv":{"default":"b918ff0e03b3c59d617962e7077dc088"}}

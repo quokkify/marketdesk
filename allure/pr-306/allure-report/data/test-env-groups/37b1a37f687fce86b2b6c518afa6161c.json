@@ -1,0 +1,1 @@
+{"id":"37b1a37f687fce86b2b6c518afa6161c","fullName":"hermes-marketdesk:src/frontend/state/api/settingsApi.test.ts#settings API contract serializes two users in one workspace into distinct RTK cache entries","name":"serializes two users in one workspace into distinct RTK cache entries","status":"passed","testResultsByEnv":{"default":"e4d808bb754634321513437413f9c195"}}

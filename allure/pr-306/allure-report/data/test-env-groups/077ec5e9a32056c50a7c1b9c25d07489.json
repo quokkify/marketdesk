@@ -1,0 +1,1 @@
+{"id":"077ec5e9a32056c50a7c1b9c25d07489","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisMarketplaceOAuthRefreshLock.test.ts#RedisMarketplaceOAuthRefreshLock acquires and releases the per-marketplace lock","name":"acquires and releases the per-marketplace lock","status":"passed","testResultsByEnv":{"default":"5deec214bbd0c0e9aa09b7fd94aabffa"}}

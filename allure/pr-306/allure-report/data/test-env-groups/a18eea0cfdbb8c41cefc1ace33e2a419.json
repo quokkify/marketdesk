@@ -1,0 +1,1 @@
+{"id":"a18eea0cfdbb8c41cefc1ace33e2a419","fullName":"hermes-marketdesk:src/backend/application/__tests__/ProductImageUploadService.test.ts#ProductImageUploadService rejects a MIME type that does not match the decoded format","name":"rejects a MIME type that does not match the decoded format","status":"passed","testResultsByEnv":{"default":"d95918ad1c6ddcf4e2f184a985993a3f"}}

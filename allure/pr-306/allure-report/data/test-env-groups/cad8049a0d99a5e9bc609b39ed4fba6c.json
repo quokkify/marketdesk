@@ -1,0 +1,1 @@
+{"id":"cad8049a0d99a5e9bc609b39ed4fba6c","fullName":"hermes-marketdesk:src/backend/application/__tests__/MarketplaceOAuthService.test.ts#MarketplaceOAuthService does not refresh when workspace app credentials are missing","name":"does not refresh when workspace app credentials are missing","status":"passed","testResultsByEnv":{"default":"0a96eb1c5e67b7d4df69fd09688f3b91"}}

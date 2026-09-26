@@ -1,0 +1,1 @@
+{"id":"e2954f0729db3d9557b945b4051644fc","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Listing.test.ts#Listing lifecycle detects expiry from a past expiresAt","name":"detects expiry from a past expiresAt","status":"passed","testResultsByEnv":{"default":"65dc7d5c8ed133d9524ff8e6f56ce9bc"}}

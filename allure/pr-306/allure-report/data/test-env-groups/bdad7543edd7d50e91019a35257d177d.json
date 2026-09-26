@@ -1,0 +1,1 @@
+{"id":"bdad7543edd7d50e91019a35257d177d","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product status transitions (forward-only) forbids any transition out of sold","name":"forbids any transition out of sold","status":"passed","testResultsByEnv":{"default":"122a63b4da08f9b6c6df6e4c5931e06d"}}

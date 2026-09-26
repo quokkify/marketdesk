@@ -1,0 +1,1 @@
+{"id":"57a62a5a244883041ceba634489e1a13","fullName":"hermes-marketdesk:src/backend/config/di/__tests__/container.test.ts#buildContainer (composition root) propagates a Hermes-run failure through the job handler (C2)","name":"propagates a Hermes-run failure through the job handler (C2)","status":"passed","testResultsByEnv":{"default":"51209874fd55b81b6be59e90a2639782"}}

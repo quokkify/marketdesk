@@ -1,0 +1,1 @@
+{"id":"c0d883aed1a67ad73c0930c467c3ece4","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/repositories/__tests__/OlxPublicationQuotaRepository.test.ts#OlxPublicationQuotaRepository persists a block without consuming quota","name":"persists a block without consuming quota","status":"passed","testResultsByEnv":{"default":"fea029be02677cad6aae4c2e914ee0dd"}}

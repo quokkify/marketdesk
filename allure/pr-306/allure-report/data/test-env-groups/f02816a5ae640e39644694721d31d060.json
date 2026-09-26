@@ -1,0 +1,1 @@
+{"id":"f02816a5ae640e39644694721d31d060","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#PublishListingHandler works without an event publisher","name":"works without an event publisher","status":"passed","testResultsByEnv":{"default":"83925e27b6cac5e16f118d0e788c1f41"}}

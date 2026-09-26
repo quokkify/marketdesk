@@ -1,0 +1,1 @@
+{"id":"fa45fa18dbf193c5fcbceae8f3e385d6","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter does not request thread metadata when the advert is missing","name":"does not request thread metadata when the advert is missing","status":"passed","testResultsByEnv":{"default":"4ac9519b41b6f1f3b496de5842c97bb0"}}

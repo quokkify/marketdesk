@@ -1,0 +1,1 @@
+{"id":"1284f637130ae9934175707a3d030bf2","fullName":"hermes-marketdesk:src/backend/config/applicationVersion.test.ts#readEmbeddedApplicationVersion uses Development when the artifact metadata file is absent","name":"uses Development when the artifact metadata file is absent","status":"passed","testResultsByEnv":{"default":"df01c2f3d61ec5305bd5fbf2edcc9e81"}}

@@ -1,0 +1,1 @@
+{"id":"7a2a9d2dfa7e1093278c6d8187592fdf","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/repositories/__tests__/OlxPublicationQuotaRepository.test.ts#OlxPublicationQuotaRepository bounds account quota history in SQL","name":"bounds account quota history in SQL","status":"passed","testResultsByEnv":{"default":"5d3346563e553fefe23a547c849ccbb3"}}

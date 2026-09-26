@@ -1,0 +1,1 @@
+{"id":"0b768935e574a48283838262834659e7","fullName":"hermes-marketdesk:src/backend/application/__tests__/PublishListingUseCase.test.ts#PublishListingUseCase enqueues with marketplaceId when the OAuth account is connected","name":"enqueues with marketplaceId when the OAuth account is connected","status":"passed","testResultsByEnv":{"default":"1bd515d97a71afd6fc7bb4c65aa5d140"}}
