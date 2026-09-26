@@ -1,1 +1,1 @@
-{"id":"e496fa10f3902e8254a69967d7c65fa7","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode rejects invalid mode DISABLE","name":"rejects invalid mode DISABLE","status":"passed","testResultsByEnv":{"default":"857ace23974c7c8c763fbb9220c1c3cb"}}
+{"id":"e496fa10f3902e8254a69967d7c65fa7","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode rejects invalid mode DISABLE","name":"rejects invalid mode DISABLE","status":"passed","testResultsByEnv":{"default":"434d4d4bcc227fc57beb932c9694672a"}}

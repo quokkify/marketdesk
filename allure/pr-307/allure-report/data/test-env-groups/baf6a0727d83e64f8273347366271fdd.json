@@ -1,1 +1,1 @@
-{"id":"baf6a0727d83e64f8273347366271fdd","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money refuses cross-currency arithmetic","name":"refuses cross-currency arithmetic","status":"passed","testResultsByEnv":{"default":"ff5c5f6af6ae41085c2c46b9377cf399"}}
+{"id":"baf6a0727d83e64f8273347366271fdd","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money refuses cross-currency arithmetic","name":"refuses cross-currency arithmetic","status":"passed","testResultsByEnv":{"default":"ba6018f38dd57fe8448a6cb142734325"}}

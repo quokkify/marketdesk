@@ -1,1 +1,1 @@
-{"id":"abd95248a9c4134bfbde0084212f676c","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money rejects non-finite amounts","name":"rejects non-finite amounts","status":"passed","testResultsByEnv":{"default":"fe30bd84a58bc637d877696a7e7915fd"}}
+{"id":"abd95248a9c4134bfbde0084212f676c","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money rejects non-finite amounts","name":"rejects non-finite amounts","status":"passed","testResultsByEnv":{"default":"8a720f9764403d7c65e7d4617bd1a11a"}}
