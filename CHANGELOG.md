@@ -2,6 +2,26 @@
 
 ## [1.1.0](https://github.com/quokkify/marketdesk/compare/v1.0.0...v1.1.0) (2026-09-26)
 
+<!-- project-toolkit:rich-block:start -->
+### 📦 Dependencies
+- update @tanstack/react-query to v5.103.2 ([#293](https://github.com/quokkify/marketdesk/pull/293)) ([3591ff9](https://github.com/quokkify/marketdesk/commit/3591ff9ece0e382f3e119c06bb60ac1d1a96efff)) <!-- project-toolkit:rich-release-notes pr=293 -->
+- update prettier to v3.9.8 ([#294](https://github.com/quokkify/marketdesk/pull/294)) ([6579d18](https://github.com/quokkify/marketdesk/commit/6579d18749b62146070db8a443f2118922ac9a21)) <!-- project-toolkit:rich-release-notes pr=294 -->
+- update tsx to v4.23.15 ([#295](https://github.com/quokkify/marketdesk/pull/295)) ([c736343](https://github.com/quokkify/marketdesk/commit/c736343fc177631d92fe670fe16016f963593061)) <!-- project-toolkit:rich-release-notes pr=295 -->
+- update @swc/core to v1.16.2 ([#296](https://github.com/quokkify/marketdesk/pull/296)) ([8a4d3ac](https://github.com/quokkify/marketdesk/commit/8a4d3ac1ff0da71deace134a0ac9c6dbdb826836)) <!-- project-toolkit:rich-release-notes pr=296 -->
+- update @types/pg to v8.23.1 ([#297](https://github.com/quokkify/marketdesk/pull/297)) ([795ee4f](https://github.com/quokkify/marketdesk/commit/795ee4f75cad5a63e3e9dbcc256fb7fe563d2a2d)) <!-- project-toolkit:rich-release-notes pr=297 -->
+- update @vitejs/plugin-react to v6.1.1 ([#298](https://github.com/quokkify/marketdesk/pull/298)) ([8e71ad0](https://github.com/quokkify/marketdesk/commit/8e71ad0407c1149c3780937754c7e8ed923b260e)) <!-- project-toolkit:rich-release-notes pr=298 -->
+- update allure-jest to v3.12.2 ([#299](https://github.com/quokkify/marketdesk/pull/299)) ([69f675e](https://github.com/quokkify/marketdesk/commit/69f675e9fd1057cf3c86fdfe854cf3b27fe05761)) <!-- project-toolkit:rich-release-notes pr=299 -->
+- update docker-compose to v1.5.0 ([#300](https://github.com/quokkify/marketdesk/pull/300)) ([d0e7796](https://github.com/quokkify/marketdesk/commit/d0e77968769f017ee6c9fc0a995ab2b21ad49b78)) <!-- project-toolkit:rich-release-notes pr=300 -->
+- update eslint to v10.11.0 ([#301](https://github.com/quokkify/marketdesk/pull/301)) ([cd4129e](https://github.com/quokkify/marketdesk/commit/cd4129e3af414264b5630f3f1b9aca288de67c35)) <!-- project-toolkit:rich-release-notes pr=301 -->
+- update jest to v30.5.2 ([#302](https://github.com/quokkify/marketdesk/pull/302)) ([2baae2a](https://github.com/quokkify/marketdesk/commit/2baae2a1d0609b7f4cd8f517779924a8e9264872)) <!-- project-toolkit:rich-release-notes pr=302 -->
+- update react monorepo to v19.3.0 ([#303](https://github.com/quokkify/marketdesk/pull/303)) ([da7a2d5](https://github.com/quokkify/marketdesk/commit/da7a2d5b357b996feaf72d16a18bbdfbef0c2c22)) <!-- project-toolkit:rich-release-notes pr=303 -->
+- update supertest to v7.3.0 ([#304](https://github.com/quokkify/marketdesk/pull/304)) ([11d9e68](https://github.com/quokkify/marketdesk/commit/11d9e6837e5575456c39d622264399c13c7c9aa6)) <!-- project-toolkit:rich-release-notes pr=304 -->
+- update terser to v5.51.2 ([#305](https://github.com/quokkify/marketdesk/pull/305)) ([c0da78d](https://github.com/quokkify/marketdesk/commit/c0da78d58cfd5e8a9c1704ded33c5380164a646f)) <!-- project-toolkit:rich-release-notes pr=305 -->
+- update typescript-eslint monorepo to v8.70.1 ([#306](https://github.com/quokkify/marketdesk/pull/306)) ([3392779](https://github.com/quokkify/marketdesk/commit/3392779c2e40f56f4a644769763aa4cff32bd729)) <!-- project-toolkit:rich-release-notes pr=306 -->
+- update vite to v8.3.0 ([#307](https://github.com/quokkify/marketdesk/pull/307)) ([d2fcabb](https://github.com/quokkify/marketdesk/commit/d2fcabb8845ec2eb2aa256ce86cd7757480598e1)) <!-- project-toolkit:rich-release-notes pr=307 -->
+- lock file maintenance ([#308](https://github.com/quokkify/marketdesk/pull/308)) ([50f0e86](https://github.com/quokkify/marketdesk/commit/50f0e864f7ce26a5247e455d974831a1b3b078e4)) <!-- project-toolkit:rich-release-notes pr=308 -->
+- update @langchain/core to v1.2.12 ([#317](https://github.com/quokkify/marketdesk/pull/317)) ([b8c4fdd](https://github.com/quokkify/marketdesk/commit/b8c4fddb38e0d81cc9d2f2ef0e51892d17a320cb)) <!-- project-toolkit:rich-release-notes pr=317 -->
+<!-- project-toolkit:rich-block:end -->
 
 ### Features
 
