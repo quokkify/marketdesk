@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/quokkify/marketdesk/compare/v1.0.0...v1.1.0) (2026-09-26)
+
+
+### Features
+
+* graph-backed product publication journey via LangGraph ([#311](https://github.com/quokkify/marketdesk/issues/311)) ([04bdd47](https://github.com/quokkify/marketdesk/commit/04bdd47fd2def495999401e9a1e8e9c8070488cd))
+
 ## 1.0.0 (2026-09-25)
 
 
