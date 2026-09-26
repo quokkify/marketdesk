@@ -1,1 +1,1 @@
-{"id":"b96016a42f30699569c3c3f965048d09","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money rejects invalid currency codes","name":"rejects invalid currency codes","status":"passed","testResultsByEnv":{"default":"b4a174c369b125a45e8de101848d6ddd"}}
+{"id":"b96016a42f30699569c3c3f965048d09","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Money.test.ts#Money rejects invalid currency codes","name":"rejects invalid currency codes","status":"passed","testResultsByEnv":{"default":"be417d0e6324b3dee6bd69f029fb6661"}}
