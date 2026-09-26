@@ -1,0 +1,1 @@
+{"id":"9e48ec303f07eb7ce54cfdacfd450b50","fullName":"hermes-marketdesk:src/backend/application/__tests__/CreateProductUseCase.test.ts#CreateProductUseCase fails validation when the description is too short","name":"fails validation when the description is too short","status":"passed","testResultsByEnv":{"default":"0c1d1a5341c42869bf38f2b744e8354c"}}

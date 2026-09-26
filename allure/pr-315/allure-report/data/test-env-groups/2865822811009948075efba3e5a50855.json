@@ -1,0 +1,1 @@
+{"id":"2865822811009948075efba3e5a50855","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Listing.test.ts#Listing lifecycle refuses to clear remote identity for a listing that is not live","name":"refuses to clear remote identity for a listing that is not live","status":"passed","testResultsByEnv":{"default":"ce1a528bb991e5914526d024f74c6cd1"}}

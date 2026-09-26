@@ -1,0 +1,1 @@
+{"id":"981cf8baf5f4ef1489be21c5098ba130","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter does NOT retry publish on a 5xx failure (no duplicate POST)","name":"does NOT retry publish on a 5xx failure (no duplicate POST)","status":"passed","testResultsByEnv":{"default":"5f5b8777335fd4669f9879f1d4036fd6"}}

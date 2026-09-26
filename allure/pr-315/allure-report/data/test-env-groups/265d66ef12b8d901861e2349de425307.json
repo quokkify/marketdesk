@@ -1,0 +1,1 @@
+{"id":"265d66ef12b8d901861e2349de425307","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions denies origins outside the allowlist","name":"denies origins outside the allowlist","status":"passed","testResultsByEnv":{"default":"554b4e28b0112c9d3096f55501506fb5"}}

@@ -1,0 +1,1 @@
+{"id":"36cbc1be619a2a909b3747e1f31194cf","fullName":"hermes-marketdesk:src/backend/config/__tests__/database.test.ts#migrationPoolConfig uses only database settings and preserves verified TLS policy","name":"uses only database settings and preserves verified TLS policy","status":"passed","testResultsByEnv":{"default":"b4d44f6ae8af277fbd0c4ca9cb47105e"}}

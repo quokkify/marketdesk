@@ -1,0 +1,1 @@
+{"id":"60ba081cb6055cebd358a2057b7d9952","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/OlxPublicationQuotaService.test.ts#OlxPublicationQuotaService rejects a blank override reason (\" \")","name":"rejects a blank override reason (\" \")","status":"passed","testResultsByEnv":{"default":"a8228a6ef76f258acefe511b25f29d67"}}

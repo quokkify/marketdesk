@@ -1,0 +1,1 @@
+{"id":"dd1ac458f7003869808c4f6e2f0ec91a","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/__tests__/newRepositories.test.ts#AuthUserMapper normalizes a null workspace_id","name":"normalizes a null workspace_id","status":"passed","testResultsByEnv":{"default":"99a5322a229235b0dde7dfe99738a1e1"}}

@@ -1,0 +1,1 @@
+{"id":"d66eaaf7c85733ff1a3a8914acc738bc","fullName":"hermes-marketdesk:src/backend/experiments/__tests__/ProductAssistanceExperiment.test.ts#offline assistance experiments never exports arbitrary error text, stacks or names","name":"never exports arbitrary error text, stacks or names","status":"passed","testResultsByEnv":{"default":"b68f8c77f5ac6238785ea902d9f7fbc9"}}

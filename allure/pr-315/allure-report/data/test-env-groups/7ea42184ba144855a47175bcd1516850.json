@@ -1,0 +1,1 @@
+{"id":"7ea42184ba144855a47175bcd1516850","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/uploads.integration.test.ts#product image upload HTTP contract rejects unsupported or signature-mismatched image data","name":"rejects unsupported or signature-mismatched image data","status":"passed","testResultsByEnv":{"default":"be40de5ff4c7b4deb463d8652cd9f478"}}

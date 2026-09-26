@@ -1,0 +1,1 @@
+{"id":"a1a35abc937965e470bea064b1093225","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#SyncMarketplaceHandler keeps non-OLX sync on the existing generic adapter path","name":"keeps non-OLX sync on the existing generic adapter path","status":"passed","testResultsByEnv":{"default":"614c4e443f5cfe51e909af42a3be9722"}}

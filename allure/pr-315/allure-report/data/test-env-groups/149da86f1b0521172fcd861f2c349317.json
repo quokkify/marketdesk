@@ -1,0 +1,1 @@
+{"id":"149da86f1b0521172fcd861f2c349317","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API products rejects draft listing creation for a disconnected marketplace","name":"rejects draft listing creation for a disconnected marketplace","status":"passed","testResultsByEnv":{"default":"647512d0190033edeaea4ee377cc2c4b"}}

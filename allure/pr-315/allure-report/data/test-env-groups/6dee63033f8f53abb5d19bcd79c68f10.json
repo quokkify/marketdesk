@@ -1,0 +1,1 @@
+{"id":"6dee63033f8f53abb5d19bcd79c68f10","fullName":"hermes-marketdesk:src/backend/config/__tests__/database.test.ts#migrationPoolConfig rejects malformed migration DB port 0","name":"rejects malformed migration DB port 0","status":"passed","testResultsByEnv":{"default":"ceafe1a2539868b51591e94f6e5c9362"}}

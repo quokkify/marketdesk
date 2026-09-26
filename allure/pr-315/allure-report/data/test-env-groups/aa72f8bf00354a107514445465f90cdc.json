@@ -1,0 +1,1 @@
+{"id":"aa72f8bf00354a107514445465f90cdc","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product invariants rejects a negative selling price","name":"rejects a negative selling price","status":"passed","testResultsByEnv":{"default":"5474aa906bc55b0272c87df92e3dd884"}}

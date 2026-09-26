@@ -1,0 +1,1 @@
+{"id":"7380c08bf700ab64be6b1eeed2e9a2be","fullName":"hermes-marketdesk:src/backend/config/__tests__/database.test.ts#databaseSslConfig prevents DATABASE_URL parameters from overriding the explicit TLS mode","name":"prevents DATABASE_URL parameters from overriding the explicit TLS mode","status":"passed","testResultsByEnv":{"default":"727f0dcd124d11aca23eda8a4ce7538e"}}

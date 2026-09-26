@@ -1,0 +1,1 @@
+{"id":"bf23579fe1169afae6046a96126adc8b","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions allows exact configured origins","name":"allows exact configured origins","status":"passed","testResultsByEnv":{"default":"db1d327c7ee58d5c4f37ee31ccd4476f"}}

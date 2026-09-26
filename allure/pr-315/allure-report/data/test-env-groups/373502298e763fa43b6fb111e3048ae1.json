@@ -1,0 +1,1 @@
+{"id":"373502298e763fa43b6fb111e3048ae1","fullName":"hermes-marketdesk:src/backend/application/__tests__/PublishListingUseCase.test.ts#PublishListingUseCase enqueues a publish job and logs intent when connected","name":"enqueues a publish job and logs intent when connected","status":"passed","testResultsByEnv":{"default":"2f97befc99b218bc3df33c0514baf73f"}}

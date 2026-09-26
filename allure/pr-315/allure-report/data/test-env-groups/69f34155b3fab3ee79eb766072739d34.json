@@ -1,0 +1,1 @@
+{"id":"69f34155b3fab3ee79eb766072739d34","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API hermes preserves explicit null bodies as validation failures","name":"preserves explicit null bodies as validation failures","status":"passed","testResultsByEnv":{"default":"0a9df27b0fe9db0ae31ff8bc42740016"}}

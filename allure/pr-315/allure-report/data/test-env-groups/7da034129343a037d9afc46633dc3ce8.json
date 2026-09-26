@@ -1,0 +1,1 @@
+{"id":"7da034129343a037d9afc46633dc3ce8","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisMarketplaceOAuthRefreshLock.test.ts#RedisMarketplaceOAuthRefreshLock renews the owned lease before it expires","name":"renews the owned lease before it expires","status":"passed","testResultsByEnv":{"default":"c4ba0ab28675f8ef62242e03cb73dcd9"}}

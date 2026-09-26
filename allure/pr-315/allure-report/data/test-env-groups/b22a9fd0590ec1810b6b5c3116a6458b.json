@@ -1,0 +1,1 @@
+{"id":"b22a9fd0590ec1810b6b5c3116a6458b","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product status transitions (forward-only) forbids reverse transitions (active -> draft)","name":"forbids reverse transitions (active -> draft)","status":"passed","testResultsByEnv":{"default":"1a59666cdd54d0d1d788027fe1f82bda"}}

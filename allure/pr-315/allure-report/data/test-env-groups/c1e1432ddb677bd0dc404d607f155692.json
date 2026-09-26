@@ -1,0 +1,1 @@
+{"id":"c1e1432ddb677bd0dc404d607f155692","fullName":"hermes-marketdesk:src/backend/application/__tests__/SyncMarketplaceUseCase.test.ts#SyncMarketplaceUseCase enqueues token-free sync jobs scoped to the requested workspace","name":"enqueues token-free sync jobs scoped to the requested workspace","status":"passed","testResultsByEnv":{"default":"defa1de85f8b4ea38a52549da27a8e5b"}}

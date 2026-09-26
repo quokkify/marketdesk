@@ -1,0 +1,1 @@
+{"id":"d8a9ec2b0a811e8695b8d84ce3d9861d","fullName":"hermes-marketdesk:src/frontend/pages/ProductsPage.test.ts#product wizard navigation guard blocks Back and cross-page navigation while a dirty wizard is open","name":"blocks Back and cross-page navigation while a dirty wizard is open","status":"passed","testResultsByEnv":{"default":"9ebfe97e558a5c9bf0b73da52336c8f6"}}

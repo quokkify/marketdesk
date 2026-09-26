@@ -1,0 +1,1 @@
+{"id":"06f1db13615932bffe4c64a60e638aba","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions rejects blank CORS_ORIGIN in production","name":"rejects blank CORS_ORIGIN in production","status":"passed","testResultsByEnv":{"default":"1832b7c5815f657181d8c8ddc2dc1ccd"}}

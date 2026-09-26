@@ -1,0 +1,1 @@
+{"id":"661e4deba8a04a625d61374f0f658aa1","fullName":"hermes-marketdesk:src/backend/application/__tests__/ProductImageUploadService.test.ts#ProductImageUploadService rejects non-UUID image ids before touching storage","name":"rejects non-UUID image ids before touching storage","status":"passed","testResultsByEnv":{"default":"d497aa32ffaaf5831dee557ad423eb39"}}

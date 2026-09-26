@@ -1,0 +1,1 @@
+{"id":"6f8a9c6b6c0f242cbbf2b3b0d68961ef","fullName":"hermes-marketdesk:src/backend/experiments/__tests__/ProductAssistanceExperiment.test.ts#offline assistance experiments rejects missing provenance before creating an artifact","name":"rejects missing provenance before creating an artifact","status":"passed","testResultsByEnv":{"default":"8ed956c0922fd99ef16e98591b4af69c"}}
