@@ -1,0 +1,1 @@
+{"id":"ccb38e7ce10a93d498d1ad3f34aa1430","fullName":"hermes-marketdesk:src/backend/application/__tests__/MarketplaceOAuthService.test.ts#MarketplaceOAuthService re-reads credentials while holding the refresh lock","name":"re-reads credentials while holding the refresh lock","status":"passed","testResultsByEnv":{"default":"c33b1146b646b4d7a3cff904947da9f8"}}

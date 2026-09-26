@@ -1,0 +1,1 @@
+{"id":"a4288b495d60ecdd37a0bfdfb5fdb903","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter keeps auth sync failures as job-level errors","name":"keeps auth sync failures as job-level errors","status":"passed","testResultsByEnv":{"default":"010c1caa4b077ce1efe04d5f4c1f9418"}}

@@ -1,0 +1,1 @@
+{"id":"d6f41a1013bb9838aec8a1ceea88407e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter normalizes 401 to MarketplaceAuthenticationError","name":"normalizes 401 to MarketplaceAuthenticationError","status":"passed","testResultsByEnv":{"default":"04d70c58b5bfad168f3dfb2e898de69e"}}

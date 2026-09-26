@@ -1,0 +1,1 @@
+{"id":"cf3c0eff54ad8f656f37cdc86af9b165","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveJwtSecret (S1 fail-closed JWT secret) production throws when the secret is unset","name":"throws when the secret is unset","status":"passed","testResultsByEnv":{"default":"e59839826b9c88b5c0312fce2d48e1c7"}}

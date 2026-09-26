@@ -1,0 +1,1 @@
+{"id":"341fac851ad8bbfef99328ce35d3ea79","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/__tests__/mappers.test.ts#MarketplaceMapper maps a disconnected marketplace with null lastSync","name":"maps a disconnected marketplace with null lastSync","status":"passed","testResultsByEnv":{"default":"2adad53735b310fa34b896e3538fdd2f"}}

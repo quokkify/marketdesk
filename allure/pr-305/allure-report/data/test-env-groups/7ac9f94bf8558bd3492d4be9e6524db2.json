@@ -1,0 +1,1 @@
+{"id":"7ac9f94bf8558bd3492d4be9e6524db2","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/cors.test.ts#createCorsOptions does not treat wildcard config as a credentialed wildcard origin","name":"does not treat wildcard config as a credentialed wildcard origin","status":"passed","testResultsByEnv":{"default":"5301ca4beb141a063db9afe91c5fd0e2"}}

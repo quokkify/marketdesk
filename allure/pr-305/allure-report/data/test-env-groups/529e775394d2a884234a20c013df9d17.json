@@ -1,0 +1,1 @@
+{"id":"529e775394d2a884234a20c013df9d17","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache returns null (treats as miss) on corrupt JSON","name":"returns null (treats as miss) on corrupt JSON","status":"passed","testResultsByEnv":{"default":"e3718462eadb52bfe21c5631cc7be48e"}}

@@ -1,0 +1,1 @@
+{"id":"cd53428aceaa02527141016f424f482c","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter does NOT retry delist on a 5xx failure (no duplicate DELETE)","name":"does NOT retry delist on a 5xx failure (no duplicate DELETE)","status":"passed","testResultsByEnv":{"default":"3e29570b18f9e38908a9e8fc363c922d"}}

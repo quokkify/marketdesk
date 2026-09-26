@@ -1,0 +1,1 @@
+{"id":"96654e4a39342fcecfc8d5705736dd00","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/HermesAI.test.ts#HermesAI (IAIProvider) analyzeListing clamps the score and returns string suggestions","name":"analyzeListing clamps the score and returns string suggestions","status":"passed","testResultsByEnv":{"default":"493ac88262fcc2a669c9b2e28b3a2986"}}

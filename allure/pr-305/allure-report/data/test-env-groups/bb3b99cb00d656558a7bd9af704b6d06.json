@@ -1,0 +1,1 @@
+{"id":"bb3b99cb00d656558a7bd9af704b6d06","fullName":"hermes-marketdesk:src/backend/presentation/http/controllers/__tests__/AnalyticsController.test.ts#parseAnalyticsRange rejects an invalid analytics query 4","name":"rejects an invalid analytics query 4","status":"passed","testResultsByEnv":{"default":"c8c4e96827a5d9e6e91d7602d8048ef5"}}

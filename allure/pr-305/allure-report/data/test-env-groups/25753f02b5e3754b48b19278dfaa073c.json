@@ -1,0 +1,1 @@
+{"id":"25753f02b5e3754b48b19278dfaa073c","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/HermesAI.test.ts#HermesAI (IAIProvider) suggestPrice tolerates JSON wrapped in a fenced code block","name":"suggestPrice tolerates JSON wrapped in a fenced code block","status":"passed","testResultsByEnv":{"default":"0be0a16b983361424841dcf481e70c81"}}

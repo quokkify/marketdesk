@@ -1,0 +1,1 @@
+{"id":"c5ac896c2312ff7cf2fad92758695d4b","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects flat taxonomy with an ancestor marked as a leaf","name":"rejects flat taxonomy with an ancestor marked as a leaf","status":"passed","testResultsByEnv":{"default":"e00aa163fb242981dce432ea857893d8"}}

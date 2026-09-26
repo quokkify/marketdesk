@@ -1,0 +1,1 @@
+{"id":"66043d012c6412413ce82e5cf3025d50","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product status transitions (forward-only) allows draft -> active -> attention -> sold","name":"allows draft -> active -> attention -> sold","status":"passed","testResultsByEnv":{"default":"fa2559895c004bdc6dffd6b0789c97b9"}}

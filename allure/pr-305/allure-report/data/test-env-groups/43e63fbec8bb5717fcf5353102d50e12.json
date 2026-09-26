@@ -1,0 +1,1 @@
+{"id":"43e63fbec8bb5717fcf5353102d50e12","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/idor.integration.test.ts#IDOR: workspace A cannot reach workspace B resources (S2) DELETE /products/:idB -> 404 (no delete)","name":"DELETE /products/:idB -> 404 (no delete)","status":"passed","testResultsByEnv":{"default":"bd0f4fb475eac909e060c6fd4cb38c7a"}}

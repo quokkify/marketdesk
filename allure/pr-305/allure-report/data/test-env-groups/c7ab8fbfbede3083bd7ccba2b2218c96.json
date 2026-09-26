@@ -1,0 +1,1 @@
+{"id":"c7ab8fbfbede3083bd7ccba2b2218c96","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode rejects a missing production mode: undefined","name":"rejects a missing production mode: undefined","status":"passed","testResultsByEnv":{"default":"d638fce0a0c86854cb5ea983fc126793"}}

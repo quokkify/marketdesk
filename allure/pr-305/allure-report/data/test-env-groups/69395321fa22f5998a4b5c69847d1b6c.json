@@ -1,0 +1,1 @@
+{"id":"69395321fa22f5998a4b5c69847d1b6c","fullName":"hermes-marketdesk:src/backend/config/__tests__/safeErrorDetails.test.ts#safeErrorDetails preserves useful non-secret connection failure fields","name":"preserves useful non-secret connection failure fields","status":"passed","testResultsByEnv":{"default":"fbeb1f7407b6d390e34a9fe14f81053a"}}

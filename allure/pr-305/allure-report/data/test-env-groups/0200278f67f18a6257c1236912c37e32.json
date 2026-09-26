@@ -1,0 +1,1 @@
+{"id":"0200278f67f18a6257c1236912c37e32","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/FetchMarketplaceHttpClient.test.ts#FetchMarketplaceHttpClient adds default headers and serializes JSON requests","name":"adds default headers and serializes JSON requests","status":"passed","testResultsByEnv":{"default":"a1504e3475b1eedfb6f3f0b303281858"}}

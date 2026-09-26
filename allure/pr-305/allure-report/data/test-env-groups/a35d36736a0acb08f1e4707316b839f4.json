@@ -1,0 +1,1 @@
+{"id":"a35d36736a0acb08f1e4707316b839f4","fullName":"hermes-marketdesk:src/backend/application/__tests__/CreateProductUseCase.test.ts#CreateProductUseCase creates a product, persists it and emits an event (happy path)","name":"creates a product, persists it and emits an event (happy path)","status":"passed","testResultsByEnv":{"default":"369040fdd62d68a78f4568d7a44abf6e"}}

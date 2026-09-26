@@ -1,0 +1,1 @@
+{"id":"21d58aaa523ad25011a527b5ef176462","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects flat taxonomy with a child attached to the asserted leaf","name":"rejects flat taxonomy with a child attached to the asserted leaf","status":"passed","testResultsByEnv":{"default":"b0cbfaff2febaaf073a264f696c5c62b"}}
