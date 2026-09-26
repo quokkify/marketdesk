@@ -1,0 +1,1 @@
+{"id":"7281f4be279509970e931f168c46928a","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/OlxPublicationQuotaService.test.ts#OlxPublicationQuotaService blocks unverified quota without an override","name":"blocks unverified quota without an override","status":"passed","testResultsByEnv":{"default":"bf6a427ca4debcd9588ebd40c946ce25"}}

@@ -1,0 +1,1 @@
+{"id":"8c3bf1467c0abc0b462a50b1a8c43497","fullName":"hermes-marketdesk:src/backend/config/__tests__/safeErrorDetails.test.ts#safeErrorDetails redacts connection strings and configured secrets from messages","name":"redacts connection strings and configured secrets from messages","status":"passed","testResultsByEnv":{"default":"8c33dff0ba64e90d84d97f0d919bcac3"}}

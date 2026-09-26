@@ -1,0 +1,1 @@
+{"id":"97cfcfafb42d1d49a22bf3a0b55544c7","fullName":"hermes-marketdesk:src/backend/config/applicationVersion.test.ts#resolveApplicationVersion shows Development when release metadata is absent: undefined","name":"shows Development when release metadata is absent: undefined","status":"passed","testResultsByEnv":{"default":"e7fb6e95c896ba88f4c0c2a8971563ff"}}

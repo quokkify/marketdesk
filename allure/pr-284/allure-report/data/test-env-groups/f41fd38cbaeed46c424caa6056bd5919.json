@@ -1,0 +1,1 @@
+{"id":"f41fd38cbaeed46c424caa6056bd5919","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter maps OLX remote status expired to local status expired","name":"maps OLX remote status expired to local status expired","status":"passed","testResultsByEnv":{"default":"1d28c5a078f6ca70f1d29c6381ac0ba5"}}

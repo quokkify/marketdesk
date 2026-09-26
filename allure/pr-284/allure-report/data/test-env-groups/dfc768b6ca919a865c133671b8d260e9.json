@@ -1,0 +1,1 @@
+{"id":"dfc768b6ca919a865c133671b8d260e9","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects flat taxonomy with a string zero root sentinel","name":"rejects flat taxonomy with a string zero root sentinel","status":"passed","testResultsByEnv":{"default":"03d007598a565ef73b350ce34f55991f"}}

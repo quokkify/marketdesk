@@ -1,0 +1,1 @@
+{"id":"d2283e23efd4588e4391f9f3428e8d29","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter treats invalid OLX counter value decimal string as unavailable","name":"treats invalid OLX counter value decimal string as unavailable","status":"passed","testResultsByEnv":{"default":"db886a859621939c8914d032f71e0be3"}}

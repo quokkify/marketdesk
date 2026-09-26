@@ -1,0 +1,1 @@
+{"id":"bc74a02d8da7d102024a5a33c17d2d94","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent lifecycle transitions rejects completing an undo as applied","name":"rejects completing an undo as applied","status":"passed","testResultsByEnv":{"default":"72fbd7b16c49ebae2f31e0348a667fee"}}

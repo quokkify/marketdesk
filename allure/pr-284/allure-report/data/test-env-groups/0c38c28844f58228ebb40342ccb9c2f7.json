@@ -1,0 +1,1 @@
+{"id":"0c38c28844f58228ebb40342ccb9c2f7","fullName":"hermes-marketdesk:src/backend/config/di/__tests__/container.test.ts#buildContainer (composition root) exposes a functioning WS event subscriber fed by the broker","name":"exposes a functioning WS event subscriber fed by the broker","status":"passed","testResultsByEnv":{"default":"a25ba4c2adce74c5eb204f0f9d83353e"}}

@@ -1,0 +1,1 @@
+{"id":"06bc6abf0be3dcf9d3dcdd60ab5d5b68","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/__tests__/mappers.test.ts#ActivityLogMapper keeps actorId when present and null metadata becomes undefined","name":"keeps actorId when present and null metadata becomes undefined","status":"passed","testResultsByEnv":{"default":"eaddf58d755849a4bf5c89a4d61808c4"}}

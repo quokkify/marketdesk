@@ -1,0 +1,1 @@
+{"id":"79ca076c987f9dec06d87d58d877186a","fullName":"hermes-marketdesk:src/backend/persistence/__tests__/migrationSql.test.ts#concurrent migration SQL parsing fails closed for malformed executable concurrent DDL","name":"fails closed for malformed executable concurrent DDL","status":"passed","testResultsByEnv":{"default":"4797a0fbbc562e43c1ad6b6cf1a59726"}}

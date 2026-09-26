@@ -1,0 +1,1 @@
+{"id":"bf36719ed936a0a89dd61985828404cb","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#PublishListingHandler does not retry permanent finalization failures","name":"does not retry permanent finalization failures","status":"passed","testResultsByEnv":{"default":"b70c6e1e009eecb7729ecda884a7b46a"}}

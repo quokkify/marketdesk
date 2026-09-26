@@ -1,0 +1,1 @@
+{"id":"8cf66c227e9b147250475667d74dffad","fullName":"hermes-marketdesk:src/backend/application/dto/presenters.test.ts#presentListing omits unsafe external URL https://evil.example/phishing","name":"omits unsafe external URL https://evil.example/phishing","status":"passed","testResultsByEnv":{"default":"1eb57a8f94b9a72c81a09b14a0376fcc"}}
