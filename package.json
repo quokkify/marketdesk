@@ -30,7 +30,8 @@
     "test:visual": "playwright test",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:ci": "jest --ci --forceExit"
+    "test:ci": "jest --ci --forceExit",
+    "experiment:assistance": "node --import tsx scripts/run-assistance-experiment.ts"
   },
   "keywords": [
     "marketplace",

@@ -53,3 +53,4 @@ export JWT_SECRET=ci_test_secret_not_for_production
 npm run build:migrate
 node dist/backend/migrate.js
 npm run test:ci
+npm run experiment:assistance
