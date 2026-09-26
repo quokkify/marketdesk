@@ -1,0 +1,1 @@
+{"id":"8f5ef06352e03fe6cb3b87251909ada4","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/OlxPublicationQuotaService.test.ts#OlxPublicationQuotaService rejects an invalid cycleStartedAt date","name":"rejects an invalid cycleStartedAt date","status":"passed","testResultsByEnv":{"default":"3d6fd7a52833ea4e53eb0c7c0fdfd569"}}

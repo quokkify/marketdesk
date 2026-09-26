@@ -1,0 +1,1 @@
+{"id":"dc679083c30311ba69ed3a13879698bb","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent lifecycle transitions can route a guarded automatic decision to human review","name":"can route a guarded automatic decision to human review","status":"passed","testResultsByEnv":{"default":"91a5fffef17de7ad9bfd37cc28ce8eca"}}

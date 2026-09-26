@@ -1,0 +1,1 @@
+{"id":"f676573e7bf4e89094dab8e28e3a2e56","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API auth rejects invalid credentials with a 401 error envelope","name":"rejects invalid credentials with a 401 error envelope","status":"passed","testResultsByEnv":{"default":"3798fa6229f9e31bddaede989442ddb8"}}

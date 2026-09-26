@@ -1,0 +1,1 @@
+{"id":"34386a93a40b37480d5a1383547e25ad","fullName":"hermes-marketdesk:src/backend/config/__tests__/safeErrorDetails.test.ts#safeErrorDetails does not serialize arbitrary properties or non-Error values","name":"does not serialize arbitrary properties or non-Error values","status":"passed","testResultsByEnv":{"default":"7501ba9b5f9d1c0a909ed3522f520637"}}

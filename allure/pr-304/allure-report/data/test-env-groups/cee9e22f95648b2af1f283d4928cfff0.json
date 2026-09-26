@@ -1,0 +1,1 @@
+{"id":"cee9e22f95648b2af1f283d4928cfff0","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#PublishListingHandler rejects undeclared runtime fields in persisted update jobs","name":"rejects undeclared runtime fields in persisted update jobs","status":"passed","testResultsByEnv":{"default":"e966737605d26197230adbc2ba3ce120"}}

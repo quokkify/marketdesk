@@ -1,0 +1,1 @@
+{"id":"7776202ed82708cefb0efa8886f5fc60","fullName":"hermes-marketdesk:src/backend/infrastructure/jobQueue/__tests__/jobHandlers.test.ts#SyncMarketplaceHandler uses the marketplace account access token for OLX sync jobs","name":"uses the marketplace account access token for OLX sync jobs","status":"passed","testResultsByEnv":{"default":"a239e51fdef282f8d9264e7cc66a078d"}}

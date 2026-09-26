@@ -1,0 +1,1 @@
+{"id":"18ca4fd0103e5fb35991b1ae9be7d98f","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter returns [] for sync with no ids without calling the transport","name":"returns [] for sync with no ids without calling the transport","status":"passed","testResultsByEnv":{"default":"a9565a9e093425cd8b91ac5399cc1a45"}}

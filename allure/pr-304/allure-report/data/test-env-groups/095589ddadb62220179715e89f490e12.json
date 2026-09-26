@@ -1,0 +1,1 @@
+{"id":"095589ddadb62220179715e89f490e12","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product invariants rejects a description shorter than 20 chars","name":"rejects a description shorter than 20 chars","status":"passed","testResultsByEnv":{"default":"2b72521adc7cb71de242351127e3d5eb"}}

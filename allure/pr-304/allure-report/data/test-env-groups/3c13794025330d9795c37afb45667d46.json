@@ -1,0 +1,1 @@
+{"id":"3c13794025330d9795c37afb45667d46","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLXAdapter maps a real empty OLX thread list to zero conversations and messages","name":"maps a real empty OLX thread list to zero conversations and messages","status":"passed","testResultsByEnv":{"default":"d90e18424a633c1f9aa0267da5d44912"}}
