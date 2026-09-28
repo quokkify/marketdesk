@@ -22,16 +22,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Check out full repository history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: quokkify/project-toolkit/actions/checkout@v2.23.0
         with:
           fetch-depth: 0
 
       - name: Set up Python and Copier
-        uses: quokkify/project-toolkit/actions/setup-python@v2.22.0
+        uses: quokkify/project-toolkit/actions/setup-python@v2.23.0
         with:
-          python-version: '3.14'
+          python-version: "3.14"
           package-manager: pip
-          cache-dependencies: 'false'
+          cache-dependencies: "false"
           install-command: python -m pip install copier==9.18.2
 
       - name: Apply the template and push the update branch
