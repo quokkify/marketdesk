@@ -1,0 +1,1 @@
+{"id":"46f6d2a2dc4e59c062530eb0abfa351c","fullName":"hermes-marketdesk:src/backend/config/applicationVersion.test.ts#readEmbeddedApplicationVersion reads the version from the immutable artifact metadata file","name":"reads the version from the immutable artifact metadata file","status":"passed","testResultsByEnv":{"default":"037405f44545b00d19c2d5a6edebcb5f"}}

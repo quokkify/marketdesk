@@ -1,0 +1,1 @@
+{"id":"925339bd916ee0ed95c2daba1e0cc9b3","fullName":"hermes-marketdesk:src/backend/domain/entities/__tests__/OlxPublicationQuota.test.ts#OlxPublicationQuota rejects an invalid staleAt date","name":"rejects an invalid staleAt date","status":"passed","testResultsByEnv":{"default":"cc345f3f7e2dbd8f3ba978e16e9fc934"}}

@@ -1,0 +1,1 @@
+{"id":"53246d8d3873486db3b8fe6f6eba9307","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product status transitions (forward-only) canPublish is true while not sold","name":"canPublish is true while not sold","status":"passed","testResultsByEnv":{"default":"d5d46f23256a7f9d4a2d15175dfd1c25"}}

@@ -1,0 +1,1 @@
+{"id":"d364db2e327998dd43d0b060bc225e8b","fullName":"hermes-marketdesk:src/backend/config/__tests__/safeErrorDetails.test.ts#safeErrorDetails redacts configured secrets from every emitted string field","name":"redacts configured secrets from every emitted string field","status":"passed","testResultsByEnv":{"default":"7c4b9ac124826a40149c05c35eaab1b6"}}
