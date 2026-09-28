@@ -1,0 +1,1 @@
+{"id":"7faf2aa6aea3ae7b5de338280772107e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/cache/__tests__/RedisCache.test.ts#RedisCache returns null on a miss","name":"returns null on a miss","status":"passed","testResultsByEnv":{"default":"f33b421e522bc1e12c3ce650ece6eff8"}}

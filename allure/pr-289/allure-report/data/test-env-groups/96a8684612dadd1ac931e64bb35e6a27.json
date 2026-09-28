@@ -1,1 +1,0 @@
-{"id":"96a8684612dadd1ac931e64bb35e6a27","fullName":"hermes-marketdesk:src/backend/application/__tests__/MarketplaceOAuthService.test.ts#MarketplaceOAuthService clears stored credentials when disconnecting","name":"clears stored credentials when disconnecting","status":"passed","testResultsByEnv":{"default":"4e2e080083bf2347855e4271602a90f5"}}

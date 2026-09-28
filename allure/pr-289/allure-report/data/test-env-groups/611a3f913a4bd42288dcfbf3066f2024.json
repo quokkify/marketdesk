@@ -1,1 +1,0 @@
-{"id":"611a3f913a4bd42288dcfbf3066f2024","fullName":"hermes-marketdesk:src/backend/application/__tests__/PublishListingUseCase.test.ts#PublishListingUseCase does not enqueue when the OLX quota decision blocks publication","name":"does not enqueue when the OLX quota decision blocks publication","status":"passed","testResultsByEnv":{"default":"1fae19ae6939519cf9cea5bc8f9e660e"}}
