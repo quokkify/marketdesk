@@ -4,7 +4,7 @@ A workspace-scoped platform for managing products, listings, marketplace state, 
 
 Project status: [prototype](.github/project-status.yml) · active implementation · not ready for production · current release `marketdesk-v0.19.2`.
 
-Documentation showcase copies are hosted in [quokkify/.github](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk); runtime-required brand assets remain under `public/`. To update the project scaffold, run `copier update --trust` and review the generated diff before committing.
+Documentation showcase copies are hosted in [quokkify/.github](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk); runtime-required brand assets remain under `public/`. The CI scaffold comes from [project-toolkit](https://github.com/quokkify/project-toolkit) at the version in `.copier-answers.yml`. Use the `Update project template` workflow for a reviewable update branch; preserve MarketDesk's Node commands and required check names when resolving Copier conflicts.
 
 ## Overview
 
@@ -308,18 +308,24 @@ npx tsc --noEmit -p tsconfig.json          # typecheck frontend + shared
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` runs on every push/PR to `main`: install (npm cached),
-lint (reported, non-blocking — see Known Issues), typecheck (both tsconfigs), the
-Jest suite (with Postgres + Redis service containers available), and the frontend +
-backend builds. Any step except lint fails the build.
+`.github/workflows/validate.yml` runs on pull requests and pushes to `main`.
+It calls the shared Node and Docker build workflows from `project-toolkit`.
+The Node job runs repository checks, Jest through `scripts/ci-test.sh`, and the
+backend/frontend build; Docker builds the current combined image without pushing.
+The `Validation pipeline complete` job is a required merge check, alongside
+`CodeQL` and `Gitleaks`. Renovate uses `.github/renovate.json` and the shared
+`quokkify/renovate-presets` configuration. Release Please creates release PRs
+and tags through the shared release workflow.
 
-### Known Issues
+The Allure workflow reads test artifacts from the completed validation run,
+comments on the pull request, and publishes trusted same-repository PR reports
+under `https://quokkify.github.io/marketdesk/allure/pr-N/`. GitHub Pages serves
+the `gh-pages` branch; fork and Dependabot PRs do not publish there.
 
-- A small number of **pre-existing** ESLint errors remain in files outside the
-  current change set (`src/backend/config/database.ts`, `src/backend/config/redis.ts`,
-  `src/backend/persistence/seed.ts`, `src/shared/utils/index.ts`): unused imports and
-  one `no-prototype-builtins`. The CI lint step is therefore non-blocking; new code is
-  expected to be lint-clean.
+The shared Docker workflow already accepts a Dockerfile, build context, image
+name, tags, and optional registry credentials. Publishing separate backend and
+frontend images to GHCR will follow the planned split of the frontend build and
+assets. The current Dockerfile still produces one image that serves both.
 
 ## Database
 

@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '30 3 * * 6'
+    - cron: "30 3 * * 6"
   workflow_dispatch:
 
 permissions:
@@ -17,12 +17,12 @@ concurrency:
 
 jobs:
   scan:
-    name: Scan Git history and current tree
+    name: gitleaks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Check out full repository history
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: quokkify/project-toolkit/actions/checkout@v2.23.0
         with:
           fetch-depth: 0
           persist-credentials: false

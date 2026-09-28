@@ -31,6 +31,10 @@ BLOCK_END = "<!-- project-toolkit:rich-block:end -->"
 REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SAFE_PATH_PATTERN = re.compile(r"[A-Za-z0-9._/-]+")
 DEPENDENCY_TITLE_PATTERN = re.compile(r"^(?:chore|deps)\(deps\):\s+", re.IGNORECASE)
+DEPENDENCY_UPDATE_PATTERN = re.compile(
+    r"^(?:chore|deps)\(deps\):\s+update\s+(?P<name>[A-Za-z0-9@_./-]+)\s+to\s+v?(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?P<tail>.*)$",
+    re.IGNORECASE,
+)
 BARE_CHORE_TITLE_PATTERN = re.compile(r"^chore:\s+", re.IGNORECASE)
 DEPENDENCIES_HEADING = "### 📦 Dependencies"
 
@@ -62,6 +66,75 @@ def _render_dependency_content(content: str) -> str:
             line = f"- {line}"
         rendered.append(line)
     return "\n".join(rendered) or "- Dependency update"
+
+
+def _dependency_identity(title: str) -> tuple[str, str, bool] | None:
+    """Recognize only explicit, unambiguous versioned dependency titles."""
+    match = DEPENDENCY_UPDATE_PATTERN.fullmatch(title.strip())
+    if not match:
+        return None
+    tail = match.group("tail").strip()
+    security = bool(re.fullmatch(r"\[security\]", tail, re.IGNORECASE))
+    if tail and not security:
+        return None
+    return match.group("name"), match.group("version"), security
+
+
+def _version_key(version: str) -> tuple[tuple[int, ...], int, tuple[object, ...]]:
+    """Order semantic numeric versions (stable after prerelease)."""
+    base, separator, prerelease = version.partition("-")
+    identifiers: tuple[object, ...] = tuple(
+        (0, int(item)) if item.isdigit() else (1, item.casefold())
+        for item in prerelease.split(".")
+    ) if separator else ()
+    return tuple(int(part) for part in base.split(".")), int(not separator), identifiers
+
+
+def _compact_dependency_entries(
+    entries: list[tuple[int, str, dict[str, str], bool, Mapping[str, object]]],
+) -> list[tuple[int, str, dict[str, str], bool, Mapping[str, object]]]:
+    """Collapse repeated recognized package updates, retaining every source link."""
+    grouped: dict[str, list[tuple[int, str, dict[str, str], bool, Mapping[str, object], str, bool]]] = {}
+    retained = []
+    for number, title, sections, legacy, pr in entries:
+        identity = _dependency_identity(title)
+        if identity is None or any(key != "dependencies" for key in sections) or (
+            "dependencies" in sections and sections["dependencies"] != title
+        ):
+            retained.append((number, title, sections, legacy, pr))
+            continue
+        name, version, security = identity
+        grouped.setdefault(name, []).append(
+            (number, title, sections, legacy, pr, version, security)
+        )
+    for updates in grouped.values():
+        winner = max(updates, key=lambda item: (_version_key(item[5]), item[0]))
+        identity = _dependency_identity(winner[1])
+        assert identity is not None
+        name, version, _ = identity
+        links = []
+        for number, _title, _sections, _legacy, pr, _version, _security in sorted(updates):
+            url = pr.get("pr_url")
+            source = f"[#{number}]({url})" if isinstance(url, str) and url else f"#{number}"
+            commit_url = pr.get("commit_url")
+            commit_sha = pr.get("commit_sha")
+            if (
+                isinstance(commit_url, str)
+                and commit_url
+                and isinstance(commit_sha, str)
+                and commit_sha
+            ):
+                source += f" ([{commit_sha[:7]}]({commit_url}))"
+            links.append(source)
+        summary = f"- update {name} to v{version} ({', '.join(links)})"
+        if any(item[6] for item in updates):
+            summary += " [security]"
+        # Markers remain machine-readable so every original PR is discoverable.
+        for item in sorted(updates):
+            marker = MARKER.format(number=item[0])
+            summary += " " + marker
+        retained.append((winner[0], winner[1], {"dependencies": summary}, True, winner[4]))
+    return sorted(retained, key=lambda item: item[0])
 
 
 def _add_dependency_marker(content: str, marker: str) -> str:
@@ -148,6 +221,11 @@ def _rich_numbers(text: str) -> set[str]:
                 marker = STANDALONE_MARKER_PATTERN.fullmatch(line) or INLINE_MARKER_PATTERN.fullmatch(line)
             if marker:
                 numbers.add(marker.group(1))
+            elif re.fullmatch(
+                r"\s*[-*+]\s+update\s+\S+\s+to\s+v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\s+\(.+\)\s+(?:\[security\]\s+)?(?:<!-- project-toolkit:rich-release-notes pr=[0-9]+ -->\s*){2,}",
+                line,
+            ):
+                numbers.update(re.findall(MARKER_PATTERN, line))
     return numbers
 
 
@@ -194,9 +272,11 @@ def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> 
             title = str(pr.get("title", "")).strip()
             if title:
                 sections = {"dependencies": title}
+        title = str(pr.get("title", "")).strip()
+        if _dependency_identity(title) is not None and "dependencies" not in sections:
+            sections = {**sections, "dependencies": title}
         # PR bodies are untrusted; reserved delimiters must not be able to
         # terminate or forge the machine-owned block on a later rerun.
-        title = str(pr.get("title", "")).strip()
         reserved = (
             BLOCK_START.casefold(),
             BLOCK_END.casefold(),
@@ -220,6 +300,7 @@ def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> 
         ):
             entries.append((int(number), title, sections, pr.get("legacy_dependency") is True, pr))
     entries.sort(key=lambda item: item[0])
+    entries = _compact_dependency_entries(entries)
     # Keep every dependency bullet together. Markdown treats a heading,
     # paragraph, or another list as a boundary, so rendering in PR-number
     # order would split the dependency list when a rich non-dependency PR is
@@ -237,11 +318,20 @@ def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> 
             blocks.append(DEPENDENCIES_HEADING)
             dependency_heading_written = True
         content = sections["dependencies"]
-        if legacy_dependency and content == title:
+        has_source_markers = "<!-- project-toolkit:rich-release-notes pr=" in content
+        if has_source_markers:
+            # A compacted entry already carries markers for every source PR.
+            # Do not append the winner marker a second time.
+            pass
+        elif legacy_dependency and content == title:
             content = _render_dependency_title(title, number=number, pr=pr)
         else:
             content = _render_dependency_content(content)
-        blocks.append(_add_dependency_marker(content, MARKER.format(number=number)))
+        blocks.append(
+            content
+            if has_source_markers
+            else _add_dependency_marker(content, MARKER.format(number=number))
+        )
     for number_value, title, sections, legacy_dependency, _pr in entries:
         number = str(number_value)
         has_dependency_section = "dependencies" in sections
