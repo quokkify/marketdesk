@@ -1,0 +1,1 @@
+{"id":"b3247b325fb474d5916cc50c2f7be5c5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode enables verified TLS explicitly in production","name":"enables verified TLS explicitly in production","status":"passed","testResultsByEnv":{"default":"9a2a0b0d49d64a6f3c8426574fe3422d"}}
