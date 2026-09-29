@@ -12,7 +12,6 @@ import { createErrorHandler } from '../http/middleware/ErrorHandlingMiddleware';
 import { authMiddleware, requireWorkspace, signToken } from '../http/middleware/AuthMiddleware';
 import { uploadRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createUploadRoutes } from '../http/routes/uploads';
-import { uploadRateLimiter } from '../http/middleware/RateLimitMiddleware';
 
 const IMAGE_ID = '123e4567-e89b-42d3-a456-426614174000';
 let jpeg: Buffer;
