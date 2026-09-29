@@ -43,3 +43,7 @@ export function authenticatedRateLimiter(): RateLimitRequestHandler {
 export function sensitiveRateLimiter(): RateLimitRequestHandler {
   return build(10, keyByWorkspace);
 }
+
+export function uploadRateLimiter(limit = 30): RateLimitRequestHandler {
+  return build(limit, keyByWorkspace);
+}
