@@ -2,6 +2,25 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 
+export function removeHtmlComments(html) {
+  let activeHtml = '';
+  let insideHtmlComment = false;
+  for (let index = 0; index < html.length; index += 1) {
+    if (!insideHtmlComment && html.startsWith('<!--', index)) {
+      insideHtmlComment = true;
+      index += 3;
+      continue;
+    }
+    if (insideHtmlComment && html.startsWith('-->', index)) {
+      insideHtmlComment = false;
+      index += 2;
+      continue;
+    }
+    if (!insideHtmlComment) activeHtml += html[index];
+  }
+  return activeHtml;
+}
+
 const root = path.resolve(import.meta.dirname, '..');
 const publicDir = path.join(root, 'public');
 const expected = [
@@ -15,7 +34,7 @@ const [html, sidebar, svg] = await Promise.all([
   readFile(path.join(publicDir, 'marketdesk-mark.svg'), 'utf8'),
 ]);
 
-const activeHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+const activeHtml = removeHtmlComments(html);
 const htmlTags = (name) =>
   [...activeHtml.matchAll(new RegExp(`<${name}\\b([^>]*)>`, 'gi'))].map((match) => {
     const attributes = new Map();
