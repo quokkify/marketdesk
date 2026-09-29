@@ -1,5 +1,4 @@
 import express from 'express';
-import rateLimit from 'express-rate-limit';
 import request from 'supertest';
 import sharp from 'sharp';
 import type {
@@ -11,6 +10,7 @@ import { ProductImageUploadService } from '../../application/services/ProductIma
 import { ProductImageUploadController } from '../http/controllers/ProductImageUploadController';
 import { createErrorHandler } from '../http/middleware/ErrorHandlingMiddleware';
 import { authMiddleware, requireWorkspace, signToken } from '../http/middleware/AuthMiddleware';
+import { uploadRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createUploadRoutes } from '../http/routes/uploads';
 
 const IMAGE_ID = '123e4567-e89b-42d3-a456-426614174000';
@@ -49,17 +49,11 @@ function buildUploadApp(maxFileSize = 1024 * 1024) {
   const service = new ProductImageUploadService(storage, maxFileSize);
   const controller = new ProductImageUploadController(service);
   const app = express();
-  const uploadRateLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    limit: 2,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
   app.use(
     '/api/uploads',
     authMiddleware,
-    uploadRateLimiter,
     requireWorkspace,
+    uploadRateLimiter(2),
     createUploadRoutes(controller, maxFileSize),
   );
   app.use(createErrorHandler());
