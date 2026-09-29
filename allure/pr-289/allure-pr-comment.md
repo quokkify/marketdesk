@@ -1,18 +1,18 @@
 ## ✅ Allure Report — passed
 
-976 / 976 tests passed · 100% pass rate
+977 / 977 tests passed · 100% pass rate
 
 | Tests | Passed | Failed | Broken | Skipped | Report |
 | ---: | ---: | ---: | ---: | ---: | :--- |
-| 976 | 976 | 0 | 0 | 0 | [View report ↗](https://quokkify.github.io/marketdesk/allure/pr-289/allure-report/?run=36426424641) |
+| 977 | 977 | 0 | 0 | 0 | [View report ↗](https://quokkify.github.io/marketdesk/allure/pr-289/allure-report/?run=36536713653) |
 
 <details>
 <summary><strong>Tests by layer</strong></summary>
 
 | Layer | Tests | Passed | Failed | Broken | Skipped |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| No epic assigned | 976 | 976 | 0 | 0 | 0 |
-| All layers | 976 | 976 | 0 | 0 | 0 |
+| No epic assigned | 977 | 977 | 0 | 0 | 0 |
+| All layers | 977 | 977 | 0 | 0 | 0 |
 
 </details>
 
