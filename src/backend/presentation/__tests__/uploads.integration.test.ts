@@ -52,10 +52,10 @@ function buildUploadApp(maxFileSize = 1024 * 1024) {
   app.use(
     '/api/uploads',
     authMiddleware,
-    uploadRateLimiter(2),
     authenticatedRateLimiter(),
     requireWorkspace,
     createUploadRoutes(controller, maxFileSize),
+  );
   app.use(createErrorHandler());
   return { app, storage };
 }
