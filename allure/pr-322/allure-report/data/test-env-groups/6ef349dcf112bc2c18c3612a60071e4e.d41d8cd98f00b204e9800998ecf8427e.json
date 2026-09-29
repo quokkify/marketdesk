@@ -1,0 +1,1 @@
+{"id":"6ef349dcf112bc2c18c3612a60071e4e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/persistence/__tests__/mappers.test.ts#ProductMapper parses numeric decimal prices as well as strings","name":"parses numeric decimal prices as well as strings","status":"passed","testResultsByEnv":{"default":"f85b04ed248787301e70ab420cb99cbb"}}
