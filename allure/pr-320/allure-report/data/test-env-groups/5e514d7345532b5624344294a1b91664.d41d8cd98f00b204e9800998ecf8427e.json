@@ -1,0 +1,1 @@
+{"id":"5e514d7345532b5624344294a1b91664.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/notifiers.test.ts#TelegramBot throws when no chatId is provided or configured","name":"throws when no chatId is provided or configured","status":"passed","testResultsByEnv":{"default":"8d4f2e18ec578a63600b8b92dd59729b"}}
