@@ -32,34 +32,55 @@ const AssistanceState = Annotation.Root({
 
 type GraphState = typeof AssistanceState.State;
 
+export interface AssistanceTransition {
+  node: 'route' | 'draft' | 'publication' | 'improve';
+  phase: 'started' | 'completed' | 'failed';
+}
+
 // Hermes credentials stay in the injected provider adapter. Graph state contains
 // only tenant-scoped IDs and review-only results, never API keys or tokens.
 export class ProductAssistanceGraph {
   private readonly graph;
 
   constructor(
-    private readonly drafts: ProductAIDraftService,
-    private readonly recheckService: ProductRecheckService,
-    private readonly products: IProductRepository,
-    private readonly listings: IListingRepository,
-    private readonly marketplaces: IMarketplaceRepository,
-    private readonly ai: IAIProvider,
+    private readonly drafts: Pick<ProductAIDraftService, 'generateDraft'>,
+    private readonly recheckService: Pick<ProductRecheckService, 'recheck'>,
+    private readonly products: Pick<IProductRepository, 'findByIdForWorkspace'>,
+    private readonly listings: Pick<IListingRepository, 'findByIdForWorkspace'>,
+    private readonly marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>,
+    private readonly ai: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>,
+    observe?: (transition: AssistanceTransition) => void,
   ) {
+    // The observer receives node lifecycle only, never graph state or error text.
+    const traced = (
+      node: AssistanceTransition['node'],
+      run: (state: GraphState) => Promise<Partial<GraphState>> | Partial<GraphState>,
+    ) => async (state: GraphState): Promise<Partial<GraphState>> => {
+      observe?.({ node, phase: 'started' });
+      try {
+        const update = await run(state);
+        observe?.({ node, phase: 'completed' });
+        return update;
+      } catch (error) {
+        observe?.({ node, phase: 'failed' });
+        throw error;
+      }
+    };
     this.graph = new StateGraph(AssistanceState)
-      .addNode('route', () => ({}))
-      .addNode('draft', async (state: GraphState) => {
+      .addNode('route', traced('route', () => ({})))
+      .addNode('draft', traced('draft', async (state: GraphState) => {
         if (state.input.kind !== 'draft') throw new Error('Invalid draft route');
         const result = await this.drafts.generateDraft({
           ...state.input.request, workspaceId: state.input.workspaceId,
         });
         if (result.isErr()) throw result.error;
         return { result: result.value };
-      })
-      .addNode('publication', async (state: GraphState) => {
+      }))
+      .addNode('publication', traced('publication', async (state: GraphState) => {
         if (state.input.kind !== 'publication') throw new Error('Invalid publication route');
         return { result: await this.recheckService.recheck(state.input.request) };
-      })
-      .addNode('improve', async (state: GraphState) => {
+      }))
+      .addNode('improve', traced('improve', async (state: GraphState) => {
         if (state.input.kind !== 'improve') throw new Error('Invalid improvement route');
         const { workspaceId, productId, listingId } = state.input;
         const product = await this.products.findByIdForWorkspace(productId, workspaceId);
@@ -97,7 +118,7 @@ export class ProductAssistanceGraph {
           reviewOnly: true as const, copy: seo.recommendations,
           ...(price ? { price } : {}),
         } };
-      })
+      }))
       .addEdge(START, 'route')
       .addConditionalEdges('route', (state: GraphState) => state.input.kind, {
         draft: 'draft', publication: 'publication', improve: 'improve',
