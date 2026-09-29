@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.20.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.19.2...marketdesk-v0.20.0) (2026-09-29)
+
+
+### ✨ Features
+
+* graph-backed product publication journey via LangGraph ([#311](https://github.com/quokkify/marketdesk/issues/311)) ([04bdd47](https://github.com/quokkify/marketdesk/commit/04bdd47fd2def495999401e9a1e8e9c8070488cd))
+
+
+### 🐛 Bug Fixes
+
+* **release:** use unprefixed release tags ([#291](https://github.com/quokkify/marketdesk/issues/291)) ([823a20b](https://github.com/quokkify/marketdesk/commit/823a20bde61e22309404d443faaa2851ee68b8b1))
+* **security:** address CodeQL findings ([#320](https://github.com/quokkify/marketdesk/issues/320)) ([8f76a0d](https://github.com/quokkify/marketdesk/commit/8f76a0d953a7c6a702f9290630ddddbb3fbae7bd))
+
 ## 1.0.0 (2026-09-25)
 
 
