@@ -10,13 +10,11 @@ from pathlib import Path
 from typing import Any
 
 RICH_HEADINGS = {
-    "release notes": "Release notes",
-    "highlight": "Highlights",
-    "usage example": "Usage Examples",
-    "migration": "Migration",
-    "breaking change": "Breaking Changes",
-    "dependencies": "📦 Dependencies",
+    "highlight": "✨ Highlights",
+    "usage example": "💡 Usage Examples",
+    "migration": "🔄 Migration",
 }
+LEGACY_RICH_HEADINGS = {"highlights", "usage examples", "migration", "breaking changes"}
 MARKER = "<!-- project-toolkit:rich-release-notes pr={number} -->"
 MARKER_PREFIX = "<!-- project-toolkit:rich-release-notes "
 MARKER_PATTERN = re.compile(r"<!-- project-toolkit:rich-release-notes pr=([0-9]+) -->")
@@ -30,118 +28,10 @@ BLOCK_START = "<!-- project-toolkit:rich-block:start -->"
 BLOCK_END = "<!-- project-toolkit:rich-block:end -->"
 REPOSITORY_PATTERN = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SAFE_PATH_PATTERN = re.compile(r"[A-Za-z0-9._/-]+")
-DEPENDENCY_TITLE_PATTERN = re.compile(r"^(?:chore|deps)\(deps\):\s+", re.IGNORECASE)
-DEPENDENCY_UPDATE_PATTERN = re.compile(
-    r"^(?:chore|deps)\(deps\):\s+update\s+(?P<name>[A-Za-z0-9@_./-]+)\s+to\s+v?(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?P<tail>.*)$",
-    re.IGNORECASE,
-)
-BARE_CHORE_TITLE_PATTERN = re.compile(r"^chore:\s+", re.IGNORECASE)
-DEPENDENCIES_HEADING = "### 📦 Dependencies"
 
 
 class EnrichmentError(RuntimeError):
     """Raised when release metadata is unsafe or ambiguous."""
-
-
-def _render_dependency_title(title: str, *, number: str, pr: Mapping[str, object]) -> str:
-    """Render a title-only dependency with visible source attribution."""
-    description = DEPENDENCY_TITLE_PATTERN.sub("", title, count=1).strip() or "Dependency update"
-    pr_url = pr.get("pr_url")
-    attribution = f"([#{number}]({pr_url}))" if isinstance(pr_url, str) and pr_url else f"(#{number})"
-    commit_url = pr.get("commit_url")
-    commit_sha = pr.get("commit_sha")
-    if isinstance(commit_url, str) and commit_url and isinstance(commit_sha, str) and commit_sha:
-        attribution += f" ([{commit_sha[:7]}]({commit_url}))"
-    return f"- {description} {attribution}"
-
-
-def _render_dependency_content(content: str) -> str:
-    """Normalize dependency entries to bullets without losing Markdown links."""
-    rendered: list[str] = []
-    for line in content.splitlines():
-        line = DEPENDENCY_TITLE_PATTERN.sub("", line.strip(), count=1).strip()
-        if not line:
-            continue
-        if not re.match(r"^(?:[-*+] |\d+[.)] )", line):
-            line = f"- {line}"
-        rendered.append(line)
-    return "\n".join(rendered) or "- Dependency update"
-
-
-def _dependency_identity(title: str) -> tuple[str, str, bool] | None:
-    """Recognize only explicit, unambiguous versioned dependency titles."""
-    match = DEPENDENCY_UPDATE_PATTERN.fullmatch(title.strip())
-    if not match:
-        return None
-    tail = match.group("tail").strip()
-    security = bool(re.fullmatch(r"\[security\]", tail, re.IGNORECASE))
-    if tail and not security:
-        return None
-    return match.group("name"), match.group("version"), security
-
-
-def _version_key(version: str) -> tuple[tuple[int, ...], int, tuple[object, ...]]:
-    """Order semantic numeric versions (stable after prerelease)."""
-    base, separator, prerelease = version.partition("-")
-    identifiers: tuple[object, ...] = tuple(
-        (0, int(item)) if item.isdigit() else (1, item.casefold())
-        for item in prerelease.split(".")
-    ) if separator else ()
-    return tuple(int(part) for part in base.split(".")), int(not separator), identifiers
-
-
-def _compact_dependency_entries(
-    entries: list[tuple[int, str, dict[str, str], bool, Mapping[str, object]]],
-) -> list[tuple[int, str, dict[str, str], bool, Mapping[str, object]]]:
-    """Collapse repeated recognized package updates, retaining every source link."""
-    grouped: dict[str, list[tuple[int, str, dict[str, str], bool, Mapping[str, object], str, bool]]] = {}
-    retained = []
-    for number, title, sections, legacy, pr in entries:
-        identity = _dependency_identity(title)
-        if identity is None or any(key != "dependencies" for key in sections) or (
-            "dependencies" in sections and sections["dependencies"] != title
-        ):
-            retained.append((number, title, sections, legacy, pr))
-            continue
-        name, version, security = identity
-        grouped.setdefault(name, []).append(
-            (number, title, sections, legacy, pr, version, security)
-        )
-    for updates in grouped.values():
-        winner = max(updates, key=lambda item: (_version_key(item[5]), item[0]))
-        identity = _dependency_identity(winner[1])
-        assert identity is not None
-        name, version, _ = identity
-        links = []
-        for number, _title, _sections, _legacy, pr, _version, _security in sorted(updates):
-            url = pr.get("pr_url")
-            source = f"[#{number}]({url})" if isinstance(url, str) and url else f"#{number}"
-            commit_url = pr.get("commit_url")
-            commit_sha = pr.get("commit_sha")
-            if (
-                isinstance(commit_url, str)
-                and commit_url
-                and isinstance(commit_sha, str)
-                and commit_sha
-            ):
-                source += f" ([{commit_sha[:7]}]({commit_url}))"
-            links.append(source)
-        summary = f"- update {name} to v{version} ({', '.join(links)})"
-        if any(item[6] for item in updates):
-            summary += " [security]"
-        # Markers remain machine-readable so every original PR is discoverable.
-        for item in sorted(updates):
-            marker = MARKER.format(number=item[0])
-            summary += " " + marker
-        retained.append((winner[0], winner[1], {"dependencies": summary}, True, winner[4]))
-    return sorted(retained, key=lambda item: item[0])
-
-
-def _add_dependency_marker(content: str, marker: str) -> str:
-    """Keep the source marker inside the dependency list item."""
-    lines = content.splitlines()
-    lines[0] = f"{lines[0]} {marker}"
-    return "\n".join(lines)
 
 
 def _without_comments(lines: Iterable[str]) -> str:
@@ -250,7 +140,8 @@ def _remove_legacy_block(top: str) -> str:
             continue
         if removing and fence is None:
             heading = re.match(r"^###\s+(.+?)\s*$", line)
-            if heading and heading.group(1).strip().casefold() not in {value.casefold() for value in RICH_HEADINGS.values()}:
+            rich_headings = {*(value.casefold() for value in RICH_HEADINGS.values()), *LEGACY_RICH_HEADINGS}
+            if heading and heading.group(1).strip().casefold() not in rich_headings:
                 removing = False
             elif re.match(r"^##[ \t]+", line):
                 removing = False
@@ -260,7 +151,7 @@ def _remove_legacy_block(top: str) -> str:
 
 
 def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> str:
-    entries: list[tuple[int, str, dict[str, str], bool, Mapping[str, object]]] = []
+    entries: list[tuple[int, dict[str, str]]] = []
     seen: set[str] = set()
     for pr in prs:
         number = str(pr.get("number", "")).strip()
@@ -268,15 +159,9 @@ def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> 
             continue
         seen.add(number)
         sections = extract_rich_sections(str(pr.get("body", "")))
-        if not sections and pr.get("legacy_dependency") is True:
-            title = str(pr.get("title", "")).strip()
-            if title:
-                sections = {"dependencies": title}
-        title = str(pr.get("title", "")).strip()
-        if _dependency_identity(title) is not None and "dependencies" not in sections:
-            sections = {**sections, "dependencies": title}
         # PR bodies are untrusted; reserved delimiters must not be able to
         # terminate or forge the machine-owned block on a later rerun.
+        title = str(pr.get("title", "")).strip()
         reserved = (
             BLOCK_START.casefold(),
             BLOCK_END.casefold(),
@@ -287,106 +172,21 @@ def _render_entries(prs: Iterable[Mapping[str, object]], excluded: set[str]) -> 
             "</summary",
         )
         untrusted = [title.casefold(), *(value.casefold() for value in sections.values())]
-        is_dependency = bool(DEPENDENCY_TITLE_PATTERN.match(title))
-        # Native dependency PRs do not have a rich section in their body, but
-        # their title is still useful context in the enriched block.  Ordinary
-        # bare chore PRs, on the other hand, must not create a synthetic note.
-        if not sections and BARE_CHORE_TITLE_PATTERN.match(title):
-            continue
-        if (sections or is_dependency) and not any(
+        if sections and not any(
             marker in value
             for value in untrusted
             for marker in reserved
         ):
-            entries.append((int(number), title, sections, pr.get("legacy_dependency") is True, pr))
-    entries.sort(key=lambda item: item[0])
-    entries = _compact_dependency_entries(entries)
-    # Keep every dependency bullet together. Markdown treats a heading,
-    # paragraph, or another list as a boundary, so rendering in PR-number
-    # order would split the dependency list when a rich non-dependency PR is
-    # interleaved between dependency PRs. A mixed entry must also defer its
-    # non-dependency sections until this first phase is complete.
+            entries.append((int(number), sections))
     entries.sort(key=lambda item: item[0])
     blocks: list[str] = []
-    dependency_heading_written = False
-    for number_value, title, sections, legacy_dependency, pr in entries:
+    for number_value, sections in entries:
         number = str(number_value)
-        has_dependency_section = "dependencies" in sections
-        if not has_dependency_section:
-            continue
-        if not dependency_heading_written:
-            blocks.append(DEPENDENCIES_HEADING)
-            dependency_heading_written = True
-        content = sections["dependencies"]
-        has_source_markers = "<!-- project-toolkit:rich-release-notes pr=" in content
-        if has_source_markers:
-            # A compacted entry already carries markers for every source PR.
-            # Do not append the winner marker a second time.
-            pass
-        elif legacy_dependency and content == title:
-            content = _render_dependency_title(title, number=number, pr=pr)
-        else:
-            content = _render_dependency_content(content)
-        blocks.append(
-            content
-            if has_source_markers
-            else _add_dependency_marker(content, MARKER.format(number=number))
-        )
-    for number_value, title, sections, legacy_dependency, _pr in entries:
-        number = str(number_value)
-        has_dependency_section = "dependencies" in sections
-        if not has_dependency_section:
-            blocks.append(MARKER.format(number=number))
-            if title and not legacy_dependency:
-                blocks.append(f"#### {title}")
+        blocks.append(MARKER.format(number=number))
         for key, heading in RICH_HEADINGS.items():
-            if key == "dependencies":
-                continue
             if key in sections:
-                content = re.sub(
-                    rf"^\s*{re.escape(DEPENDENCIES_HEADING)}\s*$\n?",
-                    "",
-                    sections[key],
-                    flags=re.MULTILINE,
-                ).strip()
-                blocks.extend((f"### {heading}", content, ""))
+                blocks.extend((f"### {heading}", sections[key], ""))
     return "\n".join(blocks).rstrip()
-
-
-LEGACY_DEPENDENCY_COMMIT = re.compile(
-    r"^chore\(deps\):.*?\(#(?P<number>[0-9]+)\)\s*$"
-)
-VERSION_HEADING = re.compile(
-    r"^##[ \t]+(?:\[(?P<linked>[0-9]+\.[0-9]+\.[0-9]+)\]\([^)]*\)|"
-    r"(?P<plain>[0-9]+\.[0-9]+\.[0-9]+))"
-)
-
-
-def legacy_dependency_pr_numbers(changelog: str) -> list[int]:
-    """Find pre-native dependency PRs since the previous generated release."""
-    versions = []
-    for line in changelog.splitlines():
-        match = VERSION_HEADING.match(line)
-        if match:
-            versions.append(match.group("linked") or match.group("plain"))
-    if len(versions) < 2:
-        return []
-    completed = _run_git(["log", f"v{versions[1]}..HEAD", "--format=%s"])
-    numbers = {
-        int(match.group("number"))
-        for line in completed.stdout.splitlines()
-        if (match := LEGACY_DEPENDENCY_COMMIT.fullmatch(line.strip()))
-    }
-    return sorted(numbers)
-
-
-def _run_git(arguments: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run git without a shell and fail closed on missing history."""
-    completed = subprocess.run(["git", *arguments], text=True, capture_output=True, check=False)
-    if completed.returncode:
-        detail = completed.stderr.strip() or completed.stdout.strip()
-        raise EnrichmentError(f"git {' '.join(arguments)} failed: {detail}")
-    return completed
 
 
 def enrich_changelog(changelog: str, prs: Iterable[Mapping[str, object]]) -> str:
@@ -414,14 +214,13 @@ def enrich_changelog(changelog: str, prs: Iterable[Mapping[str, object]]) -> str
     return changelog[:start] + top + changelog[end:]
 
 
-def enrich_release_body(body: str, rich_markdown: str) -> str:
-    """Replace this tool's body block while preserving all Release Please text."""
-    block = f"{BLOCK_START}\n{rich_markdown}\n{BLOCK_END}" if rich_markdown else ""
-    pattern = rf"{re.escape(BLOCK_START)}[\s\S]*?{re.escape(BLOCK_END)}"
-    if re.search(pattern, body):
-        return re.sub(pattern, block, body)
-    if not block:
-        return body
+def _insert_rich_block(body: str, block: str) -> str:
+    """Insert rich notes ahead of generated release sections when present."""
+    # Put user-authored context before Release Please's generated sections so
+    # Highlights, usage examples, and migration guidance are visible first.
+    first_section = re.search(r"(?m)^###[ \t]+", body)
+    if first_section:
+        return body[: first_section.start()] + block + "\n\n" + body[first_section.start() :]
     delimiters = list(re.finditer(r"\n---\n", body))
     if delimiters:
         footer_delimiter = delimiters[-1]
@@ -429,7 +228,24 @@ def enrich_release_body(body: str, rich_markdown: str) -> str:
     return body.rstrip() + "\n\n" + block + "\n"
 
 
-def enrich_component_release_body(body: str, rich_by_component: Mapping[str, str]) -> str:
+def enrich_release_body(body: str, rich_markdown: str) -> str:
+    """Replace this tool's body block while preserving all Release Please text."""
+    block = f"{BLOCK_START}\n{rich_markdown}\n{BLOCK_END}" if rich_markdown else ""
+    pattern = rf"{re.escape(BLOCK_START)}[\s\S]*?{re.escape(BLOCK_END)}"
+    existing = re.search(pattern, body)
+    if existing:
+        prefix = body[:existing.start()]
+        if prefix.endswith("\n\n"):
+            prefix = prefix[:-2]
+        body = prefix + body[existing.end():]
+    if not block:
+        return body
+    return _insert_rich_block(body, block)
+
+
+def enrich_component_release_body(
+    body: str, rich_by_component: Mapping[str, str]
+) -> str:
     """Rebuild rich blocks inside Release Please multi-component details."""
     detail_pattern = re.compile(
         r"(?ms)^<details><summary>(?P<component>.+?): (?P<version>[0-9]+\.[0-9]+\.[0-9]+[^<]*)</summary>\n"
@@ -449,14 +265,16 @@ def enrich_component_release_body(body: str, rich_by_component: Mapping[str, str
             raise EnrichmentError(f"release body contains duplicate component {component!r}")
         found.add(component)
         notes = match.group("notes")
+        old_block_pattern = rf"{re.escape(BLOCK_START)}[\s\S]*?{re.escape(BLOCK_END)}\n?$"
+        notes = re.sub(old_block_pattern, "", notes)
         rich = rich_by_component.get(component, "")
         block = f"{BLOCK_START}\n{rich}\n{BLOCK_END}" if rich else ""
         block_pattern = rf"{re.escape(BLOCK_START)}[\s\S]*?{re.escape(BLOCK_END)}"
         if re.search(block_pattern, notes):
-            new_notes = re.sub(block_pattern, block, notes)
+            without_block = re.sub(block_pattern, "", notes)
+            new_notes = _insert_rich_block(without_block, block) if block else without_block
         elif block:
-            separator = "" if notes.endswith("\n\n") else ("\n" if notes.endswith("\n") else "\n\n")
-            new_notes = notes + separator + block + "\n"
+            new_notes = _insert_rich_block(notes, block)
         else:
             new_notes = notes
         updated = updated[: match.start("notes")] + new_notes + updated[match.end("notes") :]
@@ -589,8 +407,9 @@ def source_pr_numbers(changelog: str, repository: str) -> list[int]:
     attribution = re.compile(
         rf"\(\[#(?P<number>[0-9]+)\]\(https://github\.com/{escaped_repository}/"
         rf"(?:issues|pull)/(?P=number)\)\)\s+"
-        rf"\(\[[0-9a-f](7, 40)\]\(https://github\.com/{escaped_repository}/"
-        rf"commit/[0-9a-f]40\)\)\s*$"
+        rf"\(\[[0-9a-f]" + "{7,40}"
+        + rf"\]\(https://github\.com/{escaped_repository}/"
+        + r"commit/[0-9a-f]{40}\)\)\s*$"
     )
     numbers: set[int] = set()
     fence: tuple[str, int] | None = None
@@ -700,8 +519,6 @@ def prepare_release_enrichment(
         {path for _, path in release_targets}, key=lambda path: path.as_posix()
     )
     numbers_by_path: dict[Path, list[int]] = {}
-    legacy_by_path: dict[Path, set[int]] = {}
-    legacy_numbers: set[int] = set()
     all_numbers: set[int] = set()
     for changelog_path in changelog_paths:
         try:
@@ -710,11 +527,7 @@ def prepare_release_enrichment(
             raise EnrichmentError(f"cannot read generated changelog {changelog_path}: {exc}") from exc
         numbers = source_pr_numbers(changelog, repository)
         numbers_by_path[changelog_path] = numbers
-        legacy = set(legacy_dependency_pr_numbers(changelog)) - set(numbers)
-        legacy_by_path[changelog_path] = legacy
-        legacy_numbers.update(legacy)
         all_numbers.update(numbers)
-        all_numbers.update(legacy)
 
     source_prs: dict[int, dict[str, Any]] = {}
     for number in sorted(all_numbers):
@@ -731,7 +544,6 @@ def prepare_release_enrichment(
             "number": number,
             "title": str(source.get("title", "")),
             "body": str(source.get("body") or ""),
-            "legacy_dependency": number in legacy_numbers,
             "pr_url": str(source.get("html_url") or ""),
             "commit_sha": str(source.get("merge_commit_sha") or ""),
             "commit_url": (
@@ -743,14 +555,10 @@ def prepare_release_enrichment(
     rendered_numbers: set[int] = set()
     for changelog_path in changelog_paths:
         original = changelog_path.read_text(encoding="utf-8")
-        selected = [
-            {**source_prs[number], "legacy_dependency": number in legacy_by_path[changelog_path]}
-            for number in sorted(
-                set(numbers_by_path[changelog_path]) | legacy_by_path[changelog_path]
-            )
-        ]
+        selected = [source_prs[number] for number in sorted(set(numbers_by_path[changelog_path]))]
         updated = enrich_changelog(original, selected)
-        changelog_path.write_text(updated, encoding="utf-8", newline="\n")
+        with changelog_path.open("w", encoding="utf-8", newline="\n") as changelog_file:
+            changelog_file.write(updated)
         top = _version_ranges(updated)
         if top:
             rendered_numbers.update(
@@ -777,7 +585,8 @@ def prepare_release_enrichment(
                     f"generated rich markers reference unknown source PRs: {missing}"
                 )
             rich_by_component[component] = _render_entries(
-                [source_prs[number] for number in path_numbers], set()
+                [source_prs[number] for number in path_numbers],
+                set(),
             )
         updated_body = enrich_component_release_body(release_body, rich_by_component)
     else:
@@ -785,7 +594,8 @@ def prepare_release_enrichment(
         if missing:
             raise EnrichmentError(f"generated rich markers reference unknown source PRs: {missing}")
         rich_markdown = _render_entries(
-            [source_prs[number] for number in sorted(rendered_numbers)], set()
+            [source_prs[number] for number in sorted(rendered_numbers)],
+            set(),
         )
         updated_body = enrich_release_body(release_body, rich_markdown)
     output_directory.mkdir(parents=True, exist_ok=True)
@@ -842,11 +652,14 @@ def main() -> None:
     prs = json.loads(args.pull_requests.read_text(encoding="utf-8"))
     original = args.changelog.read_text(encoding="utf-8")
     updated = enrich_changelog(original, prs)
-    args.changelog.write_text(updated, encoding="utf-8", newline="\n")
+    with args.changelog.open("w", encoding="utf-8", newline="\n") as changelog_file:
+        changelog_file.write(updated)
     if args.release_body and args.rich_body:
         top = _version_ranges(updated)
         rich = _render_entries(prs, _rich_numbers(updated[top[0][1]:]) if top else set())
-        args.rich_body.write_text(enrich_release_body(args.release_body.read_text(encoding="utf-8"), rich), encoding="utf-8", newline="\n")
+        rich_body = enrich_release_body(args.release_body.read_text(encoding="utf-8"), rich)
+        with args.rich_body.open("w", encoding="utf-8", newline="\n") as rich_body_file:
+            rich_body_file.write(rich_body)
 
 
 if __name__ == "__main__":

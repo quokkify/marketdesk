@@ -12,6 +12,7 @@ import { createErrorHandler } from '../http/middleware/ErrorHandlingMiddleware';
 import { authMiddleware, requireWorkspace, signToken } from '../http/middleware/AuthMiddleware';
 import { uploadRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createUploadRoutes } from '../http/routes/uploads';
+import { uploadRateLimiter } from '../http/middleware/RateLimitMiddleware';
 
 const IMAGE_ID = '123e4567-e89b-42d3-a456-426614174000';
 let jpeg: Buffer;
@@ -139,6 +140,26 @@ describe('product image upload HTTP contract', () => {
         message: 'Request body exceeds the configured limit',
       },
     });
+  });
+
+  it('limits repeated uploads per workspace while allowing requests within the limit', async () => {
+    const { app, storage } = buildUploadApp();
+
+    const first = await auth(request(app).post('/api/uploads/images'))
+      .set('Content-Type', 'image/jpeg')
+      .send(jpeg);
+    const second = await auth(request(app).post('/api/uploads/images'))
+      .set('Content-Type', 'image/jpeg')
+      .send(jpeg);
+    const rejected = await auth(request(app).post('/api/uploads/images'))
+      .set('Content-Type', 'image/jpeg')
+      .send(jpeg);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(rejected.status).toBe(429);
+    expect(rejected.body.error.code).toBe('RATE_LIMITED');
+    expect(storage.stored).toHaveLength(2);
   });
 
   it('deletes through the authenticated workspace and reports missing images', async () => {
