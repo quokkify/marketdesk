@@ -86,6 +86,7 @@ export class ProductImprovementReviewService {
           proposal.editedValue = listing.price.amount;
         } else {
           if (typeof value !== 'string') throw new ValidationError('Copy must be text');
+          if (proposal.field === 'title' && Array.from(value.trim()).length > 255) throw new ValidationError('Product title must be at most 255 characters');
           const changed = proposal.field === 'title' ? product.rename(value) : product.updateDescription(value);
           if (changed.isErr()) throw changed.error;
           await tx.saveProduct(product);

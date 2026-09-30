@@ -172,4 +172,21 @@ describeDb('durable improvement review (PostgreSQL)', () => {
     expect((await service().read(scope))!.sessionId).toBe(review.sessionId);
   });
 
+  it('rejects oversized generated and edited titles without changing product or review', async () => {
+    const longTitleGraph = { proposeImprovements: async (input: ReviewScope) => {
+      const result = await graph.proposeImprovements(input);
+      result.copy[0].proposedValue = 'x'.repeat(256);
+      return result;
+    }};
+    const review = (await new ProductImprovementReviewService(longTitleGraph, store, randomUUID).propose(scope, actor)).session!;
+    const decision = { revision: 1, proposalId: review.proposals[0].proposalId, action: 'accept' as const };
+    await expect(service().decide(scope, review.sessionId, decision, actor)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(service().decide(scope, review.sessionId, { ...decision, editedValue: '😀'.repeat(256) }, actor)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(await service().read(scope)).toEqual(review);
+    expect((await pool.query('SELECT name FROM products WHERE id=$1', [scope.productId])).rows[0].name).toBe('Original title');
+    const accepted = await service().decide(scope, review.sessionId, { ...decision, editedValue: '😀'.repeat(255) }, actor);
+    expect(accepted.proposals[0].editedValue).toBe('😀'.repeat(255));
+    expect((await pool.query('SELECT char_length(name)::int AS length FROM products WHERE id=$1', [scope.productId])).rows[0].length).toBe(255);
+  });
+
 });
