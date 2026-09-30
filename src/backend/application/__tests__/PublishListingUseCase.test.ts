@@ -1,4 +1,4 @@
-import { PublishListingUseCase } from '../usecases/PublishListingUseCase';
+import { PublishListingUseCase, PUBLICATION_PREFLIGHT_GRAPH_VERSION } from '../usecases/PublishListingUseCase';
 import { Product } from '../../domain/entities/Product';
 import { Listing } from '../../domain/entities/Listing';
 import { Marketplace } from '../../domain/entities/Marketplace';
@@ -157,6 +157,8 @@ describe('PublishListingUseCase', () => {
     expect(publishQueue.jobs[0].data.input.price).toBe(100);
     expect(publishQueue.jobs[0].data.input.marketplaceCategory).toEqual(exactCategory);
     expect(activityLog.entries.map((e) => e.action)).toContain('listing.publish_requested');
+    expect(activityLog.entries.find((entry) => entry.action === 'listing.publish_requested')?.metadata)
+      .toMatchObject({ workflowVersion: PUBLICATION_PREFLIGHT_GRAPH_VERSION });
   });
 
   it('enqueues with marketplaceId when the OAuth account is connected', async () => {

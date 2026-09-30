@@ -122,6 +122,10 @@ export const productRecheckSchema = z.object({
   listingId: z.string().trim().min(1, 'listingId is required'),
 }).strict();
 
+export const productImprovementSchema = z.object({
+  listingId: z.string().trim().min(1).optional(),
+}).strict();
+
 export const publishListingSchema = z.object({
   actorId: z.string().optional(),
   dryRun: z.boolean().optional(),

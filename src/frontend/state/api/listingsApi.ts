@@ -12,6 +12,12 @@ import type {
   PublishListingPreview,
 } from './dto.js';
 
+export interface OlxCategorySearchResult {
+  providerCategoryId: string;
+  name: string;
+  path: string[];
+}
+
 export const listingsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getListings: builder.query<Listing[], ListingListParams | void>({
@@ -36,6 +42,28 @@ export const listingsApi = baseApi.injectEndpoints({
     publishListingPreview: builder.mutation<PublishListingPreview, string>({
       query: (id) => ({ url: `/listings/${id}/publish-preview`, method: 'POST' }),
       transformResponse: (res: ApiResponse<PublishListingPreview>) => unwrap(res),
+    }),
+
+    searchOlxCategories: builder.mutation<OlxCategorySearchResult[], { id: string; query: string }>({
+      query: ({ id, query }) => ({
+        url: `/listings/${id}/marketplace-categories?query=${encodeURIComponent(query)}`,
+        method: 'GET',
+      }),
+      transformResponse: (res: ApiResponse<OlxCategorySearchResult[]>) => unwrap(res),
+    }),
+
+    setListingMarketplaceCategory: builder.mutation<Listing, { id: string; providerCategoryId: string }>({
+      query: ({ id, providerCategoryId }) => ({
+        url: `/listings/${id}/marketplace-category`,
+        method: 'PUT',
+        body: { providerCategoryId },
+      }),
+      transformResponse: (res: ApiResponse<Listing>) => unwrap(res),
+      invalidatesTags: (result, _error, { id }) => [
+        { type: 'Listing', id },
+        { type: 'Listing', id: 'LIST' },
+        ...(result ? [{ type: 'Product' as const, id: result.productId }] : []),
+      ],
     }),
 
     // POST /listings/:id/publish — publish an existing (draft) listing.
@@ -96,6 +124,8 @@ export const {
   useGetListingsQuery,
   useGetListingQuery,
   usePublishListingPreviewMutation,
+  useSearchOlxCategoriesMutation,
+  useSetListingMarketplaceCategoryMutation,
   usePublishListingMutation,
   useUpdateListingMutation,
   useRelistListingMutation,

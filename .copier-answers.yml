@@ -1,4 +1,4 @@
-_commit: v2.22.0
+_commit: v2.23.5
 _src_path: https://github.com/quokkify/project-toolkit.git
 allure_categories_file: ''
 allure_external_artifact_max_count: 50
@@ -6,24 +6,26 @@ allure_external_artifact_min_count: 1
 allure_external_artifact_prefix: allure-results-
 allure_external_workflow_name: Validate
 allure_external_workflow_path: .github/workflows/validate.yml
-allure_publish_pages: false
+allure_pages_url: https://quokkify.github.io/marketdesk
+allure_publish_pages: true
 allure_report: true
 codeql: true
 codeql_languages: []
 components:
--   id: marketdesk-node
+  - id: marketdesk-node
     name: MarketDesk
     path: .
     type: node
 docker: true
+gitleaks: true
 project_name: MarketDesk
 release_mode: single
 release_please: true
 renovate: true
 renovate_config_repository: quokkify/renovate-presets
 renovate_presets:
-- default
-- github-actions
-- javascript
-- docker
-toolkit_version: v2.22.0
+  - default
+  - github-actions
+  - javascript
+  - docker
+toolkit_version: v2.23.5

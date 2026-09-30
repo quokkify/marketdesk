@@ -7,6 +7,7 @@ import type {
   ProductAIDraft,
   ProductAIDraftRequest,
   ProductRecheckResult,
+  ProductImprovementSuggestions,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
@@ -78,6 +79,14 @@ export const productsApi = baseApi.injectEndpoints({
     recheckProduct: builder.mutation<ProductRecheckResult, { productId: string; listingId: string }>({
       query: buildProductRecheckRequest,
       transformResponse: (res: ApiResponse<ProductRecheckResult>) => unwrap(res),
+    }),
+
+    proposeProductImprovements: builder.mutation<ProductImprovementSuggestions, { productId: string; listingId?: string }>({
+      query: ({ productId, listingId }) => ({
+        url: `/products/${productId}/improvements`, method: 'POST',
+        body: listingId ? { listingId } : {},
+      }),
+      transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
@@ -152,6 +161,7 @@ export const {
   useGetProductsQuery,
   useGetProductQuery,
   useRecheckProductMutation,
+  useProposeProductImprovementsMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,

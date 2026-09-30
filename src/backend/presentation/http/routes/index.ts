@@ -18,6 +18,7 @@ import {
   publicRateLimiter,
   authenticatedRateLimiter,
   sensitiveRateLimiter,
+  uploadRateLimiter,
 } from '../middleware/RateLimitMiddleware';
 import { createAuthRoutes } from './auth';
 import { createProductRoutes } from './products';
@@ -64,6 +65,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const sensitiveLimiter: RequestHandler | undefined = rateLimit
     ? sensitiveRateLimiter()
     : undefined;
+  const uploadsLimiter: RequestHandler | undefined = rateLimit ? uploadRateLimiter() : undefined;
 
   // Public
   api.get('/application-info', ...(publicLimiter ? [publicLimiter] : []), (_req, res) =>
@@ -92,6 +94,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   api.use(
     '/uploads',
     ...guard,
+    ...(uploadsLimiter ? [uploadsLimiter] : []),
     createUploadRoutes(c.uploads, options.maxUploadFileSize ?? 52_428_800)
   );
 

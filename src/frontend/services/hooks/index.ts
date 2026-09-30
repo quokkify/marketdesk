@@ -8,6 +8,7 @@ import {
   useGetProductsQuery,
   useGetProductQuery,
   useRecheckProductMutation,
+  useProposeProductImprovementsMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,
@@ -19,6 +20,8 @@ import {
   useGetListingsQuery,
   useGetListingQuery,
   usePublishListingPreviewMutation,
+  useSearchOlxCategoriesMutation,
+  useSetListingMarketplaceCategoryMutation,
   usePublishListingMutation,
   useUpdateListingMutation,
   useRelistListingMutation,
@@ -75,6 +78,7 @@ export function useProducts(params: ProductListParams = {}, options?: ProductsOp
 }
 export const useProduct = useGetProductQuery;
 export const useRecheckProduct = useRecheckProductMutation;
+export const useProposeProductImprovements = useProposeProductImprovementsMutation;
 export const useProductListings = useGetProductListingsQuery;
 export const useCreateProduct = useCreateProductMutation;
 export const useGenerateProductAIDraft = useGenerateProductAIDraftMutation;
@@ -91,6 +95,8 @@ export function useListings(params: ListingListParams = {}, options?: ListingsOp
 }
 export const useListing = useGetListingQuery;
 export const usePublishListingPreview = usePublishListingPreviewMutation;
+export const useSearchOlxCategories = useSearchOlxCategoriesMutation;
+export const useSetListingMarketplaceCategory = useSetListingMarketplaceCategoryMutation;
 export const usePublishListing = usePublishListingMutation;
 export const useUpdateListing = useUpdateListingMutation;
 export const useRelistListing = useRelistListingMutation;

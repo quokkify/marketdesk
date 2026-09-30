@@ -26,6 +26,7 @@ import type { ISettingsRepository } from '../../application/ports/ISettingsRepos
 import type { IAuthUserStore } from './ports/IAuthUserStore';
 import type { ProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import type { ProductRecheckService } from '../../application/services/ProductRecheckService';
+import type { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 
 import { NotFoundError } from '../../domain/shared/DomainError';
 import { env, isProduction } from '../../config/env';
@@ -55,6 +56,7 @@ export interface AppDeps {
   productService: ProductApplicationService;
   productAIDraftService?: ProductAIDraftService;
   productRecheckService?: ProductRecheckService;
+  productAssistanceGraph?: ProductAssistanceGraph;
   listingService: ListingApplicationService;
   hermesService: HermesApplicationService;
   analyticsService: AnalyticsApplicationService;
@@ -189,6 +191,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.marketplaceRepo,
       deps.idGenerator ?? crypto.randomUUID,
       deps.productRecheckService,
+      deps.productAssistanceGraph,
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,

@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: quokkify/project-toolkit/actions/checkout@v2.23.5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -110,10 +110,10 @@ jobs:
           fi
 
   marketdesk-node:
-    name: MarketDesk
-    uses: quokkify/project-toolkit/.github/workflows/node-ci.yml@v2.22.0
+    name: "MarketDesk"
+    uses: quokkify/project-toolkit/.github/workflows/node-ci.yml@v2.23.5
     with:
-      working-directory: '.'
+      working-directory: "."
       node-version: '24'
       lint-command: >-
         npm run verify:spec &&
@@ -127,11 +127,11 @@ jobs:
       run-build: true
       build-command: npm run build
       upload-test-artifacts: true
-      test-artifact-path: 'allure-results'
+      test-artifact-path: "allure-results"
       test-artifact-name: allure-results-marketdesk-node
 
   docker:
-    uses: quokkify/project-toolkit/.github/workflows/docker-build.yml@v2.22.0
+    uses: quokkify/project-toolkit/.github/workflows/docker-build.yml@v2.23.5
     with:
       push: false
 

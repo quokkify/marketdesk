@@ -8,6 +8,22 @@ function client(data: unknown): MarketplaceHttpClient {
 describe('OlxTaxonomyResolver', () => {
   const now = new Date('2026-07-16T12:00:00.000Z');
 
+  it('searches only verified leaf candidates with complete provider paths', async () => {
+    const request = jest.fn(async () => ({ status: 200, data: { data: [
+      { id: 100, name: 'Elektronika', parent_id: 0, is_leaf: false },
+      { id: 110, name: 'Projektory', parent_id: 100, is_leaf: true },
+      { id: 120, name: 'Projektory kieszonkowe', parent_id: 100, is_leaf: true },
+    ] } }));
+    const resolver = new OlxTaxonomyResolver(
+      { request: request as MarketplaceHttpClient['request'] }, 'https://example.test/api', () => now,
+    );
+    await expect(resolver.search('Projektory')).resolves.toEqual([
+      { providerCategoryId: '110', name: 'Projektory', path: ['Elektronika', 'Projektory'] },
+      { providerCategoryId: '120', name: 'Projektory kieszonkowe', path: ['Elektronika', 'Projektory kieszonkowe'] },
+    ]);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
   it('attests an exact leaf category from the provider response', async () => {
     const request = jest.fn(async ({ url }: { url: string }) => ({
       status: 200,

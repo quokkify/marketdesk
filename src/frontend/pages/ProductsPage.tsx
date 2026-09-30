@@ -75,6 +75,7 @@ import type {
   ProductSubmissionValues,
   ProductWizardDraftState,
 } from '../components/forms/index.js';
+import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 
 export function shouldBlockProductWizardNavigation(
   wizardOpen: boolean,
@@ -434,8 +435,17 @@ const ProductsPage: React.FC = () => {
       return;
     }
     try {
-      const { targetMarketplace: _targetMarketplace, ...productValues } = values;
-      await createProduct({ ...productValues, workspaceId }).unwrap();
+      const { targetMarketplace, ...productValues } = values;
+      const selectedMarketplace = verifiedMarketplaces?.find(
+        (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
+      );
+      if (!selectedMarketplace) throw new Error('Select a connected marketplace before creating the product.');
+      const product = await createProduct({ ...productValues, workspaceId }).unwrap();
+      const { advancePublicationJourney } = await import('../workflows/publicationJourneyGraph.js');
+      const journey = await advancePublicationJourney(
+        { phase: 'review' },
+        { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
+      );
       if (draftKey && !clearStoredDraft()) {
         dispatch(
           enqueueToast({
@@ -446,8 +456,11 @@ const ProductsPage: React.FC = () => {
       }
       setDraftDirty(false);
       setInitialDraft(null);
-      dispatch(enqueueToast({ message: 'Product created.', severity: 'success' }));
-      completeWizardNavigation();
+      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
+      allowWizardNavigationRef.current = true;
+      navigate(`/products/${product.id}`, {
+        state: { publicationJourney: { ...journey, version: PUBLICATION_JOURNEY_VERSION } },
+      });
     } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }

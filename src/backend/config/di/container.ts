@@ -109,6 +109,7 @@ import { DismissHermesEventUseCase } from '../../application/usecases/DismissHer
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 import { ProductRecheckService } from '../../application/services/ProductRecheckService';
+import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 import { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
@@ -434,6 +435,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     },
     idGenerator
   );
+  const productAssistanceGraph = new ProductAssistanceGraph(
+    productAIDraftService,
+    productRecheckService,
+    productRepo,
+    listingRepo,
+    marketplaceRepo,
+    aiProvider,
+  );
   const listingService = new ListingApplicationService(
     listingRepo,
     publishListingUC,
@@ -680,6 +689,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productService,
     productAIDraftService,
     productRecheckService,
+    productAssistanceGraph,
     listingService,
     hermesService,
     analyticsService,
