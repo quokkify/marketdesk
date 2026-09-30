@@ -93,6 +93,7 @@ MarketDesk is an integrated product and listing management system designed to si
 - [Caddy + Cloudflare VPS deployment](docs/deployment/caddy-cloudflare-vps.md) — production HTTPS reverse-proxy setup for the `hosting/domain provider → Cloudflare DNS → Caddy → VPS → MarketDesk` path.
 - [Upload storage initialization and recovery](docs/deployment/upload-storage.md) — non-root Compose startup, expected ownership, safe recovery, and upload/read/restart/delete verification.
 - [Installed release version](docs/deployment/release-version.md) — exact-tag artifact metadata, fail-closed Compose deployment, runtime/UI contract, and smoke verification.
+- [GHCR container images](docs/deployment/container-images.md) — backend, frontend, and static brand assets images, tags, and consumption contract.
 - [OLX publication quota guard](docs/olx-publication-quota.md) — operator workflow, fail-closed decisions, explicit overrides, and concurrency semantics.
 - [Persistent settings contracts](docs/settings-persistence.md) — principal-scoped persistence, strict PATCH DTOs, and redacted integration reads.
 
