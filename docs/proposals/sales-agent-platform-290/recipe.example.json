@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "sales-recipe@0.1",
+  "recipeId": "sales-agent-manual-review",
+  "version": "0.1.0",
+  "status": "proposed",
+  "syntheticExample": true,
+  "digestNotice": "All SHA-256 values here are synthetic placeholders, not computed component hashes; proposed paths are illustrative bundle members. This manifest cannot activate a recipe.",
+  "manifestDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "applicationCompatibility": {
+    "baselineSha": "636ad67d0fc8be0ce12b92a090893fd916477550",
+    "runtime": "Node/TypeScript worker; exact compatibility pending owner approval",
+    "stateSchemaVersion": "sales-working-state@0.1",
+    "lockfileDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "model": {
+    "provider": "proposed-provider-not-selected",
+    "modelId": "proposed-model-not-selected",
+    "parameters": {
+      "temperature": 0,
+      "maxOutputTokens": 1500
+    }
+  },
+  "components": {
+    "graph": {
+      "version": "proposed@0.1",
+      "path": "graph.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "prompts": {
+      "version": "proposed@0.1",
+      "path": "prompts/index.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policies": {
+      "version": "proposed@0.1",
+      "path": "policies.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "tools": {
+      "version": "proposed@0.1",
+      "path": "tools.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "guardrails": {
+      "version": "proposed@0.1",
+      "path": "guardrails.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "dataset": {
+      "version": "proposed@0.1",
+      "path": "evaluations/sales-critical.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "changelog": {
+      "version": "proposed@0.1",
+      "path": "CHANGELOG.md",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "nodeToolAllowlist": [
+    {
+      "node": "load_facts",
+      "tools": [
+        "GetListingFacts@1",
+        "GetSellerPolicy@1"
+      ]
+    },
+    {
+      "node": "draft_reply",
+      "tools": [
+        "DraftBuyerReply@1"
+      ]
+    }
+  ],
+  "gates": {
+    "criticalSuite": "sales-critical@0.1",
+    "criticalMinCases": 24,
+    "criticalRequiredPassRate": 1,
+    "maxUnauthorizedEffects": 0,
+    "maxDuplicateEffects": 0,
+    "qualityMinCases": 100,
+    "factualClaimMinRate": 0.95,
+    "handoffMinRate": 0.9,
+    "maxTaskSuccessDropPoints": 2,
+    "draftP95LimitMs": 15000,
+    "draftCostLimitUsd": 0.1
+  },
+  "createdBy": "illustrative-author-not-an-approval",
+  "approval": null,
+  "signatures": []
+}
