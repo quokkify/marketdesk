@@ -1,12 +1,22 @@
 # GHCR container images
 
-The `Container images` workflow builds three separate images from the repository root:
+The `Container images` workflow builds three separate images from the repository root. This is an image-publication contract, not a change to the production Compose deployment:
 
 - `ghcr.io/quokkify/marketdesk-backend`: the existing `Dockerfile` application runtime. It runs the non-root Node backend/API, serves the bundled SPA on port `3000`, and has a `/health` Docker health check. It needs the same runtime environment documented for the Compose `app` service. Compose still builds its established combined application image locally; this workflow does not change deployment behavior.
-- `ghcr.io/quokkify/marketdesk-frontend`: `Dockerfile.frontend` builds the production Vite SPA and serves it with Nginx on port `8080`, including history-route fallback. Route browser/API paths appropriately in a deployment reverse proxy; the image does not configure a backend URL or deployment.
-- `ghcr.io/quokkify/marketdesk-assets`: `Dockerfile.assets` serves the stable brand files `marketdesk-mark.svg`, `favicon-32x32.png`, and `apple-touch-icon.png` from the web root on port `8080`. The endpoints are `/marketdesk-mark.svg`, `/favicon-32x32.png`, and `/apple-touch-icon.png`.
+- `ghcr.io/quokkify/marketdesk-frontend`: `Dockerfile.frontend` builds the production Vite SPA and serves it with Caddy's static file server on port `8080`, including history-route fallback. Route browser/API paths appropriately in a deployment reverse proxy; the image does not configure a backend URL or deployment.
+- `ghcr.io/quokkify/marketdesk-assets`: `Dockerfile.assets` serves the stable brand files `marketdesk-mark.svg`, `favicon-32x32.png`, and `apple-touch-icon.png` from the web root on port `8080` with Caddy's static file server. The endpoints are `/marketdesk-mark.svg`, `/favicon-32x32.png`, and `/apple-touch-icon.png`.
 
-The assets image is an HTTP static server, not a volume or an OCI filesystem artifact. A deployment can run it as a separate service and route those exact paths on the frontend's public origin (or copy the files from the image into the frontend document root at build/deploy time). The existing SPA expects `/marketdesk-mark.svg` at its origin root; serving the assets container under a subpath alone will not satisfy that URL. No deployment or automatic coupling of the two images is configured here.
+The assets image is an HTTP static server, not a volume or an OCI filesystem artifact. A future split deployment may run it as a private service and route the exact asset paths on the frontend's public origin. The existing SPA expects `/marketdesk-mark.svg`, `/favicon-32x32.png`, and `/apple-touch-icon.png` at its origin root; serving the assets container under a subpath alone will not satisfy those URLs. No deployment or automatic coupling of the two images is configured here. Do not publish either static-image port directly to the internet.
+
+## Deployment scenarios
+
+### Recommended current VPS deployment (no change)
+
+Keep using the existing Compose `app` image built from the root `Dockerfile`. It contains both backend and SPA; the Node backend serves the SPA, API, `/health`, and `/ready` on port `3000`. Compose binds it to `127.0.0.1:3000`, and the existing native host Caddy reverse-proxies to `127.0.0.1:3000` as described in [the VPS runbook](caddy-cloudflare-vps.md). This is the production deployment to retain; the separately published frontend/assets images are not a replacement and no migration is implied.
+
+### Optional future split-image deployment
+
+If a deliberate deployment change is later chosen, run backend, frontend, and assets as distinct Compose services on a private Docker network. Keep host Caddy as the only public TLS/ingress endpoint. Because native host Caddy cannot resolve Compose-only service DNS, explicitly bind each upstream to loopback (for example backend `127.0.0.1:3000`, frontend `127.0.0.1:3001:8080`, assets `127.0.0.1:3002:8080`); never bind the static services to `0.0.0.0` or public interfaces. Configure host Caddy to proxy `/api/*`, `/health`, `/ready`, and `/uploads/*` to `127.0.0.1:3000`, and send remaining browser routes to `127.0.0.1:3001`. Route the three exact root asset URLs listed above to `127.0.0.1:3002` before the frontend catch-all. The SPA's API requests are same-origin `/api/...`; preserve that origin through the proxy. The backend image includes the SPA assets too, but host Caddy's explicit route separation ensures the separately built frontend receives browser routes in this optional topology. This Compose/Caddy change must be designed, validated, and rolled out separately; none of it is defined or activated by this image workflow.
 
 A pull request targeting `main` builds all three images with Buildx but does not authenticate to GHCR or push tags. Pushes to `main` publish `:main` and immutable `:sha-<12-character-commit>` tags. `marketdesk-vX.Y.Z` release-tag pushes publish the exact `:marketdesk-vX.Y.Z` and SHA tags; the backend receives that tag as `MARKETDESK_RELEASE_TAG`. No `latest` tag or multi-architecture build is configured. Images are built for `linux/amd64` (the shared workflow's default would also be amd64).
 

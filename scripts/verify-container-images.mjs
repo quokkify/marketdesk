@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(path, 'utf8');
-const [workflow, backend, frontend, assets, frontendNginx, assetsNginx] = await Promise.all([
+const [workflow, backend, frontend, assets, frontendCaddy, assetsCaddy, caddyDeployment] = await Promise.all([
   read('.github/workflows/container-images.yml'),
   read('Dockerfile'),
   read('Dockerfile.frontend'),
   read('Dockerfile.assets'),
-  read('docker/nginx/frontend.conf'),
-  read('docker/nginx/assets.conf'),
+  read('docker/caddy/frontend.Caddyfile'),
+  read('docker/caddy/assets.Caddyfile'),
+  read('docs/deployment/caddy-cloudflare-vps.md'),
 ]);
 
 for (const [image, dockerfile] of [
@@ -27,11 +28,21 @@ assert.match(backend, /dist\/backend\/main\.js/);
 assert.match(backend, /localhost:3000\/health/);
 assert.match(frontend, /npm run build:frontend/);
 assert.match(frontend, /dist\/frontend\//);
-assert.match(frontendNginx, /try_files \$uri \$uri\/ \/index\.html/);
+assert.match(frontend, /FROM caddy:2\.10\.2-alpine/);
+assert.match(assets, /FROM caddy:2\.10\.2-alpine/);
+assert.doesNotMatch(frontend + assets, /nginx/i);
+assert.match(frontendCaddy, /root \* \/srv/);
+assert.match(frontendCaddy, /try_files \{path\} \{path\}\/ \/index\.html/);
+assert.match(frontendCaddy, /file_server/);
 assert.match(assets, /marketdesk-mark\.svg/);
 assert.match(assets, /favicon-32x32\.png/);
 assert.match(assets, /apple-touch-icon\.png/);
 assert.match(assets, /marketdesk-mark\.svg \\| exit 1/);
-assert.match(assetsNginx, /try_files \$uri =404/);
-assert.match(assetsNginx, /Access-Control-Allow-Origin/);
+assert.match(assetsCaddy, /file_server/);
+assert.match(assetsCaddy, /Access-Control-Allow-Origin/);
+const deploymentGuide = await read('docs/deployment/container-images.md');
+assert.match(deploymentGuide, /Recommended current VPS deployment[\s\S]*host Caddy[\s\S]*127\.0\.0\.1:3000/);
+assert.match(deploymentGuide, /Optional future split-image deployment[\s\S]*frontend[\s\S]*assets[\s\S]*127\.0\.0\.1:3001:8080[\s\S]*127\.0\.0\.1:3002:8080/);
+assert.match(deploymentGuide, /never bind the static services to `0\.0\.0\.0` or public interfaces/i);
+assert.match(caddyDeployment, /host proxies to the combined Compose `app` image bound to loopback at `127\.0\.0\.1:3000`/);
 console.log('Container image workflow and runtime contracts verified.');
