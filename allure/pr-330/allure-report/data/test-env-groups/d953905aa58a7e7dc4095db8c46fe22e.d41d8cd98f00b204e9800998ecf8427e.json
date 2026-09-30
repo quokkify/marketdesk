@@ -1,0 +1,1 @@
+{"id":"d953905aa58a7e7dc4095db8c46fe22e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/CreateProductUseCase.test.ts#CreateProductUseCase rejects a duplicate SKU with a conflict","name":"rejects a duplicate SKU with a conflict","status":"passed","testResultsByEnv":{"default":"d7211f93cb68ca4e72e7afb76cd56416"}}
