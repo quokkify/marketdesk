@@ -1,0 +1,1 @@
+{"id":"c25edfd906e1b8deddfb71defffc339a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/RunHermesUseCase.test.ts#RunHermesUseCase rejects a product outside the authenticated workspace","name":"rejects a product outside the authenticated workspace","status":"passed","testResultsByEnv":{"default":"f32dfac2e10ade594912d5225a1b64d9"}}
