@@ -55,6 +55,7 @@ test.beforeEach(async ({ page }) => {
       data = [product]; pagination = true;
     } else if (path === '/api/products/p1') data = product;
     else if (path === '/api/products/p1/listings') data = [listing];
+    else if (path === '/api/products/p1/improvements' && request.method() === 'GET') data = null;
     else if (path === '/api/products/p1/improvements') data = {
       graphVersion: 'product-assistance@1', productId: 'p1',
       productUpdatedAt: now, listingUpdatedAt: now, reviewOnly: true,

@@ -301,7 +301,9 @@ export interface ProductRecheckResult {
 }
 
 export interface ProductImprovementSuggestions {
+  currency?: string;
   graphVersion: 'product-assistance@1';
+  session?: ProductImprovementReviewSession;
   productId: string;
   productUpdatedAt: string;
   listingUpdatedAt?: string;
@@ -491,3 +493,34 @@ export interface PaginatedResponse<T> {
 }
 
 export * from './settings';
+
+/** Durable seller review; this is not a LangGraph execution checkpoint. */
+export interface ProductImprovementReviewSession {
+  currency: string;
+  graphVersion: 'product-assistance@1';
+  sessionId: string;
+  revision: number;
+  productId: string;
+  listingId?: string;
+  productUpdatedAt: string;
+  listingUpdatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  proposals: Array<{
+    proposalId: string;
+    field: 'title' | 'description' | 'price';
+    proposedValue: string | number;
+    rationale: string;
+    status: 'pending' | 'accepted' | 'rejected';
+    decidedAt?: string;
+    editedValue?: string | number;
+  }>;
+}
+
+export interface ProductImprovementDecision {
+  revision: number;
+  proposalId: string;
+  action: 'accept' | 'reject';
+  editedValue?: string | number;
+  allowBelowCost?: boolean;
+}
