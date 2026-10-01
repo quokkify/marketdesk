@@ -13,8 +13,14 @@ export async function promoteImages(sha, run = execFileAsync) {
   // Capture all previous aliases before mutating any of them. The immutable
   // digest references let the failure handler restore the original set.
   for (const tag of tags) {
-    const { stdout } = await run('docker', ['buildx', 'imagetools', 'inspect', tag, '--format', '{{.Manifest.Digest}}']);
+    const { stdout } = await run('docker', ['buildx', 'imagetools', 'inspect', tag, '--format', '{{.Manifest.Digest}}']).catch((error) => {
+      // A missing alias is expected during first publication; promotion can
+      // bootstrap it, though there is no previous value to restore on failure.
+      if (/not found|manifest unknown|no such manifest/i.test(error.stderr ?? error.message)) return { stdout: '' };
+      throw error;
+    });
     const digest = stdout.trim();
+    if (!digest) continue;
     if (!/^sha256:[0-9a-f]{64}$/i.test(digest)) throw new Error(`Could not resolve prior digest for ${tag}`);
     previous.set(tag, digest);
   }
@@ -29,7 +35,8 @@ export async function promoteImages(sha, run = execFileAsync) {
     const rollbackErrors = [];
     for (const [tag, digest] of previous) {
       try {
-        await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, `${repository}-${tag.split('/').at(-1).split(':')[0]}@${digest}`]);
+        const image = tag.slice(0, tag.lastIndexOf(':'));
+        await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, `${image}@${digest}`]);
       } catch (error) {
         rollbackErrors.push(`${tag}: ${error.message}`);
       }
