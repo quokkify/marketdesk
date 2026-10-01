@@ -113,4 +113,5 @@ jobs:
       - name: Promote all images
         env:
           IMAGE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/promote-container-images.mjs "$IMAGE_SHA"

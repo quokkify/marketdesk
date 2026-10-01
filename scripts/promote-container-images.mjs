@@ -15,10 +15,12 @@ export async function promoteImages(sha, run = execFileAsync) {
   for (const tag of tags) {
     const { stdout } = await run('docker', ['buildx', 'imagetools', 'inspect', tag, '--format', '{{.Manifest.Digest}}']).catch((error) => {
       if (/not found|manifest unknown|no such manifest/i.test(error.stderr ?? error.message)) {
-        throw new Error(`Refusing promotion: ${tag} is missing; cannot guarantee rollback of a partially created alias`, { cause: error });
+        previous.set(tag, null);
+        return { stdout: '' };
       }
       throw error;
     });
+    if (previous.has(tag)) continue;
     const digest = stdout.trim();
     if (!/^sha256:[0-9a-f]{64}$/i.test(digest)) throw new Error(`Could not resolve prior digest for ${tag}`);
     previous.set(tag, digest);
@@ -34,6 +36,16 @@ export async function promoteImages(sha, run = execFileAsync) {
     const rollbackErrors = [];
     for (const [tag, digest] of previous) {
       try {
+        if (digest === null) {
+          const image = tag.slice(0, tag.lastIndexOf(':'));
+          const packageName = image.slice(repository.length + 1);
+          const { stdout } = await run('gh', ['api', '--paginate', `orgs/quokkify/packages/container/marketdesk-${packageName}/versions`, '--jq', '.[] | select(.metadata.container.tags[]? == "main") | .id']);
+          const versionIds = stdout.trim().split(/\s+/).filter(Boolean);
+          for (const id of versionIds) {
+            await run('gh', ['api', '--method', 'DELETE', `orgs/quokkify/packages/container/marketdesk-${packageName}/versions/${id}`]);
+          }
+          continue;
+        }
         const image = tag.slice(0, tag.lastIndexOf(':'));
         await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, `${image}@${digest}`]);
       } catch (error) {
