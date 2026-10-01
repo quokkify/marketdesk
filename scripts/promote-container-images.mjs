@@ -7,25 +7,6 @@ const repository = 'ghcr.io/quokkify/marketdesk';
 
 export async function promoteImages(sha, run = execFileAsync) {
   if (!/^[0-9a-f]{40}$/i.test(sha)) throw new Error('Expected a full 40-character commit SHA');
-  const tags = images.map((image) => `${repository}-${image}:main`);
-  const previous = new Map();
-
-  // Capture all previous aliases before mutating any of them. The immutable
-  // digest references let the failure handler restore the original set.
-  for (const tag of tags) {
-    const { stdout } = await run('docker', ['buildx', 'imagetools', 'inspect', tag, '--format', '{{.Manifest.Digest}}']).catch((error) => {
-      if (/not found|manifest unknown|no such manifest/i.test(error.stderr ?? error.message)) {
-        previous.set(tag, null);
-        return { stdout: '' };
-      }
-      throw error;
-    });
-    if (previous.has(tag)) continue;
-    const digest = stdout.trim();
-    if (!/^sha256:[0-9a-f]{64}$/i.test(digest)) throw new Error(`Could not resolve prior digest for ${tag}`);
-    previous.set(tag, digest);
-  }
-
   try {
     for (const image of images) {
       const tag = `${repository}-${image}:main`;
@@ -33,29 +14,24 @@ export async function promoteImages(sha, run = execFileAsync) {
       await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, source]);
     }
   } catch (promotionError) {
-    const rollbackErrors = [];
-    for (const [tag, digest] of previous) {
+    // A failed update cannot safely delete a newly-created GHCR alias: the
+    // registry's version-delete API can also delete the immutable SHA tag
+    // when both tags address the same manifest. Instead, reconcile the full
+    // alias set to this run's already-published immutable sources.
+    const reconciliationErrors = [];
+    for (const image of images) {
+      const tag = `${repository}-${image}:main`;
+      const source = `${repository}-${image}:sha-${sha.slice(0, 12)}`;
       try {
-        if (digest === null) {
-          const image = tag.slice(0, tag.lastIndexOf(':'));
-          const packageName = image.slice(repository.length + 1);
-          const { stdout } = await run('gh', ['api', '--paginate', `orgs/quokkify/packages/container/marketdesk-${packageName}/versions`, '--jq', '.[] | select(.metadata.container.tags[]? == "main") | .id']);
-          const versionIds = stdout.trim().split(/\s+/).filter(Boolean);
-          for (const id of versionIds) {
-            await run('gh', ['api', '--method', 'DELETE', `orgs/quokkify/packages/container/marketdesk-${packageName}/versions/${id}`]);
-          }
-          continue;
-        }
-        const image = tag.slice(0, tag.lastIndexOf(':'));
-        await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, `${image}@${digest}`]);
+        await run('docker', ['buildx', 'imagetools', 'create', '--tag', tag, source]);
       } catch (error) {
-        rollbackErrors.push(`${tag}: ${error.message}`);
+        reconciliationErrors.push(`${tag}: ${error.message}`);
       }
     }
-    if (rollbackErrors.length) {
-      throw new Error(`Promotion failed (${promotionError.message}); rollback incomplete: ${rollbackErrors.join('; ')}`, { cause: promotionError });
+    if (reconciliationErrors.length) {
+      throw new Error(`Promotion failed (${promotionError.message}); complete-set reconciliation failed: ${reconciliationErrors.join('; ')}`, { cause: promotionError });
     }
-    throw new Error(`Promotion failed; all prior :main aliases restored: ${promotionError.message}`, { cause: promotionError });
+    throw new Error(`Promotion failed; all :main aliases reconciled to ${sha.slice(0, 12)}: ${promotionError.message}`, { cause: promotionError });
   }
 }
 

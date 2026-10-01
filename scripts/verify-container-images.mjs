@@ -30,8 +30,10 @@ assert.match(workflow, /if \[\[ "\$EVENT_NAME" == push && "\$REF_TYPE" == tag \]
 assert.match(workflow, /promote-main:[\s\S]*?needs: build[\s\S]*?if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'[\s\S]*?git rev-parse HEAD/);
 assert.match(workflow, /run: node scripts\/promote-container-images\.mjs/);
 const promotion = await read('scripts/promote-container-images.mjs');
-assert.match(promotion, /all prior :main aliases restored/);
-assert.match(promotion, /imagetools', 'inspect'/);
+assert.match(promotion, /all :main aliases reconciled/);
+assert.match(promotion, /complete-set reconciliation failed/);
+assert.match(promotion, /imagetools', 'create', '--tag', tag, source/);
+assert.doesNotMatch(promotion, /gh', \['api'|--method', 'DELETE'/);
 assert.doesNotMatch(workflow.match(/- name: Resolve image tags[\s\S]*?- name: Build and publish/)[0], /:main/);
 assert.match(backend, /USER nodejs/);
 assert.match(backend, /dist\/backend\/main\.js/);
