@@ -113,10 +113,4 @@ jobs:
       - name: Promote all images
         env:
           IMAGE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          for image in backend frontend assets; do
-            docker buildx imagetools create \
-              --tag "ghcr.io/quokkify/marketdesk-${image}:main" \
-              "ghcr.io/quokkify/marketdesk-${image}:sha-${IMAGE_SHA::12}"
-          done
+        run: node scripts/promote-container-images.mjs "$IMAGE_SHA"

@@ -22,6 +22,7 @@
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
     "verify:brand-assets": "node scripts/verify-brand-assets.mjs",
     "verify:container-images": "node scripts/verify-container-images.mjs",
+    "verify:container-promotion": "node scripts/verify-container-promotion.mjs",
     "verify:migration-runner": "npm run build:migrate && node scripts/verify-migration-runner-failure.mjs",
     "verify:release-metadata": "node scripts/verify-release-metadata.mjs && node scripts/verify-release-process-lifecycle.mjs && npm run verify:migration-runner",
     "compose:release": "node scripts/compose-release.mjs",

@@ -28,7 +28,10 @@ assert.match(workflow, /group: container-images-\$\{\{[\s\S]*?github\.ref_name \
 assert.match(workflow, /if \[\[ "\$IMAGE_NAME" == backend && "\$REF_TYPE" == tag \]\]; then[\s\S]*?sha_namespace="sha-release"/);
 assert.match(workflow, /if \[\[ "\$EVENT_NAME" == push && "\$REF_TYPE" == tag \]\]; then[\s\S]*?\$\{image\}:\$\{REF_NAME\}/);
 assert.match(workflow, /promote-main:[\s\S]*?needs: build[\s\S]*?if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'[\s\S]*?git rev-parse HEAD/);
-assert.match(workflow, /docker buildx imagetools create[\s\S]*?\$\{image\}:main[\s\S]*?\$\{image\}:sha-\$\{IMAGE_SHA::12\}/);
+assert.match(workflow, /run: node scripts\/promote-container-images\.mjs/);
+const promotion = await read('scripts/promote-container-images.mjs');
+assert.match(promotion, /all prior :main aliases restored/);
+assert.match(promotion, /imagetools', 'inspect'/);
 assert.doesNotMatch(workflow.match(/- name: Resolve image tags[\s\S]*?- name: Build and publish/)[0], /:main/);
 assert.match(backend, /USER nodejs/);
 assert.match(backend, /dist\/backend\/main\.js/);
