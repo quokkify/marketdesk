@@ -14,13 +14,12 @@ export async function promoteImages(sha, run = execFileAsync) {
   // digest references let the failure handler restore the original set.
   for (const tag of tags) {
     const { stdout } = await run('docker', ['buildx', 'imagetools', 'inspect', tag, '--format', '{{.Manifest.Digest}}']).catch((error) => {
-      // A missing alias is expected during first publication; promotion can
-      // bootstrap it, though there is no previous value to restore on failure.
-      if (/not found|manifest unknown|no such manifest/i.test(error.stderr ?? error.message)) return { stdout: '' };
+      if (/not found|manifest unknown|no such manifest/i.test(error.stderr ?? error.message)) {
+        throw new Error(`Refusing promotion: ${tag} is missing; cannot guarantee rollback of a partially created alias`, { cause: error });
+      }
       throw error;
     });
     const digest = stdout.trim();
-    if (!digest) continue;
     if (!/^sha256:[0-9a-f]{64}$/i.test(digest)) throw new Error(`Could not resolve prior digest for ${tag}`);
     previous.set(tag, digest);
   }

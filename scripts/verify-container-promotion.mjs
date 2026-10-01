@@ -36,20 +36,17 @@ for (let failedPosition = 0; failedPosition < images.length; failedPosition += 1
   }
 }
 
-const missingState = new Map();
 const missingCalls = [];
-await promoteImages('b'.repeat(40), async (_command, args) => {
+await assert.rejects(promoteImages('b'.repeat(40), async (_command, args) => {
   missingCalls.push([...args]);
   if (args[2] === 'inspect') {
     const error = new Error('manifest unknown');
     error.stderr = 'manifest unknown';
     throw error;
   }
-  if (args[2] === 'create') missingState.set(args[4], args[5]);
   return { stdout: '' };
-});
-assert.equal(missingCalls.filter((args) => args[2] === 'create').length, 3, 'missing aliases bootstrap successfully');
-assert.equal(missingState.size, 3);
+}), /cannot guarantee rollback/);
+assert.equal(missingCalls.filter((args) => args[2] === 'create').length, 0, 'missing aliases fail closed before publication');
 
 let failedPromotion = false;
 await assert.rejects(
@@ -65,4 +62,4 @@ await assert.rejects(
   /rollback incomplete/,
 );
 
-console.log('Promotion rollback verified at all three failure positions; rollback arguments, alias restoration, and initial publication verified.');
+console.log('Promotion rollback verified at all three failure positions; rollback arguments and alias restoration verified; missing aliases fail closed.');
