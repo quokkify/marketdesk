@@ -7,6 +7,13 @@ on:
     branches: [main]
     tags: ['marketdesk-v*']
 
+# Serialize main publications together, while release publications are isolated
+# by tag. Never cancel an in-flight matrix: all three mutable :main tags must
+# finish from the same commit before a newer main run can publish.
+concurrency:
+  group: container-images-${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -54,7 +61,11 @@ jobs:
         run: |
           set -euo pipefail
           image="ghcr.io/quokkify/marketdesk-${IMAGE_NAME}"
-          tags="${image}:sha-${GITHUB_SHA::12}"
+          sha_namespace="sha"
+          if [[ "$REF_TYPE" == tag ]]; then
+            sha_namespace="sha-release"
+          fi
+          tags="${image}:${sha_namespace}-${GITHUB_SHA::12}"
           if [[ "$EVENT_NAME" == push && "$REF_TYPE" == branch && "$REF_NAME" == main ]]; then
             tags+=$'\n'"${image}:main"
           elif [[ "$EVENT_NAME" == push && "$REF_TYPE" == tag ]]; then

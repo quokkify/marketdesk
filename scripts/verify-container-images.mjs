@@ -23,6 +23,9 @@ assert.match(workflow, /pull_request:[\s\S]*?push:[\s\S]*?branches: \[main\][\s\
 assert.match(workflow, /push: \$\{\{ github\.event_name != 'pull_request' \}\}/);
 assert.match(workflow, /packages: write/);
 assert.match(workflow, /MARKETDESK_RELEASE_TAG=/);
+assert.match(workflow, /concurrency:[\s\S]*?cancel-in-progress: false/);
+assert.match(workflow, /group: container-images-\$\{\{[\s\S]*?github\.ref_name \|\| github\.ref \}\}/);
+assert.match(workflow, /sha_namespace="sha"[\s\S]*?if \[\[ "\$REF_TYPE" == tag \]\]; then[\s\S]*?sha_namespace="sha-release"[\s\S]*?\$\{image\}:\$\{sha_namespace\}-\$\{GITHUB_SHA::12\}/);
 assert.match(backend, /USER nodejs/);
 assert.match(backend, /dist\/backend\/main\.js/);
 assert.match(backend, /localhost:3000\/health/);
