@@ -4,7 +4,7 @@
 
 **One workspace for seller operations: products, marketplace listings, analytics, and reviewable AI assistance.**
 
-Project status: [prototype, not production-certified](.github/project-status.yml)
+Project status: [prototype, not production-certified](.github/project-status.yml) · active implementation. Releases may use a combined `marketdesk-v*` tag or independent `backend-v*`, `frontend-v*`, and `assets-v*` component tags.
 
 </div>
 
@@ -46,7 +46,7 @@ See [Development and operations](docs/development.md) for environment setup, che
 
 ## Architecture
 
-React + TypeScript frontend · Node.js + Express API · PostgreSQL · Redis · Docker Compose. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA.
+React + TypeScript frontend · Node.js + Express API · PostgreSQL · Redis · Docker Compose. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA; separately published component images are an optional topology.
 
 ## Documentation
 

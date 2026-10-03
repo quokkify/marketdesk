@@ -1,12 +1,54 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "node",
+  "release-type": "simple",
+  "bootstrap-sha": "8ec7844c0a467d5dfbe3046ab6da07c37a891a27",
+  "include-component-in-tag": true,
   "packages": {
-    ".": {
-      "release-type": "node",
-      "package-name": "marketdesk",
+    "src/backend": {
+      "release-type": "simple",
+      "package-name": "backend",
+      "changelog-path": "CHANGELOG-backend.md",
       "bump-minor-pre-major": true,
-      "changelog-path": "CHANGELOG.md",
+      "changelog-sections": [
+        {"type": "feat", "section": "✨ Features"},
+        {"type": "fix", "section": "🐛 Bug Fixes"},
+        {"type": "deps", "section": "📦 Dependencies"},
+        {"type": "docs", "section": "📚 Documentation"},
+        {"type": "perf", "section": "🚀 Performance"},
+        {"type": "refactor", "section": "♻️ Refactoring"},
+        {"type": "revert", "section": "↩️ Reverts"},
+        {"type": "build", "section": "🛠 Build System", "hidden": true},
+        {"type": "ci", "section": "⚙️ CI", "hidden": true},
+        {"type": "test", "section": "🧪 Tests", "hidden": true},
+        {"type": "chore", "section": "🧹 Chores", "hidden": true},
+        {"type": "style", "section": "🎨 Style", "hidden": true}
+      ]
+    },
+    "src/frontend": {
+      "release-type": "simple",
+      "package-name": "frontend",
+      "changelog-path": "CHANGELOG-frontend.md",
+      "bump-minor-pre-major": true,
+      "changelog-sections": [
+        {"type": "feat", "section": "✨ Features"},
+        {"type": "fix", "section": "🐛 Bug Fixes"},
+        {"type": "deps", "section": "📦 Dependencies"},
+        {"type": "docs", "section": "📚 Documentation"},
+        {"type": "perf", "section": "🚀 Performance"},
+        {"type": "refactor", "section": "♻️ Refactoring"},
+        {"type": "revert", "section": "↩️ Reverts"},
+        {"type": "build", "section": "🛠 Build System", "hidden": true},
+        {"type": "ci", "section": "⚙️ CI", "hidden": true},
+        {"type": "test", "section": "🧪 Tests", "hidden": true},
+        {"type": "chore", "section": "🧹 Chores", "hidden": true},
+        {"type": "style", "section": "🎨 Style", "hidden": true}
+      ]
+    },
+    "public": {
+      "release-type": "simple",
+      "package-name": "assets",
+      "changelog-path": "CHANGELOG-assets.md",
+      "bump-minor-pre-major": true,
       "changelog-sections": [
         {"type": "feat", "section": "✨ Features"},
         {"type": "fix", "section": "🐛 Bug Fixes"},

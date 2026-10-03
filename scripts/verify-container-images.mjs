@@ -19,7 +19,8 @@ for (const [image, dockerfile] of [
 ]) {
   assert.match(workflow, new RegExp(`image: ${image}\\s+dockerfile: ${dockerfile.replaceAll('.', '\\.')}\\b`));
 }
-assert.match(workflow, /pull_request:[\s\S]*?push:[\s\S]*?branches: \[main\][\s\S]*?tags: \['marketdesk-v\*'\]/);
+assert.match(workflow, /pull_request:[\s\S]*?push:[\s\S]*?branches: \[main\][\s\S]*?tags: \['marketdesk-v\*', 'backend-v\*', 'frontend-v\*', 'assets-v\*'\]/);
+assert.match(workflow, /Select image for release tag[\s\S]*?\$\{IMAGE_NAME\}-v[\s\S]*?steps\.release-image\.outputs\.include == 'true'/);
 assert.match(workflow, /push: \$\{\{ github\.event_name != 'pull_request' \}\}/);
 assert.match(workflow, /packages: write/);
 assert.match(workflow, /MARKETDESK_RELEASE_TAG=/);
