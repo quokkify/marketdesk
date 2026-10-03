@@ -4,12 +4,25 @@ MarketDesk displays the version embedded in the running artifact. It never queri
 
 ## Release deployment
 
+Release Please tracks `backend`, `frontend`, and `assets` independently. The
+manifest starts all three at `0.20.0`, the last combined MarketDesk version;
+the first manifest PR establishes separate `backend-v*`, `frontend-v*`, and
+`assets-v*` tags and per-component changelogs. The backend tag identifies the
+combined application image used by the current Compose deployment. Frontend and
+asset tags identify their corresponding GHCR images.
+
+Release Please assigns commits by changed files under `src/backend`,
+`src/frontend`, and `public`. Root-level changes such as `package.json`, lockfiles,
+or Dockerfiles do not select a component by themselves; when such a change needs
+a component release, include a corresponding change under that component path.
+
 Create and verify a fresh live PostgreSQL, Redis, and uploads backup before every
-release. Keep it owner-private and record checksums/restore-list validation. Then
-check out the exact release tag and run Compose through the fail-closed wrapper:
+backend release deployment. Keep it owner-private and record checksums/restore-list
+validation. Then check out the exact backend release tag and run Compose through
+the fail-closed wrapper:
 
 ```bash
-git checkout marketdesk-v0.10.0
+git checkout backend-v0.21.0
 npm run compose:release -- up -d
 ```
 
@@ -17,7 +30,8 @@ The wrapper:
 
 1. resolves `HEAD` and enumerates canonical release tags pointing exactly at that commit;
 2. requires a clean checkout with no tracked or untracked changes;
-3. accepts only `marketdesk-vX.Y.Z`;
+3. accepts exactly one `backend-vX.Y.Z` application tag (and continues to accept
+   historical `marketdesk-vX.Y.Z` tags for rollback);
 4. permits only detached Compose `up`, pins the repository Compose file/project directory and directory-derived project name, verifies any existing `marketdesk-app` project label, and always adds `--build`;
 5. exports that exact value as `MARKETDESK_RELEASE_TAG` only for the Compose subprocess;
 6. archives the validated commit and uses that immutable archive for the Compose file, Docker build context, and Dockerfile;
@@ -47,7 +61,7 @@ Normal local builds leave `MARKETDESK_RELEASE_TAG` empty and honestly report `De
 
 ## Runtime verification
 
-For `marketdesk-v0.10.0`, both public runtime contracts must report `v0.10.0`:
+For `backend-v0.21.0`, both public runtime contracts must report `v0.21.0`:
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/application-info

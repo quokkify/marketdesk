@@ -2,7 +2,7 @@
 
 A workspace-scoped platform for managing products, listings, marketplace state, analytics, and Hermes-assisted decisions. OLX is the only validated live marketplace integration today; other channels remain explicit roadmap surfaces.
 
-Project status: [prototype](.github/project-status.yml) · active implementation · not ready for production · current release `marketdesk-v0.19.2`.
+Project status: [prototype](.github/project-status.yml) · active implementation · not ready for production · current combined release `marketdesk-v0.20.0`; component releases use `backend-v*`, `frontend-v*`, and `assets-v*`.
 
 Documentation showcase copies are hosted in [quokkify/.github](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk); runtime-required brand assets remain under `public/`. The CI scaffold comes from [project-toolkit](https://github.com/quokkify/project-toolkit) at the version in `.copier-answers.yml`. Use the `Update project template` workflow for a reviewable update branch; preserve MarketDesk's Node commands and required check names when resolving Copier conflicts.
 
