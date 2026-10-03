@@ -42,7 +42,35 @@ def read_histories() -> dict[str, str]:
     return {component: (ROOT / path).read_text() for component, path in AUDIT['targets'].items()}
 
 
+def verify_baseline(text: str, corrected: str) -> str:
+    """Ignore only newer release blocks before the exact frozen baseline."""
+    header, baseline = corrected.split('\n\n', 1)
+    baseline = baseline.rstrip()
+    heading = baseline.splitlines()[0]
+    assert text.startswith(header + '\n\n'), 'document header'
+    assert text.splitlines().count(heading) == 1, 'baseline heading'
+    start = text.index('\n' + heading) + 1
+    inherited = text.index('\n\n## Inherited legacy history', start)
+    assert text[start:inherited] == baseline, 'baseline content'
+    prefix = text[len(header) + 2:start]
+    headings = re.findall(r'(?m)^## .+$', prefix)
+    assert not prefix or (headings and prefix.startswith(headings[0] + '\n')), 'unexpected prefix'
+    versions = []
+    for release_heading in headings:
+        match = re.fullmatch(r'## \[(\d+\.\d+\.\d+)\]\(https?://[^\s)]+\) \(\d{4}-\d{2}-\d{2}\)', release_heading)
+        assert match is not None, 'prepended release heading'
+        versions.append(tuple(map(int, match[1].split('.'))))
+    baseline_match = re.match(r'## \[(\d+\.\d+\.\d+)\]', heading)
+    assert baseline_match is not None, 'frozen baseline heading'
+    baseline_version = baseline_match[1]
+    versions.append(tuple(map(int, baseline_version.split('.'))))
+    assert all(new > old for new, old in zip(versions, versions[1:])), 'release order'
+
+    return '.'.join(map(str, versions[0]))
+
+
 def verify_conservation(histories: dict[str, str]) -> None:
+    assert set(histories) == set(AUDIT['targets']), 'component streams'
     expected = {component: [] for component in histories}
     for entry in AUDIT['entries']:
         for component in entry['components']:
@@ -133,17 +161,80 @@ class HistoryChecks(unittest.TestCase):
             self.assertEqual(entry['shared_only'], not direct)
 
     def test_current_release_and_versions_stable(self):
+        manifest = json.loads((ROOT / '.github/release-please/manifest.json').read_text())
+        self.assertEqual(set(manifest), {'src/backend', 'src/frontend', 'public'})
         for component, text in read_histories().items():
             original = git('show', f"{AUDIT['source_commit']}:{AUDIT['targets'][component]}")
             self.assertEqual(digest(original), AUDIT['current_sha256'][component])
             corrected = original.replace(f'{component}-v0.20.0...', 'marketdesk-v0.20.0...')
             self.assertEqual(digest(corrected), AUDIT['migrated_current_sha256'][component])
             # Future release prepends are allowed; the actual 0.21.0 remains intact.
-            self.assertIn(corrected.rstrip() + '\n\n## Inherited legacy history', text)
-        manifest = json.loads((ROOT / '.github/release-please/manifest.json').read_text())
-        self.assertEqual(set(manifest), {'src/backend', 'src/frontend', 'public'})
+            self.assertEqual(verify_baseline(text, corrected), manifest[str(Path(AUDIT['targets'][component]).parent)])
         for version in manifest.values():
             self.assertGreaterEqual(tuple(map(int, version.split('.'))), (0, 21, 0))
+
+    def test_baseline_rejects_corruption_after_prepends(self):
+        for component, text in read_histories().items():
+            original = git('show', f"{AUDIT['source_commit']}:{AUDIT['targets'][component]}")
+            corrected = original.replace(f'{component}-v0.20.0...', 'marketdesk-v0.20.0...')
+            baseline = corrected.split('\n\n', 1)[1].rstrip()
+            text = text.replace('# Changelog\n\n', '# Changelog\n\n## [0.99.0](https://github.com/quokkify/marketdesk/releases/tag/next) (2026-10-04)\n\n* new release\n\n', 1)
+            heading = baseline.splitlines()[0]
+            bullet = next(line for line in baseline.splitlines() if line.startswith('* '))
+            for old, new in [(heading, ''), (heading, heading.replace('0.21.0', '0.21.9')),
+                             ('2026-10-03', '2026-10-02'), (bullet, ''), (bullet, bullet + ' altered'),
+                             ('marketdesk-v0.20.0', 'missing-tag'), ('/issues/', '/pull/'),
+                             ('/commit/', '/commits/'), ('### ✨ Features', '### Changed')]:
+                with self.subTest(component=component, corruption=old):
+                    damaged = text.replace(baseline, baseline.replace(old, new, 1), 1)
+                    self.assertNotEqual(damaged, text)
+                    with self.assertRaises(AssertionError):
+                        verify_baseline(damaged, corrected)
+            with self.assertRaises(AssertionError):
+                verify_baseline(text.replace(baseline, baseline + '\n\n' + baseline, 1), corrected)
+
+    def test_release_prepend_scenarios_and_metadata(self):
+        histories = read_histories()
+        baseline_histories = {c: '# Changelog\n\n' + text[text.index('## [0.21.0]'):]
+                              for c, text in histories.items()}
+        manifest = {str(Path(p).parent): '0.21.0' for p in AUDIT['targets'].values()}
+        for active, versions in [(set(), []), (set(histories), ['0.21.1']),
+                                 (set(histories), ['0.21.1', '0.22.0']),
+                                 ({'backend'}, ['0.21.1']), ({'frontend', 'assets'}, ['0.21.1'])]:
+            with self.subTest(active=active, versions=versions):
+                scenario = dict(baseline_histories)
+                metadata = dict(manifest)
+                for c in active:
+                    for version in versions:
+                        entry = f'## [{version}](https://github.com/quokkify/marketdesk/releases/tag/{c}-v{version}) (2026-10-04)\n\n* next release\n\n'
+                        scenario[c] = scenario[c].replace('# Changelog\n\n', '# Changelog\n\n' + entry, 1)
+                    metadata[str(Path(AUDIT['targets'][c]).parent)] = versions[-1]
+                with mock.patch(__name__ + '.read_histories', return_value=scenario), mock.patch.object(Path, 'read_text', return_value=json.dumps(metadata)):
+                    self.test_current_release_and_versions_stable()
+                    verify_conservation(scenario)
+                    broken = dict(metadata)
+                    broken['src/backend'] = '0.99.0'
+                    with mock.patch.object(Path, 'read_text', return_value=json.dumps(broken)), self.assertRaises(AssertionError):
+                        self.test_current_release_and_versions_stable()
+                    broken.pop('public')
+                    with mock.patch.object(Path, 'read_text', return_value=json.dumps(broken)), self.assertRaises(AssertionError):
+                        self.test_current_release_and_versions_stable()
+
+    def test_inherited_corruption_and_missing_stream_fail(self):
+        histories = read_histories()
+        for component in histories:
+            damaged = dict(histories)
+            del damaged[component]
+            with self.subTest(component=component), self.assertRaises(AssertionError):
+                verify_conservation(damaged)
+        entry = AUDIT['entries'][0]
+        component = entry['components'][0]
+        for old, new in [(entry['text'], ''), (entry['text'], entry['text'] + ' altered'),
+                         (AUDIT['sections'][entry['section']]['heading'].replace('## ', '## Legacy ', 1), '## Legacy corrupted')]:
+            damaged = dict(histories)
+            damaged[component] = damaged[component].replace(old, new, 1)
+            with self.subTest(corruption=old), self.assertRaises(AssertionError):
+                verify_conservation(damaged)
 
     def test_chronology_links_and_no_fake_legacy_components(self):
         dates = [s['date'] for s in AUDIT['sections']]
@@ -205,6 +296,19 @@ class HistoryChecks(unittest.TestCase):
             self.skipTest('pass --native-directory after running the actual Release Please updater')
         for component, original in read_histories().items():
             next_release = (NATIVE_DIRECTORY / (component + '.md')).read_text()
+            frozen = git('show', f"{AUDIT['source_commit']}:{AUDIT['targets'][component]}")
+            corrected = frozen.replace(f'{component}-v0.20.0...', 'marketdesk-v0.20.0...')
+            self.assertEqual(verify_baseline(next_release, corrected), '0.22.0')
+            multiple = (NATIVE_DIRECTORY / (component + '-multiple.md')).read_text()
+            self.assertEqual(verify_baseline(multiple, corrected), '0.23.0')
+            for candidate in [next_release, multiple]:
+                histories = read_histories()
+                histories[component] = candidate
+                verify_conservation(histories)
+                baseline = corrected.split('\n\n', 1)[1].rstrip()
+                bullet = next(line for line in baseline.splitlines() if line.startswith('* '))
+                with self.assertRaises(AssertionError):
+                    verify_baseline(candidate.replace(bullet, '', 1), corrected)
             self.assertIn(original[original.index('## [0.21.0]'):].rstrip(), next_release)
             self.assertEqual(ENRICH.source_pr_numbers(next_release, 'quokkify/marketdesk'), [901])
             updated = ENRICH.enrich_changelog(next_release, [{'number': 901, 'body': '## Highlight\nNext native release.'}])

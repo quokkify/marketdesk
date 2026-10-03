@@ -19,5 +19,9 @@ for (const [component, path] of Object.entries(audit.targets)) {
   assert.ok(updated.indexOf(entry) < updated.indexOf('## [0.21.0]'));
   assert.ok(updated.endsWith(original.slice(original.indexOf('## [0.21.0]'))));
   writeFileSync(join(outputDirectory, `${component}.md`), updated);
+  const nextEntry = entry.replaceAll('0.21.0', '0.22.0').replaceAll('0.22.0)', '0.23.0)').replace('## [0.22.0]', '## [0.23.0]');
+  const multiple = new Changelog({ version: '0.23.0', changelogEntry: nextEntry }).updateContent(updated);
+  assert.ok(multiple.endsWith(updated.slice(updated.indexOf('## [0.22.0]'))));
+  writeFileSync(join(outputDirectory, `${component}-multiple.md`), multiple);
 }
-console.log('Actual Release Please Changelog updater: 3 next-release prepends preserve all current and inherited content. No GitHub writes.');
+console.log('Actual Release Please Changelog updater: 6 prepends preserve all current and inherited content. No GitHub writes.');
