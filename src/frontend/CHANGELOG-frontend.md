@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
+
+
+### 📚 Documentation
+
+* **release:** migrate inherited component changelog histories ([#345](https://github.com/quokkify/marketdesk/issues/345)) ([ebcef80](https://github.com/quokkify/marketdesk/commit/ebcef80f805f3483ee63462a72c8ab27e0fd9bf1))
+
 ## [0.21.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.20.0...frontend-v0.21.0) (2026-10-03)
 
 
