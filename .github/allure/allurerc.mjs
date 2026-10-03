@@ -1,6 +1,8 @@
 export default {
   name: 'MarketDesk',
   output: './allure-report',
+  historyPath: './allure-history/history.jsonl',
+  historyLimit: 20,
   plugins: {
     awesome: {
       options: {
