@@ -1,0 +1,13 @@
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+
+WORKDIR /app
+COPY package*.json .npmrc ./
+RUN npm ci
+COPY . .
+RUN npm run build:frontend
+
+FROM caddy:2.10.2-alpine
+COPY docker/caddy/frontend.Caddyfile /etc/caddy/Caddyfile
+COPY --from=builder /app/dist/frontend/ /srv/
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/ || exit 1

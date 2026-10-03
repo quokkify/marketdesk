@@ -1,0 +1,117 @@
+name: Container images
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['marketdesk-v*']
+
+# Serialize publications by source ref. Main promotion is a separate,
+# success-gated job so a failed matrix cannot update a subset of :main tags.
+concurrency:
+  group: container-images-${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            dockerfile: Dockerfile
+          - image: frontend
+            dockerfile: Dockerfile.frontend
+          - image: assets
+            dockerfile: Dockerfile.assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: metadata
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/quokkify/marketdesk-${IMAGE_NAME}"
+          sha_namespace="sha"
+          if [[ "$IMAGE_NAME" == backend && "$REF_TYPE" == tag ]]; then
+            sha_namespace="sha-release"
+          fi
+          tags="${image}:${sha_namespace}-${GITHUB_SHA::12}"
+          if [[ "$EVENT_NAME" == push && "$REF_TYPE" == tag ]]; then
+            tags+=$'\n'"${image}:${REF_NAME}"
+          fi
+          printf 'tags<<EOF\n%s\nEOF\n' "$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          build-args: |
+            MARKETDESK_RELEASE_TAG=${{ startsWith(github.ref, 'refs/tags/marketdesk-v') && github.ref_name || '' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+  promote-main:
+    name: Promote complete main image set
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify this run is still current
+        env:
+          RUN_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$RUN_SHA"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote all images
+        env:
+          IMAGE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/promote-container-images.mjs "$IMAGE_SHA"

@@ -122,6 +122,8 @@ systemctl status caddy --no-pager
 
 ## Recommended Caddyfile
 
+This is the current production topology: native Caddy on the host proxies to the combined Compose `app` image bound to loopback at `127.0.0.1:3000`. Keep this deployment unchanged when pulling/publishing the separate GHCR images; those images do not alter this Caddy configuration. See [GHCR image deployment scenarios](container-images.md#deployment-scenarios) before considering a future split-image migration.
+
 Replace `marketdesk.example.com` with the production hostname and adjust `127.0.0.1:3000` only if `APP_PORT` differs.
 
 ```caddyfile
