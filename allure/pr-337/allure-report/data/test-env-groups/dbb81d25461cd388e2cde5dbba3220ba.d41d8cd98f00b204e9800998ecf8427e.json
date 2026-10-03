@@ -1,0 +1,1 @@
+{"id":"dbb81d25461cd388e2cde5dbba3220ba.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveJwtSecret (S1 fail-closed JWT secret) production throws when the secret is an empty string","name":"throws when the secret is an empty string","status":"passed","testResultsByEnv":{"default":"93260e86a2f7e520c7fb29ad948726a1"}}
