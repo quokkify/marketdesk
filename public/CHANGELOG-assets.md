@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.21.1](https://github.com/quokkify/marketdesk/compare/assets-v0.21.0...assets-v0.21.1) (2026-10-03)
+
+<!-- project-toolkit:rich-block:start -->
+<!-- project-toolkit:rich-release-notes pr=345 -->
+### ✨ Highlights
+- Migrated the combined changelog into backend, frontend, and assets histories, preserving historical entries, links, and explicit legacy provenance.
+- Added conservation checks and corrected release-note enrichment so repeated runs do not accumulate blank lines.
+
+### 🔄 Migration
+No runtime migration. All GitHub Release metadata/tags/assets are unchanged. Legacy 1.0.0 is documented as an overlapping combined bootstrap snapshot, not a component bump. Native Release Please remains bump authority.
+<!-- project-toolkit:rich-block:end -->
+
+### 📚 Documentation
+
+* **release:** migrate inherited component changelog histories ([#345](https://github.com/quokkify/marketdesk/issues/345)) ([ebcef80](https://github.com/quokkify/marketdesk/commit/ebcef80f805f3483ee63462a72c8ab27e0fd9bf1))
+
 ## [0.21.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.20.0...assets-v0.21.0) (2026-10-03)
 
 
