@@ -1,1 +1,0 @@
-{"id":"a15b4800fae6fdc9318ca9f782794c2b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/applicationVersion.test.ts#resolveApplicationVersion normalizes an exact MarketDesk release tag for display","name":"normalizes an exact MarketDesk release tag for display","status":"passed","testResultsByEnv":{"default":"24e89cce71a2896a560d7593ad3f0bbf"}}
