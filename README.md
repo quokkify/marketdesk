@@ -4,7 +4,7 @@
 
 **One workspace for seller operations: products, marketplace listings, analytics, and reviewable AI assistance.**
 
-Project status: [prototype, not production-certified](.github/project-status.yml) · active implementation. Releases may use a combined `marketdesk-v*` tag or independent `backend-v*`, `frontend-v*`, and `assets-v*` component tags.
+Project status: [prototype, not production-certified](.github/project-status.yml) · active implementation. Current releases use independent `backend-v*`, `frontend-v*`, and `assets-v*` component tags; combined `marketdesk-v*` tags remain historical rollback references.
 
 </div>
 
@@ -58,6 +58,7 @@ React + TypeScript frontend · Node.js + Express API · PostgreSQL · Redis · D
 - [Existing product, analytics and dark-theme screenshots](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk) (visual references; not production-readiness claims)
 - [Development and operations guide](docs/development.md)
 - [Caddy + Cloudflare deployment](docs/deployment/caddy-cloudflare-vps.md) · [Release and migration safety](docs/deployment/release-version.md)
+- Release histories: [Backend](src/backend/CHANGELOG-backend.md) · [Frontend](src/frontend/CHANGELOG-frontend.md) · [Assets](public/CHANGELOG-assets.md) · [Legacy migration audit](docs/deployment/changelog-history-migration.md)
 - [Upload storage](docs/deployment/upload-storage.md) · [GHCR image contract](docs/deployment/container-images.md)
 - [OLX publication quota guard](docs/olx-publication-quota.md) · [Hermes agent boundary](docs/marketdesk-agents.md)
 

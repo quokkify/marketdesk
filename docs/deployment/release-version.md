@@ -6,8 +6,12 @@ MarketDesk displays the version embedded in the running artifact. It never queri
 
 Release Please tracks `backend`, `frontend`, and `assets` independently. The
 manifest starts all three at `0.20.0`, the last combined MarketDesk version;
-the first manifest PR establishes separate `backend-v*`, `frontend-v*`, and
-`assets-v*` tags and per-component changelogs. The backend tag identifies the
+the first manifest PR established separate `backend-v*`, `frontend-v*`, and
+`assets-v*` tags at `0.21.0`. Read the [backend](../../src/backend/CHANGELOG-backend.md),
+[frontend](../../src/frontend/CHANGELOG-frontend.md), and [assets](../../public/CHANGELOG-assets.md)
+changelogs for current releases and explicitly inherited combined history.
+The [migration audit](changelog-history-migration.md) explains the legacy bootstrap,
+conservation checks, and GitHub latest/list-order distinction. The backend tag identifies the
 combined application image used by the current Compose deployment. Frontend and
 asset tags identify their corresponding GHCR images.
 

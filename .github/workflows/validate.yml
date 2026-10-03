@@ -84,6 +84,8 @@ jobs:
                       if reference != answers["toolkit_version"] and not pinned_release:
                           raise SystemExit(f"{path} uses toolkit {reference}, expected {answers['toolkit_version']}")
           PY
+      - name: Verify component changelog history and enrichment
+        run: python3 scripts/verify-changelog-history.py
       - name: Install actionlint
         env:
           ACTIONLINT_VERSION: 1.7.12
