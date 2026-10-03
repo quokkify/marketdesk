@@ -7,7 +7,11 @@ import {
 } from './applicationVersion';
 
 describe('resolveApplicationVersion', () => {
-  it('normalizes an exact MarketDesk release tag for display', () => {
+  it('normalizes an exact backend release tag for display', () => {
+    expect(resolveApplicationVersion('backend-v0.10.0')).toBe('v0.10.0');
+  });
+
+  it('continues to recognize historical MarketDesk release tags', () => {
     expect(resolveApplicationVersion('marketdesk-v0.10.0')).toBe('v0.10.0');
   });
 
@@ -19,11 +23,11 @@ describe('resolveApplicationVersion', () => {
     'v0.10.0',
     'hermes-marketdesk-v0.10.0',
     'marketdesk-v0.10',
-    'marketdesk-v0.10.0-rc.1',
-    'marketdesk-v0.10.0 dirty',
-    'marketdesk-v01.10.0',
-    ' marketdesk-v0.10.0 ',
-    'marketdesk-v0.10.0\n',
+    'backend-v0.10.0-rc.1',
+    'backend-v0.10.0 dirty',
+    'backend-v01.10.0',
+    ' backend-v0.10.0 ',
+    'backend-v0.10.0\n',
     '   ',
   ])('does not invent a production version from malformed metadata: %s', (value) => {
     expect(resolveApplicationVersion(value)).toBe('Version unavailable');
@@ -37,7 +41,7 @@ describe('readEmbeddedApplicationVersion', () => {
   afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
   it('reads the version from the immutable artifact metadata file', () => {
-    writeFileSync(releaseFile, 'marketdesk-v0.10.0');
+    writeFileSync(releaseFile, 'backend-v0.10.0');
     expect(readEmbeddedApplicationVersion(releaseFile)).toBe('v0.10.0');
   });
 
@@ -46,7 +50,7 @@ describe('readEmbeddedApplicationVersion', () => {
   });
 
   it('does not normalize malformed artifact file content', () => {
-    writeFileSync(releaseFile, 'marketdesk-v0.10.0\n');
+    writeFileSync(releaseFile, 'backend-v0.10.0\n');
     expect(readEmbeddedApplicationVersion(releaseFile)).toBe('Version unavailable');
   });
 });
