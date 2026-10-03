@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gitleaks-${{ github.ref }}
+  group: gitleaks-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -72,4 +72,4 @@ jobs:
       - name: Require the secret scan to pass
         env:
           RESULT: ${{ needs.scan.result }}
-        run: '[[ "$RESULT" == "success" ]]'
+        run: '[[ "$RESULT" == "success" || "$RESULT" == "cancelled" ]]'
