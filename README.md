@@ -8,12 +8,13 @@ Project status: [prototype, not production-certified](.github/project-status.yml
 
 </div>
 
-<picture>
-  <source media="(max-width: 700px)" srcset="docs/design/readme-showcase/marketdesk-readme-hero-mobile.svg" />
-  <img src="docs/design/readme-showcase/marketdesk-readme-hero.svg" alt="OpenDesign concept illustration of the MarketDesk seller workspace, showing a product catalog, OLX provider status, analytics and human-reviewed Hermes proposals. Illustrative synthetic demo data; not a production screenshot." />
-</picture>
+<p align="center">
+  <img src="docs/design/readme-showcase/marketdesk-readme-hero-mobile.svg" width="560" alt="OpenDesign concept illustration of the MarketDesk seller workspace, showing a product catalog, OLX provider status, analytics and human-reviewed Hermes proposals. Illustrative synthetic demo data; not a production screenshot." />
+</p>
 
 *Designed concept; all interface data is synthetic. See the [editable design source and provenance](docs/design/readme-showcase/README.md).*
+
+[View the wide desktop concept](docs/design/readme-showcase/marketdesk-readme-hero.svg) · [View its editable HTML source](docs/design/readme-showcase/marketdesk-readme-source.html)
 
 MarketDesk is a workspace-scoped product and listing management platform. **OLX is the only validated real marketplace integration**; other channels are roadmap surfaces. Hermes recommendations require human review and guarded execution—not unattended automation. This project is a prototype, not production-certified.
 
