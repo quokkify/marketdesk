@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.20.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.19.2...marketdesk-v0.20.0) (2026-10-03)
+
+<!-- project-toolkit:rich-block:start -->
+<!-- project-toolkit:rich-release-notes pr=311 -->
+### ✨ Highlights
+**Create product → Prepare listing → Check readiness → Review → Publish**
+
+**1. Review the product**
+
+![Product creation review screen](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/01-create-product.png)
+
+**2. See optional wording and price suggestions**
+
+![Product assistant suggestions](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/02-review-suggestions.png)
+
+**3. Confirm publication**
+
+![Publication confirmation screen](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/03-confirm-publication.png)
+
+*Screenshots use mocked demo data. Suggestions are optional, and publication remains your decision.*
+<!-- project-toolkit:rich-block:end -->
+
+### ✨ Features
+
+* add reproducible sales agent experiment bundles ([#315](https://github.com/quokkify/marketdesk/issues/315)) ([79f2673](https://github.com/quokkify/marketdesk/commit/79f26736ab416fc9ffec133b5bf470f9b4ed4ccf))
+* graph-backed product publication journey via LangGraph ([#311](https://github.com/quokkify/marketdesk/issues/311)) ([04bdd47](https://github.com/quokkify/marketdesk/commit/04bdd47fd2def495999401e9a1e8e9c8070488cd))
+
+
+### 🐛 Bug Fixes
+
+* rate limit upload test app ([#329](https://github.com/quokkify/marketdesk/issues/329)) ([f0f020e](https://github.com/quokkify/marketdesk/commit/f0f020e6888ac5b0d56b11283059fa077305f90b))
+* **release:** use unprefixed release tags ([#291](https://github.com/quokkify/marketdesk/issues/291)) ([823a20b](https://github.com/quokkify/marketdesk/commit/823a20bde61e22309404d443faaa2851ee68b8b1))
+* **security:** address CodeQL findings ([#320](https://github.com/quokkify/marketdesk/issues/320)) ([8f76a0d](https://github.com/quokkify/marketdesk/commit/8f76a0d953a7c6a702f9290630ddddbb3fbae7bd))
+
 ## 1.0.0 (2026-09-25)
 
 
