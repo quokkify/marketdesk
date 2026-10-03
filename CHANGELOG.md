@@ -2,6 +2,25 @@
 
 ## [0.20.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.19.2...marketdesk-v0.20.0) (2026-10-03)
 
+<!-- project-toolkit:rich-block:start -->
+<!-- project-toolkit:rich-release-notes pr=311 -->
+### ✨ Highlights
+**Create product → Prepare listing → Check readiness → Review → Publish**
+
+**1. Review the product**
+
+![Product creation review screen](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/01-create-product.png)
+
+**2. See optional wording and price suggestions**
+
+![Product assistant suggestions](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/02-review-suggestions.png)
+
+**3. Confirm publication**
+
+![Publication confirmation screen](https://raw.githubusercontent.com/quokkify/marketdesk/c0fbd206ee1848c5882202c0046cf6ff21c2a44e/docs/screenshots/issue-290/03-confirm-publication.png)
+
+*Screenshots use mocked demo data. Suggestions are optional, and publication remains your decision.*
+<!-- project-toolkit:rich-block:end -->
 
 ### ✨ Features
 
