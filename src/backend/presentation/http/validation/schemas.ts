@@ -283,3 +283,15 @@ export const approveCategoryCorrectionOperationSchema = z.object({
 });
 
 export const executeCategoryCorrectionOperationSchema = z.object({});
+
+export const productImprovementDecisionSchema = z.object({
+  revision: z.number().int().positive(),
+  proposalId: z.string().uuid(),
+  action: z.enum(['accept', 'reject']),
+  editedValue: z.union([z.string().max(10000), z.number().finite().positive()]).optional(),
+  allowBelowCost: z.boolean().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.action === 'reject' && (value.editedValue !== undefined || value.allowBelowCost !== undefined)) {
+    context.addIssue({ code: 'custom', message: 'Rejected proposals cannot include an edit or price confirmation' });
+  }
+});

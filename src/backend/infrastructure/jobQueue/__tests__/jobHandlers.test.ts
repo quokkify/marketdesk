@@ -1030,6 +1030,7 @@ describe('SyncMarketplaceHandler', () => {
 });
 
 describe('PublishListingHandler', () => {
+  afterEach(() => jest.useRealTimers());
   const publishResult: PublishResult = {
     externalListingId: 'olx-99',
     externalUrl: 'https://www.olx.pl/d/oferta/olx-99',
@@ -1272,6 +1273,7 @@ describe('PublishListingHandler', () => {
   });
 
   it('abandons a deterministic OLX update failure so a later update can use the real ListingService category snapshot', async () => {
+    jest.useFakeTimers({ now: new Date('2026-09-30T10:00:00.000Z') });
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const marketplaceRepo = new InMemoryMarketplaceRepository();
@@ -1358,6 +1360,8 @@ describe('PublishListingHandler', () => {
       taxonomyVerifiedAt: '2026-07-15T00:00:00.000Z',
       taxonomyStaleAt: '2026-08-15T00:00:00.000Z',
     };
+    // This is a distinct generation, regardless of how fast the test runs.
+    jest.advanceTimersByTime(1);
     listing.recordMarketplaceCategory(exactCategory);
     await listingRepo.save(listing);
     unwrap(product.rename('Second approved title'));

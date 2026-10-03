@@ -8,6 +8,7 @@ import type {
   ProductAIDraftRequest,
   ProductRecheckResult,
   ProductImprovementSuggestions,
+  ProductImprovementReviewSession,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
@@ -76,14 +77,61 @@ export const productsApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Product', id }],
     }),
 
-    recheckProduct: builder.mutation<ProductRecheckResult, { productId: string; listingId: string }>({
+    recheckProduct: builder.mutation<
+      ProductRecheckResult,
+      { productId: string; listingId: string }
+    >({
       query: buildProductRecheckRequest,
       transformResponse: (res: ApiResponse<ProductRecheckResult>) => unwrap(res),
     }),
 
-    proposeProductImprovements: builder.mutation<ProductImprovementSuggestions, { productId: string; listingId?: string }>({
+    getProductImprovementReview: builder.query<
+      ProductImprovementReviewSession | null,
+      { productId: string; listingId?: string; principalKey: string }
+    >({
+      query: ({ productId, listingId }) =>
+        `/products/${productId}/improvements${buildQueryString({ listingId })}`,
+      transformResponse: (res: ApiResponse<ProductImprovementReviewSession | null>) => unwrap(res),
+    }),
+
+    decideProductImprovement: builder.mutation<
+      ProductImprovementReviewSession,
+      {
+        productId: string;
+        listingId?: string;
+        sessionId: string;
+        revision: number;
+        proposalId: string;
+        action: 'accept' | 'reject';
+        editedValue?: string | number;
+        allowBelowCost?: boolean;
+      }
+    >({
+      query: ({ productId, listingId, sessionId, ...body }) => ({
+        url: `/products/${productId}/improvements/${sessionId}/decisions${buildQueryString({ listingId })}`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (res: ApiResponse<ProductImprovementReviewSession>) => unwrap(res),
+      invalidatesTags: (result, _error, { productId }) =>
+        result
+          ? [
+              { type: 'Product', id: productId },
+              { type: 'Product', id: 'LIST' },
+              { type: 'Listing', id: `PRODUCT:${productId}` },
+              { type: 'Listing', id: 'LIST' },
+              ...(result.listingId ? [{ type: 'Listing' as const, id: result.listingId }] : []),
+            ]
+          : [],
+    }),
+
+    proposeProductImprovements: builder.mutation<
+      ProductImprovementSuggestions,
+      { productId: string; listingId?: string }
+    >({
       query: ({ productId, listingId }) => ({
-        url: `/products/${productId}/improvements`, method: 'POST',
+        url: `/products/${productId}/improvements`,
+        method: 'POST',
         body: listingId ? { listingId } : {},
       }),
       transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
@@ -162,6 +210,8 @@ export const {
   useGetProductQuery,
   useRecheckProductMutation,
   useProposeProductImprovementsMutation,
+  useGetProductImprovementReviewQuery,
+  useDecideProductImprovementMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,
