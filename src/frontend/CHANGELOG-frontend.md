@@ -2,6 +2,15 @@
 
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
+<!-- project-toolkit:rich-block:start -->
+<!-- project-toolkit:rich-release-notes pr=345 -->
+### ✨ Highlights
+- Migrated the combined changelog into backend, frontend, and assets histories, preserving historical entries, links, and explicit legacy provenance.
+- Added conservation checks and corrected release-note enrichment so repeated runs do not accumulate blank lines.
+
+### 🔄 Migration
+No runtime migration. All GitHub Release metadata/tags/assets are unchanged. Legacy 1.0.0 is documented as an overlapping combined bootstrap snapshot, not a component bump. Native Release Please remains bump authority.
+<!-- project-toolkit:rich-block:end -->
 
 ### 📚 Documentation
 
