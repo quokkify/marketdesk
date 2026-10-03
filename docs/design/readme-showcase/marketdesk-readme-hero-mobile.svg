@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 930" role="img" aria-labelledby="title desc">
+  <title id="title">MarketDesk — mobile workspace concept</title>
+  <desc id="desc">A narrow, vertically composed concept view of a workspace-scoped product catalog, its OLX-only provider state, illustrative analytics without live numbers, and one Hermes proposal with a human review action. All interface data is synthetic. Other channels are roadmap items. Prototype, not production-certified.</desc>
+  <defs>
+    <style>
+      .display{font:600 27px Georgia,'Times New Roman',serif;letter-spacing:-.45px;fill:#202238}
+      .body{font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#3f4255}
+      .small{font:14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#414456}
+      .tiny{font:13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#4d5061}
+      .label{font:600 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.45px;fill:#55586a}
+      .cardhead{font:600 17px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;fill:#202238}
+      .line{stroke:#deddd9}
+    </style>
+  </defs>
+  <rect width="360" height="930" fill="#f7f6f2"/>
+  <circle cx="28" cy="29" r="22" fill="#5B55E7"/>
+  <path fill="#FFFFFF" transform="translate(12 13) scale(1.3333333)" d="m21.9 7.89-1.05-3.37C20.63 3.62 19.85 3 18.94 3H5.05c-.9 0-1.69.63-1.9 1.52L2.1 7.89c-.46 1.97.85 3.11.9 3.17V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7.94c1.12-1.12 1.09-2.41.9-3.17M13 5h1.96l.54 3.52c.09.71-.39 1.48-1.28 1.48-.67 0-1.22-.59-1.22-1.31zM6.44 8.86c-.08.65-.6 1.14-1.21 1.14-.93 0-1.35-.97-1.19-1.64L5.05 5h1.97zM11 8.69c0 .72-.55 1.31-1.29 1.31-.75 0-1.3-.7-1.22-1.48L9.04 5H11zM18.77 10c-.61 0-1.14-.49-1.21-1.14L16.98 5l1.93-.01 1.05 3.37c.16.67-.25 1.64-1.19 1.64"/>
+  <text x="60" y="27" class="cardhead">MarketDesk</text>
+  <text x="60" y="47" class="tiny">WORKSPACE · NORTHSTAR GOODS</text>
+  <text x="20" y="91" class="display">Every listing,</text>
+  <text x="20" y="122" class="display">in its place.</text>
+  <text x="20" y="151" class="body">Products, channel health and proposals</text>
+  <text x="20" y="171" class="body">in one human-reviewed workspace.</text>
+  <rect x="20" y="187" width="228" height="30" rx="15" fill="#eeede9"/>
+  <circle cx="35" cy="202" r="4" fill="#c96b5b"/>
+  <text x="46" y="207" class="tiny" fill="#34364a">Concept · synthetic demo data</text>
+
+  <rect x="16" y="233" width="328" height="176" rx="12" fill="#fff" stroke="#deddd9"/>
+  <text x="32" y="261" class="cardhead">Catalog &amp; listings</text>
+  <text x="32" y="284" class="label">PRODUCT · WORKSPACE SCOPED</text>
+  <rect x="32" y="300" width="68" height="78" rx="7" fill="#eeeee9"/>
+  <rect x="42" y="310" width="48" height="48" rx="4" fill="#d6ded9"/>
+  <path d="M44 353l13-17 10 10 8-8 12 15" fill="none" stroke="#71877d" stroke-width="2.5"/>
+  <text x="112" y="322" class="small" font-weight="600">Everyday canvas</text>
+  <text x="112" y="341" class="small" font-weight="600">tote</text>
+  <text x="112" y="364" class="tiny">SKU · MD-204</text>
+  <rect x="112" y="372" width="113" height="25" rx="12.5" fill="#edf4f0"/>
+  <circle cx="124" cy="384.5" r="3.5" fill="#397663"/>
+  <text x="134" y="389" class="tiny" fill="#315e52">Draft listing</text>
+
+  <rect x="16" y="425" width="328" height="160" rx="12" fill="#fff" stroke="#deddd9"/>
+  <text x="32" y="454" class="cardhead">Provider · OLX only</text>
+  <text x="32" y="478" class="label">VALIDATED INTEGRATION</text>
+  <rect x="32" y="494" width="40" height="40" rx="9" fill="#f2f0ff"/>
+  <text x="52" y="522" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-size="22" font-weight="700" fill="#5B55E7">O</text>
+  <text x="84" y="510" class="small" font-weight="600">OLX connection</text>
+  <rect x="84" y="519" width="103" height="28" rx="14" fill="#edf4f0"/>
+  <circle cx="98" cy="533" r="4" fill="#397663"/>
+  <text x="109" y="538" class="tiny" fill="#315e52">Available</text>
+  <text x="32" y="568" class="tiny">All other sales channels are roadmap items.</text>
+
+  <rect x="16" y="601" width="328" height="143" rx="12" fill="#fff" stroke="#deddd9"/>
+  <text x="32" y="630" class="cardhead">Analytics</text>
+  <text x="32" y="654" class="label">ILLUSTRATIVE · NO LIVE NUMBERS</text>
+  <path d="M37 707h286M37 683h286" stroke="#eeede9" stroke-width="1.5"/>
+  <path d="M49 718c25-18 42-6 64-22s39 2 60-13 40 0 59-14 39-3 76-19" fill="none" stroke="#5B55E7" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="308" cy="650" r="5" fill="#c96b5b"/>
+  <text x="32" y="733" class="tiny">Example trend only · synthetic data</text>
+
+  <rect x="16" y="760" width="328" height="130" rx="12" fill="#fff" stroke="#deddd9"/>
+  <text x="32" y="790" class="cardhead">Hermes proposal</text>
+  <text x="32" y="814" class="small" font-weight="600">Suggested title improvement</text>
+  <text x="32" y="837" class="tiny">A person reviews before any action.</text>
+  <rect x="32" y="849" width="148" height="32" rx="7" fill="#fff" stroke="#8e8c89"/>
+  <text x="106" y="871" class="small" text-anchor="middle" fill="#202238" font-weight="600">Review proposal</text>
+
+  <path d="M20 893h320" class="line"/>
+  <text x="20" y="913" class="tiny" fill="#414456">Prototype · not production-certified</text>
+</svg>
