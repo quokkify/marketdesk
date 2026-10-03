@@ -224,7 +224,11 @@ def _insert_rich_block(body: str, block: str) -> str:
     delimiters = list(re.finditer(r"\n---\n", body))
     if delimiters:
         footer_delimiter = delimiters[-1]
-        return body[:footer_delimiter.start()] + "\n\n" + block + body[footer_delimiter.start():]
+        # Normalize the machine-owned spacing before a separator insertion.
+        # Unlike heading insertion, this branch adds leading blank lines; a
+        # removed block must not make those accumulate on subsequent reruns.
+        prefix = body[:footer_delimiter.start()].rstrip("\n")
+        return prefix + "\n\n" + block + body[footer_delimiter.start():]
     return body.rstrip() + "\n\n" + block + "\n"
 
 

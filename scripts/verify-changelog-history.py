@@ -185,6 +185,21 @@ class HistoryChecks(unittest.TestCase):
                 self.assertNotIn(other + ' only.', notes)
         self.assertEqual(ENRICH.release_body_components('<details><summary>backend: 0.22.0</summary>\n</details>'), {'backend'})
 
+    def test_separator_and_plain_notes_are_idempotent(self):
+        """Retain generated separators/footer content through repeated enrichments."""
+        rich = ENRICH._render_entries([{'number': 901, 'body': '## Highlight\nBackend context.'}], set())
+        for notes in ['\nGenerated notes.\n\n---\nFooter.\n', '\nGenerated notes.\n---\nFooter.\n', '\nGenerated notes without headings or separators.\n']:
+            with self.subTest(notes=notes):
+                body = '<details><summary>backend: 0.22.0</summary>\n' + notes + '</details>'
+                first = ENRICH.enrich_component_release_body(body, {'backend': rich})
+                for _ in range(3):
+                    self.assertEqual(first, ENRICH.enrich_component_release_body(first, {'backend': rich}))
+                self.assertIn('Generated notes', first)
+                if 'Footer.' in notes:
+                    self.assertIn('\n---\nFooter.', first)
+                single = ENRICH.enrich_release_body(notes, rich)
+                self.assertEqual(single, ENRICH.enrich_release_body(single, rich))
+
     def test_native_next_release_preserves_inherited_history(self):
         if NATIVE_DIRECTORY is None:
             self.skipTest('pass --native-directory after running the actual Release Please updater')
