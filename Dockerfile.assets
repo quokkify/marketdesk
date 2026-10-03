@@ -3,5 +3,6 @@ COPY docker/caddy/assets.Caddyfile /etc/caddy/Caddyfile
 COPY public/marketdesk-mark.svg /srv/marketdesk-mark.svg
 COPY public/favicon-32x32.png /srv/favicon-32x32.png
 COPY public/apple-touch-icon.png /srv/apple-touch-icon.png
+COPY public/assets-manifest.json /srv/assets-manifest.json
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/marketdesk-mark.svg || exit 1

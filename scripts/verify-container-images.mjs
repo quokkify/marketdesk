@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(path, 'utf8');
-const [workflow, backend, frontend, assets, frontendCaddy, assetsCaddy, caddyDeployment] = await Promise.all([
+const [workflow, backend, frontend, assets, assetsManifest, frontendCaddy, assetsCaddy, caddyDeployment] = await Promise.all([
   read('.github/workflows/container-images.yml'),
   read('Dockerfile'),
   read('Dockerfile.frontend'),
   read('Dockerfile.assets'),
+  read('public/assets-manifest.json'),
   read('docker/caddy/frontend.Caddyfile'),
   read('docker/caddy/assets.Caddyfile'),
   read('docs/deployment/caddy-cloudflare-vps.md'),
@@ -50,6 +51,9 @@ assert.match(frontendCaddy, /file_server/);
 assert.match(assets, /marketdesk-mark\.svg/);
 assert.match(assets, /favicon-32x32\.png/);
 assert.match(assets, /apple-touch-icon\.png/);
+assert.match(assets, /assets-manifest\.json/);
+assert.match(assetsManifest, /"component":\s*"assets"/);
+assert.match(assetsManifest, /"tagPrefix":\s*"assets-v"/);
 assert.match(assets, /marketdesk-mark\.svg \\| exit 1/);
 assert.match(assetsCaddy, /file_server/);
 assert.match(assetsCaddy, /Access-Control-Allow-Origin/);
