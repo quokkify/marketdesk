@@ -271,7 +271,10 @@ def enrich_component_release_body(
         block = f"{BLOCK_START}\n{rich}\n{BLOCK_END}" if rich else ""
         block_pattern = rf"{re.escape(BLOCK_START)}[\s\S]*?{re.escape(BLOCK_END)}"
         if re.search(block_pattern, notes):
-            without_block = re.sub(block_pattern, "", notes)
+            # The inserter owns the two newlines after its block. Remove those
+            # with the block so reruns do not accumulate blank lines ahead of
+            # the generated section (including migrated component histories).
+            without_block = re.sub(block_pattern + r"(?:\n\n)?", "", notes)
             new_notes = _insert_rich_block(without_block, block) if block else without_block
         elif block:
             new_notes = _insert_rich_block(notes, block)
