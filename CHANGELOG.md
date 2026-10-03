@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.20.0...marketdesk-v0.21.0) (2026-10-03)
+
+
+### ✨ Features
+
+* publish split MarketDesk images to GHCR ([#332](https://github.com/quokkify/marketdesk/issues/332)) ([8ec7844](https://github.com/quokkify/marketdesk/commit/8ec7844c0a467d5dfbe3046ab6da07c37a891a27))
+
+
+### 🐛 Bug Fixes
+
+* **ci:** isolate Gitleaks concurrency by event ([#337](https://github.com/quokkify/marketdesk/issues/337)) ([cff3dcf](https://github.com/quokkify/marketdesk/commit/cff3dcfaab7c41865aae9bf0de43359c687b9bd0))
+
 ## [0.20.0](https://github.com/quokkify/marketdesk/compare/marketdesk-v0.19.2...marketdesk-v0.20.0) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
