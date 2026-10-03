@@ -9,7 +9,7 @@ Project status: [prototype, not production-certified](.github/project-status.yml
 </div>
 
 <picture>
-  <source media="(max-width: 480px)" srcset="docs/design/readme-showcase/marketdesk-readme-hero-mobile.svg" />
+  <source media="(max-width: 700px)" srcset="docs/design/readme-showcase/marketdesk-readme-hero-mobile.svg" />
   <img src="docs/design/readme-showcase/marketdesk-readme-hero.svg" alt="OpenDesign concept illustration of the MarketDesk seller workspace, showing a product catalog, OLX provider status, analytics and human-reviewed Hermes proposals. Illustrative synthetic demo data; not a production screenshot." />
 </picture>
 
