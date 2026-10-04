@@ -43,7 +43,7 @@ Other useful scripts: `npm run db:migrate`, `npm run db:seed`, `npm run dev:back
 
 ### Java test automation
 
-Java 21 test automation is maintained in [`test-automation/`](../test-automation/) from the [java-test-automation-template](https://github.com/quokkify/java-test-automation-template). Run its static checks and tests with:
+Java 21 test automation is maintained in [`test-automation/`](../test-automation/) from the [java-test-automation-template](https://github.com/quokkify/java-test-automation-template). Its dependencies include q4j configuration and TestNG support, SQL database helpers, the Tyrus WebSocket client, Selenide UI helpers, and the PostgreSQL JDBC driver. q4j module versions share one version-catalog entry so they stay aligned. Run its static checks and tests with:
 
 ```bash
 cd test-automation

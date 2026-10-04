@@ -4,6 +4,11 @@ repositories {
 
 dependencies {
     testImplementation libs.q4j.config
+    testImplementation libs.q4j.testng
+    testImplementation libs.q4j.sql
+    testImplementation libs.q4j.tyrus
+    testImplementation libs.q4j.selenide
     testImplementation libs.testng
+    testRuntimeOnly libs.postgresql
     checkstyle libs.checkstyle
 }
