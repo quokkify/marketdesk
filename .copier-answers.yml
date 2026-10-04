@@ -28,5 +28,6 @@ renovate_presets:
   - github-actions
   - javascript
   - docker
+  - java
 toolkit_version: v3.0.1
 allure_source: auto

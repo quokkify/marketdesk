@@ -1,0 +1,13 @@
+[versions]
+q4j = "0.7.0"
+testng = "7.12.0"
+checkstyle = "14.3.0"
+spotbugs-plugin = "6.5.12"
+
+[libraries]
+q4j-config = { module = "dev.quokkify:config", version.ref = "q4j" }
+testng = { module = "org.testng:testng", version.ref = "testng" }
+checkstyle = { module = "com.puppycrawl.tools:checkstyle", version.ref = "checkstyle" }
+
+[plugins]
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs-plugin" }

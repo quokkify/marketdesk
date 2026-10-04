@@ -1,0 +1,13 @@
+tasks.withType(Test).configureEach {
+    useTestNG()
+    systemProperty 'file.encoding', 'UTF-8'
+    // Forward this explicit override to the separate test JVM.
+    def message = System.getProperty('TEST_MESSAGE')
+    if (message != null) {
+        systemProperty 'TEST_MESSAGE', message
+    }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+    }
+}
