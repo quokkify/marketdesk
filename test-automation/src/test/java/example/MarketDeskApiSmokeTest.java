@@ -63,31 +63,31 @@ public class MarketDeskApiSmokeTest {
     }
 
     @Step("Response status is {expectedStatus}")
-    private MarketDeskApiVerifier hasStatus(ValidatableResponse response, String expectedStatus) {
+    public MarketDeskApiVerifier hasStatus(ValidatableResponse response, String expectedStatus) {
       response.body("status", equalTo(expectedStatus));
       return self();
     }
 
     @Step("Database readiness is connected")
-    private MarketDeskApiVerifier hasDatabaseConnection(ValidatableResponse response) {
+    public MarketDeskApiVerifier hasDatabaseConnection(ValidatableResponse response) {
       response.body("database", equalTo("connected"));
       return self();
     }
 
     @Step("Redis readiness is connected")
-    private MarketDeskApiVerifier hasRedisConnection(ValidatableResponse response) {
+    public MarketDeskApiVerifier hasRedisConnection(ValidatableResponse response) {
       response.body("redis", equalTo("connected"));
       return self();
     }
 
     @Step("Response success flag is false")
-    private MarketDeskApiVerifier hasFailureFlag(ValidatableResponse response) {
+    public MarketDeskApiVerifier hasFailureFlag(ValidatableResponse response) {
       response.body("success", equalTo(false));
       return self();
     }
 
     @Step("Response error code is UNAUTHORIZED")
-    private MarketDeskApiVerifier hasUnauthorizedError(ValidatableResponse response) {
+    public MarketDeskApiVerifier hasUnauthorizedError(ValidatableResponse response) {
       response.body("error.code", equalTo("UNAUTHORIZED"));
       return self();
     }
