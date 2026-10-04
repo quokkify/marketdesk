@@ -1,0 +1,1 @@
+{"id":"b78ffa2dfd870bbc4877cdb816a0712c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveDatabaseSslMode rejects invalid mode verify-ca","name":"rejects invalid mode verify-ca","status":"passed","testResultsByEnv":{"default":"7e79c73d1481a2f011e273e88466ca67"}}
