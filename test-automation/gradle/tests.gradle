@@ -11,3 +11,22 @@ tasks.withType(Test).configureEach {
         exceptionFormat = 'full'
     }
 }
+
+// Keep the default suite safe for fast local development. Live HTTP checks are
+// explicitly selected by `apiTest` and run against the Compose application in CI.
+tasks.named('test', Test) {
+    useTestNG {
+        excludeGroups 'api'
+    }
+}
+
+tasks.register('apiTest', Test) {
+    description = 'Runs API tests against a running MarketDesk application.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useTestNG {
+        includeGroups 'api'
+    }
+    shouldRunAfter tasks.named('test')
+}

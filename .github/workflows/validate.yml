@@ -145,7 +145,7 @@ jobs:
       build-tool: gradle
       lint-command: >-
         ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest --console=plain
-      test-command: ./gradlew test --console=plain
+      test-command: bash ../scripts/ci-java-api-tests.sh
       run-build: false
 
   docker:

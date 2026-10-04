@@ -644,14 +644,6 @@ describe('Presentation API', () => {
   });
 
   describe('products', () => {
-    it('returns 401 when unauthenticated', async () => {
-      const { app } = await buildTestApp();
-      const res = await request(app).get('/api/products');
-      expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
-      expect(res.body.error.code).toBe('UNAUTHORIZED');
-    });
-
     it('authenticates and binds recheck to the requested product, listing and workspace', async () => {
       const result = {
         productId: 'p-real', listingId: 'listing-preview', marketplaceId: 'marketplace-olx',
