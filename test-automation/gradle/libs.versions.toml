@@ -1,0 +1,20 @@
+[versions]
+q4j = "0.7.0"
+testng = "7.12.0"
+checkstyle = "14.3.0"
+spotbugs-plugin = "6.5.12"
+
+[libraries]
+q4j-config = { module = "dev.quokkify:config", version.ref = "q4j" }
+q4j-testng = { module = "dev.quokkify:testng", version.ref = "q4j" }
+q4j-sql = { module = "dev.quokkify:sql", version.ref = "q4j" }
+q4j-tyrus = { module = "dev.quokkify:tyrus", version.ref = "q4j" }
+q4j-selenide = { module = "dev.quokkify:selenide", version.ref = "q4j" }
+q4j-rest-assured = { module = "dev.quokkify:rest-assured", version.ref = "q4j" }
+q4j-jackson-json = { module = "dev.quokkify:jackson-json", version.ref = "q4j" }
+postgresql = { module = "org.postgresql:postgresql", version = "42.7.13" }
+testng = { module = "org.testng:testng", version.ref = "testng" }
+checkstyle = { module = "com.puppycrawl.tools:checkstyle", version.ref = "checkstyle" }
+
+[plugins]
+spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs-plugin" }

@@ -136,6 +136,18 @@ jobs:
       test-artifact-path: "allure-results"
       test-artifact-name: allure-results-marketdesk-node
 
+  java-test-automation:
+    name: Java test automation
+    uses: quokkify/ci-kit/.github/workflows/java-ci.yml@v3.0.1
+    with:
+      working-directory: test-automation
+      java-version: '21'
+      build-tool: gradle
+      lint-command: >-
+        ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest --console=plain
+      test-command: ./gradlew test --console=plain
+      run-build: false
+
   docker:
     uses: quokkify/ci-kit/.github/workflows/docker-build.yml@v3.0.1
     with:
@@ -144,7 +156,7 @@ jobs:
   complete:
     name: Validation pipeline complete
     if: ${{ always() }}
-    needs: [template-contract, marketdesk-node, docker]
+    needs: [template-contract, marketdesk-node, java-test-automation, docker]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

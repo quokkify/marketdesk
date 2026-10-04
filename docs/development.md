@@ -41,6 +41,18 @@ npm run verify:brand-assets
 
 Other useful scripts: `npm run db:migrate`, `npm run db:seed`, `npm run dev:backend`, and `npm run dev:frontend`. Run formatters only on the files being changed; `npm run format` formats source files in place.
 
+### Java test automation
+
+Java 21 test automation is maintained in [`test-automation/`](../test-automation/) from the [java-test-automation-template](https://github.com/quokkify/java-test-automation-template). Its dependencies include q4j configuration and TestNG support, REST Assured and Jackson JSON for API checks, SQL database helpers, the Tyrus WebSocket client, Selenide UI helpers, and the PostgreSQL JDBC driver. q4j module versions share one version-catalog entry so they stay aligned. Run its static checks and tests with:
+
+```bash
+cd test-automation
+./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest
+./gradlew test
+```
+
+The Java project has its own `.copier-answers.yml`; update it independently with Copier from inside `test-automation/`. CI uses [ci-kit](https://github.com/quokkify/ci-kit) and checks this project alongside the existing Node pipeline.
+
 ## Architecture and API
 
 The system is a React/TypeScript SPA served by a Node/Express TypeScript API. PostgreSQL stores workspace-scoped data; Redis backs cache/queue responsibilities. Backend code is layered into domain, application, infrastructure, and presentation boundaries. The canonical architecture and product sources are linked from [`spec/README.md`](spec/README.md); implementation evidence and gaps are in [`spec/TRACEABILITY.md`](spec/TRACEABILITY.md).

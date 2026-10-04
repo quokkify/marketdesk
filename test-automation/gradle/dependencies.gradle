@@ -1,0 +1,16 @@
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.q4j.config
+    testImplementation libs.q4j.testng
+    testImplementation libs.q4j.sql
+    testImplementation libs.q4j.tyrus
+    testImplementation libs.q4j.selenide
+    testImplementation libs.q4j.rest.assured
+    testImplementation libs.q4j.jackson.json
+    testImplementation libs.testng
+    testRuntimeOnly libs.postgresql
+    checkstyle libs.checkstyle
+}
