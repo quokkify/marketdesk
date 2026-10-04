@@ -45,6 +45,8 @@ public class MarketDeskApiSmokeTest {
         .get("/api/products");
 
     response.then()
+          .log()
+          .ifValidationFails()
           .statusCode(401)
           .body("success", equalTo(false))
           .body("error.code", equalTo("UNAUTHORIZED"));
