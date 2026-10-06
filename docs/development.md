@@ -47,11 +47,11 @@ Java 21 test automation is maintained in [`test-automation/`](../test-automation
 
 ```bash
 cd test-automation
-./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest
+./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture
 ./gradlew test
 ```
 
-Start the MarketDesk Compose stack before running `./gradlew apiTest`. CI uses [`scripts/ci-java-api-tests.sh`](../scripts/ci-java-api-tests.sh) to start the stack, wait for database/Redis readiness, run both Java tasks, and clean up its containers and volumes. The initial Java API slice covers liveness, readiness, and the unauthenticated products response; additional TypeScript integration coverage will move over in subsequent slices.
+Start the MarketDesk Compose stack before running `./gradlew apiTest`; the tests call `MARKETDESK_API_BASE_URI` (default `http://127.0.0.1:3000`, override it as an environment variable or `-DMARKETDESK_API_BASE_URI=...`). CI uses [`scripts/ci-java-api-tests.sh`](../scripts/ci-java-api-tests.sh) to start the stack with a throwaway marketplace credentials key, wait for database/Redis readiness, run both Java tasks, and clean up its containers and volumes. Framework code (configs, services, verifications, steps) lives in `test-automation/src/main` under `dev.quokkify.marketdesk`, and `src/test` holds only the test classes; [`test-automation/AGENTS.md`](../test-automation/AGENTS.md) defines the layers, and `verifyArchitecture` checks the project contracts. The initial Java API slice covers liveness, readiness, and the unauthenticated products response; additional TypeScript integration coverage will move over in subsequent slices.
 
 The Java project has its own `.copier-answers.yml`; update it independently with Copier from inside `test-automation/`. CI uses [ci-kit](https://github.com/quokkify/ci-kit) and checks this project alongside the existing Node pipeline.
 

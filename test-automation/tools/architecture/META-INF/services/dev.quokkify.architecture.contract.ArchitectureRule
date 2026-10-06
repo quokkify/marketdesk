@@ -1,0 +1,7 @@
+# Architecture rules run by ./gradlew verifyArchitecture (gradle/architecture.gradle).
+# The published jar registers none; every rule is opted in here. See docs/agents/architecture-verification.md.
+dev.quokkify.architecture.rules.JavaConventionsRule
+dev.quokkify.architecture.rules.NoConsoleOutputRule
+dev.quokkify.architecture.rules.NoDeprecatedApiRule
+dev.quokkify.architecture.rules.ServiceRegistrationRule
+dev.quokkify.architecture.rules.TestClassNamingRule

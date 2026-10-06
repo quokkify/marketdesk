@@ -1,0 +1,87 @@
+// Architecture verification with dev.quokkify:architecture; rules are listed in
+// tools/architecture/META-INF/services/dev.quokkify.architecture.contract.ArchitectureRule.
+// The root packages to verify come from `architecture.packages` in gradle.properties.
+def architecturePackages = providers.gradleProperty('architecture.packages')
+    .orElse(providers.provider {
+        throw new GradleException('Set architecture.packages in gradle.properties to the base package of this project.')
+    })
+
+configurations {
+    architectureRunner {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    architectureRunner libs.q4j.architecture
+    architectureRunner libs.log4j.core
+    architectureRunner libs.log4j.slf4j2.impl
+}
+
+// Every source set other than main counts as tests. Generated sources under build/ are not verified.
+def buildDir = layout.buildDirectory.get().asFile.toPath()
+def mainSourceSets = { sourceSets.matching { it.name == SourceSet.MAIN_SOURCE_SET_NAME } }
+def testSourceSets = { sourceSets.matching { it.name != SourceSet.MAIN_SOURCE_SET_NAME } }
+def authored = { Collection<SourceSet> sets ->
+    files({ sets.collect { it.java.sourceDirectories } })
+        .filter { it.directory && !it.toPath().startsWith(buildDir) }
+}
+def compiled = { Collection<SourceSet> sets -> files({ sets.collect { it.output.classesDirs } }) }
+def processed = { Collection<SourceSet> sets -> files({ sets.collect { it.output.resourcesDir } }) }
+def mainSources = authored(mainSourceSets())
+def testSources = authored(testSourceSets())
+def mainClasses = compiled(mainSourceSets())
+def testClasses = compiled(testSourceSets())
+def mainResources = processed(mainSourceSets())
+def testResources = processed(testSourceSets())
+def directories = { FileCollection collection -> collection.files.findAll { it.directory }.join(',') }
+
+def verifiedMarker = layout.buildDirectory.file('architecture/verified')
+def verifyArchitecture = tasks.register('verifyArchitecture', JavaExec) {
+    group = 'verification'
+    description = 'Verifies the architecture rules registered in tools/architecture.'
+    dependsOn 'classes', 'testClasses'
+    mainClass = 'dev.quokkify.architecture.ArchitectureRunner'
+    classpath = files('tools/architecture') + configurations.architectureRunner + mainClasses + testClasses +
+        files({ sourceSets.collect { it.runtimeClasspath } })
+    inputs.property('packages', architecturePackages)
+    systemProperty 'architecture.module', rootProject.name
+    // Gradle pipes the runner output, so the color mode is decided here.
+    def consoleOutput = gradle.startParameter.consoleOutput
+    def plainConsole = consoleOutput == org.gradle.api.logging.configuration.ConsoleOutput.Plain
+    def autoConsole = consoleOutput == org.gradle.api.logging.configuration.ConsoleOutput.Auto
+    def isSet = { String name -> !providers.environmentVariable(name).getOrElse('').isBlank() }
+    systemProperty 'architecture.color',
+        plainConsole || isSet('NO_COLOR') || (autoConsole && isSet('CI')) ? 'never' : 'always'
+    def failOn = providers.gradleProperty('architecture.fail.on')
+    if (failOn.isPresent()) {
+        systemProperty 'architecture.fail.on', failOn.get()
+    }
+    inputs.files(fileTree('tools/architecture')).withPropertyName('rules').withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(mainSources.asFileTree.matching { include '**/*.java' })
+        .withPropertyName('mainSources')
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(testSources.asFileTree.matching { include '**/*.java' })
+        .withPropertyName('testSources')
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(verifiedMarker)
+
+    doFirst {
+        systemProperty 'architecture.packages', architecturePackages.get()
+        // Only these directories are verified, never the runner or the dependencies on the classpath.
+        systemProperty 'architecture.main.classes', directories(mainClasses)
+        systemProperty 'architecture.test.classes', directories(testClasses)
+        systemProperty 'architecture.main.resources', directories(mainResources)
+        systemProperty 'architecture.test.resources', directories(testResources)
+        systemProperty 'architecture.main.sources', mainSources.files.join(',')
+        systemProperty 'architecture.test.sources', testSources.files.join(',')
+    }
+    doLast {
+        verifiedMarker.get().asFile.text = 'verified\n'
+    }
+}
+
+tasks.named('check') {
+    dependsOn verifyArchitecture
+}

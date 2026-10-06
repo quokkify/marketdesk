@@ -144,7 +144,7 @@ jobs:
       java-version: '21'
       build-tool: gradle
       lint-command: >-
-        ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest --console=plain
+        ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain
       test-command: bash ../scripts/ci-java-api-tests.sh
       run-build: false
 
