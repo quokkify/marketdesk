@@ -1,0 +1,21 @@
+// Allure reporting. allure-testng comes with dev.quokkify:testng and writes one result per test; the AspectJ agent
+// weaves @Step and @Attachment at runtime, without it the report lists tests but none of their steps.
+// See docs/agents/test-reporting.md.
+configurations {
+    aspectjAgent {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    aspectjAgent libs.aspectj.weaver
+}
+
+def aspectjAgent = configurations.aspectjAgent
+def allureResults = layout.buildDirectory.dir('allure-results')
+
+tasks.withType(Test).configureEach {
+    jvmArgs "-javaagent:${aspectjAgent.singleFile}"
+    systemProperty 'allure.results.directory', allureResults.get().asFile.absolutePath
+}

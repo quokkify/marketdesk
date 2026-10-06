@@ -18,7 +18,7 @@ Compile, then run Checkstyle, SpotBugs and the architecture rules without runnin
 
 `verifyArchitecture` runs the [q4j architecture](https://github.com/quokkify/q4j/tree/main/architecture) rules listed in `tools/architecture`, and `./gradlew check` runs it too. The rules, the fixes for their findings, and the steps to add the gate to an older project are in [docs/agents/architecture-verification.md](docs/agents/architecture-verification.md).
 
-Run the tests:
+Run the tests. The q4j TestNG extensions registered in `src/test/resources/META-INF/services/org.testng.ITestNGListener` run them in parallel and retry failures; the environment or an optional `src/test/resources/testng.properties` sets `TEST_THREAD_COUNT` and `RETRY_COUNT`. The rules, including how to split test sets, are in [docs/agents/test-execution.md](docs/agents/test-execution.md).
 
 ```sh
 ./gradlew test

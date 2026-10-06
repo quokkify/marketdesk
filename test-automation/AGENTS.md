@@ -43,7 +43,7 @@ src/main/resources/   *.properties read by the Owner configs
 src/test/java/<base>/test/
   BaseTest       extends BaseSteps; TestNG lifecycle (@BeforeClass/@AfterClass) only
   ...Test        @Test methods only; group by layer in sub-packages (test/api, test/ui, ...) when there are many
-src/test/resources/   TestNG suites, META-INF/services listener registration
+src/test/resources/   META-INF/services listener registration, optional testng.properties (no testng.xml suites)
 ```
 
 Declare a q4j module that `src/main` uses as `implementation` in `gradle/dependencies.gradle`. Use `testImplementation` only for test-only libraries such as TestNG. Why: `testImplementation` hides the module from `src/main`, and that pushes framework code into `src/test`.
@@ -65,6 +65,8 @@ Each rule can be checked in review.
 6. **Steps act; verifications assert.** A `*Steps` class extends the q4j base for its layer. It sets `verification` in its constructor and marks every public action with `@Step`. Assertions go in a `*Verification` class with `@Step` methods that return `self()` so calls can chain.
 7. **`BaseSteps` owns the steps fields.** `BaseSteps` lives in `<base>.step` (generated empty) and declares one `protected final` field per steps class, for example `apiSteps`. `BaseTest` extends `BaseSteps`, and tests use those fields.
 8. **Tests read as the scenario:** `apiSteps.action(...)` and then `apiSteps.verify().expectation(...)`.
+9. **Tests run through the q4j TestNG extensions, in parallel.** `SuiteListener` and `RetryListener` are registered in `src/test/resources/META-INF/services/org.testng.ITestNGListener`, and they run test methods concurrently and retry failures. Do not write `testng.xml` suites, set `parallel` or thread counts in Gradle, or use TestNG groups (`@Test(groups = ...)`, `includeGroups`, `excludeGroups`). Split test sets by package with Gradle `include`/`exclude`. Put `@Test` on each test method of the concrete class: class-level and inherited `@Test` methods are not run. Mark a test that cannot run concurrently with `@SingleThread`. Why: `SuiteListener` rebuilds the suite and drops TestNG group filters, so a group split silently runs every test. The full contract is [docs/agents/test-execution.md](docs/agents/test-execution.md).
+10. **HTTP status codes are `org.apache.http.HttpStatus` constants**, for example `HttpStatus.SC_OK` and `HttpStatus.SC_UNAUTHORIZED`, never number literals such as `200`. This applies to tests, steps, and verifications. Why: the constant names the expectation, and the class already comes with `rest-assured`.
 
 ## 4. API example
 
@@ -132,10 +134,10 @@ public abstract class BaseTest extends BaseSteps {
 
 // src/test/java/<base>/test/api/HealthTest.java
 public class HealthTest extends BaseTest {
-  @Test(groups = "api")
+  @Test
   public void reportsLiveness() {
     ValidatableResponse response = healthSteps.getHealth();
-    healthSteps.verify().verifyResponseStatusCode(response, 200).hasStatus(response, "ok");
+    healthSteps.verify().verifyResponseStatusCode(response, HttpStatus.SC_OK).hasStatus(response, "ok");
   }
 }
 ```
@@ -146,6 +148,8 @@ UI and database tests follow the same layers. For UI, write a `<Name>Page`, a `<
 
 - [ ] `./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture` passes.
 - [ ] `grep -rnE 'RestAssured|System\.(getProperty|getenv)' src/test/java` prints nothing.
+- [ ] `grep -rniE 'status[a-z]*\(.*\b[1-5][0-9]{2}\b' src` prints nothing (rule 10).
+- [ ] `grep -rnE '@Test\([^)]*groups *=|includeGroups|excludeGroups' src/test gradle` prints nothing, and test output names show `Concurrency` or `Sequential` (rule 9).
 - [ ] No base URI or host is hard-coded in `src/test/java`; it comes from a `*Config` class.
 - [ ] Every new class under `src/test/java` is a test class or `BaseTest`, and none contains a nested class.
 - [ ] Every new setting has a key in an Owner config and a default or example value in `src/main/resources`.

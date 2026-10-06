@@ -5,3 +5,4 @@ dev.quokkify.architecture.rules.NoConsoleOutputRule
 dev.quokkify.architecture.rules.NoDeprecatedApiRule
 dev.quokkify.architecture.rules.ServiceRegistrationRule
 dev.quokkify.architecture.rules.TestClassNamingRule
+dev.quokkify.architecture.restassured.HttpStatusConstantRule
