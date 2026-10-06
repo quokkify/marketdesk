@@ -67,6 +67,7 @@ Each rule can be checked in review.
 8. **Tests read as the scenario:** `apiSteps.action(...)` and then `apiSteps.verify().expectation(...)`.
 9. **Tests run through the q4j TestNG extensions, in parallel.** `SuiteListener` and `RetryListener` are registered in `src/test/resources/META-INF/services/org.testng.ITestNGListener`, and they run test methods concurrently and retry failures. Do not write `testng.xml` suites, set `parallel` or thread counts in Gradle, or use TestNG groups (`@Test(groups = ...)`, `includeGroups`, `excludeGroups`). Split test sets by package with Gradle `include`/`exclude`. Put `@Test` on each test method of the concrete class: class-level and inherited `@Test` methods are not run. Mark a test that cannot run concurrently with `@SingleThread`. Why: `SuiteListener` rebuilds the suite and drops TestNG group filters, so a group split silently runs every test. The full contract is [docs/agents/test-execution.md](docs/agents/test-execution.md).
 10. **HTTP status codes are `org.apache.http.HttpStatus` constants**, for example `HttpStatus.SC_OK` and `HttpStatus.SC_UNAUTHORIZED`, never number literals such as `200`. This applies to tests, steps, and verifications. Why: the constant names the expectation, and the class already comes with `rest-assured`.
+11. **Every test reaches the Allure report with its steps.** `gradle/allure.gradle` runs each Gradle `Test` task with the AspectJ agent and writes results to `build/allure-results`; CI uploads that directory from every job that runs tests. Do not add another `-javaagent` or results directory. Why: without the agent the report shows tests but no steps, and a job that does not upload its results is missing from the report. The full contract is [docs/agents/test-reporting.md](docs/agents/test-reporting.md).
 
 ## 4. API example
 
@@ -150,6 +151,7 @@ UI and database tests follow the same layers. For UI, write a `<Name>Page`, a `<
 - [ ] `grep -rnE 'RestAssured|System\.(getProperty|getenv)' src/test/java` prints nothing.
 - [ ] `grep -rniE 'status[a-z]*\(.*\b[1-5][0-9]{2}\b' src` prints nothing (rule 10).
 - [ ] `grep -rnE '@Test\([^)]*groups *=|includeGroups|excludeGroups' src/test gradle` prints nothing, and test output names show `Concurrency` or `Sequential` (rule 9).
+- [ ] After `./gradlew clean test`, `build/allure-results` holds a `*-result.json` for every test, and a test that calls steps lists them (rule 11).
 - [ ] No base URI or host is hard-coded in `src/test/java`; it comes from a `*Config` class.
 - [ ] Every new class under `src/test/java` is a test class or `BaseTest`, and none contains a nested class.
 - [ ] Every new setting has a key in an Owner config and a default or example value in `src/main/resources`.

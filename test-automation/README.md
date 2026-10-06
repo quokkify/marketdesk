@@ -20,6 +20,8 @@ Compile, then run Checkstyle, SpotBugs and the architecture rules without runnin
 
 Run the tests. The q4j TestNG extensions registered in `src/test/resources/META-INF/services/org.testng.ITestNGListener` run them in parallel and retry failures; the environment or an optional `src/test/resources/testng.properties` sets `TEST_THREAD_COUNT` and `RETRY_COUNT`. The rules, including how to split test sets, are in [docs/agents/test-execution.md](docs/agents/test-execution.md).
 
+Every test run writes Allure results, with the steps woven in by the AspectJ agent, to `build/allure-results`; publish that directory from CI. See [docs/agents/test-reporting.md](docs/agents/test-reporting.md).
+
 ```sh
 ./gradlew test
 TEST_MESSAGE="Environment override" ./gradlew test
