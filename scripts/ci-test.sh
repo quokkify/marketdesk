@@ -25,11 +25,15 @@ docker run --detach --rm \
   --publish 6379:6379 \
   redis:8-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
 
+database_ready=false
 for _ in {1..30}; do
-  docker exec "$postgres_container" pg_isready -U marketdesk >/dev/null 2>&1 && break
+  if docker exec "$postgres_container" psql -U marketdesk -d marketdesk -tAc 'SELECT 1' >/dev/null 2>&1; then
+    database_ready=true
+    break
+  fi
   sleep 2
 done
-docker exec "$postgres_container" pg_isready -U marketdesk || { docker logs "$postgres_container"; exit 1; }
+[[ "$database_ready" == true ]] || { docker logs "$postgres_container"; exit 1; }
 
 for _ in {1..30}; do
   [[ "$(docker exec "$redis_container" redis-cli ping 2>/dev/null)" == PONG ]] && break

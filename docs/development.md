@@ -43,13 +43,15 @@ Other useful scripts: `npm run db:migrate`, `npm run db:seed`, `npm run dev:back
 
 ### Java test automation
 
-Java 21 test automation is maintained in [`test-automation/`](../test-automation/) from the [java-test-automation-template](https://github.com/quokkify/java-test-automation-template). Its dependencies include q4j configuration and TestNG support, REST Assured and Jackson JSON for API checks, SQL database helpers, the Tyrus WebSocket client, Selenide UI helpers, and the PostgreSQL JDBC driver. q4j module versions share one version-catalog entry so they stay aligned. Run its static checks and tests with:
+Java 21 test automation is maintained in [`test-automation/`](../test-automation/) from the [java-test-automation-template](https://github.com/quokkify/java-test-automation-template). Its dependencies include q4j configuration and TestNG support, REST Assured and Jackson JSON for API checks, SQL database helpers, the Tyrus WebSocket client, Selenide UI helpers, and the PostgreSQL JDBC driver. q4j module versions share one version-catalog entry so they stay aligned. The default `test` task is reserved for unit tests; API checks run separately against the Compose application. Local commands:
 
 ```bash
 cd test-automation
-./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest
+./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture
 ./gradlew test
 ```
+
+Start the MarketDesk Compose stack before running `./gradlew apiTest`; the tests call `MARKETDESK_API_BASE_URI` (default `http://127.0.0.1:3000`, override it as an environment variable or `-DMARKETDESK_API_BASE_URI=...`). CI uses [`scripts/ci-java-api-tests.sh`](../scripts/ci-java-api-tests.sh) to start the stack with a throwaway marketplace credentials key, wait for database/Redis readiness, run both Java tasks, and clean up its containers and volumes. Framework code (configs, services, verifications, steps) lives in `test-automation/src/main` under `dev.quokkify.marketdesk`, and `src/test` holds only the test classes; [`test-automation/AGENTS.md`](../test-automation/AGENTS.md) defines the layers, and `verifyArchitecture` checks the project contracts, including that API tests use `HttpStatus` constants. Tests run in parallel through the q4j TestNG extensions registered in `test-automation/src/test/resources/META-INF/services/org.testng.ITestNGListener`. The initial Java API slice covers liveness, readiness, and the unauthenticated products response; additional TypeScript integration coverage will move over in subsequent slices.
 
 The Java project has its own `.copier-answers.yml`; update it independently with Copier from inside `test-automation/`. CI uses [ci-kit](https://github.com/quokkify/ci-kit) and checks this project alongside the existing Node pipeline.
 

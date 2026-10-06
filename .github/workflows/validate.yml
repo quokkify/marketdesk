@@ -144,9 +144,12 @@ jobs:
       java-version: '21'
       build-tool: gradle
       lint-command: >-
-        ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest --console=plain
-      test-command: ./gradlew test --console=plain
+        ./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain
+      test-command: bash ../scripts/ci-java-api-tests.sh
       run-build: false
+      upload-test-artifacts: true
+      test-artifact-path: build/allure-results
+      test-artifact-name: allure-results-marketdesk-java
 
   docker:
     uses: quokkify/ci-kit/.github/workflows/docker-build.yml@v3.0.1

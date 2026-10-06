@@ -2,12 +2,32 @@ tasks.withType(Test).configureEach {
     useTestNG()
     systemProperty 'file.encoding', 'UTF-8'
     // Forward this explicit override to the separate test JVM.
-    def message = System.getProperty('TEST_MESSAGE')
-    if (message != null) {
-        systemProperty 'TEST_MESSAGE', message
+    def baseUri = System.getProperty('MARKETDESK_API_BASE_URI')
+    if (baseUri != null) {
+        systemProperty 'MARKETDESK_API_BASE_URI', baseUri
     }
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat = 'full'
     }
+}
+
+// Keep the default suite safe for fast local development. Live HTTP checks live in the
+// test.api package and run only in `apiTest`, against the Compose application in CI.
+// q4j SuiteListener rebuilds the suite and drops TestNG groups, so the split is by package.
+tasks.named('test', Test) {
+    exclude '**/test/api/**'
+    // No unit tests exist yet; the task must not fail for finding none.
+    failOnNoDiscoveredTests = false
+}
+
+tasks.register('apiTest', Test) {
+    description = 'Runs API tests against a running MarketDesk application.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/test/api/**'
+    // The result depends on the running application, which Gradle cannot see as an input.
+    outputs.upToDateWhen { false }
+    shouldRunAfter tasks.named('test')
 }

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration name="q4j-architecture" status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss} [%-5level] %c{1} - %msg%n"/>
+        </Console>
+        <Console name="Report" target="SYSTEM_OUT">
+            <PatternLayout pattern="%msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="dev.quokkify.architecture.ArchitectureRunner" level="info" additivity="false">
+            <AppenderRef ref="Report"/>
+        </Logger>
+        <Logger name="com.tngtech.archunit" level="warn"/>
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
