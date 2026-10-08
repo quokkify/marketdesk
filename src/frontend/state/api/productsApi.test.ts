@@ -42,3 +42,65 @@ describe('product recheck API request', () => {
     });
   });
 });
+
+describe('saved improvement review cache', () => {
+  it('refreshes a subscribed listing and its price history after a decision', async () => {
+    const originalFetch = global.fetch;
+    const originalRequest = global.Request;
+    global.Request = class extends originalRequest {
+      constructor(input: RequestInfo | URL, init?: RequestInit) {
+        super(
+          typeof input === 'string' && input.startsWith('/') ? `http://localhost${input}` : input,
+          init
+        );
+      }
+    };
+    const fetched: string[] = [];
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const request = input as Request;
+      const path = new URL(request.url).pathname;
+      fetched.push(path);
+      const data = path.endsWith('decisions')
+        ? { sessionId: 's1', productId: 'p1', listingId: 'l1', revision: 2, proposals: [] }
+        : path.endsWith('price-history')
+          ? []
+          : { id: 'l1' };
+      return new Response(JSON.stringify({ success: true, data }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const { configureStore } = await import('@reduxjs/toolkit');
+    const { baseApi } = await import('./baseApi');
+    const { productsApi } = await import('./productsApi');
+    const { listingsApi } = await import('./listingsApi');
+    const store = configureStore({
+      reducer: { api: baseApi.reducer, auth: () => ({ token: null }) },
+      middleware: (getDefault) => getDefault().concat(baseApi.middleware),
+    });
+    try {
+      await store.dispatch(listingsApi.endpoints.getListing.initiate('l1')).unwrap();
+      await store.dispatch(listingsApi.endpoints.getPriceHistory.initiate('l1')).unwrap();
+      await store
+        .dispatch(
+          productsApi.endpoints.decideProductImprovement.initiate({
+            productId: 'p1',
+            listingId: 'l1',
+            sessionId: 's1',
+            revision: 1,
+            proposalId: 'price',
+            action: 'accept',
+            editedValue: 90,
+          })
+        )
+        .unwrap();
+      await Promise.all(store.dispatch(baseApi.util.getRunningQueriesThunk()));
+      expect(fetched.filter((path) => path === '/api/listings/l1')).toHaveLength(2);
+      expect(fetched.filter((path) => path === '/api/listings/l1/price-history')).toHaveLength(2);
+    } finally {
+      store.dispatch(baseApi.util.resetApiState());
+      global.fetch = originalFetch;
+      global.Request = originalRequest;
+    }
+  });
+});
