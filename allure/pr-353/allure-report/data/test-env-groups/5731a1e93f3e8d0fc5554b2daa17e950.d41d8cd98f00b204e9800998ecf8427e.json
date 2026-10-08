@@ -1,0 +1,1 @@
+{"id":"5731a1e93f3e8d0fc5554b2daa17e950.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent requiresHumanReview is true for price drops greater than 20%","name":"is true for price drops greater than 20%","status":"passed","testResultsByEnv":{"default":"d7f6f28a580854c3e342d54f4f97a26f"}}
