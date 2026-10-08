@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository
-        uses: quokkify/ci-kit/actions/checkout@v3.0.1
+        uses: quokkify/ci-kit/actions/checkout@v3.0.3
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -117,7 +117,7 @@ jobs:
 
   marketdesk-node:
     name: "MarketDesk"
-    uses: quokkify/ci-kit/.github/workflows/node-ci.yml@v3.0.1
+    uses: quokkify/ci-kit/.github/workflows/node-ci.yml@v3.0.3
     with:
       working-directory: "."
       node-version: '24'
@@ -138,7 +138,7 @@ jobs:
 
   java-test-automation:
     name: Java test automation
-    uses: quokkify/ci-kit/.github/workflows/java-ci.yml@v3.0.1
+    uses: quokkify/ci-kit/.github/workflows/java-ci.yml@v3.0.3
     with:
       working-directory: test-automation
       java-version: '21'
@@ -152,7 +152,7 @@ jobs:
       test-artifact-name: allure-results-marketdesk-java
 
   docker:
-    uses: quokkify/ci-kit/.github/workflows/docker-build.yml@v3.0.1
+    uses: quokkify/ci-kit/.github/workflows/docker-build.yml@v3.0.3
     with:
       push: false
 
