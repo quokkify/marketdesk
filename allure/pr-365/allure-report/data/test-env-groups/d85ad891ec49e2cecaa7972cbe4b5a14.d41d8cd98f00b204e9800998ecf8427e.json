@@ -1,0 +1,1 @@
+{"id":"d85ad891ec49e2cecaa7972cbe4b5a14.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/CreateProductUseCase.test.ts#CreateProductUseCase fails when the workspace does not exist","name":"fails when the workspace does not exist","status":"passed","testResultsByEnv":{"default":"c8375552934f2c9dbdacc25f6822e442"}}
