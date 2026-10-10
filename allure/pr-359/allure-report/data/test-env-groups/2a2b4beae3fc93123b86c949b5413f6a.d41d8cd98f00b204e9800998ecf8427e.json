@@ -1,0 +1,1 @@
+{"id":"2a2b4beae3fc93123b86c949b5413f6a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent creation invariants requires a typed price change for price events","name":"requires a typed price change for price events","status":"passed","testResultsByEnv":{"default":"83828963c66606f2ccb8a50269cf7cfb"}}
