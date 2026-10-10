@@ -1,0 +1,1 @@
+{"id":"ed08b92ddcb61eceaadaf5933be1fe06.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/database.test.ts#databaseSslConfig uses plaintext when TLS is explicitly disabled","name":"uses plaintext when TLS is explicitly disabled","status":"passed","testResultsByEnv":{"default":"40a4264acaf5c911e0a5f538a59b8bb5"}}
