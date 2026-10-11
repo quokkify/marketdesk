@@ -1,0 +1,1 @@
+{"id":"4802af199f2b71415faf7bff336e441c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects flat taxonomy with a cyclic parent graph","name":"rejects flat taxonomy with a cyclic parent graph","status":"passed","testResultsByEnv":{"default":"4d1b2d784c94c6166ca45ca5dcb76c2e"}}
