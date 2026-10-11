@@ -1,0 +1,1 @@
+{"id":"dadf9adca6ef3359256b0a138d836bc2.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/notifiers.test.ts#EmailProvider rejects a message without a recipient","name":"rejects a message without a recipient","status":"passed","testResultsByEnv":{"default":"c5529b794bcbe9c4b9b3f0bdd076abf6"}}
