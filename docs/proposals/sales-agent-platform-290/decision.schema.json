@@ -1,0 +1,373 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "revision",
+    "supersedesDigest",
+    "status",
+    "syntheticExample",
+    "digestNotice",
+    "hypothesis",
+    "experiments",
+    "analysis",
+    "rejectedAlternatives",
+    "changes",
+    "newRegressionCases",
+    "targetRecipe",
+    "owner",
+    "approval"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "sales-decision@0.1"
+    },
+    "decisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "supersedesDigest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "pending-review",
+        "approved",
+        "rejected"
+      ]
+    },
+    "syntheticExample": {
+      "type": "boolean"
+    },
+    "digestNotice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "experiments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "experimentId",
+          "manifestDigest",
+          "applicationSha",
+          "finding",
+          "limitations"
+        ],
+        "properties": {
+          "experimentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "manifestDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "applicationSha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "finding": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limitations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "reason",
+        "measurements"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "defer",
+            "reject",
+            "propose-change"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "measurements": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "rejectedAlternatives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "component",
+          "description"
+        ],
+        "properties": {
+          "component": {
+            "enum": [
+              "graph",
+              "prompt",
+              "policy",
+              "tool",
+              "guardrail",
+              "dataset"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "newRegressionCases": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "targetRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipeId",
+        "version"
+      ],
+      "properties": {
+        "recipeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "owner": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actorId",
+            "actorRole",
+            "decidedAt",
+            "recordRef",
+            "decisionDigest",
+            "decisionRevision",
+            "scope",
+            "conditions"
+          ],
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorRole": {
+              "enum": [
+                "product-owner",
+                "security-owner",
+                "architecture-owner",
+                "designated-reviewer"
+              ]
+            },
+            "decidedAt": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$"
+            },
+            "recordRef": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decisionDigest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "decisionRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "scope": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "concept",
+                  "recipe-change",
+                  "offline-evaluation",
+                  "canary",
+                  "production-activation"
+                ]
+              }
+            },
+            "conditions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Proposed evidence-to-decision artifact (documentation contract)",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "syntheticExample": {
+            "const": false
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approval": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "actorId",
+              "actorRole",
+              "decidedAt",
+              "recordRef",
+              "decisionDigest",
+              "decisionRevision",
+              "scope",
+              "conditions"
+            ],
+            "properties": {
+              "actorId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "actorRole": {
+                "enum": [
+                  "product-owner",
+                  "security-owner",
+                  "architecture-owner",
+                  "designated-reviewer"
+                ]
+              },
+              "decidedAt": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$"
+              },
+              "recordRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decisionDigest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "decisionRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "scope": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "concept",
+                    "recipe-change",
+                    "offline-evaluation",
+                    "canary",
+                    "production-activation"
+                  ]
+                }
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
