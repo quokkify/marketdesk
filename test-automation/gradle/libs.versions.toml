@@ -2,7 +2,7 @@
 q4j = "0.12.1"
 testng = "7.12.0"
 checkstyle = "14.3.0"
-spotbugs-plugin = "6.5.12"
+spotbugs-plugin = "6.5.13"
 log4j = "2.26.1"
 aspectj = "1.9.25.1"
 
