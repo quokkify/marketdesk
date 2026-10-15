@@ -1,0 +1,1 @@
+{"id":"edcfc52955a308056a68bbc43e92024c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects a whitespace-padded client id","name":"rejects a whitespace-padded client id","status":"passed","testResultsByEnv":{"default":"a09f75fe8fa9b1e1f3b07bf288bf67e9"}}
