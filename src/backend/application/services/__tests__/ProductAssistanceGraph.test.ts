@@ -14,6 +14,7 @@ function setup() {
   const generateDraft = jest.fn(async () => Ok(draft));
   const recheck = jest.fn(async () => ({ productId: 'p1', canPublish: false }));
   const product = {
+    sellingPrice: { amount: 100, currency: 'PLN' },
     id: 'p1', name: 'Camera', description: 'Camera with lens and accessories.',
     category: 'Cameras', condition: 'good', tags: [], imageCount: 1,
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
@@ -63,7 +64,7 @@ describe('ProductAssistanceGraph', () => {
     expect(s.findListing).toHaveBeenCalledWith('l1', 'w1');
     expect(s.analyzeListingSeo).toHaveBeenCalledTimes(1);
     expect(s.suggestPrice).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ graphVersion: 'product-assistance@1', productId: 'p1', reviewOnly: true,
+    expect(result).toMatchObject({ graphVersion: 'product-assistance@1', productId: 'p1', currency: 'PLN', reviewOnly: true,
       copy: [{ field: 'description' }], price: { suggestedPrice: 95 } });
   });
 
