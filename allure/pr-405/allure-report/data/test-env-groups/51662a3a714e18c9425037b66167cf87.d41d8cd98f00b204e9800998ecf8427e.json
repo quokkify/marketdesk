@@ -1,0 +1,1 @@
+{"id":"51662a3a714e18c9425037b66167cf87.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent lifecycle transitions rejects invalid terminal-state transitions","name":"rejects invalid terminal-state transitions","status":"passed","testResultsByEnv":{"default":"c8fc9a124e7e08b7db3ca84c0c6d6e1a"}}
