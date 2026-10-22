@@ -1,0 +1,6 @@
+_commit: v3.6.0
+_src_path: https://github.com/quokkify/ci-kit.git
+module: docker
+docker_images:
+  - id: docker
+    name: docker

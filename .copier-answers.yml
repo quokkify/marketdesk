@@ -32,4 +32,5 @@ renovate_presets:
 toolkit_version: v3.6.0
 allure_source: auto
 module: legacy
-handed_off: []
+handed_off:
+  - validate
