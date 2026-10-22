@@ -1,0 +1,3 @@
+schema_version: 1
+components:
+  - {"build_command": "npm run build", "id": "marketdesk-node", "lint_command": "npm run verify:spec && npm run verify:compose-db && npm run verify:compose-uploads && npm run verify:brand-assets && npm run verify:release-metadata && npm run lint && npm run type-check", "name": "MarketDesk", "node_version": "24", "path": ".", "run_build": true, "test_artifact_name": "allure-results-marketdesk-node", "test_artifact_path": "allure-results", "test_command": "bash scripts/ci-test.sh", "upload_test_artifacts": true}

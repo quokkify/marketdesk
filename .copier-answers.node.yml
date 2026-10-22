@@ -1,0 +1,15 @@
+_commit: v3.6.0
+_src_path: https://github.com/quokkify/ci-kit.git
+module: node
+node_components:
+  - id: marketdesk-node
+    name: MarketDesk
+    path: .
+    node_version: "24"
+    lint_command: "npm run verify:spec && npm run verify:compose-db && npm run verify:compose-uploads && npm run verify:brand-assets && npm run verify:release-metadata && npm run lint && npm run type-check"
+    test_command: bash scripts/ci-test.sh
+    run_build: true
+    build_command: npm run build
+    upload_test_artifacts: true
+    test_artifact_path: allure-results
+    test_artifact_name: allure-results-marketdesk-node

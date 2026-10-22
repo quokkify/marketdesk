@@ -1,0 +1,13 @@
+schema_version: 1
+components:
+  - id: "java-test-automation"
+    name: "Java test automation"
+    path: "test-automation"
+    java_version: "21"
+    "build_tool": "gradle"
+    "lint_command": "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain"
+    "run_build": false
+    "test_artifact_name": "allure-results-marketdesk-java"
+    "test_artifact_path": "build/allure-results"
+    "test_command": "bash ../scripts/ci-java-api-tests.sh"
+    "upload_test_artifacts": true

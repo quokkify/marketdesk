@@ -1,0 +1,15 @@
+_commit: v3.6.0
+_src_path: https://github.com/quokkify/ci-kit.git
+module: java
+java_components:
+  - id: java-test-automation
+    name: Java test automation
+    path: test-automation
+    java_version: "21"
+    build_tool: gradle
+    lint_command: "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain"
+    test_command: bash ../scripts/ci-java-api-tests.sh
+    run_build: false
+    upload_test_artifacts: true
+    test_artifact_path: build/allure-results
+    test_artifact_name: allure-results-marketdesk-java
