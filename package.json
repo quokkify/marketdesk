@@ -103,7 +103,7 @@
     "@typescript-eslint/eslint-plugin": "8.71.2",
     "@typescript-eslint/parser": "8.71.2",
     "@vitejs/plugin-react": "6.1.2",
-    "allure-jest": "3.13.0",
+    "allure-jest": "3.14.0",
     "concurrently": "10.0.6",
     "docker-compose": "1.5.0",
     "eslint": "10.13.0",
