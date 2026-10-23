@@ -205,6 +205,36 @@ describe('OfflineHeuristicAIProvider', () => {
       expect(title).toBe('Vintage leather messenger bag with brass buckles - Fair condition');
     });
 
+    it('offline title never stacks condition suffixes', async () => {
+      const product = buildProduct({ name: 'Camera', condition: 'good' });
+
+      const first = await provider.generateTitle(product, null);
+      unwrap(product.rename(first));
+      unwrap(product.updateCondition('fair'));
+      const second = await provider.generateTitle(product, null);
+
+      expect(first).toBe('Camera - Good condition');
+      expect(second).toBe('Camera - Fair condition');
+    });
+
+    it('collapses condition suffixes that already stacked into the current one', async () => {
+      const title = await provider.generateTitle(
+        buildProduct({ name: 'Camera - Good condition - Fair condition', condition: 'fair' }),
+        null,
+      );
+
+      expect(title).toBe('Camera - Fair condition');
+    });
+
+    it('appends nothing when the title already names another condition', async () => {
+      const title = await provider.generateTitle(
+        buildProduct({ name: 'Like new desk lamp', condition: 'good' }),
+        null,
+      );
+
+      expect(title).toBe('Like new desk lamp');
+    });
+
     it('appends nothing when the condition is unknown', async () => {
       const title = await provider.generateTitle(
         buildProduct({ name: 'Desk lamp', condition: 'unknown' }),

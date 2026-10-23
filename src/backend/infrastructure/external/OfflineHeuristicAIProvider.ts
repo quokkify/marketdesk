@@ -22,7 +22,7 @@ import {
 const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
 const TITLE_MAX_LENGTH = 70;
 
-// Appended to titles that do not name the condition yet; "unknown" adds nothing.
+// Appended to titles that name no condition yet; "unknown" adds nothing.
 const CONDITION_LABELS: Record<ProductCondition, string | null> = {
   new: 'New',
   like_new: 'Like new',
@@ -32,6 +32,14 @@ const CONDITION_LABELS: Record<ProductCondition, string | null> = {
   refurbished: 'Refurbished',
   unknown: null,
 };
+const KNOWN_CONDITION_LABELS = Object.values(CONDITION_LABELS).filter(
+  (label): label is string => label !== null
+);
+// One or more trailing " - <condition label>" suffixes, the form appended below.
+const CONDITION_SUFFIXES = new RegExp(
+  `(?:\\s+-\\s+(?:${KNOWN_CONDITION_LABELS.join('|')}))+$`,
+  'i'
+);
 
 interface Rewrite {
   value: string;
@@ -156,18 +164,30 @@ function rewriteTitle(name: string, condition: string): Rewrite {
   const capitalized = capitalizeFirstLetter(spaced);
   if (capitalized !== spaced) changes.push('capitalized the first letter');
 
+  // Condition suffixes appended earlier are dropped first, so a changed condition
+  // replaces the old one instead of stacking ("Camera - Good condition - Fair condition").
   const label = conditionLabel(condition);
-  const fitted = truncateAtWord(capitalized, TITLE_MAX_LENGTH);
-  if (label === null || mentions(fitted, label)) {
+  const base = capitalized.replace(CONDITION_SUFFIXES, '');
+  if (label === null || mentionsAnyCondition(truncateAtWord(base, TITLE_MAX_LENGTH))) {
+    const fitted = truncateAtWord(capitalized, TITLE_MAX_LENGTH);
     if (fitted !== capitalized) changes.push(`shortened it to ${TITLE_MAX_LENGTH} characters`);
     return { value: fitted, changes };
   }
 
   const suffix = ` - ${label}`;
-  const base = truncateAtWord(capitalized, TITLE_MAX_LENGTH - suffix.length);
-  if (base !== capitalized) changes.push(`shortened it to ${TITLE_MAX_LENGTH} characters`);
-  changes.push(`added the condition "${label}"`);
-  return { value: `${base}${suffix}`, changes };
+  const fittedBase = truncateAtWord(base, TITLE_MAX_LENGTH - suffix.length);
+  const value = `${fittedBase}${suffix}`;
+  if (value !== capitalized) {
+    if (fittedBase !== base) changes.push(`shortened it to ${TITLE_MAX_LENGTH} characters`);
+    changes.push(
+      base === capitalized ? `added the condition "${label}"` : `set the condition to "${label}"`
+    );
+  }
+  return { value, changes };
+}
+
+function mentionsAnyCondition(text: string): boolean {
+  return KNOWN_CONDITION_LABELS.some((label) => mentions(text, label));
 }
 
 // Tidies whitespace without touching the wording: single spaces inside lines and at

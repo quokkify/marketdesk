@@ -5,6 +5,7 @@
 // follows Hermes going down or coming back without a restart.
 
 import type {
+  AIProviderSourceAware,
   IAIProvider,
   ListingAnalysis,
   PriceSuggestion,
@@ -27,7 +28,7 @@ export interface AIProviderSelectorDeps {
   probe: Pick<HermesHealthProbe, 'isConfigured' | 'isReachable'>;
 }
 
-export class AIProviderSelector implements IAIProvider {
+export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
   constructor(private readonly deps: AIProviderSelectorDeps) {}
 
   async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
@@ -53,13 +54,20 @@ export class AIProviderSelector implements IAIProvider {
     return (await this.resolve()).analyzeListingSeo(input, preset);
   }
 
+  // The single routing decision behind every AI call, status() and the decision
+  // engine's review-only rule for offline results.
+  async activeProvider(): Promise<'hermes' | 'offline'> {
+    const { mode, probe } = this.deps;
+    if (mode !== 'auto') return mode;
+    return probe.isConfigured() && (await probe.isReachable()) ? 'hermes' : 'offline';
+  }
+
   async status(): Promise<HermesStatusView> {
     const { mode, probe } = this.deps;
+    const activeProvider = await this.activeProvider();
     const hermesConfigured = probe.isConfigured();
     const hermesReachable =
       mode !== 'offline' && hermesConfigured ? await probe.isReachable() : null;
-    const activeProvider =
-      mode === 'hermes' || (mode === 'auto' && hermesReachable === true) ? 'hermes' : 'offline';
     return {
       mode,
       activeProvider,
@@ -70,9 +78,6 @@ export class AIProviderSelector implements IAIProvider {
   }
 
   private async resolve(): Promise<IAIProvider> {
-    const { mode, hermes, offline, probe } = this.deps;
-    if (mode === 'offline') return offline;
-    if (mode === 'hermes') return hermes;
-    return probe.isConfigured() && (await probe.isReachable()) ? hermes : offline;
+    return (await this.activeProvider()) === 'hermes' ? this.deps.hermes : this.deps.offline;
   }
 }

@@ -8,7 +8,9 @@
 //                  everything else -> pending_review
 //
 // Additionally, HermesEvent.requiresHumanReview() forces review for critical price
-// drops (> 20%), so those never auto-apply regardless of tier.
+// drops (> 20%), so those never auto-apply regardless of tier. Title, price and
+// description changes made while the AI provider answers from its offline heuristics
+// (AIProviderSourceAware) always go to review, whatever the tier and guardrails say.
 
 import { Result, Ok, Err } from '../shared/Result';
 import { ValidationError, InvalidStateError, NotFoundError } from '../shared/DomainError';
@@ -28,7 +30,7 @@ import type { IProductRepository } from '../repositories/interfaces/IProductRepo
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
-import type { IAIProvider } from '../ports/IAIProvider';
+import { isAIProviderSourceAware, type IAIProvider } from '../ports/IAIProvider';
 import {
   listingSeoProfile,
   listingSeoInputSchema,
@@ -48,6 +50,8 @@ interface Suggestion {
 
 export type IdFactory = () => string;
 
+const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
+
 export class HermesDecisionEngine {
   constructor(
     private readonly productRepo: IProductRepository,
@@ -63,14 +67,20 @@ export class HermesDecisionEngine {
     const products = await this.productRepo.findByWorkspace(workspace.id);
 
     for (const product of products) {
+      // Asked before and after the AI calls, so a switch to the offline heuristics at
+      // any point during the check keeps this product's AI-made changes review-only.
+      const offlineBefore = await this.aiAnswersOffline();
       const suggestions = await this.checkConditions(product);
+      const answeredOffline = offlineBefore || (await this.aiAnswersOffline());
 
       for (const suggestion of suggestions) {
-        let decision = this.determineAutonomy(
-          workspace.autonomyLevel,
-          suggestion.type,
-          suggestion.severity
-        );
+        const reviewOnly =
+          answeredOffline &&
+          suggestion.change !== null &&
+          AI_MADE_CHANGE_KINDS.has(suggestion.change.kind);
+        let decision: AutonomyDecision = reviewOnly
+          ? 'pending_review'
+          : this.determineAutonomy(workspace.autonomyLevel, suggestion.type, suggestion.severity);
         const created = HermesEvent.create({
           id: this.idFactory(),
           workspaceId: workspace.id,
@@ -494,6 +504,13 @@ export class HermesDecisionEngine {
       default:
         return Err(new ValidationError('Unknown proposed change'));
     }
+  }
+
+  private async aiAnswersOffline(): Promise<boolean> {
+    return (
+      isAIProviderSourceAware(this.aiProvider) &&
+      (await this.aiProvider.activeProvider()) === 'offline'
+    );
   }
 
   private runCompletedEvent(workspaceId: string, count: number): DomainEvent {

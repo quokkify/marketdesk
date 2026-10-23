@@ -49,3 +49,16 @@ export interface IAIProvider {
   // Run a MarketDesk-owned, tool-free listing SEO profile over sanitized input only.
   analyzeListingSeo(input: ListingSeoInput, preset: CreativityPreset): Promise<ListingSeoOutput>;
 }
+
+// Optional capability of a provider that may answer from built-in offline heuristics
+// instead of Hermes. HermesDecisionEngine keeps changes made while offline review-only.
+export interface AIProviderSourceAware {
+  // The source that would answer the next call.
+  activeProvider(): Promise<'hermes' | 'offline'>;
+}
+
+export function isAIProviderSourceAware(
+  provider: IAIProvider
+): provider is IAIProvider & AIProviderSourceAware {
+  return typeof (provider as Partial<AIProviderSourceAware>).activeProvider === 'function';
+}

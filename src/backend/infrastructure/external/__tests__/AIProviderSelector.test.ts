@@ -141,6 +141,26 @@ describe('AIProviderSelector', () => {
   });
 
   it.each([
+    { mode: 'offline', configured: true, reachable: true, source: 'offline' },
+    { mode: 'hermes', configured: false, reachable: false, source: 'hermes' },
+    { mode: 'auto', configured: true, reachable: true, source: 'hermes' },
+    { mode: 'auto', configured: true, reachable: false, source: 'offline' },
+    { mode: 'auto', configured: false, reachable: true, source: 'offline' },
+  ] as const)(
+    'activeProvider in $mode mode with configured=$configured and reachable=$reachable is $source',
+    async ({ mode, configured, reachable, source }) => {
+      const selector = new AIProviderSelector({
+        hermes,
+        offline,
+        mode,
+        probe: probe(configured, reachable),
+      });
+
+      await expect(selector.activeProvider()).resolves.toBe(source);
+    },
+  );
+
+  it.each([
     { mode: 'auto', configured: false, probeAnswer: true, activeProvider: 'offline', hermesReachable: null },
     { mode: 'auto', configured: true, probeAnswer: true, activeProvider: 'hermes', hermesReachable: true },
     { mode: 'auto', configured: true, probeAnswer: false, activeProvider: 'offline', hermesReachable: false },
