@@ -120,6 +120,7 @@ export interface MarketplaceOAuthServiceDeps {
   stateTtlSeconds?: number;
   // Enabled while the OLX adapter is not real: start() connects a labelled sandbox
   // account and returns the app's success URL instead of an OLX authorization URL.
+  // While disabled, a stored sandbox account is refused instead of served as a token.
   sandbox?: { enabled: boolean; successUrl: string };
 }
 
@@ -190,6 +191,7 @@ const REFRESH_SKEW_MS = 60_000;
 
 const OLX_SANDBOX_ACCOUNT_HANDLE = 'OLX sandbox account';
 const OLX_SANDBOX_ACCESS_TOKEN = 'sandbox';
+const OLX_SANDBOX_TOKEN_TYPE = 'sandbox';
 const OLX_SANDBOX_SCOPES = ['read', 'write', 'v2'];
 const OLX_SANDBOX_TOKEN_LIFETIME_YEARS = 10;
 
@@ -326,6 +328,17 @@ export class MarketplaceOAuthService {
 
     try {
       const tokens = normalizeTokens(this.deps.credentialVault.decrypt(account.credentials));
+      if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+        // A leftover sandbox connection cannot reach real OLX: report it as needing a
+        // reconnect, like unreadable credentials, instead of as a live connection.
+        return this.toStatus(
+          marketplace.id,
+          marketplace.key,
+          marketplace.isConnected(),
+          { ...account, status: 'error' },
+          null
+        );
+      }
       return this.toStatus(
         marketplace.id,
         marketplace.key,
@@ -458,6 +471,11 @@ export class MarketplaceOAuthService {
     }
 
     const tokens = this.decryptTokens(account);
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      throw new InvalidStateError(
+        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
+      );
+    }
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -488,6 +506,11 @@ export class MarketplaceOAuthService {
 
     // Another worker may have refreshed while this worker waited for the lock.
     const tokens = this.decryptTokens(account);
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      throw new InvalidStateError(
+        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
+      );
+    }
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -556,7 +579,7 @@ export class MarketplaceOAuthService {
       handle: OLX_SANDBOX_ACCOUNT_HANDLE,
       credentials: this.deps.credentialVault.encrypt({
         accessToken: OLX_SANDBOX_ACCESS_TOKEN,
-        tokenType: 'Bearer',
+        tokenType: OLX_SANDBOX_TOKEN_TYPE,
         scopes: [...OLX_SANDBOX_SCOPES],
         expiresAt,
       }),
@@ -573,6 +596,18 @@ export class MarketplaceOAuthService {
       expiresAt: expiresAt.toISOString(),
       sandbox: true,
     };
+  }
+
+  // The fixed handle survives a disconnect, which clears the credentials. The token type
+  // inside the encrypted credentials identifies them even if the handle is overwritten.
+  private isSandboxAccount(
+    account: MarketplaceAccountRecord,
+    tokens?: OlxOAuthTokens | null
+  ): boolean {
+    return (
+      account.handle === OLX_SANDBOX_ACCOUNT_HANDLE ||
+      tokens?.tokenType === OLX_SANDBOX_TOKEN_TYPE
+    );
   }
 
   private decryptTokens(account: MarketplaceAccountRecord): OlxOAuthTokens {
@@ -638,7 +673,7 @@ export class MarketplaceOAuthService {
         : null,
       tokenExpiresAt: tokens?.expiresAt.toISOString(),
       refreshable: Boolean(tokens?.refreshToken),
-      sandbox: account?.handle === OLX_SANDBOX_ACCOUNT_HANDLE,
+      sandbox: account ? this.isSandboxAccount(account, tokens) : false,
     };
   }
 }
