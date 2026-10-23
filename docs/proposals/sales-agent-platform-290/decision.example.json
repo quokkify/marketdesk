@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "sales-decision@0.1",
+  "decisionId": "illustrative-290-boundary-review",
+  "revision": 1,
+  "supersedesDigest": null,
+  "status": "pending-review",
+  "syntheticExample": true,
+  "digestNotice": "Experiment ID, digest and application SHA are synthetic placeholders. No run, measurement, owner decision or approval is claimed.",
+  "hypothesis": "A server-owned approval digest prevents edited reply text from reusing approval.",
+  "experiments": [
+    {
+      "experimentId": "synthetic-not-executed",
+      "manifestDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "applicationSha": "0000000000000000000000000000000000000000",
+      "finding": "No measurement available; this example defines the evidence fields only.",
+      "limitations": [
+        "No real-model test",
+        "No buyer messaging adapter",
+        "No production send or durable conversation test"
+      ]
+    }
+  ],
+  "analysis": {
+    "outcome": "defer",
+    "reason": "Require approved dispatcher contract and executable adversarial cases before promotion.",
+    "measurements": null
+  },
+  "rejectedAlternatives": [
+    "Treat graph resume or model approved:true as authoritative approval."
+  ],
+  "changes": [
+    {
+      "component": "policy",
+      "description": "Propose exact-payload approval invalidation when draft text changes."
+    }
+  ],
+  "newRegressionCases": [
+    "edited-text-invalidates-approval",
+    "foreign-approval-denied",
+    "unknown-send-no-blind-retry"
+  ],
+  "targetRecipe": {
+    "recipeId": "sales-agent-manual-review",
+    "version": "0.1.0"
+  },
+  "owner": null,
+  "approval": null
+}
