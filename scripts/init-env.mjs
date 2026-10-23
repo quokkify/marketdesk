@@ -42,15 +42,21 @@ function fillSecrets(text) {
   const generated = [];
 
   for (const key of SECRET_KEYS) {
-    // dotenv lets the last definition win, so that is the one that decides.
-    const last = [...result.matchAll(new RegExp(`^${key}=([^\\r\\n]*)`, 'gm'))].at(-1);
-    if (last && !needsSecret(effectiveValue(last[1]))) continue;
+    // Same line grammar as dotenv and Compose: optional indentation and `export`, spaces around
+    // the separator, and `:` as well as `=`. The last definition wins, so it decides.
+    const definition = new RegExp(`^([ \\t]*(?:export[ \\t]+)?${key}[ \\t]*[=:])([^\\r\\n]*)`, 'gm');
+    const last = [...result.matchAll(definition)].at(-1);
+    if (last && !needsSecret(effectiveValue(last[2]))) continue;
 
-    const assignment = `${key}=${generateSecret()}`;
+    const secret = generateSecret();
     if (last) {
-      result = result.slice(0, last.index) + assignment + result.slice(last.index + last[0].length);
+      // Replace the value in place and keep the line's own prefix. dotenv ignores `KEY:value`
+      // without a space, so a colon keeps one.
+      const gap = last[1].endsWith(':') ? ' ' : '';
+      result =
+        result.slice(0, last.index) + last[1] + gap + secret + result.slice(last.index + last[0].length);
     } else {
-      result += `${result === '' || result.endsWith('\n') ? '' : '\n'}${assignment}\n`;
+      result += `${result === '' || result.endsWith('\n') ? '' : '\n'}${key}=${secret}\n`;
     }
     generated.push(key);
   }

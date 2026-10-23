@@ -166,6 +166,124 @@ test('does not count a commented-out secret as set', () => {
   );
 });
 
+// dotenv and Compose both accept these spellings of a definition. A real secret written
+// this way must never be mistaken for a missing one: the appended line would win in both
+// parsers, and replacing MARKETPLACE_CREDENTIALS_KEY makes stored credentials unreadable.
+const CREDENTIALS_KEY = 'MARKETPLACE_CREDENTIALS_KEY';
+
+function assertRealSecretKept(definition) {
+  const realKey = Buffer.alloc(32, 5).toString('base64');
+  withProject({ '.env.example': ENV_EXAMPLE, '.env': `${definition(realKey)}\n` }, (dir) => {
+    const result = initEnv({ cwd: dir, log: quiet });
+
+    assert.deepEqual(result.generated, ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'HERMES_WEBHOOK_SECRET']);
+    const text = readEnv(dir);
+    assert.equal(dotenv.parse(text).MARKETPLACE_CREDENTIALS_KEY, realKey);
+    assert.equal(
+      text.split('\n').filter((line) => line.includes(CREDENTIALS_KEY)).length,
+      1,
+      'a second definition must not be appended',
+    );
+  });
+}
+
+test('keeps a real secret written as "export KEY=value"', () => {
+  assertRealSecretKept((value) => `export ${CREDENTIALS_KEY}=${value}`);
+});
+
+test('keeps a real secret written with spaces around the equals sign', () => {
+  assertRealSecretKept((value) => `${CREDENTIALS_KEY} = ${value}`);
+});
+
+test('keeps a real secret on an indented line', () => {
+  assertRealSecretKept((value) => `  ${CREDENTIALS_KEY}=${value}`);
+});
+
+test('keeps a real secret written YAML-style as "KEY: value"', () => {
+  assertRealSecretKept((value) => `${CREDENTIALS_KEY}: ${value}`);
+});
+
+test('replaces an "export KEY=your_..." placeholder in place and keeps the export prefix', () => {
+  withProject(
+    {
+      '.env.example': ENV_EXAMPLE,
+      '.env': [
+        'NODE_ENV=development',
+        'export JWT_SECRET=your_jwt_secret_key_change_in_production',
+        'OLX_ADAPTER_MODE=stub',
+        '',
+      ].join('\n'),
+    },
+    (dir) => {
+      const result = initEnv({ cwd: dir, log: quiet });
+
+      assert.ok(result.generated.includes('JWT_SECRET'));
+      const lines = readEnv(dir).split('\n');
+      assert.equal(lines[0], 'NODE_ENV=development');
+      assert.match(lines[1], /^export JWT_SECRET=\S+$/);
+      assert.equal(lines[2], 'OLX_ADAPTER_MODE=stub');
+      assert.equal(lines.filter((line) => /^(export\s+)?JWT_SECRET\s*[=:]/.test(line)).length, 1);
+      assert.equal(decodedBytes(dotenv.parse(readEnv(dir)).JWT_SECRET), 32);
+      assert.deepEqual(initEnv({ cwd: dir, log: quiet }), { created: false, generated: [] });
+    },
+  );
+});
+
+test('replaces an indented placeholder with spaces around the equals sign in place', () => {
+  withProject(
+    {
+      '.env.example': ENV_EXAMPLE,
+      '.env': '  JWT_REFRESH_SECRET = your_jwt_refresh_secret_key_change_in_production\n',
+    },
+    (dir) => {
+      initEnv({ cwd: dir, log: quiet });
+
+      const text = readEnv(dir);
+      assert.match(text.split('\n')[0], /^ {2}JWT_REFRESH_SECRET =\s*\S+$/);
+      assert.equal(text.split('\n').filter((line) => line.includes('JWT_REFRESH_SECRET')).length, 1);
+      assert.equal(decodedBytes(dotenv.parse(text).JWT_REFRESH_SECRET), 32);
+    },
+  );
+});
+
+test('replaces a YAML-style placeholder in place and keeps it readable by dotenv', () => {
+  withProject(
+    {
+      '.env.example': ENV_EXAMPLE,
+      '.env': 'HERMES_WEBHOOK_SECRET: your_hermes_webhook_secret\n',
+    },
+    (dir) => {
+      initEnv({ cwd: dir, log: quiet });
+
+      const text = readEnv(dir);
+      const definitions = text.split('\n').filter((line) => line.includes('HERMES_WEBHOOK_SECRET'));
+      assert.equal(definitions.length, 1, 'the placeholder line must be rewritten, not left behind');
+      assert.match(definitions[0], /^HERMES_WEBHOOK_SECRET: \S+$/);
+      assert.equal(decodedBytes(dotenv.parse(text).HERMES_WEBHOOK_SECRET), 32);
+    },
+  );
+});
+
+test('adds the space dotenv needs after a colon when it replaces "KEY:placeholder"', () => {
+  withProject(
+    {
+      '.env.example': ENV_EXAMPLE,
+      '.env': 'HERMES_WEBHOOK_SECRET:your_hermes_webhook_secret\n',
+    },
+    (dir) => {
+      initEnv({ cwd: dir, log: quiet });
+
+      // dotenv ignores "KEY:value" without a space, so the rewritten line must not be spelled that way.
+      const text = readEnv(dir);
+      const definitions = text.split('\n').filter((line) => line.includes('HERMES_WEBHOOK_SECRET'));
+      assert.equal(definitions.length, 1, 'the placeholder line must be rewritten, not left behind');
+      const value = dotenv.parse(text).HERMES_WEBHOOK_SECRET;
+      assert.equal(typeof value, 'string', 'dotenv must be able to read the rewritten line');
+      assert.equal(decodedBytes(value), 32);
+    },
+  );
+});
+
 test('CLI lists the keys it generated and never prints their values', () => {
   withProject({ '.env.example': ENV_EXAMPLE }, (dir) => {
     const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
