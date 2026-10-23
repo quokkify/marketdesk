@@ -14,7 +14,7 @@ This repository is managed by the [`quokkify/ci-kit`](https://github.com/quokkif
 | `.github/workflows/codeql.yml`                           | CodeQL code scanning                                  | toolkit |
 | `.github/workflows/gitleaks.yml`                         | Secret scanning                                       | toolkit |
 | `.github/workflows/allure-report.yml`, `.github/allure/` | Allure 3 pull-request report                          | toolkit |
-| `.github/workflows/release.yml`, `.github/scripts/`      | Release Please (single)                               | toolkit |
+| `.github/workflows/release.yml`, `.github/scripts/`      | Release Please (manifest)                             | toolkit |
 | `.github/release-please/`                                | Release Please config and manifest                    | project |
 | `.github/renovate.json`                                  | Renovate config extending `quokkify/renovate-presets` | project |
 

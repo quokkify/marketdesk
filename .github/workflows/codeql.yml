@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 3 * * 6'
+    - cron: "0 3 * * 6"
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ['actions', 'javascript-typescript']
+        language: ["actions", "javascript-typescript"]
     permissions:
       actions: read
       contents: read
@@ -46,12 +46,12 @@ jobs:
 
   complete:
     name: CodeQL
-    if: ${{ always() }}
+    if: always()
     needs: analyze
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every CodeQL analysis to pass
         env:
-          RESULT: ${{ needs.analyze.result }}
-        run: '[[ "$RESULT" == "success" ]]'
+          ANALYZE_RESULT: ${{ needs.analyze.result }}
+        run: test "$ANALYZE_RESULT" = success

@@ -1,0 +1,11 @@
+# Rendered by the ci-kit template (toolkit-owned, see docs/ci-kit.md);
+# keep them byte-identical to the render so ci-kit updates apply cleanly.
+.copier-answers*.yml
+docs/ci-kit.md
+.github/allure/
+.github/scripts/
+.github/workflows/allure-report.yml
+.github/workflows/codeql.yml
+.github/workflows/copier-update.yml
+.github/workflows/gitleaks.yml
+.github/workflows/release.yml
