@@ -36,6 +36,11 @@ allure_source: auto
 module: legacy
 handed_off:
   - validate
+  - base
+  - security
+  - release
+  - allure
+  - renovate
 codeql_aggregate: true
 gitleaks_job_name: gitleaks
 gitleaks_scan: history

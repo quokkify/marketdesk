@@ -1,0 +1,13 @@
+_commit: v3.11.0
+_src_path: https://github.com/quokkify/ci-kit.git
+codeql: true
+codeql_aggregate: true
+codeql_languages:
+  - actions
+  - javascript-typescript
+gitleaks: true
+gitleaks_aggregate: true
+gitleaks_job_name: gitleaks
+gitleaks_scan: history
+module: security
+toolkit_version: v3.11.0
