@@ -1,0 +1,95 @@
+// Boot-level contract for src/backend/main.ts. main.ts calls
+// assertStartupConfiguration(env) before it touches any resource. These tests build the
+// real `env` module from raw variables, the way a fresh checkout would, and assert what
+// the operator would see. No process is spawned.
+
+import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+type EnvModule = typeof import('../config/env');
+
+const envExamplePath = path.resolve(__dirname, '../../../.env.example');
+const savedVariables = new Map<string, string | undefined>();
+
+// Sets process.env for the test and remembers the original values for afterEach.
+function setProcessEnv(variables: Record<string, string>): void {
+  for (const [name, value] of Object.entries(variables)) {
+    if (!savedVariables.has(name)) savedVariables.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+}
+
+// Imports a fresh copy of config/env so `env` is rebuilt from the current process.env.
+async function loadEnvModule(): Promise<EnvModule> {
+  let loaded: EnvModule | undefined;
+  await jest.isolateModulesAsync(async () => {
+    loaded = await import('../config/env');
+  });
+  if (!loaded) throw new Error('config/env did not load');
+  return loaded;
+}
+
+function generatedSecret(): string {
+  return randomBytes(32).toString('base64');
+}
+
+afterEach(() => {
+  for (const [name, value] of savedVariables) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  savedVariables.clear();
+});
+
+describe('boot configuration', () => {
+  it('boot fails fast when MARKETPLACE_CREDENTIALS_KEY is empty', async () => {
+    const example = dotenv.parse(readFileSync(envExamplePath));
+    setProcessEnv({
+      NODE_ENV: 'development',
+      ALLOW_INSECURE_DEV_JWT: 'false',
+      JWT_SECRET: example.JWT_SECRET ?? '',
+      MARKETPLACE_CREDENTIALS_KEY: example.MARKETPLACE_CREDENTIALS_KEY ?? '',
+    });
+    const { env, assertStartupConfiguration } = await loadEnvModule();
+
+    const boot = () => assertStartupConfiguration(env);
+
+    expect(boot).toThrow(/MARKETPLACE_CREDENTIALS_KEY.*npm run env:init/);
+    expect(boot).toThrow(/JWT_SECRET.*npm run env:init/);
+  });
+
+  it('boot proceeds once every secret is a generated 32-byte base64 value', async () => {
+    setProcessEnv({
+      NODE_ENV: 'development',
+      ALLOW_INSECURE_DEV_JWT: 'false',
+      JWT_SECRET: generatedSecret(),
+      MARKETPLACE_CREDENTIALS_KEY: generatedSecret(),
+    });
+    const { env, assertStartupConfiguration } = await loadEnvModule();
+
+    expect(() => assertStartupConfiguration(env)).not.toThrow();
+  });
+
+  it('boot with ALLOW_INSECURE_DEV_JWT=true still fails on the missing credentials key only', async () => {
+    const example = dotenv.parse(readFileSync(envExamplePath));
+    setProcessEnv({
+      NODE_ENV: 'development',
+      ALLOW_INSECURE_DEV_JWT: 'true',
+      JWT_SECRET: example.JWT_SECRET ?? '',
+      MARKETPLACE_CREDENTIALS_KEY: example.MARKETPLACE_CREDENTIALS_KEY ?? '',
+    });
+    const { env, assertStartupConfiguration } = await loadEnvModule();
+    let message = '';
+
+    try {
+      assertStartupConfiguration(env);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    expect(message).toContain('MARKETPLACE_CREDENTIALS_KEY');
+    expect(message).not.toContain('JWT_SECRET');
+  });
+});

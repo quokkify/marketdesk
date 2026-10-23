@@ -14,7 +14,7 @@ function renderCompose(overrides) {
     ['compose', '--project-directory', projectDir, '-f', composeFile, 'config', '--format', 'json'],
     {
       encoding: 'utf8',
-      env: { ...process.env, ...overrides },
+      env: { ...process.env, MARKETPLACE_CREDENTIALS_KEY: undefined, ...overrides },
     },
   );
   if (result.status !== 0) {
@@ -34,6 +34,7 @@ try {
       'DB_PASSWORD=internal-probe-password',
       'JWT_SECRET=compose-probe-jwt-secret',
       'HERMES_API_KEY=compose-probe-hermes-key',
+      'MARKETPLACE_CREDENTIALS_KEY=compose-probe-credentials-key',
     ].join('\n'),
     { mode: 0o600 },
   );
@@ -70,6 +71,28 @@ try {
   assert.equal(internal.services.app.depends_on.postgres, undefined);
   assert.equal(internal.services.postgres.ports[0].host_ip, '127.0.0.1');
   assert.equal(internal.services.redis.ports[0].host_ip, '127.0.0.1');
+
+  // The app refuses to boot without the credentials key, so Compose must stop first
+  // and tell the operator how to generate one.
+  const withoutKeyEnv = join(projectDir, 'without-credentials-key.env');
+  writeFileSync(
+    withoutKeyEnv,
+    readFileSync(join(projectDir, '.env'), 'utf8')
+      .split('\n')
+      .filter((line) => !line.startsWith('MARKETPLACE_CREDENTIALS_KEY='))
+      .join('\n'),
+    { mode: 0o600 },
+  );
+  const missingKey = spawnSync(
+    'docker',
+    [
+      'compose', '--project-directory', projectDir, '--env-file', withoutKeyEnv,
+      '-f', composeFile, 'config', '--format', 'json',
+    ],
+    { encoding: 'utf8', env: { ...process.env, MARKETPLACE_CREDENTIALS_KEY: undefined } },
+  );
+  assert.notEqual(missingKey.status, 0, 'compose must refuse to render without MARKETPLACE_CREDENTIALS_KEY');
+  assert.match(missingKey.stderr, /MARKETPLACE_CREDENTIALS_KEY must be set \(run npm run env:init\)/);
 
   const external = renderCompose({
     DATABASE_URL: externalUrl,

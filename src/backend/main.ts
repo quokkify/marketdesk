@@ -2,15 +2,18 @@ import express from 'express';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import pino from 'pino';
-import { env, isDevelopment, isTest } from './config/env.js';
-import { createPool, closePool } from './config/database.js';
-import { createRedisClient, closeRedis } from './config/redis.js';
-import { buildApp, createCorsOptions, HELMET_OPTIONS } from './presentation/http/app.js';
+import {
+  assertStartupConfiguration,
+  env,
+  isDevelopment,
+  isProduction,
+  isTest,
+} from './config/env.js';
+import { createPool } from './config/database.js';
+import { createRedisClient } from './config/redis.js';
+import { buildApp } from './presentation/http/app.js';
 import { HermesLiveUpdates } from './presentation/websocket/HermesLiveUpdates.js';
 import { buildContainer, type AppContainer } from './config/di/index.js';
 import { safeErrorDetails } from './config/safeErrorDetails.js';
@@ -53,6 +56,15 @@ function resolveContainer(): AppContainer {
 
 const startServer = async () => {
   try {
+    // Refuse to boot on missing or placeholder secrets before touching any resource, so a
+    // fresh `.env` fails with one actionable message instead of a half-working process.
+    assertStartupConfiguration(env);
+    if (!isProduction && process.env.ALLOW_INSECURE_DEV_JWT === 'true') {
+      logger.warn(
+        'ALLOW_INSECURE_DEV_JWT=true: JWT secret checks are relaxed. Use it for local development only.',
+      );
+    }
+
     const uploadsDir = await verifyUploadStorageWritable(env.upload.uploadDir);
     logger.info({ uploadsDir }, 'Upload storage writable');
 
@@ -65,37 +77,22 @@ const startServer = async () => {
     await pool.query('SELECT NOW()');
     logger.info('Database connection verified');
 
-    let app: express.Express;
-    let container: AppContainer | undefined;
-    try {
-      container = resolveContainer();
-      app = buildApp(container.deps, {
-        enableRateLimit: !isTest,
-        corsOrigin: env.cors.origin,
-        applicationVersion: env.applicationVersion,
-      });
-      logger.info('API layer mounted via buildApp(deps)');
-    } catch (wiringError) {
-      // In production a wiring failure is fatal — surface it and exit rather than
-      // serving a crippled health-only process. In dev/test we degrade so the
-      // process stays inspectable.
-      if (env.nodeEnv === 'production') {
-        logger.error(
-          { error: safeErrorDetails(wiringError, startupSensitiveValues) },
-          'Failed to wire application (fatal)',
-        );
-        throw wiringError;
-      }
-      logger.warn(
-        { error: safeErrorDetails(wiringError, startupSensitiveValues) },
-        'API layer failed to wire; starting health-only server',
-      );
-      app = express();
-      app.use(helmet(HELMET_OPTIONS));
-      app.use(compression());
-      app.use(cors(createCorsOptions(env.cors.origin)));
-      app.use(express.json({ limit: '10mb' }));
-    }
+    // A wiring failure is fatal in every environment: the catch below logs it and exits 1,
+    // so the process never answers /health while every /api route is missing.
+    const container = resolveContainer();
+    const app = buildApp(container.deps, {
+      enableRateLimit: !isTest,
+      corsOrigin: env.cors.origin,
+      applicationVersion: env.applicationVersion,
+    });
+    logger.info('API layer mounted via buildApp(deps)');
+    logger.info(
+      {
+        olxAdapterMode: env.marketplaces.olx.adapterMode,
+        hermesProviderMode: process.env.HERMES_PROVIDER_MODE ?? 'auto',
+      },
+      'Runtime modes',
+    );
 
     // Trust one reverse proxy only when explicitly enabled. In the tunnel setup
     // Docker publishes this service on loopback, preventing direct XFF spoofing.
@@ -181,11 +178,8 @@ const startServer = async () => {
 
     // Mount the Hermes live-updates WebSocket server, feeding it the container's
     // IEventSubscriber (the event broker's in-process fan-out) so published domain
-    // events reach subscribed clients. Without a container (degraded mode) it still
-    // accepts clients and can be fed via broadcast().
-    const hermesLive = new HermesLiveUpdates(
-      container ? { subscriber: container.subscriber } : {},
-    );
+    // events reach subscribed clients.
+    const hermesLive = new HermesLiveUpdates({ subscriber: container.subscriber });
     hermesLive.attach(server);
     logger.info('Hermes live WebSocket attached at /api/hermes/live');
 
@@ -206,15 +200,8 @@ const startServer = async () => {
       shuttingDown = true;
       logger.info(`${signal} received, starting graceful shutdown`);
       await hermesLive.close();
-      if (container) {
-        // Closes the Bull queues, Redis client and pg pool.
-        await container.shutdown();
-      } else {
-        // Degraded mode: no container owns the shared singletons, so close them
-        // here as part of the ordered shutdown.
-        await closeRedis();
-        await closePool();
-      }
+      // Closes the Bull queues, Redis client and pg pool.
+      await container.shutdown();
       server.close(() => {
         logger.info('HTTP server closed');
         process.exit(0);

@@ -39,6 +39,7 @@ try {
       'DB_PASSWORD=compose-probe-password',
       'JWT_SECRET=compose-probe-jwt-secret',
       'HERMES_API_KEY=compose-probe-hermes-key',
+      'MARKETPLACE_CREDENTIALS_KEY=compose-probe-credentials-key',
     ].join('\n'),
     { mode: 0o600 },
   );

@@ -10,10 +10,10 @@ Prerequisites: Node.js 22+, npm 10+, and Docker Compose v2 for the bundled servi
 git clone https://github.com/quokkify/marketdesk.git
 cd marketdesk
 npm ci
-cp .env.example .env
+npm run env:init
 ```
 
-For Compose development, set the required values in `.env` before starting: `DB_SSL_MODE=disable`, a strong `JWT_SECRET`, and `HERMES_API_KEY` matching the key configured by the native Hermes API server. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
+`npm run env:init` copies `.env.example` to `.env` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`; values that are already set are kept, so it is safe to run again. The app refuses to start while `JWT_SECRET` or `MARKETPLACE_CREDENTIALS_KEY` is missing or a placeholder. For Compose development, also set `HERMES_API_KEY` to the key configured by the native Hermes API server (`DB_SSL_MODE=disable` is already the example value). For `npm run dev` without Docker, `ALLOW_INSECURE_DEV_JWT=true` in `.env` tolerates a placeholder `JWT_SECRET`; it is ignored in production. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
 
 ```bash
 docker compose up -d
@@ -73,7 +73,7 @@ The Hermes host must be reachable from Docker but must not be exposed publicly. 
 - The Compose file mounts PostgreSQL 18 data at `/var/lib/postgresql`. Before reusing a pre-18 `postgres_data` volume, make a verified dump and restore into a fresh PG18 volume; otherwise the new mount may initialize an empty cluster.
 - Release deployment is an in-place maintenance-window operation. Create and verify a fresh PostgreSQL, Redis, and uploads backup before migrations; a failed migration may leave the app unavailable until recovery.
 - Compose's `upload-storage-init` one-shot service preserves files and assigns the fixed upload tree to UID/GID 1001:1001. Never bypass it with world-writable permissions. See [upload storage initialization and recovery](deployment/upload-storage.md).
-- Keep required `DB_SSL_MODE`, `JWT_SECRET`, and `HERMES_API_KEY` values explicit. `DB_SSL_MODE=disable` is for internal Compose connections; use the documented verified TLS mode for external PostgreSQL.
+- Keep required `DB_SSL_MODE`, `JWT_SECRET`, `MARKETPLACE_CREDENTIALS_KEY`, and `HERMES_API_KEY` values explicit. `DB_SSL_MODE=disable` is for internal Compose connections; use the documented verified TLS mode for external PostgreSQL.
 
 ## Deployment references
 

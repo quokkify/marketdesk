@@ -10,8 +10,8 @@ starter names (`StarterConfig`, `starter.properties`, `TEST_MESSAGE`), which thi
 - Live HTTP tests live in the `test.api` package and run only in `./gradlew apiTest`; `./gradlew test` excludes that
   package (see [docs/agents/test-execution.md](docs/agents/test-execution.md) for why not TestNG groups).
 - `apiTest` needs the Compose stack. [`../scripts/ci-java-api-tests.sh`](../scripts/ci-java-api-tests.sh) starts it
-  the way CI does. The stack needs a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`; without it the server answers only
-  `/health` and `/ready`, and every `/api/*` call returns 404.
+  the way CI does. The stack needs a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`; without it Compose refuses to
+  start the app (the script exports a throwaway key).
 - Tests run in parallel through the q4j `SuiteListener` (see [docs/agents/test-execution.md](docs/agents/test-execution.md));
   keep steps and services free of per-test state, and mark a test that needs exclusive use of the stack with
   `@SingleThread`.
