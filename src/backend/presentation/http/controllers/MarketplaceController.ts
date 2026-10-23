@@ -4,6 +4,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
+import type { Marketplace } from '../../../domain/entities/Marketplace';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { MarketplaceOAuthService } from '../../../application/services/MarketplaceOAuthService';
 import type { MarketplaceSyncScheduler } from '../../../application/services/MarketplaceSyncScheduler';
@@ -29,8 +30,13 @@ export class MarketplaceController {
     private readonly imports: MarketplaceImportService,
     private readonly olxQuotas: OlxPublicationQuotaService | undefined,
     private readonly oauthReturnUrl: string,
+    private readonly olxAdapterMode: string,
     private readonly logger?: ErrorLogger,
   ) {}
+
+  private present(marketplace: Marketplace) {
+    return presentMarketplace(marketplace, { olxSandbox: this.olxAdapterMode !== 'real' });
+  }
 
   listQuotas = async (req: Request, res: Response): Promise<void> => {
     if (!this.olxQuotas) throw new InvalidStateError('OLX publication quota service is unavailable');
@@ -56,7 +62,7 @@ export class MarketplaceController {
     const marketplaces = await this.marketplaceRepo.findByWorkspace(
       req.user!.workspaceId!,
     );
-    ok(res, marketplaces.map(presentMarketplace));
+    ok(res, marketplaces.map((marketplace) => this.present(marketplace)));
   };
 
   get = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -68,7 +74,7 @@ export class MarketplaceController {
     if (!marketplace) {
       return next(new NotFoundError(`Marketplace not found: ${marketplaceId}`));
     }
-    ok(res, presentMarketplace(marketplace));
+    ok(res, this.present(marketplace));
   };
 
   sync = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -232,6 +238,6 @@ export class MarketplaceController {
       return next(error);
     }
     await this.marketplaceRepo.save(marketplace);
-    ok(res, presentMarketplace(marketplace));
+    ok(res, this.present(marketplace));
   };
 }

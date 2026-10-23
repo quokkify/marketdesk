@@ -70,6 +70,8 @@ export interface AppDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   marketplaceOAuthReturnUrl: string;
+  // OLX adapter mode; anything but 'real' is sandbox. Omitted means 'stub', like the env default.
+  olxAdapterMode?: string;
   workspaceRepo: IWorkspaceRepository;
   settingsRepo: ISettingsRepository;
   authUserStore: IAuthUserStore;
@@ -211,6 +213,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.marketplaceImportService,
       deps.olxPublicationQuotaService,
       deps.marketplaceOAuthReturnUrl,
+      deps.olxAdapterMode ?? 'stub',
       deps.logger
     ),
     hermes: new HermesController(deps.hermesService, deps.categoryCorrectionOperationService),

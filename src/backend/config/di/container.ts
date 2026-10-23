@@ -323,6 +323,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     refreshLock: new RedisMarketplaceOAuthRefreshLock(redis, overrides.logger),
     idGenerator,
     stateGenerator: () => randomBytes(32).toString('base64url'),
+    sandbox: {
+      enabled: env.marketplaces.olx.adapterMode !== 'real',
+      successUrl: env.marketplaces.olx.oauthSuccessUrl,
+    },
   });
   const olxPublicationQuotaService = new OlxPublicationQuotaService(
     marketplaceRepo,
@@ -711,6 +715,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     olxPublicationQuotaService,
     categoryCorrectionOperationService,
     marketplaceOAuthReturnUrl: env.marketplaces.olx.oauthSuccessUrl,
+    olxAdapterMode: env.marketplaces.olx.adapterMode,
     workspaceRepo,
     settingsRepo,
     authUserStore,

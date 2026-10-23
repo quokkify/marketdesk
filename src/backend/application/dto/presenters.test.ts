@@ -1,6 +1,8 @@
-import { presentListing } from './presenters';
+import { presentListing, presentMarketplace } from './presenters';
 import { Listing } from '../../domain/entities/Listing';
+import { Marketplace } from '../../domain/entities/Marketplace';
 import { unwrap, money } from '../../domain/testkit/support';
+import type { MarketplaceKey } from '../../../shared/types';
 
 function listingWithExternalUrl(url: string | null, status: 'live' | 'draft' = 'live') {
   return unwrap(
@@ -59,5 +61,28 @@ describe('presentListing', () => {
     expect(unavailable.metricsAvailability?.conversations).toBe(false);
     expect(unavailable.messages).toBeNull();
     expect(unavailable.metricsAvailability?.messages).toBe(false);
+  });
+});
+
+describe('presentMarketplace', () => {
+  function marketplace(key: MarketplaceKey) {
+    return unwrap(
+      Marketplace.create({
+        id: `marketplace-${key}`,
+        workspaceId: 'ws-1',
+        key,
+        name: key,
+        connected: true,
+      }),
+    );
+  }
+
+  it('flags OLX as sandbox only while the OLX adapter is not real', () => {
+    expect(presentMarketplace(marketplace('olx'), { olxSandbox: true }).sandbox).toBe(true);
+    expect(presentMarketplace(marketplace('olx'), { olxSandbox: false }).sandbox).toBe(false);
+  });
+
+  it('never flags other marketplaces as sandbox', () => {
+    expect(presentMarketplace(marketplace('allegro'), { olxSandbox: true }).sandbox).toBe(false);
   });
 });

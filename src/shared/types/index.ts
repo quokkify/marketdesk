@@ -350,6 +350,8 @@ export interface Marketplace {
   key: MarketplaceKey;
   name: string;
   connected: boolean;
+  // True for OLX while the backend runs the OLX adapter in stub (sandbox) mode.
+  sandbox: boolean;
   syncMode: SyncMode;
   lastSyncAt?: string;
   errorCount: number;

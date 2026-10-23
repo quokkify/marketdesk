@@ -136,13 +136,18 @@ export function presentHermesEvent(event: HermesEvent): HermesEventView {
   };
 }
 
-export function presentMarketplace(marketplace: Marketplace): MarketplaceView {
+// olxSandbox is true while the OLX adapter is not real; only OLX is flagged as sandbox.
+export function presentMarketplace(
+  marketplace: Marketplace,
+  options: { olxSandbox: boolean },
+): MarketplaceView {
   return {
     id: marketplace.id,
     workspaceId: marketplace.workspaceId,
     key: marketplace.key,
     name: marketplace.name,
     connected: marketplace.isConnected(),
+    sandbox: marketplace.key === 'olx' && options.olxSandbox,
     syncMode: marketplace.syncMode,
     lastSyncAt: iso(marketplace.lastSyncAt),
     errorCount: marketplace.errorCount,
