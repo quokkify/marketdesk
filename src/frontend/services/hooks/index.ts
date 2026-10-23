@@ -9,6 +9,8 @@ import {
   useGetProductQuery,
   useRecheckProductMutation,
   useProposeProductImprovementsMutation,
+  useGetProductImprovementReviewQuery,
+  useDecideProductImprovementMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,
@@ -79,6 +81,8 @@ export function useProducts(params: ProductListParams = {}, options?: ProductsOp
 export const useProduct = useGetProductQuery;
 export const useRecheckProduct = useRecheckProductMutation;
 export const useProposeProductImprovements = useProposeProductImprovementsMutation;
+export const useProductImprovementReview = useGetProductImprovementReviewQuery;
+export const useDecideProductImprovement = useDecideProductImprovementMutation;
 export const useProductListings = useGetProductListingsQuery;
 export const useCreateProduct = useCreateProductMutation;
 export const useGenerateProductAIDraft = useGenerateProductAIDraftMutation;

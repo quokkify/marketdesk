@@ -97,6 +97,7 @@ export class ProductAssistanceGraph {
         if (listing && !marketplace) {
           throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
         }
+        const currency = product.sellingPrice.currency;
         const seo = listingSeoOutputSchema.parse(await this.ai.analyzeListingSeo({
           product: {
             id: product.id, name: product.name, description: product.description,
@@ -113,7 +114,7 @@ export class ProductAssistanceGraph {
         })) : undefined;
         return { result: {
           graphVersion: PRODUCT_ASSISTANCE_GRAPH_VERSION,
-          productId, productUpdatedAt: product.updatedAt.toISOString(),
+          productId, currency, productUpdatedAt: product.updatedAt.toISOString(),
           ...(listing ? { listingUpdatedAt: listing.updatedAt.toISOString() } : {}),
           reviewOnly: true as const, copy: seo.recommendations,
           ...(price ? { price } : {}),

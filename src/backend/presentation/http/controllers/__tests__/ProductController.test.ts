@@ -51,3 +51,51 @@ describe('ProductController recheck', () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+import express from 'express';
+import request from 'supertest';
+import { createProductRoutes } from '../../routes/products';
+import { createErrorHandler } from '../../middleware/ErrorHandlingMiddleware';
+import { ConflictError, NotFoundError } from '../../../../domain/shared/DomainError';
+
+describe('saved improvement review HTTP adapters', () => {
+  const proposalId = 'd0dcd3bd-dfcb-41c1-b3a1-6bac8b52e7ab';
+  function app(reviews?: { read?: jest.Mock; decide?: jest.Mock }) {
+    const controller = new ProductController({} as never,{} as never,{} as never,{} as never,{} as never,{} as never,()=>'id',undefined,undefined,reviews as never);
+    const server = express();
+    server.use(express.json());
+    server.use((req, _res, next) => { req.user = { workspaceId:'trusted-workspace', userId:'trusted-user' } as never; next(); });
+    server.use('/api/products',createProductRoutes(controller));
+    server.use(createErrorHandler());
+    return server;
+  }
+  it('reads using authenticated scope and carries explicit decision and actor', async () => {
+    const read = jest.fn(async () => null);
+    const decide = jest.fn(async () => ({revision:2}));
+    const server = app({read,decide});
+    await request(server).get('/api/products/product/improvements?listingId=listing').expect(200);
+    expect(read).toHaveBeenCalledWith({ workspaceId:'trusted-workspace', productId:'product',listingId:'listing' });
+    await request(server).post('/api/products/product/improvements/session/decisions?listingId=listing').send({revision:1,proposalId,action:'accept',editedValue:'Seller edit'}).expect(200);
+    expect(decide).toHaveBeenCalledWith({workspaceId:'trusted-workspace',productId:'product',listingId:'listing'},'session',{revision:1,proposalId,action:'accept',editedValue:'Seller edit'},'trusted-user');
+  });
+  it.each([
+    {revision:0,proposalId,action:'accept'},
+    {revision:1,proposalId,action:'publish'},
+    {revision:1,proposalId,action:'reject',editedValue:'edit'},
+    {revision:1,proposalId,action:'accept',workspaceId:'attacker'},
+    {revision:1,proposalId,action:'accept',editedValue:-1},
+  ])('rejects invalid or tenant-overriding decision bodies (%j)',async (body) => {
+    const decide = jest.fn();
+    await request(app({decide})).post('/api/products/product/improvements/session/decisions').send(body).expect(400);
+    expect(decide).not.toHaveBeenCalled();
+  });
+  it('preserves conflict and not-found error responses',async()=> {
+    const decide = jest.fn(async()=> { throw new ConflictError('Stale review'); });
+    const read = jest.fn(async()=> { throw new NotFoundError('Review not found'); });
+    await request(app({decide,read})).post('/api/products/product/improvements/session/decisions').send({revision:1,proposalId,action:'accept'}).expect(409);
+    await request(app({decide,read})).get('/api/products/product/improvements').expect(404);
+  });
+  it('keeps legacy construction valid and reports absent persistence as unavailable',async()=> {
+    await request(app()).get('/api/products/product/improvements').expect(503);
+  });
+});

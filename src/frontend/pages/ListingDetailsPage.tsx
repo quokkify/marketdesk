@@ -21,7 +21,6 @@ import type {
   Marketplace,
   ProductCategoryProvenance,
   ProductRecheckResult,
-  ProductImprovementSuggestions,
 } from '@shared/types';
 import type {
   HermesRunInput,
@@ -31,7 +30,6 @@ import type {
 import {
   useProduct,
   useRecheckProduct,
-  useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
   useUpdateListing,
@@ -55,6 +53,7 @@ import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyCont
 import type { PublicationJourneyState } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyEvent } from '../workflows/publicationJourneyGraph.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
+import { ProductAssistantReview } from '../components/product-detail/ProductAssistantReview.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
@@ -435,7 +434,6 @@ const ListingDetailsPage: React.FC = () => {
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
-  const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
@@ -448,7 +446,6 @@ const ListingDetailsPage: React.FC = () => {
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
-  const [improvements, setImprovements] = useState<ProductImprovementSuggestions | null>(null);
   const [priceListing, setPriceListing] = useState<Listing | null>(null);
   const [publishCandidate, setPublishCandidate] = useState<{
     listing: Listing;
@@ -471,9 +468,8 @@ const ListingDetailsPage: React.FC = () => {
   const publicationReviewOpen = useRef(false);
   const submissionInFlight = useRef(false);
   const recheckRequestIdentity = useRef(0);
-  const improvementRequestIdentity = useRef(0);
 
-  const listingItems = listings.data ?? [];
+  const listingItems = listings.currentData ?? [];
   const listingMarketplaceIds = new Set(listingItems.map((listing) => listing.marketplaceId));
   const availableMarketplace =
     !listings.isLoading && !listings.isError
@@ -592,20 +588,6 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
-  const handleProposeImprovements = async () => {
-    const requestIdentity = ++improvementRequestIdentity.current;
-    setImprovements(null);
-    try {
-      const result = await proposeImprovements({
-        productId, listingId: primaryListing?.id,
-      }).unwrap();
-      if (requestIdentity === improvementRequestIdentity.current) setImprovements(result);
-    } catch (err) {
-      if (requestIdentity !== improvementRequestIdentity.current) return;
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
   const handleAnalyzeWithHermes = async () => {
     const disabledReason = productHermesDisabledReason({
       settingsLoaded: Boolean(hermesSettings.currentData),
@@ -637,9 +619,7 @@ const ListingDetailsPage: React.FC = () => {
 
   useEffect(() => {
     recheckRequestIdentity.current += 1;
-    improvementRequestIdentity.current += 1;
     setRecheckResult(null);
-    setImprovements(null);
     setAnalysisState({ status: 'idle' });
   }, [productId, principalCacheKey]);
 
@@ -862,11 +842,11 @@ const ListingDetailsPage: React.FC = () => {
     );
   }
 
-  if (product.isLoading || !product.data) {
+  if (product.isLoading || !product.currentData) {
     return <LoadingSkeleton lines={8} />;
   }
 
-  const p = product.data;
+  const p = product.currentData;
   const images = p.images ?? [];
 
   return (
@@ -920,46 +900,12 @@ const ListingDetailsPage: React.FC = () => {
         )}
       </Card>
 
-      <Card
-        title="Product assistant"
-        subtitle="Hermes suggests text and price changes for your review"
-        sx={{ mb: 2 }}
-        action={
-          <Button variant="outlined" disabled={proposingImprovements}
-            onClick={() => void handleProposeImprovements()}>
-            {proposingImprovements ? 'Preparing suggestions…' : 'Suggest improvements'}
-          </Button>
-        }
-      >
-        {improvements && (improvements.productId !== p.id || improvements.productUpdatedAt !== p.updatedAt ||
-          (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt)) ? (
-          <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
-        ) : improvements ? (
-          <Stack spacing={1.5}>
-            {improvements.copy.map((suggestion, index) => (
-              <Box key={`${suggestion.field}-${index}`}>
-                <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
-                <Typography variant="body2">{suggestion.proposedValue}</Typography>
-                <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
-              </Box>
-            ))}
-            {improvements.price && (
-              <Box>
-                <Typography variant="subtitle2">Suggested price: {improvements.price.suggestedPrice} {currency}</Typography>
-                <Typography variant="body2">{improvements.price.reasoning}</Typography>
-              </Box>
-            )}
-            {improvements.copy.length === 0 && !improvements.price && (
-              <Typography variant="body2">No suggestions for this product.</Typography>
-            )}
-            <Alert severity="info">Suggestions are for review only. Edit the product or listing to apply them.</Alert>
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Ask Hermes for wording and price ideas. Nothing is changed automatically.
-          </Typography>
-        )}
-      </Card>
+      <ProductAssistantReview
+        key={`${principalCacheKey}:${productId}:${primaryListing?.id ?? ''}`}
+        product={p} listing={primaryListing} currency={currency}
+        principalKey={principalCacheKey} ready={Boolean(listings.currentData && marketplaces) && p.workspaceId === workspace.id && !listings.isFetching && !listings.isError}
+        refresh={async () => { await Promise.all([product.refetch(), listings.refetch()]); }}
+      />
 
       <Box sx={productDetailGridSx} data-testid="product-detail-layout">
         <Stack spacing={{ xs: 2, lg: 3 }} sx={{ minWidth: 0 }}>

@@ -7,6 +7,7 @@ import type { ProductApplicationService } from '../../../application/services/Pr
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
+import type { ProductImprovementReviewService } from '../../../application/services/ProductImprovementReviewService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -83,6 +84,7 @@ export class ProductController {
     private readonly idGenerator: () => string,
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
+    private readonly improvementReviews?: ProductImprovementReviewService,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -171,12 +173,35 @@ export class ProductController {
   proposeImprovements = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!this.assistance) throw new ServiceUnavailableError('Product assistance is unavailable');
-      const result = await this.assistance.proposeImprovements({
+      const scope = {
         productId: routeParam(req.params.id),
         workspaceId: req.user!.workspaceId!,
         listingId: req.body.listingId,
-      });
+      };
+      const result = this.improvementReviews
+        ? await this.improvementReviews.propose(scope, req.user!.userId)
+        : await this.assistance.proposeImprovements(scope);
       ok(res, result);
+    } catch (error) { next(error); }
+  };
+
+  getImprovementReview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.improvementReviews) throw new ServiceUnavailableError('Saved improvement reviews are unavailable');
+      ok(res, await this.improvementReviews.read({
+        workspaceId: req.user!.workspaceId!, productId: routeParam(req.params.id),
+        listingId: typeof req.query.listingId === 'string' ? req.query.listingId : undefined,
+      }));
+    } catch (error) { next(error); }
+  };
+
+  decideImprovement = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.improvementReviews) throw new ServiceUnavailableError('Saved improvement reviews are unavailable');
+      ok(res, await this.improvementReviews.decide({
+        workspaceId: req.user!.workspaceId!, productId: routeParam(req.params.id),
+        listingId: typeof req.query.listingId === 'string' ? req.query.listingId : undefined,
+      }, routeParam(req.params.sessionId), req.body, req.user!.userId));
     } catch (error) { next(error); }
   };
 
