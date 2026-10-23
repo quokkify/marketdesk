@@ -10,7 +10,9 @@ allure_pages_url: https://quokkify.github.io/marketdesk
 allure_publish_pages: true
 allure_report: true
 codeql: true
-codeql_languages: []
+codeql_languages:
+  - actions
+  - javascript-typescript
 components:
   - id: marketdesk-node
     name: MarketDesk
@@ -19,7 +21,7 @@ components:
 docker: true
 gitleaks: true
 project_name: MarketDesk
-release_mode: single
+release_mode: manifest
 release_please: true
 renovate: true
 renovate_config_repository: quokkify/renovate-presets
@@ -34,10 +36,10 @@ allure_source: auto
 module: legacy
 handed_off:
   - validate
-codeql_aggregate: false
+codeql_aggregate: true
 gitleaks_job_name: gitleaks
 gitleaks_scan: history
-gitleaks_aggregate: false
+gitleaks_aggregate: true
 allure_group_by:
   - epic
   - feature

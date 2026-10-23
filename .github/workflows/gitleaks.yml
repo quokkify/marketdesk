@@ -64,12 +64,12 @@ jobs:
 
   complete:
     name: Gitleaks
-    if: ${{ always() }}
+    if: always()
     needs: scan
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require the secret scan to pass
         env:
-          RESULT: ${{ needs.scan.result }}
-        run: '[[ "$RESULT" == "success" || "$RESULT" == "cancelled" ]]'
+          SCAN_RESULT: ${{ needs.scan.result }}
+        run: test "$SCAN_RESULT" = success
