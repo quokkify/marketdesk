@@ -17,6 +17,10 @@ export function formatCurrency(
 
 const MONEY_SUFFIX: Record<string, string> = { PLN: 'zł' };
 
+export function currencySymbol(currency: string = DEFAULT_CURRENCY): string {
+  return MONEY_SUFFIX[currency] ?? currency;
+}
+
 // Catalogue money style from the companion: "1 050 zł", "1 050,50 zł".
 export function formatMoney(
   amount: number | null | undefined,
@@ -29,7 +33,7 @@ export function formatMoney(
     .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const fraction = cents % 100 === 0 ? '' : `,${String(cents % 100).padStart(2, '0')}`;
   const sign = amount < 0 && cents > 0 ? '-' : '';
-  return `${sign}${whole}${fraction} ${MONEY_SUFFIX[currency] ?? currency}`;
+  return `${sign}${whole}${fraction} ${currencySymbol(currency)}`;
 }
 
 export function formatNumber(value: number | null | undefined, locale = 'en-US'): string {

@@ -69,6 +69,7 @@ import type {
 import {
   ProductWizardForm,
   hasMeaningfulProductWizardDraft,
+  productFieldErrorsFromApi,
   productWizardDraftStorageKey,
   readProductWizardDraft,
   removeProductWizardDraft,
@@ -76,6 +77,7 @@ import {
   writeProductWizardDraft,
 } from '../components/forms/index.js';
 import type {
+  ApiFieldErrors,
   ProductSubmissionValues,
   ProductWizardDraftState,
 } from '../components/forms/index.js';
@@ -442,23 +444,31 @@ const ProductsPage: React.FC = () => {
   const editProduct = (product: Product) =>
     navigate(`/products/${product.id}`, { state: { editProduct: true } });
 
-  const handleCreate = async (values: ProductSubmissionValues) => {
+  const handleCreate = async (values: ProductSubmissionValues): Promise<ApiFieldErrors | void> => {
     if (!workspaceId) {
       dispatch(enqueueToast({ message: 'No active workspace selected.', severity: 'error' }));
       return;
     }
     try {
       const { targetMarketplace, ...productValues } = values;
-      const selectedMarketplace = verifiedMarketplaces?.find(
-        (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
-      );
-      if (!selectedMarketplace) throw new Error('Select a connected marketplace before creating the product.');
+      // No target means no connected marketplace: the product is created as a draft.
+      const selectedMarketplace = targetMarketplace
+        ? verifiedMarketplaces?.find(
+            (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
+          )
+        : undefined;
+      if (targetMarketplace && !selectedMarketplace) {
+        throw new Error('The selected marketplace is no longer connected. Choose it again.');
+      }
       const product = await createProduct({ ...productValues, workspaceId }).unwrap();
-      const { advancePublicationJourney } = await import('../workflows/publicationJourneyGraph.js');
-      const journey = await advancePublicationJourney(
-        { phase: 'review' },
-        { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
-      );
+      const journey = selectedMarketplace
+        ? await import('../workflows/publicationJourneyGraph.js').then(({ advancePublicationJourney }) =>
+            advancePublicationJourney(
+              { phase: 'review' },
+              { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
+            ),
+          )
+        : null;
       if (draftKey && !clearStoredDraft()) {
         dispatch(
           enqueueToast({
@@ -469,12 +479,24 @@ const ProductsPage: React.FC = () => {
       }
       setDraftDirty(false);
       setInitialDraft(null);
-      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
       allowWizardNavigationRef.current = true;
+      if (!journey) {
+        dispatch(
+          enqueueToast({
+            message: 'Product created as a draft. Connect OLX to publish it.',
+            severity: 'success',
+          })
+        );
+        navigate(`/products/${product.id}`);
+        return;
+      }
+      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
       navigate(`/products/${product.id}`, {
         state: { publicationJourney: { ...journey, version: PUBLICATION_JOURNEY_VERSION } },
       });
     } catch (err) {
+      const rejected = productFieldErrorsFromApi(err);
+      if (Object.keys(rejected.fieldErrors).length > 0) return rejected;
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -836,6 +858,7 @@ const ProductsPage: React.FC = () => {
             marketplaces={verifiedMarketplaces}
             marketplacesLoading={readinessLoading}
             marketplacesError={readinessError}
+            currency={currency}
             onSubmit={handleCreate}
             onGenerateAIDraft={(request) => generateProductAIDraft(request).unwrap()}
             onUploadImage={(file) => uploadProductImage(file).unwrap()}

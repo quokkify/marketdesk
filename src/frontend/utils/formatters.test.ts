@@ -1,4 +1,4 @@
-import { formatMoney, formatRelative } from './formatters';
+import { currencySymbol, formatMoney, formatRelative } from './formatters';
 
 describe('formatMoney', () => {
   it('groups thousands with spaces and drops decimals for whole PLN amounts', () => {
@@ -59,5 +59,13 @@ describe('formatRelative', () => {
   it('renders a dash for missing or invalid timestamps', () => {
     expect(formatRelative(null, now)).toBe('—');
     expect(formatRelative('not a date', now)).toBe('—');
+  });
+});
+
+describe('currencySymbol', () => {
+  it('uses zł for PLN and the ISO code otherwise', () => {
+    expect(currencySymbol('PLN')).toBe('zł');
+    expect(currencySymbol('EUR')).toBe('EUR');
+    expect(currencySymbol()).toBe('zł');
   });
 });
