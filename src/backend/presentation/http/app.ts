@@ -14,6 +14,7 @@ import type { ProductApplicationService } from '../../application/services/Produ
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
+import type { HermesStatusView } from '../../../shared/types';
 import type { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
@@ -59,6 +60,8 @@ export interface AppDeps {
   productAssistanceGraph?: ProductAssistanceGraph;
   listingService: ListingApplicationService;
   hermesService: HermesApplicationService;
+  // Which AI provider serves calls right now (GET /api/hermes/status).
+  hermesStatus?: () => Promise<HermesStatusView>;
   analyticsService: AnalyticsApplicationService;
   productRepo: IProductRepository;
   listingRepo: IListingRepository;
@@ -213,7 +216,11 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.marketplaceOAuthReturnUrl,
       deps.logger
     ),
-    hermes: new HermesController(deps.hermesService, deps.categoryCorrectionOperationService),
+    hermes: new HermesController(
+      deps.hermesService,
+      deps.categoryCorrectionOperationService,
+      deps.hermesStatus
+    ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),
     settings: new SettingsController(

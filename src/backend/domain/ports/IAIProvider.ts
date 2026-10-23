@@ -16,6 +16,8 @@ export interface PriceSuggestionContext {
   recentViews: number;
   conversionRate: number;
   competitorPrice?: number;
+  // Product cost in the listing currency, when known.
+  costPrice?: number;
 }
 
 export interface PriceSuggestion {

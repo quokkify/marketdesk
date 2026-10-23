@@ -80,8 +80,11 @@ import { RedisMarketplaceOAuthRefreshLock } from '../../infrastructure/cache/Red
 import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCredentialVault';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
-import { HermesAI } from '../../infrastructure/external/HermesAI';
+import { HermesAI, loadHermesConfig } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
+import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
+import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
+import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { createEmailProvider } from '../../infrastructure/external/EmailProvider';
 import { createTelegramBot } from '../../infrastructure/external/TelegramBot';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
@@ -244,8 +247,15 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
 
   // 3. Cross-cutting ports.
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
-  const aiProvider: IAIProvider =
-    overrides.aiProvider ?? new HermesAI(new HermesCompletionClient());
+  // GET /api/hermes/status always reports this env-configured selector, even when a
+  // test swaps the provider that services call through overrides.aiProvider.
+  const aiProviderSelector = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient()),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: env.hermes.providerMode,
+    probe: new HermesHealthProbe(loadHermesConfig()),
+  });
+  const aiProvider: IAIProvider = overrides.aiProvider ?? aiProviderSelector;
   const buildOlxHeaders = (accessToken?: string): Record<string, string> => ({
     Accept: 'application/json',
     Version: '2.0',
@@ -692,6 +702,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productAssistanceGraph,
     listingService,
     hermesService,
+    hermesStatus: () => aiProviderSelector.status(),
     analyticsService,
     productRepo,
     listingRepo,

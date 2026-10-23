@@ -399,6 +399,7 @@ export class HermesDecisionEngine {
         listing: primary,
         recentViews,
         conversionRate: 0,
+        costPrice: product.costPrice?.amount,
       });
 
       const currentPrice = product.sellingPrice.amount;

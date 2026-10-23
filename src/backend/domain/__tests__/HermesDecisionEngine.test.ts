@@ -168,6 +168,22 @@ describe('HermesDecisionEngine.run', () => {
     expect(relist?.status).toBe('pending_review');
     expect(relist?.autonomyDecision).toBe('pending_review');
   });
+
+  it('gives the AI provider the product cost when it asks for a price suggestion', async () => {
+    const ai = new StubAIProvider();
+    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
+    const { engine, productRepo, listingRepo } = makeEngine({ ai });
+    seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
+    const listing = unwrap(
+      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(80) }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS' }));
+
+    await engine.run(workspace);
+
+    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 50 }));
+  });
 });
 
 describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {

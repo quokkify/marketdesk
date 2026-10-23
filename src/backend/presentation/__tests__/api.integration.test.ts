@@ -44,6 +44,11 @@ import {
 } from '../../domain/testkit/support';
 import { InMemoryWorkspaceRepository } from '../../application/testkit/support';
 import { InMemorySettingsRepository } from '../../infrastructure/persistence/repositories/InMemorySettingsRepository';
+import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
+import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
+import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
+import { HermesAI } from '../../infrastructure/external/HermesAI';
+import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 
 const iso = new Date().toISOString();
 
@@ -418,6 +423,24 @@ function stubCategoryCorrectionOperationService(): CategoryCorrectionOperationSe
   } as unknown as CategoryCorrectionOperationService;
 }
 
+// The production provider graph, configured the way CI runs it: no Hermes API key.
+function unconfiguredHermesStatus(): NonNullable<AppDeps['hermesStatus']> {
+  const config = {
+    apiUrl: 'http://127.0.0.1:8642/v1',
+    apiKey: '',
+    model: 'hermes-agent',
+    maxTokens: 256,
+    timeoutMs: 1_000,
+  };
+  const selector = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient(config), config),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: 'auto',
+    probe: new HermesHealthProbe(config),
+  });
+  return () => selector.status();
+}
+
 async function buildTestApp(
   options: {
     olxPublicationQuotaService?: OlxPublicationQuotaService;
@@ -428,6 +451,7 @@ async function buildTestApp(
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
+    hermesStatus?: AppDeps['hermesStatus'];
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -449,6 +473,7 @@ async function buildTestApp(
     productRecheckService: options.productRecheckService,
     listingService: stubListingService(),
     hermesService: options.hermesService ?? stubHermesService(),
+    hermesStatus: options.hermesStatus,
     analyticsService: stubAnalyticsService(),
     productRepo: productRepo as IProductRepository,
     listingRepo: listingRepo as IListingRepository,
@@ -1218,6 +1243,44 @@ describe('Presentation API', () => {
   });
 
   describe('hermes', () => {
+    it('GET /api/hermes/status returns activeProvider offline in tests', async () => {
+      const { app } = await buildTestApp({ hermesStatus: unconfiguredHermesStatus() });
+
+      const res = await auth(request(app).get('/api/hermes/status'));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        data: {
+          mode: 'auto',
+          activeProvider: 'offline',
+          hermesConfigured: false,
+          hermesReachable: null,
+          checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+        },
+      });
+    });
+
+    it('returns 401 for the Hermes status without a token', async () => {
+      const { app } = await buildTestApp({ hermesStatus: unconfiguredHermesStatus() });
+
+      const res = await request(app).get('/api/hermes/status');
+
+      expect(res.status).toBe(401);
+    });
+
+    it('returns a 404 envelope when no Hermes status source is wired', async () => {
+      const { app } = await buildTestApp();
+
+      const res = await auth(request(app).get('/api/hermes/status'));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Hermes status is unavailable',
+      });
+    });
+
     it('serializes every canonical lifecycle status without label translation', async () => {
       const { app } = await buildTestApp();
       const res = await auth(request(app).get('/api/hermes/events'));

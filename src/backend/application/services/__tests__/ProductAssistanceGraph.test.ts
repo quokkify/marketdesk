@@ -16,6 +16,7 @@ function setup() {
   const product = {
     id: 'p1', name: 'Camera', description: 'Camera with lens and accessories.',
     category: 'Cameras', condition: 'good', tags: [], imageCount: 1,
+    costPrice: { amount: 60, currency: 'PLN' },
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
   };
   const listing = {
@@ -65,6 +66,12 @@ describe('ProductAssistanceGraph', () => {
     expect(s.suggestPrice).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ graphVersion: 'product-assistance@1', productId: 'p1', reviewOnly: true,
       copy: [{ field: 'description' }], price: { suggestedPrice: 95 } });
+  });
+
+  it('gives the price suggestion the product cost', async () => {
+    const s = setup();
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 60 }));
   });
 
   it('rejects a listing that does not belong to the scoped product before calling Hermes', async () => {
