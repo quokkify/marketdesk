@@ -2,7 +2,10 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ISettingsRepository } from '../../../application/ports/ISettingsRepository';
 import type { IWorkspaceRepository } from '../../../domain/repositories/interfaces/IWorkspaceRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
-import type { MarketplaceOAuthService } from '../../../application/services/MarketplaceOAuthService';
+import type {
+  MarketplaceOAuthService,
+  MarketplaceOAuthStatus,
+} from '../../../application/services/MarketplaceOAuthService';
 import { Workspace } from '../../../domain/entities/Workspace';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import type {
@@ -12,6 +15,9 @@ import type {
   WorkspaceLanguage,
 } from '../../../../shared/types';
 import { ok } from '../formatters/ResponseFormatter';
+
+// The OLX sandbox flag is optional on the OAuth status until every provider payload carries it.
+type MarketplaceOAuthStatusWithSandbox = MarketplaceOAuthStatus & { sandbox?: boolean };
 
 export class SettingsController {
   constructor(
@@ -150,21 +156,23 @@ export class SettingsController {
     const marketplaces = await this.marketplaces.findByWorkspace(workspaceId);
     const marketplaceItems: IntegrationSettingsStatus[] = await Promise.all(
       marketplaces.map(async (marketplace) => {
-        let configured = false;
-        if (marketplace.key === 'olx' && typeof this.oauth.getAppCredentialStatus === 'function') {
-          const status = await this.oauth.getAppCredentialStatus({
-            marketplaceId: marketplace.id,
-            workspaceId,
-          });
-          configured = status.configured;
-        }
+        const connected = marketplace.isConnected();
+        const status: MarketplaceOAuthStatusWithSandbox | null =
+          marketplace.key === 'olx'
+            ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
+            : null;
         return {
           category: 'marketplace' as const,
           id: marketplace.id,
           providerKey: marketplace.key,
           name: marketplace.name,
           available: marketplace.key === 'olx',
-          configured,
+          configured: connected,
+          connected,
+          account: status?.account
+            ? { handle: status.account.handle, status: status.account.status }
+            : null,
+          ...(status?.sandbox === undefined ? {} : { sandbox: status.sandbox }),
         };
       })
     );
@@ -182,7 +190,7 @@ export class SettingsController {
         category: 'api_keys',
         id: 'api_keys',
         name: 'API keys',
-        available: true,
+        available: false,
         configured: apiKeySummary.active > 0,
         apiKeySummary,
       },

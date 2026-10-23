@@ -1,17 +1,26 @@
-// App theme provider: selects light/dark theme from uiSlice and applies
-// MUI's ThemeProvider + CssBaseline. Must be rendered inside the Redux Provider.
-import React from 'react';
+// App theme provider: selects light/dark theme from uiSlice and the compact/comfortable
+// density from the signed-in user's preferences, then applies MUI's ThemeProvider +
+// CssBaseline. Must be rendered inside the Redux Provider.
+import React, { useMemo } from 'react';
+import { skipToken } from '@reduxjs/toolkit/query';
 import { ThemeProvider as MuiThemeProvider, CssBaseline, useMediaQuery } from '@mui/material';
 import { useAppSelector } from '../state/hooks.js';
 import { resolveThemeMode } from '../state/slices/uiSlice.js';
-import { lightTheme } from './lightTheme.js';
-import { darkTheme } from './darkTheme.js';
+import { useGetUserPreferencesQuery } from '../state/api/settingsApi.js';
+import { buildTheme, type ThemeDensity } from './themeOptions.js';
 
 export const AppThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const mode = useAppSelector((state) => state.ui.themeMode);
+  const workspaceId = useAppSelector((state) => state.workspace.id);
+  const userId = useAppSelector((state) => state.auth.user?.id);
+  const preferences = useGetUserPreferencesQuery(
+    workspaceId && userId ? { workspaceId, userId } : skipToken
+  );
   const prefersDark = useMediaQuery('(prefers-color-scheme: dark)', { noSsr: true });
   const resolvedMode = resolveThemeMode(mode, prefersDark);
-  const theme = resolvedMode === 'dark' ? darkTheme : lightTheme;
+  const density: ThemeDensity =
+    preferences.currentData?.density === 'compact' ? 'compact' : 'comfortable';
+  const theme = useMemo(() => buildTheme(resolvedMode, density), [resolvedMode, density]);
 
   return (
     <MuiThemeProvider theme={theme}>

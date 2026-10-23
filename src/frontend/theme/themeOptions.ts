@@ -3,7 +3,7 @@
 // lightTheme.ts / darkTheme.ts wrap this so palettes stay in sync.
 
 import { createTheme } from '@mui/material/styles';
-import type { Theme, PaletteOptions } from '@mui/material/styles';
+import type { Theme, ThemeOptions, PaletteOptions } from '@mui/material/styles';
 import type { PaletteMode } from '@mui/material';
 
 const BRAND = {
@@ -52,9 +52,19 @@ function buildPalette(mode: PaletteMode): PaletteOptions {
   };
 }
 
-export function buildTheme(mode: PaletteMode): Theme {
+export type ThemeDensity = 'comfortable' | 'compact';
+
+const COMPACT_DENSITY: ThemeOptions = {
+  components: {
+    MuiButton: { defaultProps: { size: 'small' } },
+    MuiTextField: { defaultProps: { size: 'small' } },
+    MuiTableCell: { defaultProps: { size: 'small' } },
+  },
+};
+
+export function buildTheme(mode: PaletteMode, density: ThemeDensity = 'comfortable'): Theme {
   const isLight = mode === 'light';
-  return createTheme({
+  const options: ThemeOptions = {
     palette: buildPalette(mode),
     shape: { borderRadius: 10 },
     typography: {
@@ -118,5 +128,6 @@ export function buildTheme(mode: PaletteMode): Theme {
       MuiChip: { styleOverrides: { root: { borderRadius: 8, fontWeight: 600 } } },
       MuiListItemButton: { styleOverrides: { root: { borderRadius: 8 } } },
     },
-  });
+  };
+  return createTheme(options, density === 'compact' ? COMPACT_DENSITY : {});
 }

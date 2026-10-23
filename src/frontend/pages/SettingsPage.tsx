@@ -2,7 +2,8 @@
 // preferences, Hermes autonomy, notifications, integrations, appearance, and security.
 import React, { useEffect, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 import {
   Box,
   Alert,
@@ -32,8 +33,12 @@ import InfoIcon from '@mui/icons-material/InfoOutlined';
 import type {
   AutonomyLevel,
   HermesCreativityPreset,
+  IntegrationSettingsStatus,
+  MarketplaceAccountStatus,
+  MarketplaceKey,
   NotificationChannels,
   NotificationEventKey,
+  SettingsDensity,
   WorkspaceLanguage,
   WorkspaceSettingsPatch,
 } from '@shared/types';
@@ -59,7 +64,9 @@ import {
   useUpdateWorkspaceSettingsMutation,
 } from '../state/api/settingsApi.js';
 import { AUTONOMY_LABELS, AUTONOMY_DESCRIPTIONS } from '../utils/labels.js';
+import { APP_ROUTE_PATHS, TOPBAR_HEIGHT } from '../utils/constants.js';
 import { Card } from '../components/common/Card.js';
+import { ConnectionBadge } from '../components/common/Badge.js';
 
 const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CZK', 'UAH'];
 
@@ -77,61 +84,61 @@ export type SettingsSection =
 export const settingsSections: Array<{
   id: SettingsSection;
   label: string;
-  caption: string;
+  description: string;
   icon: React.ReactNode;
 }> = [
   {
     id: 'general',
     label: 'General',
-    caption: 'Workspace basics',
+    description: 'Workspace name, currency, timezone and language.',
     icon: <TuneIcon fontSize="small" />,
   },
   {
     id: 'hermes',
     label: 'Hermes AI',
-    caption: 'Autonomy and automation',
+    description: 'Control how autonomous Hermes is.',
     icon: <AutoAwesomeIcon fontSize="small" />,
   },
   {
     id: 'notifications',
     label: 'Notifications',
-    caption: 'Channels by event',
+    description: 'Delivery channels for each event.',
     icon: <NotificationsIcon fontSize="small" />,
   },
   {
     id: 'marketplaces',
     label: 'Marketplace Accounts',
-    caption: 'Seller account health',
+    description: 'Linked seller accounts and their connection status.',
     icon: <StorefrontIcon fontSize="small" />,
   },
   {
     id: 'apiKeys',
     label: 'API Keys',
-    caption: 'Programmatic access',
+    description: 'Programmatic access is planned.',
     icon: <KeyIcon fontSize="small" />,
   },
   {
     id: 'appearance',
     label: 'Appearance',
-    caption: 'Theme and density',
+    description: 'Personalize how MarketDesk looks.',
     icon: <PaletteIcon fontSize="small" />,
   },
   {
     id: 'telegram',
     label: 'Telegram',
-    caption: 'Bot notifications',
+    description: 'Telegram alerts are planned.',
     icon: <TelegramIcon fontSize="small" />,
   },
   {
     id: 'security',
     label: 'Security',
-    caption: 'Account protection',
+    description: 'Password, two-factor authentication and sessions.',
     icon: <SecurityIcon fontSize="small" />,
   },
   {
     id: 'about',
     label: 'About',
-    caption: 'Application information',
+    description: 'Application information.',
     icon: <InfoIcon fontSize="small" />,
   },
 ];
@@ -141,7 +148,39 @@ export function settingsSectionFromHash(hash: string): SettingsSection {
   return settingsSections.some(({ id }) => id === requested) ? requested : 'general';
 }
 
-export const settingsSectionPath = (section: SettingsSection) => `/settings#${section}`;
+// `?section=` is the canonical deep link; the legacy `#section` hash keeps older links working.
+export function settingsSectionFromLocation(location: {
+  search: string;
+  hash: string;
+}): SettingsSection {
+  const requested = new URLSearchParams(location.search).get('section');
+  const fromQuery = settingsSections.find(({ id }) => id === requested);
+  return fromQuery ? fromQuery.id : settingsSectionFromHash(location.hash);
+}
+
+export const settingsSectionPath = (section: SettingsSection) =>
+  `${APP_ROUTE_PATHS.settings}?section=${section}`;
+
+const NOT_AVAILABLE_LABEL = 'Not available in this release';
+
+const HERMES_REVIEW_ONLY_NOTE =
+  'Autonomy applies to scheduled catalogue runs, which are disabled in this build; all analyses stay review-only';
+
+const API_KEYS_ROADMAP_NOTE =
+  'API key management is on the roadmap and is not available in this release.';
+const TELEGRAM_ROADMAP_NOTE =
+  'Telegram notifications are on the roadmap and are not available in this release.';
+
+export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
+
+export const densityOptions: Array<{ value: SettingsDensity; label: string }> = [
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'compact', label: 'Compact' },
+];
 
 const notificationRows: Array<[NotificationEventKey, string]> = [
   ['new_sale', 'New sale'],
@@ -282,6 +321,179 @@ export function ApplicationInfoBlock({
   );
 }
 
+type MarketplaceIntegration = Extract<IntegrationSettingsStatus, { category: 'marketplace' }>;
+
+const isMarketplaceIntegration = (
+  item: IntegrationSettingsStatus
+): item is MarketplaceIntegration => item.category === 'marketplace';
+
+const MARKETPLACE_BRANDS: Record<MarketplaceKey, { code: string; color: string }> = {
+  olx: { code: 'OL', color: '#12B6AB' },
+  allegro: { code: 'AL', color: '#FF5A00' },
+  vinted: { code: 'VI', color: '#09B1BA' },
+  facebook: { code: 'FB', color: '#1877F2' },
+  ebay: { code: 'EB', color: '#E53238' },
+  etsy: { code: 'ET', color: '#F56400' },
+  amazon: { code: 'AM', color: '#FF9900' },
+};
+
+export function marketplaceAccountStatus(item: MarketplaceIntegration): MarketplaceAccountStatus {
+  if (item.account?.status === 'error') return 'error';
+  return item.connected ? 'connected' : 'disconnected';
+}
+
+export function MarketplaceAccountsList({ items }: { items: MarketplaceIntegration[] }) {
+  if (items.length === 0) {
+    return (
+      <Alert
+        severity="info"
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            component={RouterLink}
+            to={APP_ROUTE_PATHS.marketplaces}
+          >
+            Open Marketplaces
+          </Button>
+        }
+      >
+        No marketplace accounts are linked yet.
+      </Alert>
+    );
+  }
+  return (
+    <Stack divider={<Divider flexItem />}>
+      {items.map((item) => {
+        const brand = MARKETPLACE_BRANDS[item.providerKey];
+        return (
+          <Stack
+            key={item.id}
+            direction="row"
+            spacing={1.5}
+            sx={{ py: 1.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+          >
+            <Box
+              role="img"
+              aria-label={`${item.name} marketplace logo`}
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 1,
+                display: 'grid',
+                placeItems: 'center',
+                flexShrink: 0,
+                fontSize: 13,
+                fontWeight: 800,
+                color: brand.color,
+                bgcolor: alpha(brand.color, 0.14),
+              }}
+            >
+              {brand.code}
+            </Box>
+            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+              <Typography sx={{ fontWeight: 700 }} noWrap>
+                {item.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                {item.available
+                  ? (item.account?.handle ?? 'No account linked')
+                  : NOT_AVAILABLE_LABEL}
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+              {item.sandbox === true && (
+                <Chip size="small" color="warning" variant="outlined" label="Sandbox" />
+              )}
+              {item.available ? (
+                <ConnectionBadge status={marketplaceAccountStatus(item)} />
+              ) : (
+                <Chip size="small" variant="outlined" label="Roadmap" />
+              )}
+              {item.available && (
+                <Button
+                  component={RouterLink}
+                  to={APP_ROUTE_PATHS.marketplaces}
+                  size="small"
+                  variant="outlined"
+                  aria-label={`Manage ${item.name}`}
+                >
+                  Manage
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        );
+      })}
+    </Stack>
+  );
+}
+
+const SECURITY_ROWS: Array<{
+  id: string;
+  title: string;
+  action: string;
+  actionLabel: string;
+  destructive?: boolean;
+}> = [
+  { id: 'password', title: 'Password', action: 'Change', actionLabel: 'Change password' },
+  {
+    id: 'two-factor',
+    title: 'Two-factor authentication',
+    action: 'Set up',
+    actionLabel: 'Set up two-factor authentication',
+  },
+  {
+    id: 'sessions',
+    title: 'Active sessions',
+    action: 'Sign out all',
+    actionLabel: 'Sign out all sessions',
+    destructive: true,
+  },
+];
+
+export function SecurityPanel() {
+  return (
+    <Stack divider={<Divider flexItem />}>
+      {SECURITY_ROWS.map((row) => (
+        <Stack
+          key={row.id}
+          direction="row"
+          spacing={2}
+          sx={{ py: 2, alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700 }}>{row.title}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {NOT_AVAILABLE_LABEL}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            variant="outlined"
+            color={row.destructive ? 'error' : 'inherit'}
+            aria-label={row.actionLabel}
+            disabled
+          >
+            {row.action}
+          </Button>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+export function RoadmapPanel({ detail }: { detail: string }) {
+  return (
+    <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+      <Chip size="small" variant="outlined" label="Roadmap" />
+      <Typography variant="body2" color="text.secondary">
+        {detail}
+      </Typography>
+    </Stack>
+  );
+}
+
 const SettingsPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const location = useLocation();
@@ -302,11 +514,11 @@ const SettingsPage: React.FC = () => {
   const preferences = useGetUserPreferencesQuery(queryArg);
   const notifications = useGetNotificationPreferencesQuery(queryArg);
   const hermesSettings = useGetHermesSettingsQuery(queryArg);
-  const integrations = useGetIntegrationSettingsQuery(queryArg);
+  const integrations = useGetIntegrationSettingsQuery(queryArg, {
+    refetchOnMountOrArgChange: true,
+  });
 
-  const [activeSection, setActiveSection] = useState<SettingsSection>(() =>
-    settingsSectionFromHash(location.hash)
-  );
+  const activeSection = settingsSectionFromLocation(location);
   const [name, setName] = useState(workspace.name);
   const [currency, setCurrency] = useState(workspace.currency);
   const [timezone, setTimezone] = useState(workspace.timezone);
@@ -320,10 +532,6 @@ const SettingsPage: React.FC = () => {
   const [updatePreferences, { isLoading: savingPreferences }] = useUpdateUserPreferencesMutation();
   const [updateNotifications, { isLoading: savingNotifications }] =
     useUpdateNotificationPreferencesMutation();
-
-  useEffect(() => {
-    setActiveSection(settingsSectionFromHash(location.hash));
-  }, [location.hash]);
 
   const draft = { name, currency, timezone, language };
   const baselineSnapshot = baseline ? workspaceDraftSnapshot(baseline) : null;
@@ -358,11 +566,6 @@ const SettingsPage: React.FC = () => {
     baselineSnapshot,
     dirty,
   ]);
-
-  useEffect(() => {
-    if (preferences.currentData?.themeMode)
-      dispatch(setThemeMode(preferences.currentData.themeMode));
-  }, [preferences.currentData?.themeMode, principalCacheKey, dispatch]);
 
   const clearFieldError = (field: GeneralField) =>
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
@@ -469,7 +672,7 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleDensity = async (density: 'comfortable' | 'compact') => {
+  const handleDensity = async (density: SettingsDensity) => {
     if (!principal) return;
     try {
       await updatePreferences({ principal, patch: { density } }).unwrap();
@@ -479,57 +682,7 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const renderIntegrationStatuses = (category?: 'marketplace' | 'telegram' | 'api_keys') => {
-    const items = (integrations.currentData?.items ?? []).filter(
-      (item) => !category || item.category === category
-    );
-    return (
-      <SettingsQueryState
-        isLoading={integrations.isFetching && !integrations.currentData}
-        isError={integrations.isError}
-        retry={integrations.refetch}
-      >
-        <Stack spacing={1.5}>
-          <Typography variant="body2" color="text.secondary">
-            Read-only configuration status. Secret values and live connection claims are never
-            returned here.
-          </Typography>
-          {items.length === 0 && (
-            <Alert severity="info">No integrations are available in this category.</Alert>
-          )}
-          {items.map((integration) => (
-            <Stack
-              key={integration.id}
-              direction="row"
-              sx={{ justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 700 }}>{integration.name}</Typography>
-                {integration.category === 'api_keys' && (
-                  <Typography variant="caption" color="text.secondary">
-                    {integration.apiKeySummary.active} active, {integration.apiKeySummary.revoked}{' '}
-                    revoked
-                  </Typography>
-                )}
-              </Box>
-              <Chip
-                size="small"
-                label={
-                  !integration.available
-                    ? 'Unavailable'
-                    : integration.configured
-                      ? 'Configured'
-                      : 'Not configured'
-                }
-                color={integration.configured ? 'success' : 'default'}
-                variant="outlined"
-              />
-            </Stack>
-          ))}
-        </Stack>
-      </SettingsQueryState>
-    );
-  };
+  const marketplaceItems = (integrations.currentData?.items ?? []).filter(isMarketplaceIntegration);
 
   const renderSection = () => {
     switch (activeSection) {
@@ -640,6 +793,9 @@ const SettingsPage: React.FC = () => {
             retry={hermesSettings.refetch}
           >
             <Stack spacing={1.5}>
+              <Typography variant="caption" color="text.secondary">
+                {HERMES_REVIEW_ONLY_NOTE}
+              </Typography>
               {AUTONOMY_LEVEL_LIST.map((level) => {
                 const selected = hermesSettings.currentData?.autonomyLevel === level;
                 return (
@@ -774,42 +930,59 @@ const SettingsPage: React.FC = () => {
             isError={preferences.isError}
             retry={preferences.refetch}
           >
-            <Stack spacing={2}>
-              <Select
-                value={preferences.currentData?.themeMode ?? themeMode}
-                disabled={!preferences.currentData || savingPreferences}
-                onChange={(event) => handleTheme(event.target.value as ThemeMode)}
-                aria-label="Theme preference"
-              >
-                <MenuItem value="system">Use system preference</MenuItem>
-                <MenuItem value="light">Light</MenuItem>
-                <MenuItem value="dark">Dark</MenuItem>
-              </Select>
-              <Select
-                value={preferences.currentData?.density ?? 'comfortable'}
-                disabled={!preferences.currentData || savingPreferences}
-                onChange={(event) => handleDensity(event.target.value as 'comfortable' | 'compact')}
-                aria-label="Interface density"
-              >
-                <MenuItem value="comfortable">Comfortable</MenuItem>
-                <MenuItem value="compact">Compact</MenuItem>
-              </Select>
+            <Stack spacing={2.5}>
+              <Stack spacing={0.75}>
+                <Typography variant="subtitle2">Theme</Typography>
+                <Select
+                  value={preferences.currentData?.themeMode ?? themeMode}
+                  disabled={!preferences.currentData || savingPreferences}
+                  onChange={(event) => handleTheme(event.target.value as ThemeMode)}
+                  aria-label="Theme preference"
+                >
+                  {themeModeOptions.map(({ value, label }) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Stack>
+              <Stack spacing={0.75}>
+                <Typography variant="subtitle2">Density</Typography>
+                <Select
+                  value={preferences.currentData?.density ?? 'comfortable'}
+                  disabled={!preferences.currentData || savingPreferences}
+                  onChange={(event) => handleDensity(event.target.value as SettingsDensity)}
+                  aria-label="Interface density"
+                >
+                  {densityOptions.map(({ value, label }) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <Typography variant="caption" color="text.secondary">
+                  Compact uses smaller buttons, fields and table rows across the app.
+                </Typography>
+              </Stack>
             </Stack>
           </SettingsQueryState>
         );
       case 'marketplaces':
-        return renderIntegrationStatuses('marketplace');
-      case 'apiKeys':
-        return renderIntegrationStatuses('api_keys');
-      case 'telegram':
-        return renderIntegrationStatuses('telegram');
-      case 'security':
         return (
-          <Placeholder
-            title="Security controls"
-            detail="Password, two-factor authentication, and active sessions belong here."
-          />
+          <SettingsQueryState
+            isLoading={integrations.isFetching && !integrations.currentData}
+            isError={integrations.isError}
+            retry={integrations.refetch}
+          >
+            <MarketplaceAccountsList items={marketplaceItems} />
+          </SettingsQueryState>
         );
+      case 'apiKeys':
+        return <RoadmapPanel detail={API_KEYS_ROADMAP_NOTE} />;
+      case 'telegram':
+        return <RoadmapPanel detail={TELEGRAM_ROADMAP_NOTE} />;
+      case 'security':
+        return <SecurityPanel />;
       case 'about':
         return (
           <ApplicationInfoBlock
@@ -830,25 +1003,23 @@ const SettingsPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '300px minmax(0, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', md: '240px minmax(0, 1fr)' },
           gap: 2.5,
           alignItems: 'start',
         }}
       >
-        <Card title="Settings sections" subtitle="Choose what to configure" contentSx={{ p: 1.25 }}>
-          <SettingsSectionNavigation
-            activeSection={activeSection}
-            onSectionChange={(section) => {
-              setActiveSection(section);
-              navigate(settingsSectionPath(section));
-            }}
-          />
-        </Card>
+        <Box sx={{ position: { md: 'sticky' }, top: { md: TOPBAR_HEIGHT + 16 } }}>
+          <Card contentSx={{ p: 1.25 }}>
+            <SettingsSectionNavigation
+              activeSection={activeSection}
+              onSectionChange={(section) => navigate(settingsSectionPath(section))}
+            />
+          </Card>
+        </Box>
 
         <Card
           title={activeMeta.label}
-          subtitle={activeMeta.caption}
-          sx={{ borderRadius: 4 }}
+          subtitle={activeMeta.description}
           contentSx={{ p: { xs: 2, md: 3 } }}
         >
           {renderSection()}
@@ -866,7 +1037,7 @@ export function SettingsSectionNavigation({
   onSectionChange: (section: SettingsSection) => void;
 }) {
   return (
-    <Stack spacing={0.75}>
+    <Stack component="nav" aria-label="Settings sections" spacing={0.5}>
       {settingsSections.map((section) => {
         const active = activeSection === section.id;
         return (
@@ -875,49 +1046,27 @@ export function SettingsSectionNavigation({
             onClick={() => onSectionChange(section.id)}
             startIcon={section.icon}
             fullWidth
-            variant={active ? 'contained' : 'text'}
-            color={active ? 'primary' : 'inherit'}
+            color="inherit"
             aria-current={active ? 'page' : undefined}
-            sx={{ justifyContent: 'flex-start', textTransform: 'none', borderRadius: 2, py: 1.1 }}
+            sx={(theme) => ({
+              justifyContent: 'flex-start',
+              borderRadius: 1,
+              px: 1.5,
+              py: 1,
+              fontWeight: active ? 700 : 600,
+              color: active ? theme.palette.primary.main : theme.palette.text.secondary,
+              bgcolor: active ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
+              '&:hover': {
+                bgcolor: active
+                  ? alpha(theme.palette.primary.main, 0.16)
+                  : theme.palette.action.hover,
+              },
+            })}
           >
-            <Box sx={{ textAlign: 'left', minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>
-                {section.label}
-              </Typography>
-              <Typography variant="caption" sx={{ opacity: active ? 0.9 : 0.68 }} noWrap>
-                {section.caption}
-              </Typography>
-            </Box>
+            {section.label}
           </Button>
         );
       })}
-    </Stack>
-  );
-}
-
-function Placeholder({ title, detail }: { title: string; detail: string }) {
-  return (
-    <Stack spacing={2}>
-      <Box
-        sx={{
-          p: 2,
-          borderRadius: 3,
-          bgcolor: 'action.hover',
-          border: (t) => `1px dashed ${t.palette.divider}`,
-        }}
-      >
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-          {title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {detail}
-        </Typography>
-      </Box>
-      <Divider />
-      <Typography variant="body2" color="text.secondary">
-        This section is visible in the settings navigation so the UI no longer looks empty while the
-        backend contract is completed.
-      </Typography>
     </Stack>
   );
 }

@@ -1588,7 +1588,7 @@ describe('Presentation API', () => {
       expect(legacy.body.data).toMatchObject({ name: 'Legacy rename', currency: 'EUR' });
     });
 
-    it('returns redacted integration configuration without connection or credential fields', async () => {
+    it('returns marketplace connection state and unavailable surfaces without credential fields', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
       const response = await auth(request(app).get('/api/settings/integrations'));
       expect(response.status).toBe(200);
@@ -1601,6 +1601,8 @@ describe('Presentation API', () => {
             name: 'OLX',
             available: true,
             configured: true,
+            connected: true,
+            account: { handle: 'OLX account', status: 'connected' },
           },
           {
             category: 'telegram',
@@ -1613,7 +1615,7 @@ describe('Presentation API', () => {
             category: 'api_keys',
             id: 'api_keys',
             name: 'API keys',
-            available: true,
+            available: false,
             configured: false,
             apiKeySummary: { total: 0, active: 0, revoked: 0 },
           },
@@ -1623,7 +1625,7 @@ describe('Presentation API', () => {
         response.body.data.items.map((item: { category: string }) => item.category).sort()
       ).toEqual(['api_keys', 'marketplace', 'telegram']);
       expect(JSON.stringify(response.body)).not.toMatch(
-        /token|secret|hash|credentials|connected|access[_-]?key|private[_-]?key/i
+        /token|secret|hash|credentials|scopes|access[_-]?key|private[_-]?key/i
       );
     });
   });
