@@ -26,7 +26,12 @@ import type { ProductRecheckService } from '../../application/services/ProductRe
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import type { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
-import type { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
+import {
+  MarketplaceOAuthService,
+  type MarketplaceAccountRecord,
+  type OlxOAuthAppCredentials,
+  type OlxOAuthTokens,
+} from '../../application/services/MarketplaceOAuthService';
 import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import type { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
@@ -219,6 +224,64 @@ function stubMarketplaceOAuthService(): MarketplaceOAuthService {
     },
     async disconnect() {},
   } as unknown as MarketplaceOAuthService;
+}
+
+// Real OAuth service in sandbox mode over in-memory collaborators. The OAuth client
+// factory throws so any attempt to reach OLX fails the test.
+function sandboxMarketplaceOAuthService(
+  marketplaceRepo: InMemoryMarketplaceRepository
+): MarketplaceOAuthService {
+  const accounts = new Map<string, MarketplaceAccountRecord>();
+  return new MarketplaceOAuthService({
+    marketplaceRepo,
+    accountRepo: {
+      async findByMarketplaceId(marketplaceId) {
+        return accounts.get(marketplaceId) ?? null;
+      },
+      async upsert(account) {
+        const current = accounts.get(account.marketplaceId);
+        const saved: MarketplaceAccountRecord = {
+          ...account,
+          revision: (current?.revision ?? 0) + 1,
+          createdAt: current?.createdAt ?? new Date(),
+          updatedAt: new Date(),
+        };
+        accounts.set(account.marketplaceId, saved);
+        return saved;
+      },
+      async updateConnectedIfUnchanged() {
+        return null;
+      },
+    },
+    appCredentialRepo: {
+      async findByMarketplaceId() {
+        return null;
+      },
+      async upsert() {
+        throw new Error('OLX application credentials are not used in sandbox mode');
+      },
+      async deleteByMarketplaceId() {},
+    },
+    stateStore: {
+      async save() {},
+      async consume() {
+        return null;
+      },
+    },
+    oauthClientFactory: () => {
+      throw new Error('OLX OAuth client must not be built in sandbox mode');
+    },
+    credentialVault: {
+      encrypt: (tokens: OlxOAuthTokens) => ({ payload: tokens }),
+      decrypt: (envelope: Record<string, unknown>) => envelope.payload as OlxOAuthTokens,
+      encryptAppCredentials: (credentials: OlxOAuthAppCredentials) => ({ appPayload: credentials }),
+      decryptAppCredentials: (envelope: Record<string, unknown>) =>
+        envelope.appPayload as OlxOAuthAppCredentials,
+    },
+    idGenerator: () => 'account-sandbox',
+    stateGenerator: () => 'unused-oauth-state',
+    sandbox: { enabled: true, successUrl: 'http://localhost:5173/marketplaces' },
+  });
 }
 
 function stubMarketplaceImportService(): MarketplaceImportService {
@@ -428,6 +491,10 @@ async function buildTestApp(
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
+    marketplaceOAuthService?: (
+      marketplaceRepo: InMemoryMarketplaceRepository
+    ) => MarketplaceOAuthService;
+    olxAdapterMode?: string;
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -453,7 +520,8 @@ async function buildTestApp(
     productRepo: productRepo as IProductRepository,
     listingRepo: listingRepo as IListingRepository,
     marketplaceRepo: marketplaceRepo as IMarketplaceRepository,
-    marketplaceOAuthService: stubMarketplaceOAuthService(),
+    marketplaceOAuthService:
+      options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
     marketplaceImportService: stubMarketplaceImportService(),
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
@@ -463,6 +531,7 @@ async function buildTestApp(
       options.categoryCorrectionOperationService ?? stubCategoryCorrectionOperationService(),
     olxTaxonomyResolver: options.olxTaxonomyResolver,
     marketplaceOAuthReturnUrl: 'http://localhost:5173/marketplaces',
+    olxAdapterMode: options.olxAdapterMode,
     workspaceRepo: workspaceRepo as IWorkspaceRepository,
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore,
@@ -904,6 +973,56 @@ describe('Presentation API', () => {
       expect(res.body.data.connected).toBe(true);
       expect(JSON.stringify(res.body)).not.toContain('access-token');
       expect(JSON.stringify(res.body)).not.toContain('refresh-token');
+    });
+
+    it('POST /api/marketplaces/:id/connect in stub mode marks OLX connected and GET /api/marketplaces reports sandbox:true', async () => {
+      const { app, marketplaceRepo } = await buildTestApp({
+        marketplaceOAuthService: sandboxMarketplaceOAuthService,
+      });
+      (await marketplaceRepo.findByKey('ws-1', 'olx'))?.disconnect();
+
+      const connect = await auth(
+        request(app).post('/api/marketplaces/marketplace-olx/connect')
+      ).send({});
+
+      expect(connect.status).toBe(200);
+      expect(connect.body.data).toMatchObject({
+        authorizationUrl:
+          'http://localhost:5173/marketplaces?oauth=success&marketplaceId=marketplace-olx&sandbox=1',
+        state: 'sandbox',
+        sandbox: true,
+      });
+      const list = await auth(request(app).get('/api/marketplaces'));
+      expect(list.status).toBe(200);
+      expect(list.body.data).toEqual([
+        expect.objectContaining({
+          id: 'marketplace-olx',
+          key: 'olx',
+          connected: true,
+          sandbox: true,
+        }),
+      ]);
+      const detail = await auth(request(app).get('/api/marketplaces/marketplace-olx'));
+      expect(detail.status).toBe(200);
+      expect(detail.body.data).toMatchObject({ connected: true, sandbox: true });
+      const check = await auth(request(app).get('/api/marketplaces/marketplace-olx/check'));
+      expect(check.status).toBe(200);
+      expect(check.body.data).toMatchObject({
+        connected: true,
+        sandbox: true,
+        account: { handle: 'OLX sandbox account', status: 'connected' },
+      });
+    });
+
+    it('GET /api/marketplaces reports sandbox:false when the OLX adapter runs in real mode', async () => {
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
+
+      const list = await auth(request(app).get('/api/marketplaces'));
+
+      expect(list.status).toBe(200);
+      expect(list.body.data).toEqual([
+        expect.objectContaining({ key: 'olx', connected: true, sandbox: false }),
+      ]);
     });
 
     it('previews existing OLX adverts through a read-only import endpoint', async () => {

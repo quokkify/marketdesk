@@ -154,6 +154,7 @@ export interface MarketplaceOAuthStart {
   authorizationUrl: string;
   state: string;
   expiresAt: string;
+  sandbox?: boolean;
 }
 
 export interface MarketplaceOAuthStatus {
@@ -168,6 +169,7 @@ export interface MarketplaceOAuthStatus {
   } | null;
   tokenExpiresAt?: string;
   refreshable: boolean;
+  sandbox: boolean;
 }
 
 export interface MarketplaceAppCredentialStatus {

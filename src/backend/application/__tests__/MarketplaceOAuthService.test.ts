@@ -98,7 +98,10 @@ const initialTokens: OlxOAuthTokens = {
   expiresAt: new Date('2026-07-14T13:00:00.000Z'),
 };
 
-function setup(refreshLock?: MarketplaceOAuthServiceDeps['refreshLock']) {
+function setup(
+  refreshLock?: MarketplaceOAuthServiceDeps['refreshLock'],
+  sandbox?: MarketplaceOAuthServiceDeps['sandbox']
+) {
   const marketplaceRepo = new InMemoryMarketplaceRepository();
   const marketplace = unwrap(
     Marketplace.create({
@@ -158,6 +161,7 @@ function setup(refreshLock?: MarketplaceOAuthServiceDeps['refreshLock']) {
     stateGenerator: () => 'oauth-state',
     now: () => new Date('2026-07-14T12:00:00.000Z'),
     stateTtlSeconds: 600,
+    sandbox,
   });
 
   return {
@@ -712,5 +716,142 @@ describe('MarketplaceOAuthService', () => {
       credentials: {},
     });
     expect(marketplace.isConnected()).toBe(false);
+  });
+
+  describe('sandbox mode', () => {
+    const sandbox = { enabled: true, successUrl: 'http://localhost:3000/marketplaces' };
+    const sandboxScopes = ['read', 'write', 'v2'];
+
+    it('start() in sandbox mode connects the marketplace without app credentials and returns the success URL', async () => {
+      const {
+        service,
+        marketplace,
+        marketplaceRepo,
+        accountRepo,
+        appCredentialRepo,
+        stateStore,
+        oauthClientFactory,
+      } = setup(undefined, sandbox);
+      appCredentialRepo.credentials.delete(marketplace.id);
+
+      const result = await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(result).toEqual({
+        authorizationUrl:
+          'http://localhost:3000/marketplaces?oauth=success&marketplaceId=marketplace-olx&sandbox=1',
+        state: 'sandbox',
+        expiresAt: '2036-07-14T12:00:00.000Z',
+        sandbox: true,
+      });
+      expect(accountRepo.accounts.get(marketplace.id)).toMatchObject({
+        id: 'account-1',
+        marketplaceId: marketplace.id,
+        handle: 'OLX sandbox account',
+        status: 'connected',
+        scopes: sandboxScopes,
+      });
+      expect(accountRepo.accounts.get(marketplace.id)?.credentials).toEqual({
+        payload: {
+          accessToken: 'sandbox',
+          tokenType: 'Bearer',
+          scopes: sandboxScopes,
+          expiresAt: new Date('2036-07-14T12:00:00.000Z'),
+        },
+      });
+      expect((await marketplaceRepo.findById(marketplace.id))?.isConnected()).toBe(true);
+      expect(oauthClientFactory).not.toHaveBeenCalled();
+      expect(stateStore.values.size).toBe(0);
+    });
+
+    it('start() in real mode still requires app credentials', async () => {
+      const { service, marketplace, accountRepo, appCredentialRepo, stateStore, oauthClientFactory } =
+        setup(undefined, { ...sandbox, enabled: false });
+      appCredentialRepo.credentials.delete(marketplace.id);
+
+      await expect(service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' })).rejects.toThrow(
+        'OLX application credentials are not configured for this workspace'
+      );
+      expect(accountRepo.accounts.size).toBe(0);
+      expect(stateStore.values.size).toBe(0);
+      expect(oauthClientFactory).not.toHaveBeenCalled();
+      expect(marketplace.isConnected()).toBe(false);
+    });
+
+    it('start() in real mode returns the OLX authorization URL without a sandbox flag', async () => {
+      const { service, marketplace } = setup(undefined, { ...sandbox, enabled: false });
+
+      const result = await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(result).toEqual({
+        authorizationUrl: 'https://www.olx.pl/oauth/authorize?state=oauth-state',
+        state: 'oauth-state',
+        expiresAt: '2026-07-14T12:10:00.000Z',
+      });
+      expect(marketplace.isConnected()).toBe(false);
+    });
+
+    it('check() reports the sandbox account as a connected sandbox connection', async () => {
+      const { service, marketplace } = setup(undefined, sandbox);
+      await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      const status = await service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(status).toEqual({
+        connected: true,
+        marketplaceId: marketplace.id,
+        providerKey: 'olx',
+        account: {
+          id: 'account-1',
+          handle: 'OLX sandbox account',
+          status: 'connected',
+          scopes: sandboxScopes,
+        },
+        tokenExpiresAt: '2036-07-14T12:00:00.000Z',
+        refreshable: false,
+        sandbox: true,
+      });
+    });
+
+    it('check() does not report a real OAuth account as sandbox', async () => {
+      const { service, marketplace } = setup();
+      await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+      await service.complete({ providerKey: 'olx', code: 'authorization-code', state: 'oauth-state' });
+
+      const status = await service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(status.connected).toBe(true);
+      expect(status.sandbox).toBe(false);
+    });
+
+    it('disconnects a sandbox account and reconnects it idempotently', async () => {
+      const { service, marketplace, marketplaceRepo, accountRepo } = setup(undefined, sandbox);
+      await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      await service.disconnect({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(accountRepo.accounts.get(marketplace.id)).toMatchObject({
+        id: 'account-1',
+        status: 'disconnected',
+      });
+      expect(accountRepo.accounts.get(marketplace.id)?.credentials).toEqual({});
+      expect((await marketplaceRepo.findById(marketplace.id))?.isConnected()).toBe(false);
+      await expect(
+        service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' })
+      ).resolves.toMatchObject({ connected: false, sandbox: true });
+
+      await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+      await service.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+      expect(accountRepo.accounts.size).toBe(1);
+      expect(accountRepo.accounts.get(marketplace.id)).toMatchObject({
+        id: 'account-1',
+        handle: 'OLX sandbox account',
+        status: 'connected',
+      });
+      expect((await marketplaceRepo.findById(marketplace.id))?.isConnected()).toBe(true);
+      await expect(
+        service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' })
+      ).resolves.toMatchObject({ connected: true, sandbox: true });
+    });
   });
 });
