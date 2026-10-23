@@ -64,19 +64,23 @@ export class OfflineHeuristicAIProvider implements IAIProvider {
     if (recentViews > 50 && conversionRate === 0) {
       const floor = costMinor === null ? 1 : Math.ceil((costMinor * 105) / 10_000);
       const floorLabel = costMinor === null ? `the 1 ${currency} minimum` : 'cost plus 5%';
+      const costNote =
+        costMinor === null
+          ? ` The product cost is unknown, so the floor is 1 ${currency} instead of cost plus 5%.`
+          : '';
       const cut = Math.round((priceMinor * 9) / 1000);
       const target = Math.max(cut, floor);
       if (target >= currentPrice) {
         return lowConfidence(
           currentPrice,
-          `${recentViews} recent views brought no sales, but no whole-${currency} cut stays above ${floorLabel}, so the current price is kept.`
+          `${recentViews} recent views brought no sales, but no whole-${currency} cut stays above ${floorLabel}, so the current price is kept.${costNote}`
         );
       }
       return lowConfidence(
         target,
         target > cut
-          ? `${recentViews} recent views brought no sales, so a cut down to ${floorLabel} is suggested.`
-          : `${recentViews} recent views brought no sales, so a 10% cut, rounded to whole ${currency}, is suggested.`
+          ? `${recentViews} recent views brought no sales, so a cut down to ${floorLabel} is suggested.${costNote}`
+          : `${recentViews} recent views brought no sales, so a 10% cut, rounded to whole ${currency}, is suggested.${costNote}`
       );
     }
 

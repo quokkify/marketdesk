@@ -56,6 +56,7 @@ describe('OfflineHeuristicAIProvider', () => {
         confidence: 'low',
         reasoning: endsWithOfflineNotice,
       });
+      expect(suggestion.reasoning).not.toMatch(/unknown/);
     });
 
     it('suggests 1 PLN for an unpriced listing whose cost is unknown', async () => {
@@ -70,6 +71,7 @@ describe('OfflineHeuristicAIProvider', () => {
         confidence: 'low',
         reasoning: endsWithOfflineNotice,
       });
+      expect(suggestion.reasoning).toMatch(/product cost is unknown/);
     });
 
     it.each([
@@ -106,6 +108,22 @@ describe('OfflineHeuristicAIProvider', () => {
         confidence: 'low',
         reasoning: endsWithOfflineNotice,
       });
+      expect(suggestion.reasoning).not.toMatch(/unknown/);
+    });
+
+    it('cuts the price by 10 percent with only a 1 PLN floor when the cost is unknown', async () => {
+      const suggestion = await provider.suggestPrice({
+        listing: buildListing(120),
+        recentViews: 51,
+        conversionRate: 0,
+      });
+
+      expect(suggestion).toEqual({
+        suggestedPrice: 108,
+        confidence: 'low',
+        reasoning: endsWithOfflineNotice,
+      });
+      expect(suggestion.reasoning).toMatch(/product cost is unknown/);
     });
 
     it('stops the cut at cost plus 5 percent, rounded up to whole zloty', async () => {
