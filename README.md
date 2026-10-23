@@ -30,20 +30,19 @@ MarketDesk is a workspace-scoped product and listing management platform. **OLX 
 
 ## Get started
 
-Requires Node.js 22+ and npm 10+. For local Compose, configure `.env` first:
+Requires Node.js 22+ and npm 10+. For local Compose, create `.env` first. `npm run env:init` copies `.env.example` and generates the secrets the app needs:
 
 ```bash
 git clone https://github.com/quokkify/marketdesk.git
 cd marketdesk
 npm ci
-cp .env.example .env
-# Set DB_SSL_MODE=disable, JWT_SECRET, and HERMES_API_KEY in .env
+npm run env:init
 docker compose up -d
 curl -fsS http://127.0.0.1:3000/health
 curl -fsS http://127.0.0.1:3000/ready
 ```
 
-The app requires a native Hermes Agent API Server; its key must match `HERMES_API_KEY`. Restrict the Hermes host port with firewall/security-group rules to Docker traffic and trusted administrators. Compose runs upload initialization and database migrations before the app starts. For development without Docker, start local PostgreSQL and Redis, configure `.env`, then use `npm run dev`.
+`env:init` fills `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY` and keeps any value that is already set. The app refuses to start while a required secret is missing or a placeholder, and its log names the variable. The app requires a native Hermes Agent API Server; its key must match `HERMES_API_KEY`. Restrict the Hermes host port with firewall/security-group rules to Docker traffic and trusted administrators. Compose runs upload initialization and database migrations before the app starts. For development without Docker, start local PostgreSQL and Redis, configure `.env`, then use `npm run dev`.
 
 See [Development and operations](docs/development.md) for environment setup, checks, the network boundary, data safety, and troubleshooting. Never delete Compose volumes that contain data you need.
 

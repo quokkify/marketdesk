@@ -39,11 +39,16 @@ function parseCategoryIds(value: string | undefined): Record<string, number> {
   );
 }
 
+// Value prefix of the development fallback below. assertStartupConfiguration
+// recognises it so the fallback can never reach a real boot by accident.
+const DEV_ONLY_SECRET_PREFIX = 'dev-only-insecure-';
+
 // Resolve a JWT signing secret fail-closed. In production a missing secret, an
 // empty secret, or a leftover `your_`-prefixed placeholder is fatal (throws at
 // boot) so the app never signs tokens with a guessable key. Outside production
-// a clearly-marked dev-only value is returned when unset so local/test boots
-// stay frictionless. (S1)
+// a clearly-marked dev-only value is returned when unset so imports in tests and
+// `ALLOW_INSECURE_DEV_JWT=true` development stay frictionless; a normal boot
+// refuses it in assertStartupConfiguration. (S1)
 export function resolveJwtSecret(
   value: string | undefined,
   name: string,
@@ -58,7 +63,7 @@ export function resolveJwtSecret(
     }
     return value;
   }
-  return value && !isPlaceholder ? value : `dev-only-insecure-${name.toLowerCase()}`;
+  return value && !isPlaceholder ? value : `${DEV_ONLY_SECRET_PREFIX}${name.toLowerCase()}`;
 }
 
 export const env = {
@@ -182,3 +187,54 @@ export const env = {
 export const isProduction = runningInProduction;
 export const isDevelopment = env.nodeEnv === 'development';
 export const isTest = env.nodeEnv === 'test';
+
+const MIN_JWT_SECRET_LENGTH = 32;
+const CREDENTIALS_KEY_BYTES = 32;
+
+function isPlaceholderSecret(value: string): boolean {
+  return (
+    value.trim() === '' || value.startsWith('your_') || value.startsWith(DEV_ONLY_SECRET_PREFIX)
+  );
+}
+
+// Same rule as AesGcmCredentialVault: base64 text that decodes to exactly 32 bytes.
+function isValidCredentialsKey(value: string): boolean {
+  return value !== '' && Buffer.from(value, 'base64').length === CREDENTIALS_KEY_BYTES;
+}
+
+// Test mode and ALLOW_INSECURE_DEV_JWT=true (local `npm run dev`) may sign tokens with the
+// development secret. Production never may, whatever the flag says.
+function insecureDevJwtAllowed(e: typeof env): boolean {
+  if (e.nodeEnv === 'production') return false;
+  return e.nodeEnv === 'test' || process.env.ALLOW_INSECURE_DEV_JWT === 'true';
+}
+
+// Boot gate, called by main.ts before any resource is touched. Throws one error that names
+// every missing or invalid secret and the command that fixes it, so a `.env` copied from
+// `.env.example` fails loudly instead of leaving a server that answers /health while every
+// /api route is missing. The message never contains the rejected values.
+export function assertStartupConfiguration(e: typeof env): void {
+  const problems: string[] = [];
+
+  if (!insecureDevJwtAllowed(e)) {
+    if (isPlaceholderSecret(e.jwt.secret)) {
+      problems.push('JWT_SECRET is empty or still a placeholder');
+    } else if (e.jwt.secret.length < MIN_JWT_SECRET_LENGTH) {
+      problems.push(`JWT_SECRET is shorter than ${MIN_JWT_SECRET_LENGTH} characters`);
+    }
+  }
+
+  if (e.marketplaceCredentialsKey === '') {
+    problems.push('MARKETPLACE_CREDENTIALS_KEY is empty');
+  } else if (!isValidCredentialsKey(e.marketplaceCredentialsKey)) {
+    problems.push('MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key');
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `Invalid startup configuration: ${problems.join('; ')}. ` +
+        'Fix: run `npm run env:init` to generate every secret in .env, ' +
+        'or set each one yourself, for example to the output of `openssl rand -base64 32`.',
+    );
+  }
+}
