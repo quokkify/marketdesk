@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -6,6 +6,11 @@ import {
   Checkbox,
   Chip,
   IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Pagination,
   Skeleton,
   Stack,
   Table,
@@ -18,14 +23,23 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/EditOutlined';
+import { alpha } from '@mui/material/styles';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import type { Product } from '@shared/types';
-import { formatCurrency } from '../../utils/formatters.js';
+import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
-import { productInitials } from '../../pages/productsCatalogueState.js';
+import {
+  catalogueFooterLabel,
+  productInitials,
+  productTileTone,
+} from '../../pages/productsCatalogueState.js';
+
+const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
 type SortDir = 'asc' | 'desc';
 
@@ -52,17 +66,20 @@ function ProductThumbnail({ product }: { product: Product }) {
       />
     );
   }
+  const tone = productTileTone(product.sku);
   return (
     <Avatar
       variant="rounded"
       aria-label={`${product.name} image unavailable`}
-      sx={{
+      sx={(theme) => ({
         width: 44,
         height: 44,
-        bgcolor: 'primary.light',
-        color: 'primary.contrastText',
+        borderRadius: 1.5,
+        bgcolor: alpha(theme.palette[tone].main, theme.palette.mode === 'dark' ? 0.22 : 0.14),
+        color: theme.palette.mode === 'dark' ? theme.palette[tone].light : theme.palette[tone].dark,
         fontWeight: 800,
-      }}
+        fontSize: '0.875rem',
+      })}
     >
       {productInitials(product.name)}
     </Avatar>
@@ -92,7 +109,7 @@ function ProductIdentity({
             variant="caption"
             color="text.secondary"
             noWrap
-            sx={{ fontFamily: 'monospace' }}
+            sx={{ display: 'block', fontFamily: SKU_FONT }}
           >
             {product.sku}
           </Typography>
@@ -117,16 +134,134 @@ function Profit({ product, currency }: { product: Product; currency?: string }) 
       <Typography
         variant="body2"
         color={profit < 0 ? 'error.main' : 'success.main'}
-        sx={{ fontWeight: 700 }}
+        sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
       >
-        {formatCurrency(profit, currency)}
+        {formatMoney(profit, currency)}
       </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {margin === null ? 'Margin unavailable' : `${margin.toFixed(1)}% margin`}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        {margin === null ? 'Margin unavailable' : `${Math.round(margin)}% margin`}
       </Typography>
     </Box>
   );
 }
+
+function UpdatedAt({ value }: { value: string }) {
+  return (
+    <Box component="span" title={formatDateTime(value)}>
+      {formatRelative(value)}
+    </Box>
+  );
+}
+
+export interface ProductRowHandlers {
+  onOpen?: (product: Product) => void;
+  onEdit?: (product: Product) => void;
+}
+
+// Menu entries for one catalogue row; built as plain elements so the order and
+// handler wiring stay checkable without a DOM.
+export function productRowMenuItems(
+  product: Product,
+  handlers: ProductRowHandlers,
+  close: () => void
+): React.ReactElement[] {
+  const run = (handler: (product: Product) => void) => () => {
+    close();
+    handler(product);
+  };
+  const items: React.ReactElement[] = [];
+  if (handlers.onOpen) {
+    items.push(
+      <MenuItem key="open" onClick={run(handlers.onOpen)}>
+        <ListItemIcon>
+          <OpenInNewOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText>Open</ListItemText>
+      </MenuItem>
+    );
+  }
+  if (handlers.onEdit) {
+    items.push(
+      <MenuItem key="edit" onClick={run(handlers.onEdit)}>
+        <ListItemIcon>
+          <EditOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText>Edit</ListItemText>
+      </MenuItem>
+    );
+  }
+  return items;
+}
+
+export const ProductRowActions: React.FC<{ product: Product; handlers: ProductRowHandlers }> = ({
+  product,
+  handlers,
+}) => {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  const items = productRowMenuItems(product, handlers, () => setAnchorEl(null));
+  if (items.length === 0) return null;
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label={`Actions for ${product.name}`}
+        aria-haspopup="menu"
+        aria-controls={anchorEl ? menuId : undefined}
+        aria-expanded={anchorEl ? 'true' : undefined}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+      <Menu
+        id={menuId}
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        {items}
+      </Menu>
+    </>
+  );
+};
+
+export const CatalogueFooter: React.FC<{
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}> = ({ total, page, pageSize, onPageChange }) => {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={1.5}
+      sx={{
+        px: 2.5,
+        py: 1.75,
+        borderTop: 1,
+        borderColor: 'divider',
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        justifyContent: 'space-between',
+      }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        {catalogueFooterLabel(total, page, pageSize)}
+      </Typography>
+      <Pagination
+        count={pageCount}
+        page={Math.min(page, pageCount - 1) + 1}
+        onChange={(_event, next) => onPageChange(next - 1)}
+        shape="rounded"
+        color="primary"
+        size="small"
+        aria-label="Catalogue pages"
+      />
+    </Stack>
+  );
+};
 
 export interface ProductsCollectionProps {
   products?: Product[];
@@ -220,7 +355,7 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
             <TableCell>Profit</TableCell>
             <TableCell sx={{ minWidth: 160 }}>Tags</TableCell>
             <TableCell align="right">{sortHeading('Updated', 'updatedAt')}</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            <TableCell align="right" aria-label="Actions" />
           </TableRow>
         </TableHead>
         <TableBody>
@@ -262,13 +397,13 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                       </Typography>
                     </Tooltip>
                   </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>
+                  <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
                     {product.costPrice === null
                       ? '—'
-                      : formatCurrency(product.costPrice, props.currency)}
+                      : formatMoney(product.costPrice, props.currency)}
                   </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    {formatCurrency(product.sellingPrice, props.currency)}
+                  <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {formatMoney(product.sellingPrice, props.currency)}
                   </TableCell>
                   <TableCell>
                     <Profit product={product} currency={props.currency} />
@@ -292,20 +427,13 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                     </Stack>
                   </TableCell>
                   <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    {new Date(product.updatedAt).toLocaleDateString()}
+                    <UpdatedAt value={product.updatedAt} />
                   </TableCell>
                   <TableCell align="right">
-                    {props.onEdit && (
-                      <Tooltip title="Edit product">
-                        <IconButton
-                          size="small"
-                          aria-label={`Edit ${product.name}`}
-                          onClick={() => props.onEdit?.(product)}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <ProductRowActions
+                      product={product}
+                      handlers={{ onOpen: props.onOpen, onEdit: props.onEdit }}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -360,17 +488,10 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 <ProductIdentity product={product} onOpen={props.onOpen} />
               </Box>
               <ProductStatusBadge status={product.status} />
-              {props.onEdit && (
-                <Tooltip title="Edit product">
-                  <IconButton
-                    size="small"
-                    aria-label={`Edit ${product.name}`}
-                    onClick={() => props.onEdit?.(product)}
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <ProductRowActions
+                product={product}
+                handlers={{ onOpen: props.onOpen, onEdit: props.onEdit }}
+              />
             </Stack>
             <Stack
               direction="row"
@@ -399,7 +520,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 <Typography variant="body2">
                   {product.costPrice === null
                     ? '—'
-                    : formatCurrency(product.costPrice, props.currency)}
+                    : formatMoney(product.costPrice, props.currency)}
                 </Typography>
               </Box>
               <Box>
@@ -407,7 +528,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                   Price
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {formatCurrency(product.sellingPrice, props.currency)}
+                  {formatMoney(product.sellingPrice, props.currency)}
                 </Typography>
               </Box>
               <Box>
@@ -433,7 +554,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                   Updated
                 </Typography>
                 <Typography variant="body2">
-                  {new Date(product.updatedAt).toLocaleDateString()}
+                  <UpdatedAt value={product.updatedAt} />
                 </Typography>
               </Box>
             </Box>

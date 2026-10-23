@@ -1,9 +1,12 @@
 import type { Product } from '@shared/types';
 import {
+  catalogueFooterLabel,
   hasCatalogueFilters,
   parseProductsCatalogueState,
+  PRODUCT_SORT_OPTIONS,
   productInitials,
   productsToCsv,
+  productTileTone,
   tabStatus,
   updateProductsCatalogueSearch,
 } from './productsCatalogueState';
@@ -92,5 +95,30 @@ describe('products catalogue export and identity helpers', () => {
   it('creates a stable two-word fallback initial', () => {
     expect(productInitials(' wireless headphones pro ')).toBe('WH');
     expect(productInitials('')).toBe('?');
+  });
+});
+
+describe('products catalogue presentation helpers', () => {
+  it('derives a stable initials tile tone from the SKU character codes', () => {
+    // 'A' = 65 -> 65 % 6 = 5; 'B' = 66 -> 0; 'CAM-001' sums to 399 -> 3.
+    expect(productTileTone('A')).toBe('info');
+    expect(productTileTone('B')).toBe('primary');
+    expect(productTileTone('CAM-001')).toBe('warning');
+    expect(productTileTone('CAM-001')).toBe(productTileTone('CAM-001'));
+    expect(productTileTone('')).toBe('primary');
+  });
+
+  it('summarises the visible rows in the footer', () => {
+    expect(catalogueFooterLabel(10, 0, 25)).toBe('Showing 10 products');
+    expect(catalogueFooterLabel(1, 0, 25)).toBe('Showing 1 product');
+    expect(catalogueFooterLabel(60, 1, 25)).toBe('Showing 26–50 of 60 products');
+    expect(catalogueFooterLabel(60, 2, 25)).toBe('Showing 51–60 of 60 products');
+  });
+
+  it('offers only sort orders that the catalogue URL parser accepts', () => {
+    expect(PRODUCT_SORT_OPTIONS.length).toBeGreaterThan(0);
+    for (const option of PRODUCT_SORT_OPTIONS) {
+      expect(parseProductsCatalogueState(`?sort=${option.value}`).sort).toBe(option.value);
+    }
   });
 });

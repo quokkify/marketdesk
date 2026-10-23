@@ -85,6 +85,15 @@ export const MAX_QUOTA_OVERRIDE_REASON_LENGTH = 500;
 export const PUBLICATION_READINESS_RECHECK_LABEL = 'Check again';
 export const PUBLICATION_READINESS_CHECKING_LABEL = 'Checking…';
 
+// The catalogue row menu navigates here with { editProduct: true } to open the edit form.
+export function editRequestedByNavigation(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { editProduct?: unknown }).editProduct === true
+  );
+}
+
 export function productScopedHermesRunInput(productId: string): HermesRunInput {
   return { trigger: 'manual', productId };
 }
@@ -806,6 +815,12 @@ const ListingDetailsPage: React.FC = () => {
   }, [createListing, dispatch, listingItems, listings.isError, listings.isFetching,
     listings.isLoading, location.pathname, location.state, marketplaces, navigate,
     product.data, productId, publishListingPreview]);
+
+  useEffect(() => {
+    if (!product.data || !editRequestedByNavigation(location.state)) return;
+    navigate(location.pathname, { replace: true, state: null });
+    setEditOpen(true);
+  }, [location.pathname, location.state, navigate, product.data]);
 
   useEffect(() => {
     const review = (

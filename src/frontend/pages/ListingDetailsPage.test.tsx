@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   buildPublishListingInput,
   categoryConflictEvidenceLines,
+  editRequestedByNavigation,
   mainPreviewImageSx,
   isProductRecheckStale,
   PUBLICATION_READINESS_CHECKING_LABEL,
@@ -413,5 +414,13 @@ describe('ListingDetailsPage presentation', () => {
     expect(idle).not.toMatch(/<button[^>]*\sdisabled(?:=|\s|>)/);
     expect(checking).toContain('>Checking…<');
     expect(checking).toMatch(/<button[^>]*\sdisabled(?:=|\s|>)/);
+  });
+
+  it('opens the edit form only for an explicit catalogue Edit navigation', () => {
+    expect(editRequestedByNavigation({ editProduct: true })).toBe(true);
+    expect(editRequestedByNavigation({ editProduct: 'yes' })).toBe(false);
+    expect(editRequestedByNavigation({ publicationReview: { listingId: 'l-1', mode: 'relist' } })).toBe(false);
+    expect(editRequestedByNavigation(null)).toBe(false);
+    expect(editRequestedByNavigation(undefined)).toBe(false);
   });
 });
