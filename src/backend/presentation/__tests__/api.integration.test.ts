@@ -733,6 +733,23 @@ describe('Presentation API', () => {
       expect(res.body.data.id).toBeDefined();
     });
 
+    it('create accepts costPrice null for a product whose cost is unknown', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).post('/api/products')).send({
+        sku: 'UNKNOWN-COST-1',
+        name: 'Widget with unknown cost',
+        description: 'A widget whose purchase cost is not known yet',
+        costPrice: null,
+        sellingPrice: 20,
+        condition: 'good',
+        category: 'misc',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.costPrice).toBeNull();
+    });
+
     it('requires explicit API confirmation before creating below-cost pricing', async () => {
       const { app } = await buildTestApp();
       const body = {

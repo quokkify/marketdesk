@@ -38,7 +38,7 @@ export const createProductSchema = z
     sku: z.string().min(1),
     name: z.string().min(1),
     description: z.string().min(1),
-    costPrice: z.number().nonnegative(),
+    costPrice: z.number().nonnegative().nullable(),
     sellingPrice: z.number().nonnegative(),
     currency: z
       .string()
