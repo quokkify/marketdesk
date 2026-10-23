@@ -168,8 +168,12 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
   return (
     <Card>
       <Stack spacing={1.75}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
             <Box
               aria-label={`${brandLabel} marketplace logo`}
               sx={{
@@ -197,21 +201,37 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
         </Stack>
 
         <Stack spacing={1} sx={{ color: 'text.secondary' }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={0.5}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={0.5}
+            sx={{ justifyContent: 'space-between' }}
+          >
             <Typography variant="body2">Last sync</Typography>
             <Typography variant="body2" color="text.primary" sx={{ textAlign: { sm: 'right' } }}>
               {m.lastSyncAt ? formatDateTime(m.lastSyncAt) : 'Never synced'}
             </Typography>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={0.5}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={0.5}
+            sx={{ justifyContent: 'space-between' }}
+          >
             <Typography variant="body2">Synchronization</Typography>
             <Typography variant="body2" color="text.primary" sx={{ textAlign: { sm: 'right' } }}>
               {SYNC_MODE_LABELS[m.syncMode]}
             </Typography>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={0.5}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={0.5}
+            sx={{ justifyContent: 'space-between' }}
+          >
             <Typography variant="body2">Sync errors</Typography>
-            <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={{ sm: 'flex-end' }}>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{ alignItems: 'center', justifyContent: { sm: 'flex-end' } }}
+            >
               {m.errorCount > 0 && <ErrorOutlineIcon sx={{ fontSize: 16, color: 'error.main' }} />}
               <Typography variant="body2" color={m.errorCount > 0 ? 'error.main' : 'success.main'}>
                 {m.errorCount > 0 ? `${m.errorCount} needs review` : 'No errors'}
@@ -424,7 +444,7 @@ const MarketplacesPage: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2.5 }}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2.5 }}>
         <Button variant="outlined" startIcon={<SyncIcon />} onClick={() => refetch()}>
           Refresh
         </Button>
@@ -445,7 +465,7 @@ const MarketplacesPage: React.FC = () => {
             <Alert severity="info" sx={{ mb: 2 }}>
               <Stack spacing={1}>
                 <Typography variant="subtitle2">Read-only OLX import preview</Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                   <Chip size="small" label={`Discovered: ${importPreview.totals.discovered}`} />
                   <Chip size="small" color="success" label={`New: ${importPreview.totals.new}`} />
                   <Chip size="small" color="info" label={`Changed: ${importPreview.totals.changed}`} />

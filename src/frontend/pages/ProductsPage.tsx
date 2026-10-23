@@ -473,8 +473,8 @@ const ProductsPage: React.FC = () => {
           <Stack
             direction={{ xs: 'column', lg: 'row' }}
             spacing={1.25}
-            alignItems={{ xs: 'stretch', lg: 'center' }}
             useFlexGap
+            sx={{ alignItems: { xs: 'stretch', lg: 'center' } }}
           >
             <ToggleButtonGroup
               exclusive
@@ -522,13 +522,15 @@ const ProductsPage: React.FC = () => {
               placeholder="Search name, SKU, description or tag"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              inputProps={{ 'aria-label': 'Search products' }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                htmlInput: { 'aria-label': 'Search products' },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
               }}
               sx={{ minWidth: { xs: 0, sm: 260 } }}
             />
@@ -583,7 +585,7 @@ const ProductsPage: React.FC = () => {
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={1.25}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
+              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
             >
               <TextField
                 size="small"
@@ -593,7 +595,7 @@ const ProductsPage: React.FC = () => {
                 onChange={(event) =>
                   navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)
                 }
-                inputProps={{ min: 0 }}
+                slotProps={{ htmlInput: { min: 0 } }}
               />
               <TextField
                 size="small"
@@ -603,7 +605,7 @@ const ProductsPage: React.FC = () => {
                 onChange={(event) =>
                   navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)
                 }
-                inputProps={{ min: 0 }}
+                slotProps={{ htmlInput: { min: 0 } }}
               />
               <Autocomplete
                 multiple
@@ -612,10 +614,13 @@ const ProductsPage: React.FC = () => {
                 options={[]}
                 value={catalogue.tags}
                 onChange={(_event, next) => navigateCatalogue({ tags: next as string[], page: 0 })}
-                renderTags={(value, getTagProps) =>
-                  value.map((tag, index) => (
-                    <Chip variant="outlined" size="small" label={tag} {...getTagProps({ index })} />
-                  ))
+                renderValue={(value, getItemProps) =>
+                  value.map((tag, index) => {
+                    const { key, ...itemProps } = getItemProps({ index });
+                    return (
+                      <Chip key={key} variant="outlined" size="small" label={tag} {...itemProps} />
+                    );
+                  })
                 }
                 renderInput={(params) => (
                   <TextField {...params} label="Tags" placeholder="Type and press Enter" />
@@ -653,7 +658,7 @@ const ProductsPage: React.FC = () => {
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={1}
-            alignItems={{ xs: 'stretch', md: 'center' }}
+            sx={{ alignItems: { xs: 'stretch', md: 'center' } }}
           >
             <Typography sx={{ px: 1, fontWeight: 800 }}>
               {selectedIds.size} selected on this page

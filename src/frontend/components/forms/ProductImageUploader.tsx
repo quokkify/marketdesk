@@ -171,14 +171,14 @@ export const ProductImageUploader: React.FC<ProductImageUploaderProps> = ({
 
       {(error || uploadError) && <Alert severity="error">{uploadError ?? error}</Alert>}
       {uploading.length > 0 && (
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <CircularProgress size={18} />
           <Typography variant="body2">Uploading {uploading.join(', ')}</Typography>
         </Stack>
       )}
 
       {images.length > 0 && (
-        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
           {images.map((image, index) => (
             <Stack
               key={`${image}-${index}`}
@@ -196,7 +196,7 @@ export const ProductImageUploader: React.FC<ProductImageUploaderProps> = ({
                   <Chip size="small" label="Cover" sx={{ position: 'absolute', left: 4, top: 4 }} />
                 )}
               </Box>
-              <Stack direction="row" justifyContent="center">
+              <Stack direction="row" sx={{ justifyContent: 'center' }}>
                 {index > 0 && (
                   <IconButton
                     size="small"

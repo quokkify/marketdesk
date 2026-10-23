@@ -113,7 +113,7 @@ const LoginPage: React.FC = () => {
               autoComplete={isRegistration ? 'new-password' : 'current-password'}
               fullWidth
               required
-              inputProps={{ minLength: isRegistration ? 8 : undefined }}
+              slotProps={{ htmlInput: { minLength: isRegistration ? 8 : undefined } }}
               helperText={isRegistration ? 'At least 8 characters' : undefined}
             />
             {error && (

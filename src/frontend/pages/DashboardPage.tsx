@@ -113,7 +113,7 @@ const MarketplaceRow: React.FC<{ marketplace: Marketplace; onOpen: () => void }>
         alignItems: 'stretch',
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', width: '100%' }}>
         <Box
           sx={{
             width: 34,
@@ -131,7 +131,11 @@ const MarketplaceRow: React.FC<{ marketplace: Marketplace; onOpen: () => void }>
           {marketplace.name.slice(0, 3).toUpperCase()}
         </Box>
         <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-          <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+          >
             <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
               {marketplace.name}
             </Typography>
@@ -162,7 +166,7 @@ const HermesEventRow: React.FC<{
       '&:last-of-type': { borderBottom: 0 },
     }}
   >
-    <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ width: '100%' }}>
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start', width: '100%' }}>
       <Box
         sx={{
           width: 34,
@@ -179,7 +183,12 @@ const HermesEventRow: React.FC<{
         <AutoAwesomeIcon fontSize="small" />
       </Box>
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-        <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={0.75}
+          useFlexGap
+          sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+        >
           <Typography variant="body2" sx={{ fontWeight: 800 }}>
             {event.title}
           </Typography>
@@ -204,7 +213,7 @@ const AttentionRow: React.FC<{ product: Product; onOpen: () => void }> = ({ prod
     aria-label={`Open product requiring attention: ${product.name}`}
     sx={{ width: '100%', textAlign: 'left', py: 1 }}
   >
-    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: '100%' }}>
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', width: '100%' }}>
       <Box
         sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'warning.main', flexShrink: 0 }}
       />
@@ -387,7 +396,7 @@ const DashboardPage: React.FC = () => {
           <Card
             sx={{ height: 'auto' }}
             title={
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Box
                   sx={{
                     width: 28,

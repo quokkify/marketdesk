@@ -1171,7 +1171,7 @@ const ListingDetailsPage: React.FC = () => {
                   value={categorySearch}
                   onChange={(event) => setCategorySearch(event.target.value)}
                   disabled={publicationBusy}
-                  inputProps={{ maxLength: 80 }}
+                  slotProps={{ htmlInput: { maxLength: 80 } }}
                   helperText="Search by category name, then select the exact category."
                 />
                 <Button
@@ -1197,7 +1197,7 @@ const ListingDetailsPage: React.FC = () => {
                   value={providerCategoryId}
                   onChange={(event) => setProviderCategoryId(event.target.value)}
                   disabled={publicationBusy}
-                  inputProps={{ inputMode: 'numeric', maxLength: 100 }}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 100 } }}
                   helperText="The category is checked against the live OLX taxonomy before it is saved."
                 />
                 <Button
@@ -1233,7 +1233,7 @@ const ListingDetailsPage: React.FC = () => {
                   required
                   multiline
                   minRows={2}
-                  inputProps={{ maxLength: MAX_QUOTA_OVERRIDE_REASON_LENGTH }}
+                  slotProps={{ htmlInput: { maxLength: MAX_QUOTA_OVERRIDE_REASON_LENGTH } }}
                   helperText={`${MIN_QUOTA_OVERRIDE_REASON_LENGTH}–${MAX_QUOTA_OVERRIDE_REASON_LENGTH} characters. Saved in the audit log.`}
                 />
               </Stack>

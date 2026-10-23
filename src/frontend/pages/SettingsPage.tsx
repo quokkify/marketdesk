@@ -229,7 +229,7 @@ function SettingsQueryState({
 }) {
   if (isLoading) {
     return (
-      <Stack direction="row" spacing={1} alignItems="center" role="status">
+      <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center' }}>
         <CircularProgress size={18} />
         <Typography>Loading settings…</Typography>
       </Stack>
@@ -501,8 +501,7 @@ const SettingsPage: React.FC = () => {
             <Stack
               key={integration.id}
               direction="row"
-              justifyContent="space-between"
-              alignItems="center"
+              sx={{ justifyContent: 'space-between', alignItems: 'center' }}
             >
               <Box>
                 <Typography sx={{ fontWeight: 700 }}>{integration.name}</Typography>
@@ -605,7 +604,7 @@ const SettingsPage: React.FC = () => {
               {fieldErrors.language && (
                 <Typography color="error">{fieldErrors.language}</Typography>
               )}
-              <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+              <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
                 <Button
                   variant="outlined"
                   disabled={!workspaceSettings.currentData || saving}
@@ -662,10 +661,8 @@ const SettingsPage: React.FC = () => {
                   >
                     <Stack
                       direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
                       spacing={1}
-                      sx={{ mb: 0.5 }}
+                      sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}
                     >
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                         {AUTONOMY_LABELS[level]}

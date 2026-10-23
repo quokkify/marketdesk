@@ -84,7 +84,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         <StatusField {...fieldProps} />
         <ImagesField {...fieldProps} />
 
-        <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+        <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
           {onCancel && (
             <Button type="button" color="inherit" onClick={onCancel} disabled={submitting}>
               Cancel

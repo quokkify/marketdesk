@@ -29,7 +29,11 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   return (
     <Card sx={{ p: 2.5, height: '100%' }}>
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}
+      >
         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
           {label}
         </Typography>
@@ -48,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         <Skeleton variant="text" width="45%" height={20} sx={{ mt: 0.5 }} />
       ) : (
         hasDelta && (
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.75 }}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mt: 0.75 }}>
             {positive ? (
               <ArrowUpwardIcon sx={{ fontSize: 16, color: deltaColor }} />
             ) : (

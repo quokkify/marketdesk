@@ -27,10 +27,14 @@ export const Card: React.FC<CardProps> = ({
     {(title || action || subtitle) && (
       <Stack
         direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
         spacing={1}
-        sx={{ px: 2.5, pt: 2.25, pb: subtitle ? 0.5 : 1.5 }}
+        sx={{
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          px: 2.5,
+          pt: 2.25,
+          pb: subtitle ? 0.5 : 1.5,
+        }}
       >
         <Box sx={{ minWidth: 0 }}>
           {title && (

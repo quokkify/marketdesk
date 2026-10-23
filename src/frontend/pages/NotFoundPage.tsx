@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
   return (
-    <Stack spacing={2} alignItems="flex-start" sx={{ py: 6 }}>
+    <Stack spacing={2} sx={{ alignItems: 'flex-start', py: 6 }}>
       <Typography variant="h1" sx={{ fontSize: '3rem' }}>
         404
       </Typography>

@@ -427,7 +427,11 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
   return (
     <Stack spacing={3}>
       <Stack spacing={1.5} sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover' }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ alignItems: { sm: 'center' } }}
+        >
           <AutoAwesomeIcon color="primary" />
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="subtitle2">AI-assisted product creation</Typography>
@@ -492,7 +496,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                 Missing info: {draft.missingInfoQuestions.join(' ')}
               </Typography>
             )}
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
               <Button
                 size="small"
                 variant="contained"
@@ -642,9 +646,8 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                       <Box sx={{ width: '100%' }}>
                         <Stack
                           direction="row"
-                          alignItems="center"
-                          justifyContent="space-between"
                           spacing={1}
+                          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                         >
                           <Typography variant="body2" sx={{ fontWeight: 700 }}>
                             {marketplace.name}
@@ -697,7 +700,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
         )}
       </Box>
 
-      <Stack direction="row" spacing={1.5} justifyContent="space-between">
+      <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'space-between' }}>
         <Button type="button" color="inherit" onClick={onCancel} disabled={submitting}>
           Cancel
         </Button>

@@ -45,9 +45,13 @@ export const HermesHero: React.FC<{
     contentSx={{ p: 3 }}
   >
     <Stack spacing={2}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ md: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}
+      >
         <Stack spacing={1}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <AutoAwesomeIcon />
             <Typography variant="h5" sx={{ fontWeight: 800 }}>Hermes AI agent</Typography>
             <Chip size="small" label="Ready on demand" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' }} />
@@ -139,8 +143,7 @@ const HermesActivityPage: React.FC = () => {
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          justifyContent="space-between"
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, justifyContent: 'space-between' }}
         >
           <Tabs value={activityTab} onChange={(_e, value) => setActivityTab(value)} variant="scrollable" allowScrollButtonsMobile>
             <Tab value="all" label="All activity" />
@@ -148,7 +151,12 @@ const HermesActivityPage: React.FC = () => {
             <Tab value="alerts" label="Alerts" />
             <Tab value="completed" label={`Completed (${completedCount})`} />
           </Tabs>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            useFlexGap
+            sx={{ flexWrap: 'wrap' }}
+          >
           <Select
             size="small"
             multiple
@@ -159,7 +167,7 @@ const HermesActivityPage: React.FC = () => {
               selected.length === 0 ? (
                 'All statuses'
               ) : (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
                   {selected.map((s) => (
                     <HermesStatusBadge key={s} status={s} />
                   ))}
@@ -184,7 +192,7 @@ const HermesActivityPage: React.FC = () => {
               selected.length === 0 ? (
                 'All severities'
               ) : (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
                   {selected.map((s) => (
                     <HermesSeverityBadge key={s} severity={s} />
                   ))}

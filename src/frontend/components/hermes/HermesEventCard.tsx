@@ -248,7 +248,7 @@ export const ProposedChangeDiff: React.FC<{
   switch (change.kind) {
     case 'price':
       return wrap(
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography variant="caption" color="text.secondary">Price</Typography>
           <Typography variant="body2" sx={{ textDecoration: 'line-through', color: 'text.secondary' }}>
             {formatCurrency(change.from, currency)}
@@ -367,7 +367,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
     return (
       <Card data-variant="compact-review" sx={{ p: 1.5, borderColor: 'primary.main' }}>
         <Stack spacing={1.25}>
-          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+          >
             {isSeoRecommendation(event) ? (
               <Tooltip title="SEO · listing search optimization" arrow>
                 <Chip
@@ -399,7 +404,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           {!event.proposedChange && (
             <Alert severity="info">No directly applicable product change. Review and dismiss this item.</Alert>
           )}
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
             <Typography variant="caption" color="text.secondary">{formatRelativeTime(event.createdAt)}</Typography>
             {showActions && canReview && !isCategoryRecreation && (
               <ApprovalButtons
@@ -418,11 +428,15 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
 
   return (
     <Card sx={{ p: 2.25 }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
         <HermesEventTypeIcon type={event.type} severity={event.severity} />
 
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}
+          >
             <HermesSeverityBadge severity={event.severity} />
             <HermesStatusBadge status={event.status} />
             {event.autonomyDecision && <AutonomyDecisionBadge decision={event.autonomyDecision} />}
@@ -441,9 +455,14 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mt: 1.25, p: 1.25, borderRadius: 2, bgcolor: 'action.hover' }}
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mt: 1.25,
+                p: 1.25,
+                borderRadius: 2,
+                bgcolor: 'action.hover',
+              }}
             >
               <Box>
                 <Typography variant="caption" color="text.secondary">Product context</Typography>
@@ -472,10 +491,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           <Stack
             direction="row"
             spacing={1}
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mt: 1.5 }}
-            flexWrap="wrap"
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              mt: 1.5,
+            }}
           >
             <Typography variant="caption" color="text.secondary">{formatRelativeTime(event.createdAt)}</Typography>
             {showActions && canReview && !isCategoryRecreation && (

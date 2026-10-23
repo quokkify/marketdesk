@@ -115,10 +115,11 @@ export const DescriptionTagsFields: React.FC<ProductFieldsProps> = ({
       options={[]}
       value={values.tags}
       onChange={(_e, next) => onChange('tags', next as string[])}
-      renderTags={(value, getTagProps) =>
-        value.map((option, index) => (
-          <Chip variant="outlined" size="small" label={option} {...getTagProps({ index })} />
-        ))
+      renderValue={(value, getItemProps) =>
+        value.map((option, index) => {
+          const { key, ...itemProps } = getItemProps({ index });
+          return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
+        })
       }
       renderInput={(params) => (
         <TextField {...params} label="Tags" placeholder="Add a tag and press Enter" />
@@ -137,7 +138,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({ values, errors, onCh
       onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
       error={Boolean(errors.costPrice)}
       helperText={errors.costPrice}
-      inputProps={{ min: 0, step: '0.01' }}
+      slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
     />
     <TextField
       label="Selling price"
@@ -147,7 +148,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({ values, errors, onCh
       onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
       error={Boolean(errors.sellingPrice)}
       helperText={errors.sellingPrice}
-      inputProps={{ min: 0, step: '0.01' }}
+      slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
     />
   </Stack>
 );
@@ -159,10 +160,11 @@ export const ImagesField: React.FC<ProductFieldsProps> = ({ values, errors, onCh
     options={[]}
     value={values.images}
     onChange={(_e, next) => onChange('images', next as string[])}
-    renderTags={(value, getTagProps) =>
-      value.map((option, index) => (
-        <Chip variant="outlined" size="small" label={option} {...getTagProps({ index })} />
-      ))
+    renderValue={(value, getItemProps) =>
+      value.map((option, index) => {
+        const { key, ...itemProps } = getItemProps({ index });
+        return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
+      })
     }
     renderInput={(params) => (
       <TextField

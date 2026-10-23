@@ -66,7 +66,7 @@ export const SeoRecommendationQueue: React.FC<SeoRecommendationQueueProps> = ({
 
   return (
     <Stack spacing={1.25} data-testid="seo-recommendation-queue">
-      <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
           Hermes review queue · one suggestion expanded
         </Typography>
@@ -125,7 +125,11 @@ export const SeoRecommendationQueue: React.FC<SeoRecommendationQueueProps> = ({
         </Box>
       )}
 
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+      >
         <Typography variant="caption" color="text.secondary">
           {total === 1
             ? 'This is the only pending recommendation.'
@@ -160,7 +164,7 @@ export const SeoReviewSummary: React.FC<SeoReviewSummaryProps> = ({
 }) => (
   <Card
     title={
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         {event && isSeoRecommendation(event) ? (
           <SeoLegendChip />
         ) : event ? (
@@ -195,7 +199,7 @@ export const SeoReviewSummary: React.FC<SeoReviewSummaryProps> = ({
             No change is applied until you approve it.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button size="small" variant="contained" onClick={() => onReview(event)}>
             Review next
           </Button>

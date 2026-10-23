@@ -64,16 +64,18 @@ export const AnalyticsDateRangeControls: React.FC<AnalyticsDateRangeControlsProp
         </Button>
       ))}
     </ButtonGroup>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'stretch' }}>
       <Stack spacing={0.5} sx={{ minWidth: 160 }}>
         <Typography component="label" variant="caption" color="text.secondary" htmlFor="analytics-from">From</Typography>
         <TextField id="analytics-from" size="small" type="date" value={from}
-          onChange={(event) => onFromChange(event.target.value)} inputProps={{ 'aria-label': 'From date' }} />
+          onChange={(event) => onFromChange(event.target.value)}
+          slotProps={{ htmlInput: { 'aria-label': 'From date' } }} />
       </Stack>
       <Stack spacing={0.5} sx={{ minWidth: 160 }}>
         <Typography component="label" variant="caption" color="text.secondary" htmlFor="analytics-to">To</Typography>
         <TextField id="analytics-to" size="small" type="date" value={to}
-          onChange={(event) => onToChange(event.target.value)} inputProps={{ 'aria-label': 'To date' }} />
+          onChange={(event) => onToChange(event.target.value)}
+          slotProps={{ htmlInput: { 'aria-label': 'To date' } }} />
       </Stack>
     </Stack>
   </Stack>
@@ -145,8 +147,12 @@ const AnalyticsPage: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction={{ xs: 'column', lg: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2.5 }}>
-        <Stack direction="row" spacing={1} alignItems="flex-start">
+      <Stack
+        direction={{ xs: 'column', lg: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between', mb: 2.5 }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
           <Button startIcon={<DownloadIcon />} variant="outlined" disabled={!rows.length} onClick={downloadCsv}>Export CSV</Button>
           <span><Button startIcon={<ImageIcon />} variant="outlined" disabled aria-describedby="analytics-png-status">Export PNG</Button></span>
           <Typography id="analytics-png-status" variant="caption" color="text.secondary" sx={{ maxWidth: 180 }}>
@@ -189,7 +195,11 @@ const AnalyticsPage: React.FC = () => {
           {listings.isLoading ? <Typography role="status">Loading marketplace comparison…</Typography>
             : listings.isError ? <Button onClick={listings.refetch}>Retry marketplace comparison</Button>
               : !marketplaceSummary.length ? <Typography color="text.secondary">No marketplace events in this range.</Typography> : marketplaceSummary.map((item) => (
-            <Stack key={item.name} direction="row" justifyContent="space-between" sx={{ py: 0.75 }}>
+            <Stack
+              key={item.name}
+              direction="row"
+              sx={{ justifyContent: 'space-between', py: 0.75 }}
+            >
               <Typography>{item.name}</Typography><Typography sx={{ textAlign: 'right' }}>
                 {formatNumber(item.listings)} listings · {formatCurrency(item.revenue, item.currency ?? currency)} · {formatNumber(item.sales)} sales<br />
                 {formatNumber(item.conversion)}% conversion · {item.share === null ? '—' : `${formatNumber(item.share)}%`} revenue share

@@ -34,9 +34,10 @@ describe('AnalyticsDateRangeControls', () => {
     const buttons = findByType(tree, Button);
 
     expect(labels.map((label) => label.props.htmlFor).filter(Boolean)).toEqual(['analytics-from', 'analytics-to']);
-    expect(fields.map((field) => field.props.inputProps)).toEqual([
-      { 'aria-label': 'From date' }, { 'aria-label': 'To date' },
-    ]);
+    const htmlInputs = fields.map(
+      (field) => (field.props.slotProps as { htmlInput?: unknown } | undefined)?.htmlInput
+    );
+    expect(htmlInputs).toEqual([{ 'aria-label': 'From date' }, { 'aria-label': 'To date' }]);
     expect(buttons.map((button) => button.props.children)).toEqual(['7D', '30D', '90D', 'YTD']);
     (buttons[2].props.onClick as () => void)();
     expect(onPresetChange).toHaveBeenCalledWith('90d');

@@ -49,7 +49,7 @@ const ListingsPage: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2.5 }}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2.5 }}>
         <Select
           size="small"
           multiple
@@ -61,7 +61,7 @@ const ListingsPage: React.FC = () => {
             selected.length === 0 ? (
               'All statuses'
             ) : (
-              <Stack direction="row" spacing={0.5} flexWrap="wrap">
+              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
                 {selected.map((s) => (
                   <ListingStatusBadge key={s} status={s} />
                 ))}
