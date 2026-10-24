@@ -1,6 +1,7 @@
 // Rate limiting per ARCHITECTURE.md §18:
-//   - public routes (auth):        100 req/min per IP
-//   - GET /auth/me:                100 req/15 min keyed by userId (fallback IP)
+//   - public routes (the /auth prefix incl. the /auth/me token check, OAuth callback,
+//     application-info):          100 req/min per IP
+//   - GET /auth/me, after auth:    100 req/15 min keyed by userId (fallback IP)
 //   - authenticated routes:      1000 req/min keyed by workspaceId (fallback IP)
 //   - sensitive price operations:  10 req/min keyed by workspaceId (fallback IP)
 // All limiters emit the §18 error envelope (429, RATE_LIMITED) on rejection.
@@ -51,7 +52,9 @@ export function authenticatedRateLimiter(): RateLimitRequestHandler {
 }
 
 // Mount it after authMiddleware so req.user is set and the allowance belongs to the user. An IP
-// key would make everyone behind one NAT or reverse proxy share, and exhaust, a single allowance.
+// key would make everyone behind one NAT or reverse proxy share, and exhaust, a single 15-minute
+// allowance. The per-IP public limiter on the /auth prefix in front of it is only a flood guard
+// (100/min, see routes/index.ts).
 export function meRateLimiter(limit = 100): RateLimitRequestHandler {
   return build(limit, keyByUser, ME_WINDOW_MS);
 }

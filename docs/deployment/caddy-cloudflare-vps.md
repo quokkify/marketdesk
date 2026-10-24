@@ -47,13 +47,14 @@ OLX_ADAPTER_MODE=stub
 
 `TRUST_PROXY=true` makes the app trust one proxy hop, here Caddy, and take the client address
 from the `X-Forwarded-For` header that Caddy sets. The per-IP rate limits on the public routes,
-such as sign-in and registration, need it. With the default `TRUST_PROXY=false` the app sees every
-request as coming from the proxy, so all visitors share one allowance and one noisy client can use
-it up for everyone. Leave it `false` whenever the app can be reached without Caddy, because a
-direct client could then forge the header; the Compose stack binds the app to loopback, so only
-Caddy reaches it. In Cloudflare's **Proxied** mode the peer Caddy sees is a Cloudflare address, so
-the limits count per Cloudflare address, not per visitor, until Caddy is configured to trust
-Cloudflare's forwarded client address.
+such as sign-in, registration and the `/auth/me` session check, need it. With the default
+`TRUST_PROXY=false` the app sees every request as coming from the proxy, so all visitors share one
+allowance and one noisy client can use it up for everyone, including session restore after a
+reload. Leave it `false` whenever the app can be reached without Caddy, because a direct client
+could then forge the header; the Compose stack binds the app to loopback, so only Caddy reaches
+it. In Cloudflare's **Proxied** mode the peer Caddy sees is a Cloudflare address, so the limits
+count per Cloudflare address, not per visitor, until Caddy is configured to trust Cloudflare's
+forwarded client address.
 
 `DB_SSL_MODE` is mandatory in production. Keep `disable` for the internal Compose
 PostgreSQL service shown in this runbook. For an external managed PostgreSQL endpoint,

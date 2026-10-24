@@ -89,7 +89,7 @@ test('init-env is idempotent', ...)
 **Interfaces:**
 - `baseQueryWithAuth: BaseQueryFn` wraps `fetchBaseQuery`; on `error.status === 401` dispatches `logout()` and `enqueueToast({ message: 'Your session expired. Please sign in again.', severity: 'warning' })` once per expiry (guard with a module flag reset on successful login).
 - `AuthBootstrap` logs out only when `me.error.status` is 401 or 403; other errors keep the session.
-- `/auth/me` limiter moves after `authMiddleware` and keys by `req.user.userId`.
+- `/auth/me` limiter moves after `authMiddleware` and keys by `req.user.userId`; the shared public per-IP limiter is mounted on the `/auth` prefix in front of the auth router (CodeQL `js/missing-rate-limiting`).
 
 - [ ] Steps: failing tests → implement → verify → commit `fix(auth): handle expired sessions and user-keyed me limiter`.
 

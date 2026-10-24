@@ -868,7 +868,9 @@ describe('Presentation API', () => {
     });
 
     // Regression guard: the /me limiter used to run before authentication and key by IP, so
-    // everyone behind one proxy shared one allowance, and the 429 that followed logged users out.
+    // everyone behind one proxy shared one 15-minute allowance, and the 429 that followed logged
+    // users out. The public per-IP flood guard (100/min) still fronts the whole /auth prefix
+    // (routes/index.ts), but the per-user allowance is spent only after authentication.
     describe('GET /me', () => {
       const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1' })}`;
       const me = (app: express.Express, authorization?: string) => {
@@ -902,22 +904,35 @@ describe('Presentation API', () => {
         const secondOfA = await me(app, bearer('u-1'));
         const firstOfB = await me(app, bearer('u-2'));
 
+        // The per-user limiter answers last, so its headers are the ones on the response.
+        expect(firstOfB.headers['ratelimit-policy']).toBe('100;w=900');
         expect(firstOfA.headers['ratelimit-remaining']).toBe('99');
         expect(secondOfA.headers['ratelimit-remaining']).toBe('98');
         expect(firstOfB.headers['ratelimit-remaining']).toBe('99');
       });
 
-      it('rejects a bad token before the limiter, so it spends no allowance', async () => {
+      it('guards the /auth prefix per IP first and spends the per-user allowance only after authentication', async () => {
         const { app } = await buildTestApp({ enableRateLimit: true });
 
         const missing = await me(app);
         const forged = await me(app, 'Bearer not-a-jwt');
+        const login = await request(app)
+          .post('/api/auth/login')
+          .send({ email: 'demo@example.com', password: 'wrong' });
         const valid = await me(app, bearer('u-1'));
 
         expect(missing.status).toBe(401);
         expect(forged.status).toBe(401);
-        expect(missing.headers['ratelimit-remaining']).toBeUndefined();
-        expect(forged.headers['ratelimit-remaining']).toBeUndefined();
+        expect(login.status).toBe(401);
+        // One public bucket (100/min per IP) sits in front of every /auth route, token check
+        // included...
+        expect(missing.headers['ratelimit-policy']).toBe('100;w=60');
+        expect(missing.headers['ratelimit-remaining']).toBe('99');
+        expect(forged.headers['ratelimit-remaining']).toBe('98');
+        expect(login.headers['ratelimit-policy']).toBe('100;w=60');
+        expect(login.headers['ratelimit-remaining']).toBe('97');
+        // ...and the per-user allowance (100/15 min) is spent only by authenticated requests.
+        expect(valid.headers['ratelimit-policy']).toBe('100;w=900');
         expect(valid.headers['ratelimit-remaining']).toBe('99');
       });
 
@@ -928,7 +943,7 @@ describe('Presentation API', () => {
           },
         } as unknown as AuthController;
         const app = express();
-        app.use('/api/auth', createAuthRoutes(controller, undefined, meRateLimiter(2)));
+        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2)));
 
         const first = await me(app, bearer('u-1'));
         const second = await me(app, bearer('u-1'));
