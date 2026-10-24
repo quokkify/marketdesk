@@ -1,9 +1,10 @@
 // Cross-marketplace listings overview with status filtering. Rows link through
-// to the owning product's detail page.
-import React, { useMemo, useState } from 'react';
+// to the owning product's detail page. The status filter lives in the URL
+// (`?status=error`) so other screens can deep-link to it.
+import React, { useMemo } from 'react';
 import { Box, MenuItem, Select, Stack } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Listing, ListingStatus } from '@shared/types';
 import { LISTING_STATUS_LIST } from '@shared/constants';
 import { useDelistListingToDraft, useListings } from '../services/hooks/index.js';
@@ -14,12 +15,32 @@ import { Card } from '../components/common/Card.js';
 import { ListingStatusBadge } from '../components/common/Badge.js';
 import { ListingsTable } from '../components/tables/index.js';
 
+const STATUS_PARAM = 'status';
+
+// Known statuses from a comma-separated `status` param, deduplicated, in the
+// canonical order; anything else is ignored.
+export function parseListingStatusParam(value: string | null): ListingStatus[] {
+  const requested = new Set((value ?? '').split(','));
+  return LISTING_STATUS_LIST.filter((status) => requested.has(status));
+}
+
+export function withListingStatusParam(
+  current: URLSearchParams,
+  statuses: ListingStatus[],
+): URLSearchParams {
+  const next = new URLSearchParams(current);
+  if (statuses.length > 0) next.set(STATUS_PARAM, statuses.join(','));
+  else next.delete(STATUS_PARAM);
+  return next;
+}
+
 const ListingsPage: React.FC = () => {
   const navigate = useNavigate();
   const currency = useAppSelector((s) => s.workspace.currency);
   const { resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
-
-  const [statusFilter, setStatusFilter] = useState<ListingStatus[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get(STATUS_PARAM);
+  const statusFilter = useMemo(() => parseListingStatusParam(statusParam), [statusParam]);
 
   const params = useMemo<ListingListParams>(() => {
     const p: ListingListParams = { sort: '-updatedAt', limit: 100 };
@@ -30,10 +51,20 @@ const ListingsPage: React.FC = () => {
   const { data, isLoading, isFetching, isError, error, refetch } = useListings(params);
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
 
+  // GET /listings ignores `status` today, so the fetched rows are filtered
+  // here as well; the request keeps the param for when the server honours it.
+  const listings = useMemo(
+    () =>
+      statusFilter.length && data
+        ? data.filter((listing: Listing) => statusFilter.includes(listing.status))
+        : data,
+    [data, statusFilter],
+  );
 
   const handleStatusChange = (e: SelectChangeEvent<ListingStatus[]>) => {
     const value = e.target.value;
-    setStatusFilter(typeof value === 'string' ? (value.split(',') as ListingStatus[]) : value);
+    const statuses = parseListingStatusParam(typeof value === 'string' ? value : value.join(','));
+    setSearchParams(withListingStatusParam(searchParams, statuses), { replace: true });
   };
 
   const handleRelist = (listing: Listing) => {
@@ -80,7 +111,7 @@ const ListingsPage: React.FC = () => {
 
       <Card disablePadding>
         <ListingsTable
-          listings={data}
+          listings={listings}
           loading={isLoading || isFetching}
           error={isError ? error : undefined}
           onRetry={refetch}
