@@ -17,6 +17,7 @@ import authReducer, { setCredentials } from '../state/slices/authSlice';
 import uiReducer from '../state/slices/uiSlice';
 import workspaceReducer, { setWorkspace } from '../state/slices/workspaceSlice';
 import { lightTheme } from '../theme/lightTheme';
+import { withoutStyleTags } from '../testkit/staticMarkup';
 import SettingsPage from './SettingsPage';
 
 const principal: SettingsPrincipal = { workspaceId: 'ws-1', userId: 'user-a' };
@@ -132,15 +133,17 @@ async function renderSettings(url: string): Promise<string> {
   ]);
 
   try {
-    return renderToStaticMarkup(
-      <Provider store={store}>
-        <ThemeProvider theme={lightTheme}>
-          <MemoryRouter initialEntries={[url]}>
-            <SettingsPage />
-          </MemoryRouter>
-        </ThemeProvider>
-      </Provider>
-    ).replace(/<style[\s\S]*?<\/style>/g, '');
+    return withoutStyleTags(
+      renderToStaticMarkup(
+        <Provider store={store}>
+          <ThemeProvider theme={lightTheme}>
+            <MemoryRouter initialEntries={[url]}>
+              <SettingsPage />
+            </MemoryRouter>
+          </ThemeProvider>
+        </Provider>
+      )
+    );
   } finally {
     // Clears the RTK Query cache-removal timers so Jest can exit promptly.
     store.dispatch(baseApi.util.resetApiState());

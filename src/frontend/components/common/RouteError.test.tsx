@@ -9,6 +9,7 @@ import {
   type RouteObject,
 } from 'react-router-dom';
 import { lightTheme } from '../../theme/lightTheme';
+import { textOf } from '../../testkit/staticMarkup';
 import {
   RouteError,
   RouteErrorView,
@@ -38,12 +39,6 @@ async function renderRouteFailure(thrown: unknown): Promise<string> {
     </ThemeProvider>
   );
 }
-
-const textOf = (html: string) =>
-  html
-    .replace(/<style[^>]*>[^<]*<\/style>/g, '')
-    .replace(/<[^>]+>/g, '|')
-    .replace(/\|+/g, '|');
 
 type ElementProps = { children?: React.ReactNode; onClick?: () => void };
 

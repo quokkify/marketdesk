@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { lightTheme } from '../../theme/lightTheme';
+import { textOf } from '../../testkit/staticMarkup';
 import { SIDEBAR_WIDTH } from '../../utils/constants';
 import { Sidebar, isPrimaryNavActive, resolveSidebarResponsiveMode } from './Sidebar';
 
@@ -57,7 +58,7 @@ describe('expanded desktop sidebar (PRD shell)', () => {
       </MemoryRouter>
     </ThemeProvider>
   );
-  const text = html.replace(/<style[^>]*>[^<]*<\/style>/g, '').replace(/<[^>]+>/g, '|');
+  const text = textOf(html);
 
   it('is 250px wide', () => {
     expect(SIDEBAR_WIDTH).toBe(250);
@@ -86,7 +87,7 @@ describe('expanded desktop sidebar (PRD shell)', () => {
 
   it('shows pending Hermes reviews as a danger pill', () => {
     expect(html).toContain('aria-label="Hermes AI, 3 pending reviews"');
-    expect(text).toMatch(/\|Hermes AI\|+3\|/);
+    expect(text).toMatch(/\|Hermes AI\|3\|/);
     expect(html).toContain('background-color:#FBE9EC');
     expect(html).toContain('color:#D1435B');
   });

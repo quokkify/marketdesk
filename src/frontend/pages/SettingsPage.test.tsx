@@ -5,6 +5,7 @@ import { Button, Typography } from '@mui/material';
 import { alpha, ThemeProvider, type Theme } from '@mui/material/styles';
 import type { IntegrationSettingsStatus } from '@shared/types';
 import { lightTheme } from '../theme/lightTheme';
+import { withoutStyleTags } from '../testkit/staticMarkup';
 import {
   ApplicationInfoBlock,
   mapSettingsFieldErrors,
@@ -45,11 +46,13 @@ function textContent(node: React.ReactNode): string {
 }
 
 function render(node: React.ReactNode): string {
-  return renderToStaticMarkup(
-    <ThemeProvider theme={lightTheme}>
-      <MemoryRouter>{node}</MemoryRouter>
-    </ThemeProvider>
-  ).replace(/<style[\s\S]*?<\/style>/g, '');
+  return withoutStyleTags(
+    renderToStaticMarkup(
+      <ThemeProvider theme={lightTheme}>
+        <MemoryRouter>{node}</MemoryRouter>
+      </ThemeProvider>
+    )
+  );
 }
 
 function visibleText(html: string): string {
