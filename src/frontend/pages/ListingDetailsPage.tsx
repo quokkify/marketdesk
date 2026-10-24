@@ -1085,7 +1085,7 @@ const ListingDetailsPage: React.FC = () => {
             currency={currency}
             primaryAction={primaryAction}
             externalUrl={recheckListing?.status === 'live' ? recheckListing.externalUrl : undefined}
-            busy={publicationActionsLocked || creatingListing || listings.isLoading}
+            busy={publicationActionsLocked || creatingListing || listings.isLoading || listings.isError}
             onEdit={() => setEditOpen(true)}
             onPublish={() => void handlePublishToOlx()}
             onRelist={recheckListing ? () => handleRelist(recheckListing) : undefined}
