@@ -1,5 +1,9 @@
 import { OlxPublicationQuotaService } from '../OlxPublicationQuotaService';
-import { decideOlxPublication, OlxPublicationQuota } from '../../../domain/entities/OlxPublicationQuota';
+import {
+  decideOlxPublication,
+  OLX_SANDBOX_QUOTA_EVALUATION,
+  OlxPublicationQuota,
+} from '../../../domain/entities/OlxPublicationQuota';
 import type {
   AuthorizeOlxPublicationInput,
   IOlxPublicationQuotaRepository,
@@ -70,7 +74,8 @@ class AtomicInMemoryQuotaRepository implements IOlxPublicationQuotaRepository {
       const replay = this.operations.get(input.operationId);
       if (replay) return { ...replay, replayed: true };
       let quota = await this.findCurrent(input);
-      const evaluation = quota?.evaluate(input.at);
+      const evaluation = quota?.evaluate(input.at)
+        ?? (input.sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined);
       const { decision, consumedUnit } = decideOlxPublication(
         evaluation,
         input.overrideConfirmed,
@@ -97,6 +102,28 @@ class AtomicInMemoryQuotaRepository implements IOlxPublicationQuotaRepository {
     }
   }
 
+  // Units are consumed at authorize time here, so consume only re-checks a reservation
+  // that holds no quota row, the way the Postgres repository does.
+  async consume(operationId: string, _at: Date, sandboxMode = false): Promise<OlxPublicationAuthorization> {
+    const operation = this.operations.get(operationId);
+    if (!operation) throw new Error(`OLX quota reservation not found: ${operationId}`);
+    if (operation.consumedUnit || operation.decision === 'block' || operation.quota) {
+      return { ...operation, replayed: true };
+    }
+    const evaluation = sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined;
+    const result: OlxPublicationAuthorization = {
+      ...operation,
+      decision: operation.decision === 'allow' && !evaluation?.canPublishForFree
+        ? 'block'
+        : operation.decision,
+      status: evaluation?.status ?? 'unknown',
+      reason: evaluation?.reason ?? 'quota_unknown',
+      replayed: false,
+    };
+    this.operations.set(operationId, result);
+    return result;
+  }
+
   private copy(quota: OlxPublicationQuota, consumed: number): OlxPublicationQuota {
     return unwrap(OlxPublicationQuota.create({
       id: quota.id,
@@ -120,7 +147,7 @@ class AtomicInMemoryQuotaRepository implements IOlxPublicationQuotaRepository {
 
 const NOW = new Date('2026-07-15T12:00:00.000Z');
 
-function setup() {
+function setup(options: { sandboxMode?: boolean } = {}) {
   const marketplaceRepo = new InMemoryMarketplaceRepository();
   const quotaRepo = new AtomicInMemoryQuotaRepository();
   const activityLog = new InMemoryActivityLogRepository();
@@ -187,6 +214,7 @@ function setup() {
     idFactory('id'),
     { resolve: (category) => category === 'electronics' ? '2000' : null },
     () => NOW,
+    options,
   );
   return { service, quotaRepo, activityLog, marketplace, product, listing };
 }
@@ -425,5 +453,79 @@ describe('OlxPublicationQuotaService', () => {
     expect(updated.consumed).toBe(3);
     expect(updated.remaining).toBe(2);
     expect(await service.list({ marketplaceId: 'mp-1', workspaceId: 'ws-1' })).toHaveLength(1);
+  });
+
+  describe('sandbox mode', () => {
+    it('preview() in sandbox mode allows publication when no quota row exists', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: true });
+
+      const preview = await service.preview({ marketplace, product, listing });
+
+      expect(preview).toEqual({
+        applicable: true,
+        marketplaceKey: 'olx',
+        marketplaceAccountId: 'account-1',
+        subcategoryId: '2000',
+        status: 'available',
+        decision: 'allow',
+        reason: 'sandbox_unlimited',
+        requiresOverride: false,
+      });
+      expect(quotaRepo.quotas).toHaveLength(0);
+    });
+
+    it('preview() in real mode still blocks with quota_unknown', async () => {
+      const { service, marketplace, product, listing } = setup({ sandboxMode: false });
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        status: 'unknown', decision: 'block', reason: 'quota_unknown', requiresOverride: true,
+      });
+    });
+
+    it('authorizes and consumes a sandbox publication without writing a quota row', async () => {
+      const { service, quotaRepo, activityLog, marketplace, product, listing } = setup({
+        sandboxMode: true,
+      });
+
+      const authorized = await service.authorize({
+        operationId: 'operation-sandbox', mode: 'publish', marketplace, product, listing, actorId: 'user-1',
+      });
+      const consumed = await service.consumeReservation('operation-sandbox');
+
+      const sandboxDecision = {
+        applicable: true,
+        marketplaceKey: 'olx',
+        status: 'available',
+        decision: 'allow',
+        reason: 'sandbox_unlimited',
+        requiresOverride: false,
+        consumedUnit: false,
+      };
+      expect(authorized).toEqual({
+        ...sandboxDecision,
+        marketplaceAccountId: 'account-1',
+        subcategoryId: '2000',
+      });
+      expect(consumed).toEqual(sandboxDecision);
+      expect(quotaRepo.quotas).toHaveLength(0);
+      expect(quotaRepo.operations.get('operation-sandbox')).toMatchObject({
+        decision: 'allow', status: 'available', reason: 'sandbox_unlimited', consumedUnit: false, quota: null,
+      });
+      expect(activityLog.entries.at(-1)).toMatchObject({
+        action: 'olx.quota_publish_allowed',
+        metadata: expect.objectContaining({
+          operationId: 'operation-sandbox', reason: 'sandbox_unlimited', consumedUnit: false,
+        }),
+      });
+    });
+
+    it('still evaluates an existing quota row in sandbox mode', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: true });
+      await quotaRepo.save(quota(1));
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        status: 'exhausted', decision: 'block', reason: 'quota_exhausted', requiresOverride: true,
+      });
+    });
   });
 });

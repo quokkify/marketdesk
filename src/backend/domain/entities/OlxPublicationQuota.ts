@@ -38,8 +38,17 @@ export interface OlxQuotaEvaluation {
     | 'quota_exhausted'
     | 'quota_stale'
     | 'quota_unverified'
-    | 'outside_cycle';
+    | 'outside_cycle'
+    | 'sandbox_unlimited';
 }
+
+// Sandbox mode publishes through the stub adapter, which spends no OLX quota. A missing
+// quota row then reads as an unlimited free unit, and no unit is consumed.
+export const OLX_SANDBOX_QUOTA_EVALUATION: Readonly<OlxQuotaEvaluation> = Object.freeze({
+  status: 'available',
+  canPublishForFree: true,
+  reason: 'sandbox_unlimited',
+});
 
 export function decideOlxPublication(
   evaluation: OlxQuotaEvaluation | undefined,

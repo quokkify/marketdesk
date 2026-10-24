@@ -12,6 +12,8 @@ import type { Redis } from 'ioredis';
 import { buildBullAddOptions, buildContainer, type ManagedQueue } from '../container';
 import { buildApp } from '../../../presentation/http/app';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
+import { env } from '../../env';
+import { StubOlxTaxonomyResolver } from '../../../infrastructure/adapters/StubOlxTaxonomyResolver';
 
 // --- Doubles -----------------------------------------------------------------
 
@@ -173,5 +175,37 @@ describe('buildContainer (composition root)', () => {
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();
     }
+  });
+});
+
+describe('OLX taxonomy resolver wiring', () => {
+  const configuredAdapterMode = env.marketplaces.olx.adapterMode;
+
+  afterEach(() => {
+    env.marketplaces.olx.adapterMode = configuredAdapterMode;
+  });
+
+  it('serves the stub taxonomy without an OLX access token while the adapter is not real', async () => {
+    env.marketplaces.olx.adapterMode = 'stub';
+    const { deps } = build();
+
+    // No marketplace account row exists, so any access-token lookup would reject.
+    const resolver = await deps.olxTaxonomyResolver!('marketplace-olx');
+
+    expect(resolver).toBeInstanceOf(StubOlxTaxonomyResolver);
+    await expect(resolver.verify('1001')).resolves.toMatchObject({
+      providerCategoryId: '1001',
+      name: 'Cameras',
+      path: ['Electronics', 'Cameras'],
+    });
+  });
+
+  it('still resolves the OLX access token for the taxonomy in real mode', async () => {
+    env.marketplaces.olx.adapterMode = 'real';
+    const { deps } = build();
+
+    await expect(deps.olxTaxonomyResolver!('marketplace-olx')).rejects.toThrow(
+      'OLX account is not connected'
+    );
   });
 });

@@ -284,7 +284,9 @@ export class MarketplaceOAuthService {
     const account = await this.deps.accountRepo.upsert({
       id: existing?.id ?? this.deps.idGenerator(),
       marketplaceId: marketplace.id,
-      handle: tokens.accountHandle?.trim() || existing?.handle || 'OLX account',
+      handle:
+        tokens.accountHandle?.trim() ||
+        (existing && existing.handle !== OLX_SANDBOX_ACCOUNT_HANDLE ? existing.handle : 'OLX account'),
       credentials: this.deps.credentialVault.encrypt(tokens),
       status: 'connected',
       scopes: [...tokens.scopes],
@@ -326,26 +328,9 @@ export class MarketplaceOAuthService {
       );
     }
 
+    let tokens: OlxOAuthTokens;
     try {
-      const tokens = normalizeTokens(this.deps.credentialVault.decrypt(account.credentials));
-      if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
-        // A leftover sandbox connection cannot reach real OLX: report it as needing a
-        // reconnect, like unreadable credentials, instead of as a live connection.
-        return this.toStatus(
-          marketplace.id,
-          marketplace.key,
-          marketplace.isConnected(),
-          { ...account, status: 'error' },
-          null
-        );
-      }
-      return this.toStatus(
-        marketplace.id,
-        marketplace.key,
-        marketplace.isConnected(),
-        account,
-        tokens
-      );
+      tokens = normalizeTokens(this.deps.credentialVault.decrypt(account.credentials));
     } catch {
       return this.toStatus(
         marketplace.id,
@@ -355,6 +340,31 @@ export class MarketplaceOAuthService {
         null
       );
     }
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      // A leftover sandbox connection cannot reach real OLX. Disconnect the marketplace so
+      // list and detail views stop claiming a connection, and report the account as
+      // needing a reconnect, like unreadable credentials. The sandbox flag comes from the
+      // credentials read above, because the reported status drops them.
+      if (marketplace.isConnected()) {
+        marketplace.disconnect();
+        await this.deps.marketplaceRepo.save(marketplace);
+      }
+      return this.toStatus(
+        marketplace.id,
+        marketplace.key,
+        marketplace.isConnected(),
+        { ...account, status: 'error' },
+        null,
+        true
+      );
+    }
+    return this.toStatus(
+      marketplace.id,
+      marketplace.key,
+      marketplace.isConnected(),
+      account,
+      tokens
+    );
   }
 
   async saveAppCredentials(
@@ -471,11 +481,7 @@ export class MarketplaceOAuthService {
     }
 
     const tokens = this.decryptTokens(account);
-    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
-      throw new InvalidStateError(
-        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
-      );
-    }
+    this.assertNotSandboxInRealMode(account, tokens);
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -506,11 +512,7 @@ export class MarketplaceOAuthService {
 
     // Another worker may have refreshed while this worker waited for the lock.
     const tokens = this.decryptTokens(account);
-    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
-      throw new InvalidStateError(
-        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
-      );
-    }
+    this.assertNotSandboxInRealMode(account, tokens);
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -598,16 +600,32 @@ export class MarketplaceOAuthService {
     };
   }
 
-  // The fixed handle survives a disconnect, which clears the credentials. The token type
-  // inside the encrypted credentials identifies them even if the handle is overwritten.
+  // Readable credentials identify a sandbox account by the token type encrypted inside
+  // them, so a real account that carries the sandbox handle is not mistaken for one.
+  // Sandbox rows written before that marker existed still hold the dummy access token,
+  // which no real OLX token equals. The fixed handle only stands in when no credentials
+  // are readable, such as after a disconnect cleared them.
   private isSandboxAccount(
     account: MarketplaceAccountRecord,
     tokens?: OlxOAuthTokens | null
   ): boolean {
-    return (
-      account.handle === OLX_SANDBOX_ACCOUNT_HANDLE ||
-      tokens?.tokenType === OLX_SANDBOX_TOKEN_TYPE
-    );
+    return tokens
+      ? tokens.tokenType === OLX_SANDBOX_TOKEN_TYPE ||
+          tokens.accessToken === OLX_SANDBOX_ACCESS_TOKEN
+      : account.handle === OLX_SANDBOX_ACCOUNT_HANDLE;
+  }
+
+  // Both token paths run this right after decryption, before any token is returned or
+  // refreshed, so stored sandbox credentials never reach real OLX.
+  private assertNotSandboxInRealMode(
+    account: MarketplaceAccountRecord,
+    tokens: OlxOAuthTokens
+  ): void {
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      throw new InvalidStateError(
+        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
+      );
+    }
   }
 
   private decryptTokens(account: MarketplaceAccountRecord): OlxOAuthTokens {
@@ -656,7 +674,8 @@ export class MarketplaceOAuthService {
     providerKey: MarketplaceKey,
     marketplaceConnected: boolean,
     account: MarketplaceAccountRecord | null,
-    tokens: OlxOAuthTokens | null
+    tokens: OlxOAuthTokens | null,
+    sandbox = account ? this.isSandboxAccount(account, tokens) : false
   ): MarketplaceOAuthStatus {
     const connected = marketplaceConnected && account?.status === 'connected' && tokens !== null;
     return {
@@ -673,7 +692,7 @@ export class MarketplaceOAuthService {
         : null,
       tokenExpiresAt: tokens?.expiresAt.toISOString(),
       refreshable: Boolean(tokens?.refreshToken),
-      sandbox: account ? this.isSandboxAccount(account, tokens) : false,
+      sandbox,
     };
   }
 }

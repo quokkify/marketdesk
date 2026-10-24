@@ -19,6 +19,9 @@ export interface AuthorizeOlxPublicationInput extends OlxQuotaLookup {
   overrideConfirmed: boolean;
   overrideReason?: string;
   actorId?: string;
+  // While the OLX adapter is not real, a missing quota row allows publication without
+  // consuming a unit (OLX_SANDBOX_QUOTA_EVALUATION).
+  sandboxMode?: boolean;
 }
 
 export interface OlxPublicationAuthorization {
@@ -41,5 +44,5 @@ export interface IOlxPublicationQuotaRepository {
   }): Promise<OlxPublicationQuota[]>;
   save(quota: OlxPublicationQuota): Promise<void>;
   authorize(input: AuthorizeOlxPublicationInput): Promise<OlxPublicationAuthorization>;
-  consume(operationId: string, at: Date): Promise<OlxPublicationAuthorization>;
+  consume(operationId: string, at: Date, sandboxMode?: boolean): Promise<OlxPublicationAuthorization>;
 }

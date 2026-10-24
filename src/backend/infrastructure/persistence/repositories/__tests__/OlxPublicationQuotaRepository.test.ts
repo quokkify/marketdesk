@@ -193,4 +193,79 @@ describe('OlxPublicationQuotaRepository', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('ON CONFLICT (operation_id) DO UPDATE'))).toBe(true);
     expect(query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
+
+  describe('without a quota row', () => {
+    const at = new Date('2026-07-15T12:00:00.000Z');
+    const writesQuota = (query: jest.Mock) =>
+      query.mock.calls.some(([sql]) => /(INSERT INTO|UPDATE) olx_publication_quotas/.test(String(sql)));
+
+    function authorizeWithoutQuota(sandboxMode?: boolean) {
+      const query = jest.fn(async (_sql: string, _params?: unknown[]) => ({ rows: [], rowCount: 0 }));
+      const pool = { connect: async () => ({ query, release: jest.fn() }) } as unknown as Pool;
+      const result = new OlxPublicationQuotaRepository(pool).authorize({
+        operationId: 'operation-sandbox', workspaceId: 'ws-1', marketplaceId: 'mp-1',
+        marketplaceAccountId: 'account-1', subcategoryId: '1001', at, listingId: 'listing-1',
+        mode: 'publish', overrideConfirmed: false, sandboxMode,
+      });
+      return { query, result };
+    }
+
+    function consumeWithoutQuota(sandboxMode?: boolean) {
+      const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('FROM olx_publication_operations')) return { rows: [{
+          operation_id: 'operation-sandbox', decision: 'allow', quota_status: 'available',
+          reason: 'sandbox_unlimited', consumed_unit: false, quota_id: null,
+        }], rowCount: 1 };
+        return { rows: [], rowCount: 1 };
+      });
+      const pool = { connect: async () => ({ query, release: jest.fn() }) } as unknown as Pool;
+      const result = new OlxPublicationQuotaRepository(pool).consume('operation-sandbox', at, sandboxMode);
+      return { query, result };
+    }
+
+    it('records a sandbox allow in the operation ledger without writing quota', async () => {
+      const { query, result } = authorizeWithoutQuota(true);
+
+      await expect(result).resolves.toEqual({
+        operationId: 'operation-sandbox', decision: 'allow', status: 'available',
+        reason: 'sandbox_unlimited', quota: null, consumedUnit: false, replayed: false,
+      });
+      const insert = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO olx_publication_operations'));
+      expect(insert?.[1]?.[4]).toBeNull();
+      expect(insert?.[1]?.slice(8, 12)).toEqual(['allow', 'available', 'sandbox_unlimited', false]);
+      expect(writesQuota(query)).toBe(false);
+      expect(query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+    });
+
+    it('still blocks as quota_unknown outside sandbox mode', async () => {
+      const { query, result } = authorizeWithoutQuota();
+
+      await expect(result).resolves.toMatchObject({
+        decision: 'block', status: 'unknown', reason: 'quota_unknown', consumedUnit: false,
+      });
+      const insert = query.mock.calls.find(([sql]) => sql.includes('INSERT INTO olx_publication_operations'));
+      expect(insert?.[1]?.slice(8, 11)).toEqual(['block', 'unknown', 'quota_unknown']);
+    });
+
+    it('keeps a sandbox allow at consume time without consuming a quota unit', async () => {
+      const { query, result } = consumeWithoutQuota(true);
+
+      await expect(result).resolves.toEqual({
+        operationId: 'operation-sandbox', decision: 'allow', status: 'available',
+        reason: 'sandbox_unlimited', quota: null, consumedUnit: false, replayed: false,
+      });
+      const update = query.mock.calls.find(([sql]) => sql.includes('UPDATE olx_publication_operations'));
+      expect(update?.[1]).toEqual(['operation-sandbox', 'allow', 'available', 'sandbox_unlimited', false]);
+      expect(writesQuota(query)).toBe(false);
+      expect(query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
+    });
+
+    it('downgrades an allow to a block at consume time outside sandbox mode', async () => {
+      const { result } = consumeWithoutQuota();
+
+      await expect(result).resolves.toMatchObject({
+        decision: 'block', status: 'unknown', reason: 'quota_unknown', consumedUnit: false,
+      });
+    });
+  });
 });

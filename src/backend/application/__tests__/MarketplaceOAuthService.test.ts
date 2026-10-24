@@ -940,6 +940,121 @@ describe('MarketplaceOAuthService', () => {
         expect(context.refreshAccessToken).not.toHaveBeenCalled();
       });
 
+      it('a real OAuth completion over a stored sandbox account ends as a real account', async () => {
+        const { realService, marketplace, accountRepo } = await connectedInStubModeThenReal();
+        await realService.start({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+        const status = await realService.complete({
+          providerKey: 'olx',
+          code: 'authorization-code',
+          state: 'oauth-state',
+        });
+
+        expect(status).toMatchObject({
+          connected: true,
+          sandbox: false,
+          account: { id: 'account-1', handle: 'OLX account', status: 'connected' },
+        });
+        expect(accountRepo.accounts.get(marketplace.id)?.handle).toBe('OLX account');
+        await expect(realService.getValidAccessToken(marketplace.id)).resolves.toBe('access-token');
+      });
+
+      it('real mode serves a real account that still carries the sandbox handle', async () => {
+        const { service, marketplace, accountRepo } = setup(undefined, { ...sandbox, enabled: false });
+        marketplace.connect();
+        await accountRepo.upsert({
+          id: 'account-legacy',
+          marketplaceId: marketplace.id,
+          handle: 'OLX sandbox account',
+          credentials: { payload: initialTokens },
+          status: 'connected',
+          scopes: ['basic', 'write'],
+        });
+
+        await expect(service.getValidAccessToken(marketplace.id)).resolves.toBe('access-token');
+        await expect(
+          service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' })
+        ).resolves.toMatchObject({
+          connected: true,
+          sandbox: false,
+          account: { handle: 'OLX sandbox account', status: 'connected' },
+        });
+        expect(marketplace.isConnected()).toBe(true);
+      });
+
+      it('real mode refreshes an expired real token even when the account carries the sandbox handle', async () => {
+        const { service, marketplace, accountRepo, refreshAccessToken } = setup(undefined, {
+          ...sandbox,
+          enabled: false,
+        });
+        await accountRepo.upsert({
+          id: 'account-legacy',
+          marketplaceId: marketplace.id,
+          handle: 'OLX sandbox account',
+          credentials: {
+            payload: { ...initialTokens, expiresAt: new Date('2026-07-14T11:59:00.000Z') },
+          },
+          status: 'connected',
+          scopes: ['basic', 'write'],
+        });
+
+        await expect(service.getValidAccessToken(marketplace.id)).resolves.toBe('refreshed-access-token');
+        expect(refreshAccessToken).toHaveBeenCalledWith('refresh-token');
+      });
+
+      it('real mode check() flags a sandbox-marked account whose handle differs', async () => {
+        const { service, marketplace, accountRepo } = setup(undefined, { ...sandbox, enabled: false });
+        marketplace.connect();
+        await accountRepo.upsert({
+          id: 'account-renamed',
+          marketplaceId: marketplace.id,
+          handle: 'Renamed account',
+          credentials: sandboxCredentials,
+          status: 'connected',
+          scopes: sandboxScopes,
+        });
+
+        const status = await service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+        expect(status).toMatchObject({
+          connected: false,
+          sandbox: true,
+          refreshable: false,
+          account: { handle: 'Renamed account', status: 'error' },
+        });
+        expect(status.tokenExpiresAt).toBeUndefined();
+      });
+
+      it('real mode check() disconnects the marketplace of a stored sandbox account', async () => {
+        const { realService, marketplace, marketplaceRepo } = await connectedInStubModeThenReal();
+        const save = jest.spyOn(marketplaceRepo, 'save');
+
+        await realService.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+        await realService.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' });
+
+        expect(save).toHaveBeenCalledTimes(1);
+        expect(save.mock.calls[0][0].id).toBe(marketplace.id);
+        expect(save.mock.calls[0][0].isConnected()).toBe(false);
+        expect((await marketplaceRepo.findById(marketplace.id))?.isConnected()).toBe(false);
+      });
+
+      it('real mode refuses sandbox credentials stored before the token type marker existed', async () => {
+        const { service, marketplace, accountRepo } = setup(undefined, { ...sandbox, enabled: false });
+        await accountRepo.upsert({
+          id: 'account-1',
+          marketplaceId: marketplace.id,
+          handle: 'OLX sandbox account',
+          credentials: { payload: { ...sandboxCredentials.payload, tokenType: 'Bearer' } },
+          status: 'connected',
+          scopes: sandboxScopes,
+        });
+
+        await expect(service.getValidAccessToken(marketplace.id)).rejects.toThrow(realModeError);
+        await expect(
+          service.check({ marketplaceId: marketplace.id, workspaceId: 'ws-1' })
+        ).resolves.toMatchObject({ connected: false, sandbox: true });
+      });
+
       it('real mode check() reports a sandbox account as disconnected', async () => {
         const { realService, marketplace } = await connectedInStubModeThenReal();
 
