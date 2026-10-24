@@ -3,6 +3,7 @@
 // workspace slice; detail queries and mutations are re-exported verbatim with
 // friendlier names. Import these from feature components (Group 9) rather than
 // reaching into state/api directly.
+import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useAppSelector } from '../../state/hooks.js';
 import {
   useGetProductsQuery,
@@ -38,6 +39,8 @@ import {
   useImportMarketplaceAdvertsMutation,
   useUpdateMarketplaceMutation,
   useGetHermesEventsQuery,
+  useGetHermesEventsFeedInfiniteQuery,
+  useGetHermesStatusQuery,
   useGetHermesEventQuery,
   useApproveHermesEventMutation,
   useDismissHermesEventMutation,
@@ -57,6 +60,7 @@ import {
 import type {
   ProductListParams,
   ListingListParams,
+  HermesEventFeedParams,
   HermesEventListParams,
   AnalyticsQueryParams,
 } from '../../state/api/index.js';
@@ -68,6 +72,7 @@ function useWorkspaceId(): string | undefined {
 type ProductsOpts = Parameters<typeof useGetProductsQuery>[1];
 type ListingsOpts = Parameters<typeof useGetListingsQuery>[1];
 type HermesOpts = Parameters<typeof useGetHermesEventsQuery>[1];
+type HermesFeedOpts = Parameters<typeof useGetHermesEventsFeedInfiniteQuery>[1];
 type OverviewOpts = Parameters<typeof useGetAnalyticsOverviewQuery>[1];
 type RevenueOpts = Parameters<typeof useGetAnalyticsRevenueQuery>[1];
 type ListingMetricsOpts = Parameters<typeof useGetAnalyticsListingsQuery>[1];
@@ -126,6 +131,18 @@ export function useHermesEvents(
   const workspaceId = useWorkspaceId();
   return useGetHermesEventsQuery({ workspaceId, ...params }, options);
 }
+// The paged activity feed. `null` filters mean no event can match, so nothing is fetched.
+export function useHermesEventFeed(
+  filters: HermesEventFeedParams | null,
+  options?: HermesFeedOpts,
+) {
+  const workspaceId = useWorkspaceId();
+  return useGetHermesEventsFeedInfiniteQuery(
+    filters ? { workspaceId, ...filters } : skipToken,
+    options,
+  );
+}
+export const useHermesStatus = useGetHermesStatusQuery;
 export const useHermesEvent = useGetHermesEventQuery;
 export const useApproveHermesEvent = useApproveHermesEventMutation;
 export const useDismissHermesEvent = useDismissHermesEventMutation;
