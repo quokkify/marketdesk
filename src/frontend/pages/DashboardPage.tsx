@@ -28,6 +28,7 @@ import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
 import { formatRelative } from '../utils/formatters.js';
 import { hermesTypeLabel } from '../utils/labels.js';
+import { isSandboxMarketplace } from '../utils/sandbox.js';
 import { StatCard } from '../components/common/StatCard.js';
 import { Card } from '../components/common/Card.js';
 import { EmptyState } from '../components/common/EmptyState.js';
@@ -52,7 +53,6 @@ import {
   dashboardRevenueRange,
   hermesActivityEmptyState,
   hermesSeverityTone,
-  isSandboxMarketplace,
   marketplaceDisplayName,
   marketplaceOperationalSummary,
   marketplacePresentation,
@@ -256,7 +256,7 @@ export const MarketplaceRow: React.FC<{ marketplace: Marketplace; onOpen: () => 
               {marketplace.name}
             </Typography>
             {isSandboxMarketplace(marketplace) && (
-              <Badge label="Sandbox" color="info" variant="outlined" />
+              <Badge label="Sandbox" color="warning" variant="outlined" />
             )}
             <Badge label={status.statusLabel} color={status.statusColor} variant="outlined" />
           </Stack>

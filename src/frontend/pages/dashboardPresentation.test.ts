@@ -18,7 +18,6 @@ import {
   hermesActivityEmptyState,
   hermesSeverityTone,
   isHermesRunActive,
-  isSandboxMarketplace,
   marketplaceDisplayName,
   marketplaceOperationalSummary,
   marketplacePresentation,
@@ -28,6 +27,7 @@ import {
   splitDashboardEvents,
   syncAllToast,
 } from './dashboardPresentation';
+import { isSandboxMarketplace } from '../utils/sandbox';
 
 function marketplace(overrides: Partial<Marketplace> = {}): Marketplace {
   return {
