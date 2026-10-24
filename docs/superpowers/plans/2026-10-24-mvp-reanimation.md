@@ -177,10 +177,10 @@ test('init-env is idempotent', ...)
 ### Task C3: Hermes events summary and #279 sync status
 
 **Files:**
-- Modify: `src/backend/application/services/HermesApplicationService.ts`, `src/backend/domain/repositories/interfaces/IEventRepository.ts` + `EventRepository.ts` (+ in-memory testkit) (`summary(workspaceId, since)`), `src/backend/presentation/http/routes/hermes.ts` + `HermesController.ts` (`GET /api/hermes/events/summary`), `src/backend/application/dto/presenters.ts:122-137` (`marketplaceSync?: 'queued' | 'confirmed' | 'failed' | null` read from the latest `hermes_event.approved` activity metadata), `src/shared/types/index.ts`.
+- Modify: `src/backend/application/services/HermesApplicationService.ts`, `src/backend/domain/repositories/interfaces/IEventRepository.ts` + `EventRepository.ts` (+ in-memory testkit) (`summary(workspaceId, since)`), `src/backend/presentation/http/routes/hermes.ts` + `HermesController.ts` (`GET /api/hermes/events/summary`), `src/backend/application/dto/presenters.ts:122-137` (`marketplaceSync?: 'queued' | 'retry_required' | 'not_required' | null` read from `marketplaceSync.status` in the latest `hermes_event.approved` activity metadata — the vocabulary `ApproveHermesEventUseCase` already records), `src/shared/types/index.ts`.
 - Test: `HermesApplicationService.test.ts`, API integration.
 
-**Interfaces:** `HermesEventSummaryView = { actionsToday: number; awaitingReview: number; completed: number; dismissed: number }` where `actionsToday` counts events created since local midnight (workspace timezone), `awaitingReview` = `pending_review` + `pending_decision`, `completed` = `applied`, `dismissed` = `dismissed`. `HermesEventView.marketplaceSync` added; UI copy for applied events becomes `Applied in MarketDesk · marketplace update {queued|confirmed|failed}` (Task E3 consumes).
+**Interfaces:** `HermesEventSummaryView = { actionsToday: number; awaitingReview: number; completed: number; dismissed: number }` where `actionsToday` counts events created since local midnight (workspace timezone), `awaitingReview` = `pending_review` + `pending_decision`, `completed` = `applied`, `dismissed` = `dismissed`. `HermesEventView.marketplaceSync` added; UI copy for applied events stays `Applied in MarketDesk` plus a plain-language note for `queued` / `retry_required` and nothing for `not_required` (Task E3's event card already renders exactly this vocabulary).
 
 - [ ] Steps: failing tests → implement → verify → commit `feat(hermes): events summary endpoint and marketplace sync status (#279)`.
 
