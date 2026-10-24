@@ -9,7 +9,12 @@ import {
   type RouteObject,
 } from 'react-router-dom';
 import { lightTheme } from '../../theme/lightTheme';
-import { RouteError, RouteErrorView, describeRouteError } from './RouteError';
+import {
+  RouteError,
+  RouteErrorView,
+  describeRouteError,
+  type RouteErrorViewProps,
+} from './RouteError';
 
 // Renders the route's errorElement the way the router does when a loader throws.
 async function renderRouteFailure(thrown: unknown): Promise<string> {
@@ -96,13 +101,17 @@ describe('describeRouteError', () => {
 });
 
 describe('RouteErrorView', () => {
-  const reloadButton = (tree: React.ReactNode) =>
-    findElement(tree, (element) => element.props.children === 'Reload');
+  // The view has no hooks, so calling it yields its element tree.
+  const reloadButtonOf = (props: RouteErrorViewProps) =>
+    findElement(
+      RouteErrorView(props) as React.ReactElement,
+      (element) => element.props.children === 'Reload'
+    );
 
   it('runs the reload action when Reload is pressed', () => {
     const onReload = jest.fn();
 
-    reloadButton(RouteErrorView({ onReload }))?.props.onClick?.();
+    reloadButtonOf({ onReload })?.props.onClick?.();
 
     expect(onReload).toHaveBeenCalledTimes(1);
   });
@@ -115,7 +124,7 @@ describe('RouteErrorView', () => {
     });
 
     try {
-      reloadButton(RouteErrorView({}))?.props.onClick?.();
+      reloadButtonOf({})?.props.onClick?.();
     } finally {
       delete (globalThis as { window?: unknown }).window;
     }
