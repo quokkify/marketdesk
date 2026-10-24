@@ -10,6 +10,16 @@ import dotenv from 'dotenv';
 
 type EnvModule = typeof import('../config/env');
 
+// config/env calls dotenv.config() on import, which would let a developer's local .env
+// leak into a suite that asserts defaults from raw variables. doMock is not hoisted, so
+// this file's own `dotenv.parse` calls above keep the real module.
+jest.doMock('dotenv', () => {
+  const actual = jest.requireActual<typeof import('dotenv')>('dotenv');
+  const stub = { ...actual, config: () => ({ parsed: {} }) };
+  return { __esModule: true, ...stub, default: stub };
+});
+
+
 const envExamplePath = path.resolve(__dirname, '../../../.env.example');
 const savedVariables = new Map<string, string | undefined>();
 
