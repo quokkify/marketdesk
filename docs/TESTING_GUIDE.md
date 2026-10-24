@@ -28,7 +28,7 @@ npm run env:init
 docker compose up -d --build
 ```
 
-`npm run env:init` creates `.env` from `.env.example` and generates the secrets the app needs: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET` and `MARKETPLACE_CREDENTIALS_KEY`. It keeps any value that is already set, so running it again is safe. `.env` is git-ignored and private: never share it. Leave the other defaults alone, because they select the sandbox and the automatic AI mode.
+`npm run env:init` creates `.env` from `.env.example` and generates the secrets the app needs: `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET` and `MARKETPLACE_CREDENTIALS_KEY`. It keeps any value that is already set, so running it again is safe. If a key is repeated without a real value after a line that sets one, it leaves both lines as they are, prints a warning and exits 1. `.env` is git-ignored and private: never share it. Leave the other defaults alone, because they select the sandbox and the automatic AI mode.
 
 The first start builds the application image, so it takes a while. Compose then prepares the uploads folder, runs the database migrations and starts the app.
 
@@ -130,7 +130,7 @@ To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a nat
 ### 5. Look at the dashboard and analytics
 
 1. Open **Dashboard**. Your sandbox listing counts as an active listing. Items that need attention and recent activity are listed there.
-2. Open **Analytics**. The sandbox has no buyers, so sales, revenue and profit stay empty. Views and favourites are simulated by the sandbox and grow each time a sync reads a listing; a notice at the top of the page says so. Run a sync from **Marketplaces** to refresh listing numbers.
+2. Open **Analytics**. The sandbox has no buyers, so sales, revenue and profit stay empty. Views and watchers are simulated by the OLX sandbox and grow on every sync; a notice at the top of the page says so. Run a sync from **Marketplaces** to refresh listing numbers.
 
 What to check: empty states say what is missing, and no chart or tile shows invented numbers.
 
@@ -156,7 +156,7 @@ Known limitations:
 | Security, API keys, Telegram | Settings shows them as roadmap panels or disabled rows labelled "Not available in this release". | Approved deviation: Settings |
 | Bulk actions | After selecting products, Add tag, Edit price and Delete are disabled. Export CSV works for the selection. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
 | Notifications | The notifications button is disabled. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
-| Analytics | No sales in sandbox, because there are no buyers. Views and favourites are simulated by the sandbox, grow on every sync and are labelled as sandbox data. | Consequence of the sandbox |
+| Analytics | No sales in sandbox, because there are no buyers. Views and watchers are simulated by the OLX sandbox, grow on every sync and are labelled as sandbox data. | Consequence of the sandbox |
 | Price edits | Editing the price of a live listing by hand changes MarketDesk only. OLX is updated only when the listing is published again. Approving a Hermes price suggestion applies the price and queues an update for live listings. | By design |
 | Accounts | No e-mail confirmation, password reset or password change. | Not built yet |
 
@@ -171,7 +171,7 @@ Please include:
 - The steps you took, what you expected and what happened.
 - A screenshot. Crop out personal data.
 - The page address from the browser bar and the time it happened, with your time zone.
-- For a failed action: in the browser developer tools, open the Network tab, select the failed `/api/...` request, and copy its status code and its response body. The body holds an error code and message.
+- For a failed action: in the browser developer tools, open the Network tab, select the failed `/api/...` request, and copy its status code and the error `code` and `message` from its response body. For a 500, paste only that `code` and `message`, and remove anything in them that looks like a file path or a token: in the default development mode the message is the raw server error.
 - The last lines of the app log from `docker compose logs --no-color --tail=200 app`. Read them before pasting.
 - The output of `docker compose ps`, the answer of `/api/application-info`, and the commit from `git rev-parse --short HEAD`.
 - Your browser and operating system.
@@ -183,6 +183,6 @@ What I did:
 What I expected:
 What happened:
 Page address and time:
-Failed request (status and response body):
+Failed request (status, error code and message):
 Commit and browser:
 ```
