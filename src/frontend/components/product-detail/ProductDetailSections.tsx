@@ -25,7 +25,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
+import type { HermesEvent, HermesStatusView, Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
@@ -525,17 +525,24 @@ export const ProductActivityCard: React.FC<{
   </Card>
 );
 
+const ANALYZING_LABELS: Record<HermesStatusView['activeProvider'], string> = {
+  hermes: 'Analyzing with Hermes…',
+  offline: 'Analyzing with offline heuristics…',
+};
+
 // Hermes actions for one product. Everything Hermes produces stays review-only.
+// The running label names the provider that answers; it stays neutral while unknown.
 export const ProductHermesCard: React.FC<{
   analyzing: boolean;
   analyzeDisabled: boolean;
   suggesting: boolean;
   note: string;
   noteIsError?: boolean;
+  activeProvider?: HermesStatusView['activeProvider'];
   onAnalyze: () => void;
   onSuggest: () => void;
   children?: React.ReactNode;
-}> = ({ analyzing, analyzeDisabled, suggesting, note, noteIsError = false, onAnalyze, onSuggest, children }) => (
+}> = ({ analyzing, analyzeDisabled, suggesting, note, noteIsError = false, activeProvider, onAnalyze, onSuggest, children }) => (
   <Card
     title="Hermes"
     subtitle="Review-only suggestions for this product"
@@ -547,7 +554,7 @@ export const ProductHermesCard: React.FC<{
     <Stack spacing={2}>
       <Stack spacing={1}>
         <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
-          {analyzing ? 'Analyzing with Hermes…' : 'Analyze with Hermes'}
+          {analyzing ? (activeProvider ? ANALYZING_LABELS[activeProvider] : 'Analyzing…') : 'Analyze with Hermes'}
         </Button>
         <Button fullWidth variant="outlined" disabled={suggesting} onClick={onSuggest}>
           {suggesting ? 'Preparing suggestions…' : 'Suggest improvements'}

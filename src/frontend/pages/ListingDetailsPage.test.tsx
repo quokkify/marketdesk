@@ -12,6 +12,7 @@ import {
   PUBLICATION_READINESS_CHECKING_LABEL,
   PUBLICATION_READINESS_RECHECK_LABEL,
   PublicationReadinessAction,
+  productHermesAnalyzingNote,
   productHermesDisabledReason,
   productHermesSuccessMessage,
   productPrimaryAction,
@@ -96,6 +97,18 @@ describe('ListingDetailsPage presentation', () => {
         listingSeoEnabled: true,
       })
     ).toBeNull();
+  });
+
+  it('names the provider that is analyzing the product and stays neutral while it is unknown', () => {
+    expect(productHermesAnalyzingNote('hermes')).toBe(
+      'Hermes is analyzing this product only. Any recommendation will remain review-only.'
+    );
+    expect(productHermesAnalyzingNote('offline')).toBe(
+      'Offline heuristics are analyzing this product only. Any recommendation will remain review-only.'
+    );
+    expect(productHermesAnalyzingNote(undefined)).toBe(
+      'Analyzing this product only. Any recommendation will remain review-only.'
+    );
   });
 
   it('uses review-only product-scoped success copy for analysis results', () => {
@@ -354,6 +367,15 @@ describe('ListingDetailsPage presentation', () => {
           'Current listing status reported by OLX. This is separate from the product status in MarketDesk.',
         externalUrl: listing.externalUrl,
       })
+    );
+  });
+
+  it('attributes the provider status of a sandbox listing to the OLX sandbox', () => {
+    expect(remoteMarketplacePresentation(listing, 'OLX', true).explanation).toBe(
+      'Current listing status reported by the OLX sandbox. This is separate from the product status in MarketDesk.'
+    );
+    expect(remoteMarketplacePresentation(listing, 'OLX', false).explanation).toBe(
+      'Current listing status reported by OLX. This is separate from the product status in MarketDesk.'
     );
   });
 

@@ -358,6 +358,25 @@ describe('product detail Hermes card', () => {
     expect(html).toContain('Pending recommendations');
   });
 
+  it('names the active provider while the analysis runs and stays neutral while it is unknown', () => {
+    const analyzingLabel = (activeProvider?: 'hermes' | 'offline') => {
+      const tree = ProductHermesCard({
+        analyzing: true,
+        analyzeDisabled: false,
+        suggesting: false,
+        note: 'Analyzing this product only.',
+        activeProvider,
+        onAnalyze: () => undefined,
+        onSuggest: () => undefined,
+      }) as ElementLike;
+      return textContent(findByType(tree, Button)[0]);
+    };
+
+    expect(analyzingLabel('hermes')).toBe('Analyzing with Hermes…');
+    expect(analyzingLabel('offline')).toBe('Analyzing with offline heuristics…');
+    expect(analyzingLabel(undefined)).toBe('Analyzing…');
+  });
+
   it('disables analysis with its reason and reports a failed run as an alert', () => {
     const blocked = ProductHermesCard({
       analyzing: false,

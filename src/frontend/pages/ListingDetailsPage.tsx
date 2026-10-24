@@ -19,6 +19,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   HermesEvent,
+  HermesStatusView,
   Listing,
   Marketplace,
   Product,
@@ -49,6 +50,7 @@ import {
   useCreateProductListing,
   usePriceHistory,
   useHermesEvents,
+  useHermesStatus,
   useRunHermes,
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
@@ -163,6 +165,20 @@ export function productHermesDisabledReason(input: {
   return null;
 }
 
+// Names the provider that answers the run: offline heuristics stand in while Hermes is
+// unavailable. Neutral while the provider status is still unknown.
+export function productHermesAnalyzingNote(
+  activeProvider: HermesStatusView['activeProvider'] | undefined
+): string {
+  const subject =
+    activeProvider === 'hermes'
+      ? 'Hermes is analyzing'
+      : activeProvider === 'offline'
+        ? 'Offline heuristics are analyzing'
+        : 'Analyzing';
+  return `${subject} this product only. Any recommendation will remain review-only.`;
+}
+
 export function productHermesSuccessMessage(eventCount: number): string {
   return eventCount
     ? 'Hermes SEO suggestion is ready for human review.'
@@ -241,7 +257,8 @@ export function selectPrimaryListing(
 
 export function remoteMarketplacePresentation(
   listing: Listing | undefined,
-  marketplaceName: string
+  marketplaceName: string,
+  sandbox = false
 ) {
   const label = listing?.remoteStatusLabel;
   const isPending = listing?.isRemotePending === true;
@@ -255,7 +272,7 @@ export function remoteMarketplacePresentation(
     explanation: isPending
       ? `${marketplaceName} is still moderating or activating this listing. Metrics may be unavailable until it becomes active.`
       : label
-        ? `Current listing status reported by ${marketplaceName}. This is separate from the product status in MarketDesk.`
+        ? `Current listing status reported by ${sandbox ? `the ${marketplaceName} sandbox` : marketplaceName}. This is separate from the product status in MarketDesk.`
         : `${marketplaceName} has not reported a listing status yet.`,
     externalUrl: listing?.externalUrl,
   };
@@ -489,6 +506,7 @@ const ListingDetailsPage: React.FC = () => {
     { skip: !productId }
   );
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
+  const activeProvider = useHermesStatus().data?.activeProvider;
   const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
     useMarketplaceLookup();
 
@@ -553,7 +571,11 @@ const ListingDetailsPage: React.FC = () => {
   const primaryMarketplaceName = primaryListing
     ? resolveMarketplaceName(primaryListing.marketplaceId)
     : 'Marketplace';
-  const remoteMarketplace = remoteMarketplacePresentation(primaryListing, primaryMarketplaceName);
+  const remoteMarketplace = remoteMarketplacePresentation(
+    primaryListing,
+    primaryMarketplaceName,
+    primaryListing ? resolveMarketplaceSandbox(primaryListing.marketplaceId) : false
+  );
   const recommendations = selectProductRecommendations(hermesEvents.data?.items ?? [], productId);
   const recommendationTotal = hermesEvents.data?.total ?? recommendations.length;
   const analyzeDisabledReason = productHermesDisabledReason({
@@ -970,7 +992,7 @@ const ListingDetailsPage: React.FC = () => {
     olxConnected: Boolean(olxMarketplace?.connected),
   });
   const hermesNote = analyzing
-    ? 'Hermes is analyzing this product only. Any recommendation will remain review-only.'
+    ? productHermesAnalyzingNote(activeProvider)
     : analysisState.status === 'idle'
       ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
       : analysisState.message;
@@ -1118,6 +1140,7 @@ const ListingDetailsPage: React.FC = () => {
           />
           <ProductHermesCard
             analyzing={analyzing}
+            activeProvider={activeProvider}
             analyzeDisabled={Boolean(analyzeDisabledReason)}
             suggesting={proposingImprovements}
             note={hermesNote}
