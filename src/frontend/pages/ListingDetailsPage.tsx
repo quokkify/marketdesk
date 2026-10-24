@@ -279,6 +279,13 @@ export function remoteMarketplacePresentation(
   };
 }
 
+// A sandbox advert has no OLX counterpart, so only a real delist reports a removed remote advert.
+export function delistSuccessMessage(sandbox: boolean): string {
+  return sandbox
+    ? 'Listing returned to draft (sandbox).'
+    : 'Remote advert removed; listing returned to draft. Nothing was republished.';
+}
+
 export function selectProductRecommendations(
   events: HermesEvent[],
   productId: string
@@ -1075,8 +1082,7 @@ const ListingDetailsPage: React.FC = () => {
                 if (operation.state === 'executed') {
                   dispatch(
                     enqueueToast({
-                      message:
-                        'Remote advert removed; listing returned to draft. Nothing was republished.',
+                      message: delistSuccessMessage(resolveMarketplaceSandbox(listing.marketplaceId)),
                       severity: 'success',
                     })
                   );

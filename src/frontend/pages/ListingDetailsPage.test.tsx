@@ -6,6 +6,7 @@ import {
   categoryConflictEvidenceLines,
   categoryLookupUnavailable,
   CategoryLookupUnavailableNotice,
+  delistSuccessMessage,
   editRequestedByNavigation,
   mainPreviewImageSx,
   isProductRecheckStale,
@@ -402,6 +403,13 @@ describe('ListingDetailsPage presentation', () => {
     );
     expect(remoteMarketplacePresentation(listing, 'OLX', false).explanation).toBe(
       'Current listing status reported by OLX. This is separate from the product status in MarketDesk.'
+    );
+  });
+
+  it('confirms a sandbox delist as a return to draft without claiming a remote advert', () => {
+    expect(delistSuccessMessage(true)).toBe('Listing returned to draft (sandbox).');
+    expect(delistSuccessMessage(false)).toBe(
+      'Remote advert removed; listing returned to draft. Nothing was republished.'
     );
   });
 
