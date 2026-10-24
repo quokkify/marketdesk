@@ -2114,7 +2114,11 @@ describe('PublishListingHandler', () => {
   });
 
   describe('product lifecycle on a successful publish', () => {
-    function lifecycleFixture(productStatus: ProductStatus, listingStatus: ListingStatus) {
+    function lifecycleFixture(
+      productStatus: ProductStatus,
+      listingStatus: ListingStatus,
+      publish = jest.fn(async (): Promise<PublishResult> => publishResult),
+    ) {
       const productRepo = new InMemoryProductRepository();
       const listingRepo = new InMemoryListingRepository();
       const marketplaceRepo = new InMemoryMarketplaceRepository();
@@ -2153,7 +2157,7 @@ describe('PublishListingHandler', () => {
         marketplaceRepo,
         new RecordingEventPublisher(),
       );
-      const adapter = fakeAdapter({ publish: jest.fn(async () => publishResult) });
+      const adapter = fakeAdapter({ publish });
       const handler = makePublishHandler(resolverFor(adapter).resolver, undefined, listingService);
       const job = (mode: 'publish' | 'relist') => ({
         operationId: `op-lifecycle-${mode}`,
@@ -2174,6 +2178,22 @@ describe('PublishListingHandler', () => {
 
       expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
       expect((await productRepo.findById('p-lifecycle'))?.status).toBe('active');
+    });
+
+    it('leaves a draft product unchanged when the publish fails', async () => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture(
+        'draft',
+        'draft',
+        jest.fn(async (): Promise<PublishResult> => {
+          throw new Error('OLX rejected the advert');
+        }),
+      );
+
+      await expect(handler.handle(job('publish'))).rejects.toThrow('OLX rejected the advert');
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('draft');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe('draft');
+      expect(productRepo.saved).toEqual([]);
     });
 
     it.each<[ProductStatus, ProductStatus]>([

@@ -132,6 +132,7 @@ describe('ListingService', () => {
       })
     );
     productRepo.items.set(product.id, product);
+    transactional.productRepo.items.set(product.id, product);
     marketplaceRepo.items.set(marketplace.id, marketplace);
     listingRepo.items.set(listing.id, listing);
 
@@ -143,5 +144,77 @@ describe('ListingService', () => {
     ]);
     expect(transactional.listingRepo.items.get(listing.id)?.status).toBe('live');
     expect(productRepo.saved).toEqual([]);
+  });
+
+  it('activates the copy read inside the transaction, so a stale snapshot is never written back', async () => {
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const marketplaceRepo = new InMemoryMarketplaceRepository();
+    const transactional = {
+      listingRepo: new InMemoryListingRepository(),
+      productRepo: new InMemoryProductRepository(),
+    };
+    const service = new ListingService(
+      listingRepo,
+      productRepo,
+      marketplaceRepo,
+      new RecordingEventPublisher(),
+      (work) => work(transactional)
+    );
+    const draft = (name: string) =>
+      unwrap(
+        Product.create({
+          id: 'product-draft',
+          workspaceId: 'workspace-1',
+          sku: 'sku-draft',
+          name,
+          description: 'Product description long enough for domain validation.',
+          costPrice: null,
+          sellingPrice: money(50),
+          condition: 'good',
+          category: 'electronics',
+        })
+      );
+    // The publish reads this snapshot first; the seller renames the product before
+    // the transaction starts, which the transaction's own read sees.
+    const stale = draft('Original title');
+    const fresh = draft('Title edited meanwhile');
+    const marketplace = unwrap(
+      Marketplace.create({
+        id: 'marketplace-1',
+        workspaceId: 'workspace-1',
+        key: 'olx',
+        name: 'OLX',
+        connected: true,
+      })
+    );
+    const listing = unwrap(
+      Listing.create({
+        id: 'listing-draft',
+        productId: stale.id,
+        marketplaceId: marketplace.id,
+        price: money(60),
+      })
+    );
+    productRepo.items.set(stale.id, stale);
+    transactional.productRepo.items.set(fresh.id, fresh);
+    marketplaceRepo.items.set(marketplace.id, marketplace);
+    listingRepo.items.set(listing.id, listing);
+
+    const result = await service.publishListing(listing.id, 'olx-1', null, new Date(), null, null, [
+      'https://ireland.apollo.olxcdn.com/v1/files/remote-photo/image',
+    ]);
+
+    expect(result.isOk()).toBe(true);
+    expect(
+      transactional.productRepo.saved.map((saved) => [saved.name, saved.status, [...saved.images]])
+    ).toEqual([
+      [
+        'Title edited meanwhile',
+        'active',
+        ['https://ireland.apollo.olxcdn.com/v1/files/remote-photo/image'],
+      ],
+    ]);
+    expect(stale.status).toBe('draft');
   });
 });
