@@ -38,8 +38,8 @@ import { ConfirmDialog } from '../common/ConfirmDialog.js';
 // Event-view fields that the API may not send yet. Both are optional so the card
 // renders the same truthful copy for events that carry neither.
 export interface HermesEventExtras {
-  /** Marketplace-side state of an applied change; null when no marketplace update was needed. */
-  marketplaceSync?: 'queued' | 'confirmed' | 'failed' | null;
+  /** Marketplace-side state of an applied change as the API records it: queued, retry_required or not_required. */
+  marketplaceSync?: string | null;
   /** Which provider produced the suggestion; `offline` means the built-in heuristics. */
   source?: 'hermes' | 'offline';
 }
@@ -92,6 +92,18 @@ export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'
   );
 };
 
+// Plain-language note for the sync states the API records. Every other value, including
+// not_required, yields no note, so the card never prints a state word it does not know.
+function marketplaceSyncNote(
+  marketplaceSync: HermesEventExtras['marketplaceSync'],
+): { text: string; needsAttention: boolean } | null {
+  switch (marketplaceSync) {
+    case 'queued': return { text: 'marketplace update queued', needsAttention: false };
+    case 'retry_required': return { text: 'marketplace update needs a retry', needsAttention: true };
+    default: return null;
+  }
+}
+
 export function hermesLifecycleCopy(
   status: HermesEvent['status'],
   marketplaceSync?: HermesEventExtras['marketplaceSync'],
@@ -100,10 +112,10 @@ export function hermesLifecycleCopy(
     case 'pending_decision': return 'Hermes is evaluating whether this change requires review.';
     case 'pending_review': return 'A recorded decision is required before MarketDesk can continue.';
     case 'applying': return 'The approved change is queued or applying; provider completion is not yet confirmed.';
-    case 'applied':
-      return marketplaceSync
-        ? `Applied in MarketDesk · marketplace update ${marketplaceSync}`
-        : 'Applied in MarketDesk';
+    case 'applied': {
+      const note = marketplaceSyncNote(marketplaceSync);
+      return note ? `Applied in MarketDesk · ${note.text}` : 'Applied in MarketDesk';
+    }
     case 'dismissed': return 'This suggestion was dismissed without applying the proposed change.';
     case 'failed': return 'The action failed. Review the details before deciding what to do next.';
     case 'reverting': return 'The reversal is in progress; completion is not yet confirmed.';
@@ -117,7 +129,11 @@ export const HermesLifecycleCaption: React.FC<{
 }> = ({ status, marketplaceSync }) => (
   <Typography
     variant="caption"
-    color={status === 'applied' && marketplaceSync === 'failed' ? 'error.main' : 'text.secondary'}
+    color={
+      status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention
+        ? 'warning.dark'
+        : 'text.secondary'
+    }
     sx={{ display: 'block', mt: 0.75 }}
   >
     {hermesLifecycleCopy(status, marketplaceSync)}

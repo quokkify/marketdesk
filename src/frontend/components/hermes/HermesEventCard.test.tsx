@@ -249,19 +249,35 @@ describe('HermesEventCard activity presentation', () => {
 describe('applied event copy', () => {
   it.each([
     ['queued', 'Applied in MarketDesk · marketplace update queued'],
-    ['confirmed', 'Applied in MarketDesk · marketplace update confirmed'],
-    ['failed', 'Applied in MarketDesk · marketplace update failed'],
-  ] as const)('says the marketplace update is %s without claiming more', (sync, copy) => {
+    ['retry_required', 'Applied in MarketDesk · marketplace update needs a retry'],
+  ])('words the backend sync state %s in plain language', (sync, copy) => {
     expect(hermesLifecycleCopy('applied', sync)).toBe(copy);
   });
 
-  it('claims no marketplace work when the event carries no sync state', () => {
+  it.each([
+    ['not_required', 'no marketplace update was needed'],
+    ['null', 'there is no sync state'],
+    ['confirmed', 'the value is not in the vocabulary this UI knows'],
+    ['some_new_state', 'the value is not in the vocabulary this UI knows'],
+    ['constructor', 'the value only matches an inherited object property'],
+  ])('claims nothing about the marketplace when %s: %s', (sync) => {
+    const value = sync === 'null' ? null : sync;
+
+    expect(hermesLifecycleCopy('applied', value)).toBe('Applied in MarketDesk');
+  });
+
+  it('claims nothing when the event carries no sync state at all', () => {
     expect(hermesLifecycleCopy('applied')).toBe('Applied in MarketDesk');
-    expect(hermesLifecycleCopy('applied', null)).toBe('Applied in MarketDesk');
+  });
+
+  it('regression guard: never prints a raw backend token', () => {
+    for (const sync of ['queued', 'retry_required', 'not_required', 'confirmed', 'failed', 'x_y']) {
+      expect(hermesLifecycleCopy('applied', sync)).not.toMatch(/_/);
+    }
   });
 
   it('keeps the lifecycle copy of every other status independent of marketplace sync', () => {
-    expect(hermesLifecycleCopy('pending_review', 'confirmed')).toBe(
+    expect(hermesLifecycleCopy('pending_review', 'retry_required')).toBe(
       'A recorded decision is required before MarketDesk can continue.',
     );
     expect(hermesLifecycleCopy('dismissed')).toBe(
@@ -297,14 +313,38 @@ describe('HermesEventCard provenance and marketplace sync', () => {
     expect(html).not.toContain('MarketDesk recorded this action as completed.');
   });
 
-  it('keeps a failed marketplace update visible as an error and the rest neutral', () => {
-    const failed = captionFor({ status: 'applied', marketplaceSync: 'failed' });
-    const confirmed = captionFor({ status: 'applied', marketplaceSync: 'confirmed' });
-    const pending = captionFor({ status: 'pending_review', marketplaceSync: 'failed' });
+  it('shows a retry-required update as needing a retry, never as the raw token', () => {
+    const html = renderToStaticMarkup(
+      <HermesEventCard event={{ ...applied, marketplaceSync: 'retry_required' }} />,
+    );
 
-    expect(failed.props.color).toBe('error.main');
-    expect(failed.props.children).toBe('Applied in MarketDesk · marketplace update failed');
-    expect(confirmed.props.color).toBe('text.secondary');
+    expect(html).toContain('Applied in MarketDesk · marketplace update needs a retry');
+    expect(html).not.toContain('retry_required');
+  });
+
+  it.each(['not_required', null, 'something_new'])(
+    'adds nothing about the marketplace for the sync value %s',
+    (sync) => {
+      const html = renderToStaticMarkup(
+        <HermesEventCard event={{ ...applied, marketplaceSync: sync }} />,
+      );
+
+      expect(html).toContain('>Applied in MarketDesk<');
+      expect(html).not.toContain('marketplace update');
+      expect(html).not.toContain('not_required');
+    },
+  );
+
+  it('keeps a retry-required update visible as a warning and the rest neutral', () => {
+    const retry = captionFor({ status: 'applied', marketplaceSync: 'retry_required' });
+    const queued = captionFor({ status: 'applied', marketplaceSync: 'queued' });
+    const unknown = captionFor({ status: 'applied', marketplaceSync: 'something_new' });
+    const pending = captionFor({ status: 'pending_review', marketplaceSync: 'retry_required' });
+
+    expect(retry.props.color).toBe('warning.dark');
+    expect(retry.props.children).toBe('Applied in MarketDesk · marketplace update needs a retry');
+    expect(queued.props.color).toBe('text.secondary');
+    expect(unknown.props.color).toBe('text.secondary');
     expect(pending.props.color).toBe('text.secondary');
   });
 
