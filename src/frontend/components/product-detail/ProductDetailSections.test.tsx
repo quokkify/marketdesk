@@ -272,7 +272,10 @@ describe('product detail statistics card', () => {
 
     expect(sandbox).toContain('Statistics');
     expect(sandbox).toContain('Sandbox');
+    expect(sandbox).toContain('Simulated by the OLX sandbox');
+    expect(sandbox).not.toContain('OLX-reported');
     expect(real).not.toContain('Sandbox');
+    expect(real).toContain('OLX-reported status and metrics only');
     expect(noListing).toContain('Sandbox');
   });
 

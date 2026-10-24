@@ -14,7 +14,9 @@ import type { AnalyticsQueryParams, ListingPerformance } from '../state/api/inde
 import { useAppSelector } from '../state/hooks.js';
 import { formatCurrency, formatNumber } from '../utils/formatters.js';
 import { Card } from '../components/common/Card.js';
+import { SandboxDataNotice } from '../components/common/SandboxDataNotice.js';
 import { StatCard } from '../components/common/StatCard.js';
+import { hasSandboxMarketplace } from '../utils/sandbox.js';
 import { RevenueChart, ViewsChart, ConversionChart } from '../components/charts/index.js';
 import { AnalyticsTable } from '../components/tables/index.js';
 
@@ -147,6 +149,7 @@ const AnalyticsPage: React.FC = () => {
 
   return (
     <Box>
+      {hasSandboxMarketplace(marketplaces.data) && <SandboxDataNotice sx={{ mb: 2 }} />}
       <Stack
         direction={{ xs: 'column', lg: 'row' }}
         spacing={2}

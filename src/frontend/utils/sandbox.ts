@@ -3,3 +3,10 @@
 export function isSandboxMarketplace(marketplace: object | null | undefined): boolean {
   return (marketplace as { sandbox?: unknown } | null | undefined)?.sandbox === true;
 }
+
+// True while any marketplace of the workspace runs in the OLX sandbox.
+export function hasSandboxMarketplace(
+  marketplaces: ReadonlyArray<object> | null | undefined,
+): boolean {
+  return (marketplaces ?? []).some(isSandboxMarketplace);
+}

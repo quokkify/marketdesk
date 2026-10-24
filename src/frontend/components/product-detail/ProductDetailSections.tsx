@@ -335,7 +335,7 @@ export const OlxInsightsCard: React.FC<{
 }> = ({ listing, isOlx, sandbox = false, loading = false, error, onRetry, statusTitle, statusLabel, statusExplanation, statusColor }) => (
   <Card
     title="Statistics"
-    subtitle="OLX-reported status and metrics only"
+    subtitle={sandbox ? 'Simulated by the OLX sandbox' : 'OLX-reported status and metrics only'}
     action={sandbox ? <Chip size="small" color="warning" variant="outlined" label="Sandbox" /> : undefined}
   >
     {loading ? (

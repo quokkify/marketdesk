@@ -1,11 +1,35 @@
 import React from 'react';
 import { Button, Stack, TextField, Typography } from '@mui/material';
-import {
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import AnalyticsPage, {
   AnalyticsDateRangeControls,
   analyticsCsv,
   analyticsRangeForPreset,
 } from './AnalyticsPage';
 import type { ListingPerformance } from '../state/api';
+
+const mockMarketplaces: { data: Array<{ id: string; name: string; sandbox: boolean }> } = { data: [] };
+
+jest.mock('../services/hooks/index.js', () => ({
+  useAnalyticsOverview: () => ({ data: undefined, isLoading: false, isError: false }),
+  useAnalyticsListings: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+  useMarketplaces: () => mockMarketplaces,
+}));
+
+jest.mock('../state/hooks.js', () => ({
+  useAppSelector: () => 'PLN',
+}));
+
+jest.mock('../components/charts/index.js', () => ({
+  RevenueChart: () => null,
+  ViewsChart: () => null,
+  ConversionChart: () => null,
+}));
+
+jest.mock('../components/tables/index.js', () => ({
+  AnalyticsTable: () => null,
+}));
 
 type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
 
@@ -92,5 +116,21 @@ describe('analytics report helpers', () => {
     expect(csv).toContain('"\'\t=HYPERLINK(""https://evil"")"');
     expect(csv).toContain('"\'\r+cmd|calc"');
     expect(csv).toContain('"\'@SUM(1+1)"');
+  });
+});
+
+describe('AnalyticsPage sandbox data', () => {
+  const notice =
+    'Sandbox data: views and favourites are simulated by the OLX sandbox and grow on every refresh.';
+  const render = () => renderToStaticMarkup(<MemoryRouter><AnalyticsPage /></MemoryRouter>);
+
+  it('says that views and favourites are simulated while a marketplace runs in the sandbox', () => {
+    mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: true }];
+    const sandbox = render();
+    mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: false }];
+    const real = render();
+
+    expect(sandbox).toContain(notice);
+    expect(real).not.toContain(notice);
   });
 });

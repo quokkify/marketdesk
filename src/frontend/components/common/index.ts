@@ -29,3 +29,4 @@ export { LoadingSkeleton, PageSkeleton } from './Skeleton.js';
 export { Toast } from './Toast.js';
 export { PageStub } from './PageStub.js';
 export { SandboxAdvertChip } from './SandboxAdvertChip.js';
+export { SandboxDataNotice, SANDBOX_DATA_NOTICE } from './SandboxDataNotice.js';
