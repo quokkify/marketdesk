@@ -211,14 +211,17 @@ describe('Hermes banner', () => {
     expect(html).not.toContain('Offline heuristics');
   });
 
-  it('reports what Hermes is watching from the live listing and marketplace counts', () => {
+  it('reports the live listing and marketplace counts and says when Hermes runs', () => {
     const html = render();
 
-    expect(html).toContain('Watching 12 live listings on 1 marketplace');
+    expect(html).toContain(
+      '12 live listings on 1 marketplace · Hermes runs when you analyze a product',
+    );
+    expect(html).not.toMatch(/watching|monitor/i);
     expect(html).not.toContain('Sandbox');
   });
 
-  it('labels the sandbox when the watched marketplace is a sandbox', () => {
+  it('labels the sandbox when a connected marketplace is a sandbox', () => {
     mockUseMarketplaces.mockImplementation(() => query([olx({ sandbox: true })]));
 
     expect(render()).toContain('Sandbox');
@@ -232,7 +235,7 @@ describe('Hermes banner', () => {
     const html = render();
 
     expect(html).toContain('Live listing and marketplace counts could not be loaded.');
-    expect(html).not.toContain('Watching');
+    expect(html).not.toContain('live listings on');
   });
 
   it('wires Configure and product selection to the callbacks it is given', () => {

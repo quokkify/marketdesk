@@ -33,7 +33,7 @@ export interface TopBarRouteMeta {
 const ROUTE_META: Record<string, TopBarRouteMeta> = {
   '/': {
     title: 'Dashboard',
-    subtitle: 'Monitor products, marketplaces, and Hermes work from one command center.',
+    subtitle: 'Products, marketplaces, and Hermes suggestions in one command center.',
   },
   '/products': {
     title: 'Products',
@@ -49,7 +49,7 @@ const ROUTE_META: Record<string, TopBarRouteMeta> = {
   },
   '/hermes': {
     title: 'Hermes AI',
-    subtitle: 'Everything your AI agent did across monitored listings.',
+    subtitle: 'Everything your AI agent did across your listings.',
   },
   '/marketplaces': {
     title: 'Marketplaces',

@@ -182,6 +182,8 @@ export type HermesWatching =
 const countOf = (count: number, noun: string) => `${count} ${count === 1 ? noun : `${noun}s`}`;
 
 // The banner sentence from the live listing count and the connected marketplaces.
+// Nothing schedules Hermes in this build, so the sentence says when it runs instead
+// of claiming it watches the listings.
 export function hermesWatching(
   overview: QueryOf<{ liveListingCount: number }>,
   marketplaces: QueryOf<ReadonlyArray<Pick<Marketplace, 'connected' | 'sandbox'>>>,
@@ -191,7 +193,7 @@ export function hermesWatching(
   const connected = marketplaces.data.filter((marketplace) => marketplace.connected);
   return {
     kind: 'ready',
-    sentence: `Watching ${countOf(overview.data.liveListingCount, 'live listing')} on ${countOf(connected.length, 'marketplace')}`,
+    sentence: `${countOf(overview.data.liveListingCount, 'live listing')} on ${countOf(connected.length, 'marketplace')} · Hermes runs when you analyze a product`,
     sandbox: connected.some((marketplace) => marketplace.sandbox),
   };
 }
