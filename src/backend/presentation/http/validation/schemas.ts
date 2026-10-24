@@ -258,7 +258,14 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  workspaceName: z.string().trim().min(1).max(REGISTRATION_WORKSPACE_NAME_MAX_LENGTH).optional(),
+  // A blank or null name means "no name": the controller derives the default, so the
+  // account still lands in a working workspace.
+  workspaceName: z
+    .string()
+    .trim()
+    .max(REGISTRATION_WORKSPACE_NAME_MAX_LENGTH)
+    .nullish()
+    .transform((name) => name || undefined),
 });
 
 export const runHermesSchema = z.object({

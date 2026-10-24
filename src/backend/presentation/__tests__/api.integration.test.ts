@@ -654,21 +654,29 @@ describe('Presentation API', () => {
       });
     });
 
-    it('register rejects a blank workspaceName with a field error and provisions nothing', async () => {
-      const { app, authUserStore, workspaceRepo } = await buildTestApp();
+    it.each(['', '   ', null])(
+      'register falls back to the default workspace name when workspaceName is %p',
+      async (workspaceName) => {
+        const { app, workspaceRepo } = await buildTestApp();
 
-      const res = await request(app)
-        .post('/api/auth/register')
-        .send({ email: 'blank@example.com', password: 'secret123', workspaceName: '   ' });
+        const res = await request(app)
+          .post('/api/auth/register')
+          .send({ email: 'blank@example.com', password: 'secret123', workspaceName });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
-      expect(res.body.error.details).toEqual([
-        expect.objectContaining({ field: 'workspaceName' }),
-      ]);
-      expect(await workspaceRepo.findAll()).toHaveLength(0);
-      expect(authUserStore.users).toHaveLength(1);
-    });
+        expect(res.status).toBe(201);
+        const { token, user } = res.body.data;
+        const workspace = await workspaceRepo.findById(user.workspaceId);
+        expect(workspace?.name).toBe("blank's workspace");
+
+        const marketplaces = await request(app)
+          .get('/api/marketplaces')
+          .set('Authorization', `Bearer ${token}`);
+        expect(marketplaces.status).toBe(200);
+        expect(marketplaces.body.data).toEqual([
+          expect.objectContaining({ workspaceId: user.workspaceId, key: 'olx' }),
+        ]);
+      }
+    );
 
     it('register accepts a 120-character workspaceName and rejects 121 characters', async () => {
       const { app } = await buildTestApp();
