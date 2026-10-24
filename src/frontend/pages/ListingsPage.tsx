@@ -2,11 +2,11 @@
 // to the owning product's detail page. The status filter lives in the URL
 // (`?status=error`) so other screens can deep-link to it.
 import React, { useMemo } from 'react';
-import { Box, MenuItem, Select, Stack } from '@mui/material';
+import { Box, MenuItem, Select, Stack, Typography } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Listing, ListingStatus } from '@shared/types';
-import { LISTING_STATUS_LIST } from '@shared/constants';
+import { LISTING_STATUS_LIST, MAX_PAGE_SIZE } from '@shared/constants';
 import { useDelistListingToDraft, useListings } from '../services/hooks/index.js';
 import type { ListingListParams } from '../state/api/index.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
@@ -43,7 +43,7 @@ const ListingsPage: React.FC = () => {
   const statusFilter = useMemo(() => parseListingStatusParam(statusParam), [statusParam]);
 
   const params = useMemo<ListingListParams>(() => {
-    const p: ListingListParams = { sort: '-updatedAt', limit: 100 };
+    const p: ListingListParams = { sort: '-updatedAt', limit: MAX_PAGE_SIZE };
     if (statusFilter.length) p.status = statusFilter;
     return p;
   }, [statusFilter]);
@@ -53,6 +53,7 @@ const ListingsPage: React.FC = () => {
 
   // GET /listings ignores `status` today, so the fetched rows are filtered
   // here as well; the request keeps the param for when the server honours it.
+  // A full page can leave out older matches, which the caption says.
   const listings = useMemo(
     () =>
       statusFilter.length && data
@@ -60,6 +61,7 @@ const ListingsPage: React.FC = () => {
         : data,
     [data, statusFilter],
   );
+  const filterCoversLoadedPageOnly = statusFilter.length > 0 && (data?.length ?? 0) >= MAX_PAGE_SIZE;
 
   const handleStatusChange = (e: SelectChangeEvent<ListingStatus[]>) => {
     const value = e.target.value;
@@ -80,7 +82,17 @@ const ListingsPage: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2.5 }}>
+      <Stack
+        direction="row"
+        spacing={2}
+        useFlexGap
+        sx={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', mb: 2.5 }}
+      >
+        {filterCoversLoadedPageOnly && (
+          <Typography variant="body2" color="text.secondary">
+            {`Filter applies to the ${MAX_PAGE_SIZE} most recent listings.`}
+          </Typography>
+        )}
         <Select
           size="small"
           multiple

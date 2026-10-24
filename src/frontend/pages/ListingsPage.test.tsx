@@ -48,6 +48,22 @@ function listing(id: string, status: ListingStatus): Listing {
 }
 
 const LISTINGS = [listing('live-1', 'live'), listing('error-1', 'error'), listing('draft-1', 'draft')];
+// A full page as the API returns it: 100 rows, every tenth one in error.
+const FULL_PAGE = Array.from({ length: 100 }, (_, index) =>
+  listing(`listing-${index}`, index % 10 === 0 ? 'error' : 'live'),
+);
+const PARTIAL_FILTER_CAPTION = 'Filter applies to the 100 most recent listings.';
+
+function loaded(data: Listing[]) {
+  return {
+    data,
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: undefined,
+    refetch: jest.fn(),
+  };
+}
 
 function renderAt(url: string): string {
   return renderToStaticMarkup(
@@ -61,14 +77,7 @@ describe('ListingsPage status filter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete mockCapture.table;
-    mockUseListings.mockReturnValue({
-      data: LISTINGS,
-      isLoading: false,
-      isFetching: false,
-      isError: false,
-      error: undefined,
-      refetch: jest.fn(),
-    });
+    mockUseListings.mockReturnValue(loaded(LISTINGS));
   });
 
   it('reads the status filter from the URL so sync issues deep-link to error listings', () => {
@@ -86,6 +95,20 @@ describe('ListingsPage status filter', () => {
     expect(mockUseListings).toHaveBeenCalledWith({ sort: '-updatedAt', limit: 100 });
     expect(mockCapture.table?.listings).toEqual(LISTINGS);
     expect(html).toContain('All statuses');
+  });
+
+  it('says the filter covers only the most recent listings when the loaded page is full', () => {
+    mockUseListings.mockReturnValue(loaded(FULL_PAGE));
+    const html = renderAt('/listings?status=error');
+
+    expect(html).toContain(PARTIAL_FILTER_CAPTION);
+    expect(mockCapture.table?.listings).toHaveLength(10);
+  });
+
+  it('leaves the caption out when every listing is loaded or no filter is active', () => {
+    expect(renderAt('/listings?status=error')).not.toContain(PARTIAL_FILTER_CAPTION);
+    mockUseListings.mockReturnValue(loaded(FULL_PAGE));
+    expect(renderAt('/listings')).not.toContain(PARTIAL_FILTER_CAPTION);
   });
 
   it('ignores unknown and repeated statuses in the URL', () => {
