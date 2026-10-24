@@ -144,19 +144,16 @@ describe('theme toggle button', () => {
   it.each([
     ['light', 'Switch to dark mode', DarkModeOutlinedIcon],
     ['dark', 'Switch to light mode', LightModeOutlinedIcon],
-  ] as const)(
-    'names the switch away from the %s theme in effect',
-    (resolvedMode, label, Icon) => {
-      const tooltip = ThemeToggleButton({ resolvedMode, onToggle: jest.fn() }) as React.ReactElement<{
-        title: string;
-        children: React.ReactElement<{ children: React.ReactElement }>;
-      }>;
-      const button = tooltip.props.children;
+  ] as const)('names the switch away from the %s theme in effect', (resolvedMode, label, Icon) => {
+    const tooltip = ThemeToggleButton({ resolvedMode, onToggle: jest.fn() }) as React.ReactElement<{
+      title: string;
+      children: React.ReactElement<{ children: React.ReactElement }>;
+    }>;
+    const button = tooltip.props.children;
 
-      expect(tooltip.props.title).toBe(label);
-      expect(button.props.children.type).toBe(Icon);
-    }
-  );
+    expect(tooltip.props.title).toBe(label);
+    expect(button.props.children.type).toBe(Icon);
+  });
 
   it('runs the toggle when pressed', () => {
     const onToggle = jest.fn();

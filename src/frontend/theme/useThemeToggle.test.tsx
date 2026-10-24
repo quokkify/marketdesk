@@ -157,7 +157,9 @@ describe('top bar theme toggle', () => {
   });
 
   it('persists the choice through the preferences endpoint when authenticated', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, data: savedPreferences('dark') }));
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { success: true, data: savedPreferences('dark') })
+    );
     const store = createStore('light');
     const toggle = mountToggle(store, 'light');
 
@@ -176,7 +178,9 @@ describe('top bar theme toggle', () => {
   });
 
   it('flips the theme in effect, not the stored mode, when the preference follows the system', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, data: savedPreferences('light') }));
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { success: true, data: savedPreferences('light') })
+    );
     const store = createStore('system');
     const toggle = mountToggle(store, 'dark');
 

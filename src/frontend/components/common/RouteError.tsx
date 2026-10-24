@@ -92,7 +92,16 @@ export const RouteErrorView: React.FC<RouteErrorViewProps> = ({
           <Button variant="contained" startIcon={<RefreshIcon />} onClick={() => onReload()}>
             Reload
           </Button>
-          <Button variant="outlined" color="inherit" component={RouterLink} to="/">
+          <Button
+            variant="outlined"
+            color="inherit"
+            component={RouterLink}
+            to="/"
+            sx={{
+              borderColor: 'borderStrong',
+              '&:hover': { borderColor: 'borderStrong', bgcolor: 'surface2' },
+            }}
+          >
             Back to dashboard
           </Button>
         </Stack>
