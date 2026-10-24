@@ -111,7 +111,7 @@ const AnalyticsPage: React.FC = () => {
   const overview = useAnalyticsOverview(params);
   const listings = useAnalyticsListings(params);
   const ov = overview.data;
-  const pct = (current?: number, previous?: number) =>
+  const pct = (current?: number | null, previous?: number | null) =>
     typeof current === 'number' && typeof previous === 'number' && previous !== 0
       ? ((current - previous) / previous) * 100 : undefined;
   const rows: ListingPerformance[] = listings.data ?? [];

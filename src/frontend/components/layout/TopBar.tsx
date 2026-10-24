@@ -19,8 +19,9 @@ import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNone
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
-import { toggleTheme, toggleMobileSidebar } from '../../state/slices/uiSlice.js';
+import { useAppDispatch } from '../../state/hooks.js';
+import { toggleMobileSidebar, type ResolvedThemeMode } from '../../state/slices/uiSlice.js';
+import { useThemeToggle } from '../../theme/useThemeToggle.js';
 import { APP_SHELL_CONTENT_INSET, TOPBAR_HEIGHT } from '../../utils/constants.js';
 import { CommandPalette, isCommandPaletteShortcut } from './CommandPalette.js';
 
@@ -99,11 +100,22 @@ const iconButtonSx = {
   '&.Mui-disabled': { bgcolor: 'background.paper', borderColor: 'divider' },
 } as const;
 
+export const ThemeToggleButton: React.FC<{
+  resolvedMode: ResolvedThemeMode;
+  onToggle: () => void;
+}> = ({ resolvedMode, onToggle }) => (
+  <Tooltip title={resolvedMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+    <IconButton onClick={onToggle} aria-label="Toggle theme" sx={iconButtonSx}>
+      {resolvedMode === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
+    </IconButton>
+  </Tooltip>
+);
+
 export const TopBar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const themeMode = useAppSelector((state) => state.ui.themeMode);
+  const { resolvedMode, toggle: toggleTheme } = useThemeToggle();
   const isMobile = useMediaQuery('(max-width:767.95px)');
   const route = resolveTopBarRoute(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -243,15 +255,7 @@ export const TopBar: React.FC = () => {
             </IconButton>
           </Tooltip>
 
-          <Tooltip title={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <IconButton
-              onClick={() => dispatch(toggleTheme())}
-              aria-label="Toggle theme"
-              sx={iconButtonSx}
-            >
-              {themeMode === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
-            </IconButton>
-          </Tooltip>
+          <ThemeToggleButton resolvedMode={resolvedMode} onToggle={toggleTheme} />
 
           <Tooltip title="Notifications are not available yet">
             <Box component="span" sx={{ display: 'inline-flex' }}>

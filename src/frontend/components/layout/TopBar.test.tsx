@@ -2,15 +2,23 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import { lightTheme } from '../../theme/lightTheme';
-import { TopBar, resolveShortcutHint, resolveTopBarRoute } from './TopBar.js';
+import { TopBar, ThemeToggleButton, resolveShortcutHint, resolveTopBarRoute } from './TopBar.js';
 import { APP_ROUTE_PATHS, NAV_ITEMS } from '../../utils/constants.js';
 
-const state = { ui: { themeMode: 'light' } };
+// The stored preference is deliberately not the theme in effect: the top bar must follow the hook.
+const state = { ui: { themeMode: 'system' } };
+const themeToggle = { resolvedMode: 'light' as 'light' | 'dark', toggle: jest.fn() };
 
 jest.mock('../../state/hooks.js', () => ({
   useAppDispatch: () => jest.fn(),
   useAppSelector: (selector: (value: typeof state) => unknown) => selector(state),
+}));
+
+jest.mock('../../theme/useThemeToggle.js', () => ({
+  useThemeToggle: () => themeToggle,
 }));
 
 jest.mock('./CommandPalette.js', () => ({
@@ -104,5 +112,57 @@ describe('PRD top bar', () => {
   it('shows the route title with the muted subtitle', () => {
     expect(html).toMatch(/<h1[^>]*>Products<\/h1>/);
     expect(html).toContain('Manage your catalogue across every marketplace.');
+  });
+});
+
+describe('theme toggle in the top bar', () => {
+  const renderTopBar = () =>
+    renderToStaticMarkup(
+      <ThemeProvider theme={lightTheme}>
+        <MemoryRouter initialEntries={['/products']}>
+          <TopBar />
+        </MemoryRouter>
+      </ThemeProvider>
+    );
+
+  afterEach(() => {
+    themeToggle.resolvedMode = 'light';
+  });
+
+  it('offers dark mode while the theme in effect is light', () => {
+    expect(renderTopBar()).toContain('data-testid="DarkModeOutlinedIcon"');
+  });
+
+  it('offers light mode while the theme in effect is dark, even if the stored preference is system', () => {
+    themeToggle.resolvedMode = 'dark';
+
+    expect(renderTopBar()).toContain('data-testid="LightModeOutlinedIcon"');
+  });
+});
+
+describe('theme toggle button', () => {
+  it.each([
+    ['light', 'Switch to dark mode', DarkModeOutlinedIcon],
+    ['dark', 'Switch to light mode', LightModeOutlinedIcon],
+  ] as const)('names the switch away from the %s theme in effect', (resolvedMode, label, Icon) => {
+    const tooltip = ThemeToggleButton({ resolvedMode, onToggle: jest.fn() }) as React.ReactElement<{
+      title: string;
+      children: React.ReactElement<{ children: React.ReactElement }>;
+    }>;
+    const button = tooltip.props.children;
+
+    expect(tooltip.props.title).toBe(label);
+    expect(button.props.children.type).toBe(Icon);
+  });
+
+  it('runs the toggle when pressed', () => {
+    const onToggle = jest.fn();
+    const tooltip = ThemeToggleButton({ resolvedMode: 'light', onToggle }) as React.ReactElement<{
+      children: React.ReactElement<{ onClick: () => void }>;
+    }>;
+
+    tooltip.props.children.props.onClick();
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
   });
 });
