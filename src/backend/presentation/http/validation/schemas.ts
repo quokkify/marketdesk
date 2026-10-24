@@ -14,6 +14,7 @@ import {
   AUTONOMY_LEVEL_LIST,
   SYNC_MODE_LIST,
   MARKETPLACE_KEY_LIST,
+  REGISTRATION_WORKSPACE_NAME_MAX_LENGTH,
 } from '../../../../shared/constants';
 
 const conditionEnum = z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'refurbished', 'unknown']);
@@ -257,7 +258,7 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  workspaceName: z.string().min(1).optional(),
+  workspaceName: z.string().trim().min(1).max(REGISTRATION_WORKSPACE_NAME_MAX_LENGTH).optional(),
 });
 
 export const runHermesSchema = z.object({

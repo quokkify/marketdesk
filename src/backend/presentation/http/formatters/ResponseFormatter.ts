@@ -29,6 +29,19 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
+const PG_UNIQUE_VIOLATION = '23505';
+
+// A Postgres unique-constraint violation that escaped a controller, typically the
+// loser of a race that a find-then-insert pre-check could not close.
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === PG_UNIQUE_VIOLATION
+  );
+}
+
 // Map a DomainError (or arbitrary error) to an HTTP status code (§5 / §19).
 export function statusForError(error: unknown): number {
   if (
@@ -57,6 +70,9 @@ export function statusForError(error: unknown): number {
         return 500;
     }
   }
+  if (isUniqueViolation(error)) {
+    return 409;
+  }
   return 500;
 }
 
@@ -78,6 +94,10 @@ export function toErrorBody(error: unknown): ErrorBody {
       message: error.message,
       ...(error.details ? { details: error.details } : {}),
     };
+  }
+  // The driver message names the constraint and echoes the conflicting values.
+  if (isUniqueViolation(error)) {
+    return { code: ERROR_CODES.CONFLICT, message: 'Resource already exists' };
   }
   // Never leak internal error details/stack traces in production.
   const message =

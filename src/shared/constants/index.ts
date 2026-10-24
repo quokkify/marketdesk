@@ -187,6 +187,9 @@ export const DEFAULT_TIMEZONE = 'Europe/Warsaw';
 export const PRODUCT_DESCRIPTION_MIN_LENGTH = 20;
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 2000;
 
+// Registration limits
+export const REGISTRATION_WORKSPACE_NAME_MAX_LENGTH = 120;
+
 // Pagination
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
