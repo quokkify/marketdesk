@@ -123,7 +123,7 @@ What to check:
 
 - **Which provider answered.** With no Hermes server, which is the default for testers, suggestions come from the built-in offline heuristics. Their text ends with "Heuristic offline suggestion; Hermes was not consulted.", price suggestions carry low confidence, and the Hermes AI page shows which provider is active.
 - **Review only.** Offline suggestions never apply themselves, whatever autonomy level you set in Settings.
-- **Modest results.** Offline heuristics are simple rules: capitalisation and a condition suffix in titles, whitespace tidying in descriptions, and a price change only when the price is zero or a listing has many views and no sales. "No suggestion" is a normal answer.
+- **Modest results.** Offline heuristics are simple rules: capitalisation and a condition suffix in titles, whitespace tidying in descriptions, and a price change only when the price is zero or a listing has many real views and no sales. Simulated sandbox views are not counted. "No suggestion" is a normal answer.
 
 To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a native Hermes Agent API Server that the app can reach, then run `docker compose up -d --force-recreate app`. See the [Hermes integration boundary](development.md#hermes-integration-boundary). `HERMES_PROVIDER_MODE` chooses the routing: `auto` (the default) uses Hermes while it is configured and reachable and the heuristics otherwise, `hermes` never falls back, and `offline` never calls Hermes.
 

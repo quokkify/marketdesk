@@ -1,5 +1,8 @@
 import { Ok } from '../../../domain/shared/Result';
+import { Listing } from '../../../domain/entities/Listing';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
+import { money, unwrap } from '../../../domain/testkit/support';
+import { OfflineHeuristicAIProvider } from '../../../infrastructure/external/OfflineHeuristicAIProvider';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
@@ -10,7 +13,11 @@ import type { ProductRecheckService } from '../ProductRecheckService';
 const draft = { mode: 'title' as const, fields: { name: 'Camera' }, confidence: 0.7,
   uncertainFields: [], missingInfoQuestions: [], notes: [] };
 
-function setup() {
+function setup(options: {
+  sandboxMode?: boolean;
+  listing?: object;
+  ai?: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>;
+} = {}) {
   const generateDraft = jest.fn(async () => Ok(draft));
   const recheck = jest.fn(async () => ({ productId: 'p1', canPublish: false }));
   const product = {
@@ -19,7 +26,7 @@ function setup() {
     costPrice: { amount: 60, currency: 'PLN' },
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
   };
-  const listing = {
+  const listing = options.listing ?? {
     id: 'l1', productId: 'p1', marketplaceId: 'm1', views: 10,
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
     price: { amount: 100, currency: 'PLN' },
@@ -38,9 +45,11 @@ function setup() {
     { findByIdForWorkspace: findProduct } as unknown as IProductRepository,
     { findByIdForWorkspace: findListing } as unknown as IListingRepository,
     { findByIdForWorkspace: findMarketplace } as unknown as IMarketplaceRepository,
-    { analyzeListingSeo, suggestPrice } as unknown as IAIProvider,
+    (options.ai ?? { analyzeListingSeo, suggestPrice }) as unknown as IAIProvider,
+    undefined,
+    { sandboxMode: options.sandboxMode },
   );
-  return { graph, generateDraft, recheck, findProduct, findListing,
+  return { graph, generateDraft, recheck, findProduct, findListing, findMarketplace,
     analyzeListingSeo, suggestPrice };
 }
 
@@ -72,6 +81,39 @@ describe('ProductAssistanceGraph', () => {
     const s = setup();
     await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
     expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 60 }));
+  });
+
+  // The OLX sandbox adds simulated views on every sync. They are no demand signal, so the
+  // price suggestion never gets them and its reasoning never cites them.
+  it('gives the price suggestion no views for a listing on the OLX sandbox', async () => {
+    const s = setup({ sandboxMode: true });
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
+  });
+
+  it.each([
+    { when: 'OLX runs for real', sandboxMode: false, key: 'olx' },
+    { when: 'the listing is not on OLX', sandboxMode: true, key: 'allegro' },
+  ])('gives the price suggestion the listing views when $when', async ({ sandboxMode, key }) => {
+    const s = setup({ sandboxMode });
+    s.findMarketplace.mockResolvedValueOnce({ id: 'm1', key });
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 10 }));
+  });
+
+  it('never cites simulated sandbox views in the offline price reasoning', async () => {
+    const listing = unwrap(Listing.create({
+      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
+    }));
+    const s = setup({ sandboxMode: true, listing, ai: new OfflineHeuristicAIProvider() });
+
+    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+
+    expect(result.price?.reasoning).not.toMatch(/views/);
+    expect(result.price).toMatchObject({
+      suggestedPrice: 100,
+      reasoning: expect.stringMatching(/^There is not enough sales signal to change the price/),
+    });
   });
 
   it('rejects a listing that does not belong to the scoped product before calling Hermes', async () => {

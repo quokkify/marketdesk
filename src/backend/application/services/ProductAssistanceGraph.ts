@@ -50,6 +50,8 @@ export class ProductAssistanceGraph {
     private readonly marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>,
     private readonly ai: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>,
     observe?: (transition: AssistanceTransition) => void,
+    // sandboxMode: true while the OLX adapter is not real.
+    private readonly options: { sandboxMode?: boolean } = {},
   ) {
     // The observer receives node lifecycle only, never graph state or error text.
     const traced = (
@@ -108,8 +110,11 @@ export class ProductAssistanceGraph {
             marketplace: marketplace!.key,
           } : null,
         }, 'balanced'));
+        // The OLX sandbox simulates views on every sync. They are no demand signal, so a
+        // sandbox listing gets none and the price reasoning cannot cite them.
+        const simulatedViews = this.options.sandboxMode === true && marketplace?.key === 'olx';
         const price = listing ? priceSuggestionSchema.parse(await this.ai.suggestPrice({
-          listing, recentViews: listing.views ?? 0, conversionRate: 0,
+          listing, recentViews: simulatedViews ? 0 : listing.views ?? 0, conversionRate: 0,
           costPrice: product.costPrice?.amount,
         })) : undefined;
         return { result: {

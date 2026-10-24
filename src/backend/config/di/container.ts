@@ -486,6 +486,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     listingRepo,
     marketplaceRepo,
     aiProvider,
+    undefined,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const listingService = new ListingApplicationService(
     listingRepo,
