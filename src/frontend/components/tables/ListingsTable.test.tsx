@@ -172,9 +172,25 @@ describe('ListingsTable destructive delist action', () => {
 
     expect(html).toContain('Apple AirPods 4');
     expect(html).toContain('olx-1');
+    expect(html).toContain('This destructive action removes the remote advert.');
     expect(html).toContain('will not be republished automatically');
     expect(html).toContain('does not restore a consumed quota unit');
     expect(html).toContain('category and quota preview');
+    expect(html).not.toContain('Sandbox: this returns the listing to draft.');
+  });
+
+  it('replaces the remote advert and quota warnings with one sandbox sentence', () => {
+    const html = renderToStaticMarkup(
+      <DelistConfirmationContent listing={listing()} marketplaceName="OLX" isOlx sandbox />,
+    );
+
+    expect(html).toContain(
+      'Sandbox: this returns the listing to draft. No OLX advert or quota is involved.',
+    );
+    expect(html).not.toContain('removes the remote advert');
+    expect(html).not.toContain('does not restore a consumed quota unit');
+    expect(html).not.toContain('unavailable or paid');
+    expect(html).toContain('olx-1');
   });
 
   it('labels a sandbox advert in the confirmation instead of linking to it', () => {

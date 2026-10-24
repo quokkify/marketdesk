@@ -65,7 +65,13 @@ export function DelistConfirmationContent({
 }) {
   return (
     <Stack spacing={2}>
-      <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      {sandbox ? (
+        <Alert severity="warning">
+          Sandbox: this returns the listing to draft. No OLX advert or quota is involved.
+        </Alert>
+      ) : (
+        <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      )}
       <Typography><strong>Marketplace:</strong> {marketplaceName}</Typography>
       <Typography><strong>Product:</strong> {listing.productName || 'Untitled product'}</Typography>
       <Typography><strong>Listing:</strong> {listing.id}</Typography>
@@ -82,7 +88,7 @@ export function DelistConfirmationContent({
       <Typography>
         Only this listing will return to draft. Product data and photos remain. The advert will not be republished automatically.
       </Typography>
-      {isOlx && (
+      {isOlx && !sandbox && (
         <Alert severity="warning">
           OLX does not restore a consumed quota unit after removal. Publishing again may be unavailable or paid and must pass category and quota preview.
         </Alert>
