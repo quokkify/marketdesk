@@ -121,10 +121,10 @@ describe('analytics report helpers', () => {
 
 describe('AnalyticsPage sandbox data', () => {
   const notice =
-    'Sandbox data: views and favourites are simulated by the OLX sandbox and grow on every refresh.';
+    'Sandbox data: views and watchers are simulated by the OLX sandbox and grow on every sync.';
   const render = () => renderToStaticMarkup(<MemoryRouter><AnalyticsPage /></MemoryRouter>);
 
-  it('says that views and favourites are simulated while a marketplace runs in the sandbox', () => {
+  it('says that views and watchers are simulated while a marketplace runs in the sandbox', () => {
     mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: true }];
     const sandbox = render();
     mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: false }];

@@ -124,9 +124,9 @@ describe('ListingsPage status filter', () => {
     expect(mockCapture.table?.resolveMarketplaceSandbox?.('marketplace-other')).toBe(false);
   });
 
-  it('says that views and favourites are simulated while a marketplace runs in the sandbox', () => {
+  it('says that views and watchers are simulated while a marketplace runs in the sandbox', () => {
     const notice =
-      'Sandbox data: views and favourites are simulated by the OLX sandbox and grow on every refresh.';
+      'Sandbox data: views and watchers are simulated by the OLX sandbox and grow on every sync.';
     mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: true });
     const sandbox = renderAt('/listings');
     mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: false });

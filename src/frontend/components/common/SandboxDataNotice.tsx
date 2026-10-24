@@ -5,7 +5,7 @@ import { Alert } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 
 export const SANDBOX_DATA_NOTICE =
-  'Sandbox data: views and favourites are simulated by the OLX sandbox and grow on every refresh.';
+  'Sandbox data: views and watchers are simulated by the OLX sandbox and grow on every sync.';
 
 export const SandboxDataNotice: React.FC<{ sx?: SxProps<Theme> }> = ({ sx }) => (
   <Alert severity="warning" sx={sx}>
