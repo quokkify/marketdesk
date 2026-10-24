@@ -5,6 +5,7 @@
 
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
@@ -717,6 +718,102 @@ describe('Presentation API', () => {
       expect(olx?.name).toBe('OLX');
       expect(olx?.isConnected()).toBe(false);
       expect(olx?.syncMode).toBe('manual');
+    });
+
+    it('register without workspaceName provisions a default workspace and OLX row', async () => {
+      const { app, workspaceRepo } = await buildTestApp();
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'kamil@x.pl', password: 'secret123' });
+
+      expect(res.status).toBe(201);
+      const { token, user } = res.body.data;
+      expect(user.workspaceId).toEqual(expect.any(String));
+      expect(jwt.decode(token)).toMatchObject({ userId: user.id, workspaceId: user.workspaceId });
+      const workspace = await workspaceRepo.findById(user.workspaceId);
+      expect(workspace?.name).toBe("kamil's workspace");
+
+      const marketplaces = await request(app)
+        .get('/api/marketplaces')
+        .set('Authorization', `Bearer ${token}`);
+      expect(marketplaces.status).toBe(200);
+      expect(marketplaces.body.data).toHaveLength(1);
+      expect(marketplaces.body.data[0]).toMatchObject({
+        workspaceId: user.workspaceId,
+        key: 'olx',
+        name: 'OLX',
+        connected: false,
+        syncMode: 'manual',
+      });
+    });
+
+    it.each(['', '   ', null])(
+      'register falls back to the default workspace name when workspaceName is %p',
+      async (workspaceName) => {
+        const { app, workspaceRepo } = await buildTestApp();
+
+        const res = await request(app)
+          .post('/api/auth/register')
+          .send({ email: 'blank@example.com', password: 'secret123', workspaceName });
+
+        expect(res.status).toBe(201);
+        const { token, user } = res.body.data;
+        const workspace = await workspaceRepo.findById(user.workspaceId);
+        expect(workspace?.name).toBe("blank's workspace");
+
+        const marketplaces = await request(app)
+          .get('/api/marketplaces')
+          .set('Authorization', `Bearer ${token}`);
+        expect(marketplaces.status).toBe(200);
+        expect(marketplaces.body.data).toEqual([
+          expect.objectContaining({ workspaceId: user.workspaceId, key: 'olx' }),
+        ]);
+      }
+    );
+
+    it('register accepts a 120-character workspaceName and rejects 121 characters', async () => {
+      const { app } = await buildTestApp();
+
+      const atLimit = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'limit@example.com', password: 'secret123', workspaceName: 'w'.repeat(120) });
+      const overLimit = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'over@example.com', password: 'secret123', workspaceName: 'w'.repeat(121) });
+
+      expect(atLimit.status).toBe(201);
+      expect(overLimit.status).toBe(400);
+      expect(overLimit.body.error.code).toBe('VALIDATION_ERROR');
+      expect(overLimit.body.error.details).toEqual([
+        expect.objectContaining({ field: 'workspaceName' }),
+      ]);
+    });
+
+    it('register maps a concurrent duplicate email (pg 23505) to 409 and removes the provisioned workspace', async () => {
+      const { app, authUserStore, marketplaceRepo, workspaceRepo } = await buildTestApp();
+      // The findByEmail pre-check passed; the INSERT then loses the race to users.email UNIQUE.
+      authUserStore.create = jest.fn(async () => {
+        throw Object.assign(
+          new Error('duplicate key value violates unique constraint "users_email_key"'),
+          {
+            code: '23505',
+            constraint: 'users_email_key',
+            detail: 'Key (email)=(race@example.com) already exists.',
+          }
+        );
+      });
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'race@example.com', password: 'secret123' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('CONFLICT');
+      expect(JSON.stringify(res.body)).not.toMatch(/duplicate key|users_email_key|Key \(email\)/);
+      expect(await workspaceRepo.findAll()).toHaveLength(0);
+      expect(marketplaceRepo.items.size).toBe(1);
     });
 
     it('cleans up provisioned workspace and marketplace if user creation fails', async () => {

@@ -1,8 +1,9 @@
 // Thin HTTP adapter for authentication. Verifies credentials with bcrypt, issues a
 // JWT carrying { userId, workspaceId } (the tenant bootstrap the frontend needs), and
 // exposes the current principal. User persistence is abstracted behind IAuthUserStore
-// (Group 6 wires a concrete backed by the `users` table). Optional register also
-// bootstraps a workspace when a name is supplied.
+// (Group 6 wires a concrete backed by the `users` table). Register always bootstraps a
+// workspace (named by the caller, else derived from the email) so a new account is
+// never left without a tenant.
 
 import { randomUUID } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
@@ -13,7 +14,7 @@ import type { IMarketplaceRepository } from '../../../domain/repositories/interf
 import { Workspace } from '../../../domain/entities/Workspace';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 import { ConflictError } from '../../../domain/shared/DomainError';
-import { ERROR_CODES } from '../../../../shared/constants';
+import { ERROR_CODES, REGISTRATION_WORKSPACE_NAME_MAX_LENGTH } from '../../../../shared/constants';
 import { ok, created, fail } from '../formatters/ResponseFormatter';
 import { signToken } from '../middleware/AuthMiddleware';
 
@@ -25,6 +26,16 @@ const BCRYPT_ROUNDS = 10;
 // enumeration timing side-channel. (S6)
 const DUMMY_PASSWORD_HASH =
   '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+const DEFAULT_WORKSPACE_NAME_SUFFIX = "'s workspace";
+
+// "kamil@x.pl" -> "kamil's workspace". The local part is clipped so the derived name
+// stays within the length the register schema allows for an explicit one.
+function defaultWorkspaceName(email: string): string {
+  const localPart = email.split('@')[0];
+  const room = REGISTRATION_WORKSPACE_NAME_MAX_LENGTH - DEFAULT_WORKSPACE_NAME_SUFFIX.length;
+  return `${localPart.slice(0, room)}${DEFAULT_WORKSPACE_NAME_SUFFIX}`;
+}
 
 interface AuthUserView {
   id: string;
@@ -47,8 +58,8 @@ function toUserView(user: {
 export class AuthController {
   constructor(
     private readonly users: IAuthUserStore,
-    private readonly workspaceRepo?: IWorkspaceRepository,
-    private readonly marketplaceRepo?: IMarketplaceRepository,
+    private readonly workspaceRepo: IWorkspaceRepository,
+    private readonly marketplaceRepo: IMarketplaceRepository,
   ) {}
 
   login = async (req: Request, res: Response): Promise<void> => {
@@ -88,25 +99,24 @@ export class AuthController {
     let workspaceId: string | undefined;
     let marketplaceId: string | undefined;
     try {
-      if (workspaceName && this.workspaceRepo) {
-        const ws = Workspace.create({ id: randomUUID(), name: workspaceName });
-        if (ws.isErr()) return next(ws.error);
-        await this.workspaceRepo.save(ws.value);
-        workspaceId = ws.value.id;
-        if (this.marketplaceRepo) {
-          const olx = Marketplace.create({
-            id: randomUUID(),
-            workspaceId,
-            key: 'olx',
-            name: 'OLX',
-            connected: false,
-            syncMode: 'manual',
-          });
-          if (olx.isErr()) return next(olx.error);
-          marketplaceId = olx.value.id;
-          await this.marketplaceRepo.save(olx.value);
-        }
-      }
+      const ws = Workspace.create({
+        id: randomUUID(),
+        name: workspaceName ?? defaultWorkspaceName(email),
+      });
+      if (ws.isErr()) return next(ws.error);
+      await this.workspaceRepo.save(ws.value);
+      workspaceId = ws.value.id;
+      const olx = Marketplace.create({
+        id: randomUUID(),
+        workspaceId,
+        key: 'olx',
+        name: 'OLX',
+        connected: false,
+        syncMode: 'manual',
+      });
+      if (olx.isErr()) return next(olx.error);
+      marketplaceId = olx.value.id;
+      await this.marketplaceRepo.save(olx.value);
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const user = await this.users.create({ email, passwordHash, workspaceId });
@@ -115,10 +125,10 @@ export class AuthController {
     } catch (err) {
       // Best-effort compensating cleanup keeps workspace/bootstrap artifacts from
       // being orphaned if marketplace provisioning or user creation fails.
-      if (marketplaceId && this.marketplaceRepo) {
+      if (marketplaceId) {
         await this.marketplaceRepo.delete(marketplaceId).catch(() => undefined);
       }
-      if (workspaceId && this.workspaceRepo) {
+      if (workspaceId) {
         await this.workspaceRepo.delete(workspaceId).catch(() => undefined);
       }
       return next(err);

@@ -16,8 +16,10 @@ export interface LoginInput {
   password: string;
 }
 
+// The sign-up form always collects a workspace name. The API also accepts a
+// registration without one and derives a default workspace name from the email.
 export interface RegisterInput extends LoginInput {
-  workspaceName?: string;
+  workspaceName: string;
 }
 
 export interface LoginResult {
