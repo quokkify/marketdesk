@@ -218,7 +218,7 @@ const MarketplaceInitialsChip: React.FC<{ marketplace: Marketplace }> = ({ marke
   </Box>
 );
 
-const MarketplaceRow: React.FC<{ marketplace: Marketplace; onOpen: () => void }> = ({
+export const MarketplaceRow: React.FC<{ marketplace: Marketplace; onOpen: () => void }> = ({
   marketplace,
   onOpen,
 }) => {
@@ -370,7 +370,10 @@ const RecentEventRow: React.FC<{ event: HermesEvent; onOpen: () => void }> = ({
   </ButtonBase>
 );
 
-const AttentionRow: React.FC<{ item: AttentionItem; onOpen: () => void }> = ({ item, onOpen }) => (
+export const AttentionRow: React.FC<{ item: AttentionItem; onOpen: () => void }> = ({
+  item,
+  onOpen,
+}) => (
   <ButtonBase
     onClick={onOpen}
     aria-label={`Open ${item.title}, ${item.severity}: ${item.reason}`}
@@ -401,7 +404,7 @@ const AttentionRow: React.FC<{ item: AttentionItem; onOpen: () => void }> = ({ i
   </ButtonBase>
 );
 
-const QuickActionTile: React.FC<{
+export const QuickActionTile: React.FC<{
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
