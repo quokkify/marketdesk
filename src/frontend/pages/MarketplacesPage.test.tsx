@@ -253,6 +253,33 @@ describe('MarketplacesPage', () => {
     expect(renderPage()).not.toContain('Add your OLX app credentials');
   });
 
+  it('shows placeholders while marketplaces load and keeps the roadmap visible', () => {
+    mockMarketplaces.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: undefined,
+      refetch: jest.fn(),
+    });
+    const html = renderPage();
+
+    expect(count(html, 'class="MuiSkeleton-root')).toBe(2);
+    expect(html).not.toContain('marketplaces connected');
+    expect(html).not.toContain('aria-label="OLX logo"');
+    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
+  });
+
+  it('says when the workspace has no OLX marketplace record', () => {
+    setup({ marketplaces: [] });
+    const html = renderPage();
+
+    expect(mockConnection).toHaveBeenCalledWith('', { skip: true });
+    expect(html).toContain('OLX is not set up');
+    expect(html).toContain('>0 of 7 marketplaces connected</');
+    expect(html).not.toContain('Connect with OLX');
+    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
+  });
+
   it('shows a retry card when marketplaces fail to load and keeps the roadmap visible', () => {
     mockMarketplaces.mockReturnValue({
       data: undefined,
