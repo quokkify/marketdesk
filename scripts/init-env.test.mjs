@@ -534,6 +534,39 @@ test('CLI exits 1 for a skipped key even when it generated the other secrets, an
   });
 });
 
+// Only a real value earlier in the file makes the script leave a key alone. A key whose every
+// definition is a placeholder or empty has no value to keep, so it is filled like a missing one.
+test('CLI fills a key whose every definition is a placeholder or empty, and exits 0', () => {
+  const original = [
+    `${CREDENTIALS_KEY}=your_marketplace_credentials_key`,
+    'NODE_ENV=development',
+    `${CREDENTIALS_KEY}=`,
+    '',
+  ].join('\n');
+  withProject({ '.env.example': ENV_EXAMPLE, '.env': original }, (dir) => {
+    const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.doesNotMatch(run.stderr, new RegExp(CREDENTIALS_KEY), 'no real value, so no warning');
+    assert.match(run.stdout, /^Generated .*MARKETPLACE_CREDENTIALS_KEY/m);
+    assert.equal(decodedBytes(dotenv.parse(readEnv(dir))[CREDENTIALS_KEY]), 32);
+  });
+});
+
+test('CLI exits 0 on a second clean run and changes nothing', () => {
+  withProject({ '.env.example': ENV_EXAMPLE }, (dir) => {
+    const first = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
+    const afterFirstRun = readEnv(dir);
+
+    const second = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
+
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(second.status, 0, second.stderr);
+    assert.match(second.stdout, /nothing to do/);
+    assert.equal(readEnv(dir), afterFirstRun);
+  });
+});
+
 test('CLI exits non-zero and points at .env.example when run outside the project root', () => {
   withProject({}, (dir) => {
     const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
