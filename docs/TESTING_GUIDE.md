@@ -110,7 +110,7 @@ What to check: the product appears under **Products** with its photos, and the p
 
 What to check:
 
-- The advert link (**Open on OLX**) points to a placeholder address of the form `https://www.olx.pl/d/oferta/sandbox-…`. That page does not exist on olx.pl, so a "not found" there is expected. No real advert was created.
+- A sandbox advert has no page on olx.pl, so the listing shows a **Sandbox advert** label where a real advert would have its **Open on OLX** link. No real advert was created.
 - No publication quota, fee warning or OLX credentials come into play. The sandbox has no quota.
 - **Check again** in the publication readiness check validates the saved product without publishing it.
 
@@ -130,7 +130,7 @@ To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a nat
 ### 5. Look at the dashboard and analytics
 
 1. Open **Dashboard**. Your sandbox listing counts as an active listing. Items that need attention and recent activity are listed there.
-2. Open **Analytics**. Expect mostly empty charts. The sandbox has no buyers, so sales, revenue and profit stay empty. Any view or favourite counts come from the sandbox, not from real visitors. Run a sync from **Marketplaces** to refresh listing numbers.
+2. Open **Analytics**. The sandbox has no buyers, so sales, revenue and profit stay empty. Views and favourites are simulated by the sandbox and grow each time a sync reads a listing; a notice at the top of the page says so. Run a sync from **Marketplaces** to refresh listing numbers.
 
 What to check: empty states say what is missing, and no chart or tile shows invented numbers.
 
@@ -148,7 +148,7 @@ Known limitations:
 
 | Area | What you will see | Status |
 | --- | --- | --- |
-| Sandbox only | No real OLX call is ever made. The OLX connection, its category list and its publication quota are built-in stand-ins, and sandbox adverts get placeholder `olx.pl/d/oferta/sandbox-…` links. A real OLX connection needs approved OLX Partner API credentials and is not part of this setup. | Approved deviation: Sandbox mode |
+| Sandbox only | No real OLX call is ever made. The OLX connection, its category list and its publication quota are built-in stand-ins. Sandbox adverts have no OLX page and show a **Sandbox advert** label instead of a link. A real OLX connection needs approved OLX Partner API credentials and is not part of this setup. | Approved deviation: Sandbox mode |
 | Importing OLX adverts | Unavailable in sandbox mode. An import action, if shown, reports that import is not available in sandbox mode. | Approved deviation: Sandbox mode |
 | Other marketplaces | Roadmap cards with no connect action. | Approved deviation: Marketplace availability |
 | Offline AI | Without a reachable Hermes Agent API server, suggestions come from simple built-in heuristics. They are labelled as offline and always wait for review. | Approved deviation: Sandbox mode |
@@ -156,7 +156,7 @@ Known limitations:
 | Security, API keys, Telegram | Settings shows them as roadmap panels or disabled rows labelled "Not available in this release". | Approved deviation: Settings |
 | Bulk actions | After selecting products, Add tag, Edit price and Delete are disabled. Export CSV works for the selection. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
 | Notifications | The notifications button is disabled. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
-| Analytics | Mostly empty in sandbox, because there are no buyers and no real traffic. | Consequence of the sandbox |
+| Analytics | No sales in sandbox, because there are no buyers. Views and favourites are simulated by the sandbox, grow on every sync and are labelled as sandbox data. | Consequence of the sandbox |
 | Price edits | Editing the price of a live listing by hand changes MarketDesk only. OLX is updated only when the listing is published again. Approving a Hermes price suggestion applies the price and queues an update for live listings. | By design |
 | Accounts | No e-mail confirmation, password reset or password change. | Not built yet |
 
