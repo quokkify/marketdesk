@@ -7,6 +7,7 @@ import type {
   MarketplaceOAuthStatus,
 } from '../../../application/services/MarketplaceOAuthService';
 import { Workspace } from '../../../domain/entities/Workspace';
+import { isMarketplaceConnected } from '../../../application/dto/presenters';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import type {
   AutonomyLevel,
@@ -160,8 +161,8 @@ export class SettingsController {
           ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
           : null;
         // In real mode check() disconnects a leftover sandbox account, so the marketplace read
-        // above can be stale: the answer of check() decides.
-        const connected = status ? status.connected : marketplace.isConnected();
+        // above can be stale: a false from check() wins.
+        const connected = isMarketplaceConnected(marketplace, status?.connected);
         return {
           category: 'marketplace' as const,
           id: marketplace.id,
