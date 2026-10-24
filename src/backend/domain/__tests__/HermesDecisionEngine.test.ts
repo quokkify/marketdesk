@@ -149,6 +149,18 @@ describe('HermesDecisionEngine.run', () => {
     }
   });
 
+  it('suggests more photos without an invented statistic or a promise of sales', async () => {
+    const { engine, productRepo } = makeEngine();
+    seedProduct(productRepo, ['a.jpg']);
+
+    const events = await engine.run(unwrap(Workspace.create({ id: 'w1', name: 'WS' })));
+
+    expect(events.find((e) => e.type === 'suggested_more_photos')).toMatchObject({
+      title: 'Add more photos',
+      detail: 'Listings with three or more photos usually get more attention.',
+    });
+  });
+
   it('routes unsupported automatic relists to review before execution', async () => {
     const { engine, productRepo, listingRepo } = makeEngine();
     seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
@@ -526,10 +538,11 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
 
   function setup(ai: StubAIProvider) {
     const productRepo = new InMemoryProductRepository();
+    const eventRepo = new InMemoryEventRepository();
     const engine = new HermesDecisionEngine(
       productRepo,
       new InMemoryListingRepository(),
-      new InMemoryEventRepository(),
+      eventRepo,
       new RecordingEventPublisher(),
       ai,
       sequentialIdFactory('seo'),
@@ -548,8 +561,31 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       }),
     );
     productRepo.items.set(product.id, product);
-    return { engine, workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })) };
+    return { engine, eventRepo, workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })) };
   }
+
+  // Fingerprints, the source and the workspace and product ids are audit data. They stay in
+  // the agent recommendation record and never reach the detail a seller reads.
+  it('writes a listing SEO detail without fingerprints or ids and keeps them in the record', async () => {
+    const { engine, eventRepo, workspace } = setup(new SourceStub('hermes'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.detail).toBe(
+      'More searchable wording for review. Review-only suggestion from listing-seo@1.0.0 ' +
+        '(balanced). This may improve discoverability but does not guarantee a sale.',
+    );
+    expect([...eventRepo.agentRecommendations.values()]).toEqual([
+      expect.objectContaining({
+        eventId: event?.id,
+        workspaceId: 'w1',
+        productId: 'p1',
+        sourceFingerprint: expect.stringMatching(/\S/),
+        recommendationFingerprint: expect.stringMatching(/\S/),
+        outcome: 'suggested',
+      }),
+    ]);
+  });
 
   it('labels a listing SEO event from the offline heuristics offline and says so in its detail', async () => {
     const { engine, workspace } = setup(new SourceStub('offline'));
