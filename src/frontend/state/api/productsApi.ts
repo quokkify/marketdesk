@@ -122,10 +122,13 @@ export const productsApi = baseApi.injectEndpoints({
     deleteProduct: builder.mutation<{ id: string }, string>({
       query: (id) => ({ url: `/products/${id}`, method: 'DELETE' }),
       transformResponse: (_res: ApiResponse<unknown>, _meta, id) => ({ id }),
+      // Analytics queries are tagged per endpoint (no LIST id), so the bare type refetches them all.
       invalidatesTags: (_result, _error, id) => [
         { type: 'Product', id },
         { type: 'Product', id: 'LIST' },
         { type: 'Listing', id: 'LIST' },
+        'Analytics',
+        { type: 'HermesEvent', id: 'LIST' },
       ],
     }),
 
