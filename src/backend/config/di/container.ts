@@ -358,7 +358,9 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         const categoryId = env.marketplaces.olx.categoryIds[normalized];
         return categoryId === undefined ? null : String(categoryId);
       },
-    }
+    },
+    undefined,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
 
   // 5. Job queues (application IJobQueue ports). Handlers are registered below,
