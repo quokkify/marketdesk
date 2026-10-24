@@ -15,6 +15,29 @@ export function formatCurrency(
   }
 }
 
+// Dashboard-style money: PLN follows Polish conventions ("1 050 zł") and whole amounts drop
+// their decimals, while real cents are never rounded away. Other currencies keep the en-US
+// currency style. `useGrouping: true` makes modern engines group four-digit PLN amounts too,
+// which the Polish locale would otherwise leave ungrouped.
+export function formatMoney(
+  amount: number | null | undefined,
+  currency: string = DEFAULT_CURRENCY,
+): string {
+  if (amount == null || Number.isNaN(amount)) return '—';
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2;
+  try {
+    return new Intl.NumberFormat(currency.toUpperCase() === 'PLN' ? 'pl-PL' : 'en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+      useGrouping: true,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
 export function formatNumber(value: number | null | undefined, locale = 'en-US'): string {
   if (value == null || Number.isNaN(value)) return '—';
   return new Intl.NumberFormat(locale).format(value);
