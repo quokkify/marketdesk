@@ -479,6 +479,7 @@ export interface HermesStatusView {
   hermesConfigured: boolean;
   /** null when no reachability check ran: offline mode or Hermes not configured. */
   hermesReachable: boolean | null;
+  /** When the probe asked Hermes; the time of this status when no check applies. */
   checkedAt: string;
 }
 

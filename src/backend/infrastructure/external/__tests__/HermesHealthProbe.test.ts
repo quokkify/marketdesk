@@ -117,4 +117,51 @@ describe('HermesHealthProbe', () => {
     expect([first, second]).toEqual([false, false]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('shares one in-flight check between callers that arrive while it runs', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const fetchMock = jest.fn<Promise<Response>, [string | URL, RequestInit?]>(
+      () => new Promise<Response>((resolve) => (answer = resolve)),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+    const probe = new HermesHealthProbe({
+      apiUrl: 'http://127.0.0.1:8642/v1',
+      apiKey: 'local-hermes-key',
+    });
+
+    const first = probe.isReachable();
+    const second = probe.isReachable();
+    answer(modelsResponse());
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports Hermes reachable even when releasing the answer body fails', async () => {
+    const response = modelsResponse();
+    jest.spyOn(response.body!, 'cancel').mockRejectedValue(new TypeError('body already released'));
+    globalThis.fetch = jest.fn(async () => response) as typeof fetch;
+    const probe = new HermesHealthProbe({
+      apiUrl: 'http://127.0.0.1:8642/v1',
+      apiKey: 'local-hermes-key',
+    });
+
+    await expect(probe.isReachable()).resolves.toBe(true);
+  });
+
+  it('reports when it checked, and keeps that time while it reuses the answer', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-24T08:00:00.000Z'));
+    globalThis.fetch = jest.fn(async () => modelsResponse()) as typeof fetch;
+    const probe = new HermesHealthProbe({
+      apiUrl: 'http://127.0.0.1:8642/v1',
+      apiKey: 'local-hermes-key',
+    });
+
+    const checked = await probe.reachability();
+    nowSpy.mockReturnValue(Date.parse('2026-10-24T08:00:30.000Z'));
+    const reused = await probe.reachability();
+
+    expect(checked).toEqual({ reachable: true, checkedAt: new Date('2026-10-24T08:00:00.000Z') });
+    expect(reused).toEqual(checked);
+  });
 });

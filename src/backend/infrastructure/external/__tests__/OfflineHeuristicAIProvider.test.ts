@@ -147,6 +147,45 @@ describe('OfflineHeuristicAIProvider', () => {
     });
 
     it.each([
+      { branch: 'a 10 percent cut', price: 120, costPrice: 80, recentViews: 51 },
+      { branch: 'a cut down to the floor', price: 120, costPrice: 104, recentViews: 80 },
+      { branch: 'a kept price', price: 100, costPrice: 96, recentViews: 80 },
+    ])(
+      'regression: says no sale is recorded yet instead of claiming views brought no sales ($branch)',
+      async ({ price, costPrice, recentViews }) => {
+        // Callers pass conversionRate 0 when no sale is recorded, not when sales were measured.
+        const suggestion = await provider.suggestPrice({
+          listing: buildListing(price),
+          recentViews,
+          conversionRate: 0,
+          costPrice,
+        });
+
+        expect(suggestion.reasoning).toMatch(/no recorded sale yet/);
+        expect(suggestion.reasoning).not.toMatch(/brought no sales/);
+      },
+    );
+
+    it.each([
+      { branch: 'an unpriced listing', price: 0, recentViews: 0, suggestedPrice: 1 },
+      { branch: 'a cut with a 1 PLN floor', price: 120, recentViews: 51, suggestedPrice: 108 },
+    ])(
+      'regression: describes a recorded cost of 0 as no positive cost, not as unknown ($branch)',
+      async ({ price, recentViews, suggestedPrice }) => {
+        const suggestion = await provider.suggestPrice({
+          listing: buildListing(price),
+          recentViews,
+          conversionRate: 0,
+          costPrice: 0,
+        });
+
+        expect(suggestion.suggestedPrice).toBe(suggestedPrice);
+        expect(suggestion.reasoning).toMatch(/no positive product cost is recorded/i);
+        expect(suggestion.reasoning).not.toMatch(/unknown/);
+      },
+    );
+
+    it.each([
       { price: 100, costPrice: 96 },
       { price: 105, costPrice: 100 },
     ])(
@@ -238,6 +277,20 @@ describe('OfflineHeuristicAIProvider', () => {
 
       expect(title).toBe('Like new desk lamp');
     });
+
+    it.each([
+      { name: 'New Balance 574 sneakers', condition: 'good', expected: 'New Balance 574 sneakers - Good condition' },
+      { name: 'New Era cap', condition: 'like_new', expected: 'New Era cap - Like new' },
+      { name: 'New Balance 574', condition: 'new', expected: 'New Balance 574 - New' },
+    ] as const)(
+      'regression: the bare word "new" does not count as a named condition ($name)',
+      async ({ name, condition, expected }) => {
+        // Only full condition phrases ("Like new", "Good condition") count: "New" starts brands.
+        const title = await provider.generateTitle(buildProduct({ name, condition }), null);
+
+        expect(title).toBe(expected);
+      },
+    );
 
     it('appends nothing when the condition is unknown', async () => {
       const title = await provider.generateTitle(

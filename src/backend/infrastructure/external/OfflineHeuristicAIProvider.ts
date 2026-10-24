@@ -36,6 +36,9 @@ const CONDITION_LABELS: Record<ProductCondition, string | null> = {
 const KNOWN_CONDITION_LABELS = Object.values(CONDITION_LABELS).filter(
   (label): label is string => label !== null
 );
+// Phrases that show a title already names a condition. The bare word "New" is left out:
+// it starts brand names such as "New Balance" and "New Era".
+const CONDITION_PHRASES = KNOWN_CONDITION_LABELS.filter((label) => label !== CONDITION_LABELS.new);
 // One or more trailing " - <condition label>" suffixes, the form appended below.
 const CONDITION_SUFFIXES = new RegExp(
   `(?:\\s+-\\s+(?:${KNOWN_CONDITION_LABELS.join('|')}))+$`,
@@ -60,12 +63,15 @@ export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSource
     const priceMinor = listing.price.minorUnits;
     const costMinor =
       costPrice !== undefined && costPrice > 0 ? Math.round(costPrice * 100) : null;
+    // Why no cost-based floor applies: no cost at all, or a recorded cost of zero or less.
+    const missingCost =
+      costPrice === undefined ? 'the product cost is unknown' : 'no positive product cost is recorded';
 
     if (priceMinor <= 0) {
       if (costMinor === null) {
         return lowConfidence(
           1,
-          `The listing has no price and the product cost is unknown, so the 1 ${currency} minimum is suggested.`
+          `The listing has no price and ${missingCost}, so the 1 ${currency} minimum is suggested.`
         );
       }
       return lowConfidence(
@@ -80,21 +86,21 @@ export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSource
       const floorLabel = costMinor === null ? `the 1 ${currency} minimum` : 'cost plus 5%';
       const costNote =
         costMinor === null
-          ? ` The product cost is unknown, so the floor is 1 ${currency} instead of cost plus 5%.`
+          ? ` ${capitalizeFirstLetter(missingCost)}, so the floor is 1 ${currency} instead of cost plus 5%.`
           : '';
       const cut = Math.round((priceMinor * 9) / 1000);
       const target = Math.max(cut, floor);
       if (target >= currentPrice) {
         return lowConfidence(
           currentPrice,
-          `${recentViews} recent views brought no sales, but no whole-${currency} cut stays above ${floorLabel}, so the current price is kept.${costNote}`
+          `${recentViews} recent views and no recorded sale yet, but no whole-${currency} cut stays above ${floorLabel}, so the current price is kept.${costNote}`
         );
       }
       return lowConfidence(
         target,
         target > cut
-          ? `${recentViews} recent views brought no sales, so a cut down to ${floorLabel} is suggested.${costNote}`
-          : `${recentViews} recent views brought no sales, so a 10% cut, rounded to whole ${currency}, is suggested.${costNote}`
+          ? `${recentViews} recent views and no recorded sale yet, so a cut down to ${floorLabel} is suggested.${costNote}`
+          : `${recentViews} recent views and no recorded sale yet, so a 10% cut, rounded to whole ${currency}, is suggested.${costNote}`
       );
     }
 
@@ -193,7 +199,7 @@ function rewriteTitle(name: string, condition: string): Rewrite {
 }
 
 function mentionsAnyCondition(text: string): boolean {
-  return KNOWN_CONDITION_LABELS.some((label) => mentions(text, label));
+  return CONDITION_PHRASES.some((phrase) => mentions(text, phrase));
 }
 
 // Tidies whitespace without touching the wording: single spaces inside lines and at
