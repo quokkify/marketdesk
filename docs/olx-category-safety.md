@@ -1,6 +1,6 @@
 # OLX exact-category safety and correction boundary
 
-OLX publication uses marketplace-specific leaf-category metadata, not the broad product category or `OLX_DEFAULT_CATEGORY_ID`. The persisted listing metadata contains the provider category ID, full readable path, source, confidence, leaf flag, and taxonomy verification/staleness timestamps. Publish preview and the final confirmation dialog show the exact provider ID and full path. Real publish fails closed when this metadata is missing, not a leaf, invalid, stale, low-confidence, or semantically contradictory to the product.
+OLX publication uses marketplace-specific leaf-category metadata, not the broad product category or `OLX_DEFAULT_CATEGORY_ID`. The persisted listing metadata contains the provider category ID, full readable path, source, confidence, leaf flag, and taxonomy verification/staleness timestamps. Publish preview and the final confirmation dialog show the exact provider ID and full path. Real publish fails closed when this metadata is missing, not a leaf, invalid, stale, low-confidence, or semantically contradictory to the product. Categories picked from the sandbox taxonomy carry `sandbox: true`; while `OLX_ADAPTER_MODE=real`, publish preview, publish, relist, the quota guard and the adapter refuse them with reason `category_sandbox`, and no override exists.
 
 Import and sync preserve category metadata returned by OLX. A live semantic mismatch creates one `pending_review` Hermes recommendation and two independent rows in `category_correction_operations`:
 

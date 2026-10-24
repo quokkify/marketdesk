@@ -190,6 +190,25 @@ describe('ListingMapper', () => {
     expect(listing.syncError).toBe('boom');
     expect(listing.status).toBe('draft');
   });
+
+  it('keeps the sandbox marker of a stored sandbox category', () => {
+    const listing = ListingMapper.toDomain({
+      ...baseRow,
+      marketplace_category: {
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        confidence: 1,
+        isLeaf: true,
+        taxonomyVerifiedAt: '2026-10-24T09:00:00.000Z',
+        taxonomyStaleAt: '2026-10-25T09:00:00.000Z',
+        sandbox: true,
+      },
+    });
+
+    expect(listing.marketplaceCategory?.sandbox).toBe(true);
+  });
 });
 
 describe('MarketplaceMapper', () => {

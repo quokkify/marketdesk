@@ -4,6 +4,7 @@
 // mapping (§5/§19).
 
 import express from 'express';
+import type { OlxAdapterMode } from '../../config/env';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -14,11 +15,7 @@ import { signToken } from '../http/middleware/AuthMiddleware';
 import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createAuthRoutes } from '../http/routes/auth';
 import type { AuthController } from '../http/controllers/AuthController';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../http/ports/IAuthUserStore';
+import { InMemoryAuthStore } from '../testkit/support';
 import { Ok, Err } from '../../domain/shared/Result';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { Product } from '../../domain/entities/Product';
@@ -92,27 +89,6 @@ const appliedEvent: HermesEventView = {
   proposedChange: null,
   createdAt: iso,
 };
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 function stubProductService(): ProductApplicationService {
   return {
@@ -572,7 +548,7 @@ async function buildTestApp(
     marketplaceOAuthService?: (
       marketplaceRepo: InMemoryMarketplaceRepository
     ) => MarketplaceOAuthService;
-    olxAdapterMode?: string;
+    olxAdapterMode?: OlxAdapterMode;
     hermesStatus?: AppDeps['hermesStatus'];
     marketplaceImportService?: MarketplaceImportService;
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
@@ -615,7 +591,7 @@ async function buildTestApp(
       options.categoryCorrectionOperationService ?? stubCategoryCorrectionOperationService(),
     olxTaxonomyResolver: options.olxTaxonomyResolver,
     marketplaceOAuthReturnUrl: 'http://localhost:5173/marketplaces',
-    olxAdapterMode: options.olxAdapterMode,
+    olxAdapterMode: options.olxAdapterMode ?? 'stub',
     workspaceRepo: workspaceRepo as IWorkspaceRepository,
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore,
@@ -1496,10 +1472,40 @@ describe('Presentation API', () => {
         path: ['Electronics', 'Cameras'],
         source: 'provider_taxonomy',
         isLeaf: true,
+        sandbox: true,
       });
       expect(preview.status).toBe(200);
       expect(preview.body.data.warnings).toEqual([]);
       expect(preview.body.data.canPublish).toBe(true);
+      expect(preview.body.data.sandbox).toBe(true);
+      expect(preview.body.data.categoryDecision).toEqual({ allowed: true, requiresReview: false });
+    });
+
+    it('blocks a stored sandbox category in the publish preview while OLX runs in real mode', async () => {
+      const { app, listingRepo } = await buildTestApp({ olxAdapterMode: 'real' });
+      await seedPreviewListing(listingRepo, {
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        confidence: 1,
+        isLeaf: true,
+        taxonomyVerifiedAt: new Date(Date.now() - 60_000).toISOString(),
+        taxonomyStaleAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        sandbox: true,
+      });
+
+      const preview = await auth(
+        request(app).post('/api/listings/listing-preview/publish-preview')
+      ).send({});
+
+      expect(preview.status).toBe(200);
+      expect(preview.body.data).toMatchObject({
+        canPublish: false,
+        sandbox: false,
+        categoryDecision: { allowed: false, requiresReview: true, reason: 'category_sandbox' },
+        quotaOverrideEligibility: { eligible: false },
+      });
     });
 
     it('returns publish preview without publishing or enqueueing', async () => {

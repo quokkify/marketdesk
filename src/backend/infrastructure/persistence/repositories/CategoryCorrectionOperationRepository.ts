@@ -9,7 +9,7 @@ interface OperationRow {
   id: string;
   workspace_id: string;
   recommendation_event_id: string | null;
-  listing_id: string;
+  listing_id: string | null;
   marketplace_id: string;
   kind: CategoryCorrectionOperation['kind'];
   state: CategoryCorrectionOperation['state'];

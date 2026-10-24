@@ -35,6 +35,14 @@ const STUB_CATEGORY_MAP: Record<string, number> = {
   sports: 6000,
 };
 
+// Stub transport only. Every read of a sandbox advert adds these counts, so
+// repeated syncs show deterministic, growing engagement. The read counts live at
+// module scope because the workers build a fresh adapter for every job; they are
+// in memory only and reset when the process restarts.
+const STUB_VIEWS_PER_READ = 7;
+const STUB_FAVORITES_PER_READ = 1;
+const stubAdvertReads = new Map<string, number>();
+
 const OLX_CONDITION_MAP: Record<string, string> = {
   new: 'new',
   like_new: 'used',
@@ -68,6 +76,8 @@ const OLX_STATUS_TO_LOCAL: Record<string, SyncedListing['status']> = {
 
 export interface OlxAdapterConfig {
   baseUrl?: string;
+  // Public base URL of this backend; relative image paths are sent to OLX on it.
+  publicBaseUrl?: string;
   requirePublishDetails?: boolean;
   categoryIds?: Record<string, number>;
   defaultCategoryId?: number;
@@ -140,6 +150,7 @@ interface OlxResponseEnvelope<T> {
 
 export class OLXAdapter extends BaseMarketplaceAdapter {
   private readonly baseUrl: string;
+  private readonly publicBaseUrl: string | undefined;
 
   constructor(
     http?: MarketplaceHttpClient,
@@ -152,6 +163,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   ) {
     super(http ?? new StubMarketplaceHttpClient(OLXAdapter.stubResponder), 'olx', options);
     this.baseUrl = (config.baseUrl ?? OLX_PARTNER_BASE_URL).replace(/\/$/, '');
+    this.publicBaseUrl = config.publicBaseUrl?.replace(/\/+$/, '');
   }
 
   protected async doPublish(input: ListingPublishInput): Promise<PublishResult> {
@@ -223,7 +235,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         currency: input.currency,
         negotiable: this.config.priceNegotiable ?? false,
       },
-      images: input.imageUrls.map((url) => ({ url })),
+      images: input.imageUrls.map((url) => ({ url: this.publicImageUrl(url) })),
     };
     if (this.config.cityId) {
       body.location = {
@@ -252,6 +264,14 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     }
     if (attributes.length > 0) body.attributes = attributes;
     return body;
+  }
+
+  // OLX fetches advert images itself, so an image stored as a root-relative path
+  // (an upload) is sent as an absolute URL on the public base URL. Absolute URLs
+  // pass through unchanged.
+  private publicImageUrl(url: string): string {
+    if (!this.publicBaseUrl || !url.startsWith('/') || url.startsWith('//')) return url;
+    return `${this.publicBaseUrl}${url}`;
   }
 
   protected async doDelist(externalListingId: string): Promise<void> {
@@ -630,7 +650,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     if (this.config.requirePublishDetails) {
       const decision = evaluateOlxCategory({
         name: input.productName, description: input.description, category: input.category,
-      }, input.marketplaceCategory ?? null);
+      }, input.marketplaceCategory ?? null, undefined, { realOlx: true });
       if (!decision.allowed) throw new Error(decision.message ?? 'OLX category validation failed');
       const exact = input.marketplaceCategory!;
       const id = Number(exact.providerCategoryId);
@@ -642,6 +662,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   }
 
   private async extractMarketplaceCategory(data: OlxAdvertResponse) {
+    // An advert without a category key carries no category evidence at all.
+    if (data.category === undefined) return undefined;
     if (!data.category || typeof data.category === 'string' || data.category.id === undefined) return null;
     try {
       return await this.taxonomy.verify(String(data.category.id));
@@ -669,14 +691,26 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   private static stubResponder: StubResponder = (config): HttpResponse => {
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
     const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}`;
+    // Sandbox adverts have no OLX page, so the stub never returns a public URL.
     if (config.method === 'POST') {
-      return { status: 201, data: { id: `olx-${Date.now()}`, status: 'active' } };
+      return { status: 201, data: { id: externalId, status: 'active' } };
     }
     if (config.method === 'PUT' || config.method === 'DELETE') {
       return { status: 204, data: {} };
     }
     if (config.method === 'GET' && config.url.endsWith('/threads')) {
       return { status: 200, data: [] };
+    }
+    if (config.method === 'GET' && config.url.endsWith('/statistics')) {
+      // Statistics repeat the counts of the latest advert read without adding a read.
+      const reads = stubAdvertReads.get(externalId) ?? 0;
+      return {
+        status: 200,
+        data: {
+          advert_views: reads * STUB_VIEWS_PER_READ,
+          users_observing: reads * STUB_FAVORITES_PER_READ,
+        },
+      };
     }
     if (config.method === 'GET' && config.url.endsWith('/adverts')) {
       return {
@@ -694,12 +728,20 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         },
       };
     }
+    // Only a read of a named advert grows its counts, so other requests add no key.
+    const advertId = idMatch?.[1];
+    const reads = advertId ? (stubAdvertReads.get(advertId) ?? 0) + 1 : 0;
+    if (advertId) stubAdvertReads.set(advertId, reads);
     return {
       status: 200,
       data: {
         id: externalId,
         status: 'active',
-        metrics: { views: 0, favorites: 0, messages: 0 },
+        metrics: {
+          views: reads * STUB_VIEWS_PER_READ,
+          favorites: reads * STUB_FAVORITES_PER_READ,
+          messages: 0,
+        },
       },
     };
   };

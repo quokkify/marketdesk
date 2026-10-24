@@ -13,7 +13,9 @@ import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
 import { useAppSelector } from '../state/hooks.js';
 import { Card } from '../components/common/Card.js';
 import { ListingStatusBadge } from '../components/common/Badge.js';
+import { SandboxDataNotice } from '../components/common/SandboxDataNotice.js';
 import { ListingsTable } from '../components/tables/index.js';
+import { hasSandboxMarketplace } from '../utils/sandbox.js';
 
 const STATUS_PARAM = 'status';
 
@@ -37,7 +39,8 @@ export function withListingStatusParam(
 const ListingsPage: React.FC = () => {
   const navigate = useNavigate();
   const currency = useAppSelector((s) => s.workspace.currency);
-  const { resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
+  const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
+    useMarketplaceLookup();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusParam = searchParams.get(STATUS_PARAM);
   const statusFilter = useMemo(() => parseListingStatusParam(statusParam), [statusParam]);
@@ -82,6 +85,7 @@ const ListingsPage: React.FC = () => {
 
   return (
     <Box>
+      {hasSandboxMarketplace(marketplaces) && <SandboxDataNotice sx={{ mb: 2 }} />}
       <Stack
         direction="row"
         spacing={2}
@@ -130,6 +134,7 @@ const ListingsPage: React.FC = () => {
           currency={currency}
           resolveMarketplaceName={resolveMarketplaceName}
           resolveMarketplaceKey={resolveMarketplaceKey}
+          resolveMarketplaceSandbox={resolveMarketplaceSandbox}
           productHref={(l) => `/products/${l.productId}`}
           onRowClick={(l) => navigate(`/products/${l.productId}`)}
           onRelist={handleRelist}

@@ -30,7 +30,7 @@ import type { ProductRecheckService } from '../../application/services/ProductRe
 import type { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 
 import { NotFoundError } from '../../domain/shared/DomainError';
-import { env, isProduction } from '../../config/env';
+import { env, isProduction, type OlxAdapterMode } from '../../config/env';
 import { ProductImageUploadService as DefaultProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { ProductController } from './controllers/ProductController';
@@ -73,8 +73,8 @@ export interface AppDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   marketplaceOAuthReturnUrl: string;
-  // OLX adapter mode; anything but 'real' is sandbox. Omitted means 'stub', like the env default.
-  olxAdapterMode?: string;
+  // OLX adapter mode from OLX_ADAPTER_MODE; 'stub' is the sandbox.
+  olxAdapterMode: OlxAdapterMode;
   workspaceRepo: IWorkspaceRepository;
   settingsRepo: ISettingsRepository;
   authUserStore: IAuthUserStore;
@@ -207,6 +207,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       olxTaxonomyResolver: deps.olxTaxonomyResolver,
       olxQuotaService: deps.olxPublicationQuotaService,
       categoryCorrectionOperationService: deps.categoryCorrectionOperationService,
+      olxAdapterMode: deps.olxAdapterMode,
     }),
     marketplaces: new MarketplaceController(
       deps.marketplaceRepo,
@@ -216,7 +217,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.marketplaceImportService,
       deps.olxPublicationQuotaService,
       deps.marketplaceOAuthReturnUrl,
-      deps.olxAdapterMode ?? 'stub',
+      deps.olxAdapterMode,
       deps.logger
     ),
     hermes: new HermesController(
@@ -231,7 +232,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.settingsRepo,
       deps.marketplaceRepo,
       deps.marketplaceOAuthService,
-      deps.olxAdapterMode ?? 'stub'
+      deps.olxAdapterMode
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
   };

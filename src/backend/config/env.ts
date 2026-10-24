@@ -1,3 +1,4 @@
+import { BlockList, isIP } from 'node:net';
 import dotenv from 'dotenv';
 import { readEmbeddedApplicationVersion } from './applicationVersion';
 import { resolveDatabaseSslMode } from './databaseConfig';
@@ -41,6 +42,85 @@ function parseCategoryIds(value: string | undefined): Record<string, number> {
   );
 }
 
+// 'stub' is the labelled sandbox that never calls OLX; 'real' calls the OLX Partner API.
+export type OlxAdapterMode = 'stub' | 'real';
+
+export function resolveOlxAdapterMode(value: string | undefined): OlxAdapterMode {
+  const mode = value?.trim() || 'stub';
+  if (mode !== 'stub' && mode !== 'real') {
+    throw new Error('OLX_ADAPTER_MODE must be stub or real');
+  }
+  return mode;
+}
+
+const DEFAULT_PUBLIC_BASE_URL = 'http://localhost:3000';
+
+function parseHttpUrl(value: string): URL | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// Public base URL of this backend. OLX downloads advert images itself, so the OLX
+// adapter turns relative /uploads paths into absolute URLs on this base. Unset, it
+// is the origin of OLX_REDIRECT_URI, which already points at this backend.
+export function resolvePublicBaseUrl(
+  configured: string | undefined,
+  olxRedirectUri: string | undefined,
+): string {
+  const value = configured?.trim();
+  if (value) {
+    const parsed = parseHttpUrl(value);
+    if (!parsed || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      throw new Error(
+        'PUBLIC_BASE_URL must be an absolute http(s) URL without credentials, query or fragment',
+      );
+    }
+    // Rebuilt from its parts, so a bare "?" or "#" can never end up in an image URL.
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`;
+  }
+  return parseHttpUrl(olxRedirectUri?.trim() ?? '')?.origin ?? DEFAULT_PUBLIC_BASE_URL;
+}
+
+// Addresses OLX cannot reach: loopback, private, link-local, shared (CGNAT) and
+// unspecified ranges. IPv4-mapped IPv6 addresses match the IPv4 rules.
+const NON_PUBLIC_ADDRESSES = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.168.0.0', 16],
+] as const) {
+  NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, 'ipv4');
+}
+for (const [network, prefix] of [
+  ['::', 127],
+  ['fc00::', 7],
+  ['fe80::', 10],
+] as const) {
+  NON_PUBLIC_ADDRESSES.addSubnet(network, prefix, 'ipv6');
+}
+
+// A host that only resolves on this machine or a private network: localhost names,
+// single-label names such as a Compose service, .local and .internal names, and
+// addresses in a non-public range.
+function isNonPublicHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const family = isIP(host);
+  if (family !== 0) return NON_PUBLIC_ADDRESSES.check(host, family === 4 ? 'ipv4' : 'ipv6');
+  return (
+    host === 'localhost' ||
+    !host.includes('.') ||
+    /\.(localhost|local|internal)$/.test(host)
+  );
+}
+
 // Value prefix of the development fallback below. assertStartupConfiguration
 // recognises it so the fallback can never reach a real boot by accident.
 const DEV_ONLY_SECRET_PREFIX = 'dev-only-insecure-';
@@ -72,6 +152,9 @@ export const env = {
   // Local development only: tolerate a placeholder JWT_SECRET. Read once here, so the boot gate
   // and the boot warning decide from the same value (see insecureDevJwtAllowed).
   allowInsecureDevJwt: process.env.ALLOW_INSECURE_DEV_JWT === 'true',
+  publicBaseUrl: resolvePublicBaseUrl(process.env.PUBLIC_BASE_URL, process.env.OLX_REDIRECT_URI),
+  // False while publicBaseUrl is only the fallback; real OLX mode refuses that.
+  publicBaseUrlConfigured: Boolean(process.env.PUBLIC_BASE_URL?.trim()),
 
   // Database
   database: {
@@ -116,7 +199,7 @@ export const env = {
   marketplaces: {
     olx: {
       market: process.env.OLX_MARKET || 'PL',
-      adapterMode: process.env.OLX_ADAPTER_MODE || 'stub',
+      adapterMode: resolveOlxAdapterMode(process.env.OLX_ADAPTER_MODE),
       apiBaseUrl: process.env.OLX_API_BASE_URL || 'https://www.olx.pl/api/partner',
       authUrl: process.env.OLX_AUTH_URL || 'https://www.olx.pl/oauth/authorize',
       tokenUrl: process.env.OLX_TOKEN_URL || 'https://www.olx.pl/api/open/oauth/token',
@@ -220,9 +303,23 @@ const FIX_WITH_OPENSSL = 'Fix: replace it with the output of `openssl rand -base
 const CREDENTIALS_KEY_WARNING =
   'If accounts are already connected, restore the original key instead: ' +
   'a different key makes stored marketplace credentials unreadable.';
+const PUBLIC_BASE_URL_FIX_HINT =
+  'Fix: set PUBLIC_BASE_URL to the public URL of this backend, for example ' +
+  'https://marketdesk.example.com, because OLX downloads advert photos from it.';
+
+// OLX fetches advert photos from PUBLIC_BASE_URL, so real mode needs an explicit
+// public one. The sandbox never calls OLX and keeps the local fallback.
+function realOlxPublicBaseUrlProblem(e: typeof env): string | null {
+  if (e.marketplaces.olx.adapterMode !== 'real') return null;
+  if (!e.publicBaseUrlConfigured) return 'PUBLIC_BASE_URL is empty while OLX_ADAPTER_MODE=real';
+  if (isNonPublicHost(new URL(e.publicBaseUrl).hostname)) {
+    return 'PUBLIC_BASE_URL points at a loopback or private address while OLX_ADAPTER_MODE=real';
+  }
+  return null;
+}
 
 // Boot gate, called by main.ts before any resource is touched. Throws one error that names
-// every missing or invalid secret, each with the fix that applies to it, so a `.env` copied from
+// every missing or invalid setting, each with the fix that applies to it, so a `.env` copied from
 // `.env.example` fails loudly instead of leaving a server that answers /health while every
 // /api route is missing. The message never contains the rejected values.
 export function assertStartupConfiguration(e: typeof env): void {
@@ -250,6 +347,11 @@ export function assertStartupConfiguration(e: typeof env): void {
         : 'MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key. ' +
             `${FIX_WITH_OPENSSL} ${CREDENTIALS_KEY_WARNING}`,
     );
+  }
+
+  const publicBaseUrlProblem = realOlxPublicBaseUrlProblem(e);
+  if (publicBaseUrlProblem) {
+    problems.push(`${publicBaseUrlProblem}. ${PUBLIC_BASE_URL_FIX_HINT}`);
   }
 
   if (problems.length > 0) {

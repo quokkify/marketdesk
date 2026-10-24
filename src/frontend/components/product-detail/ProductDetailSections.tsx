@@ -30,6 +30,7 @@ import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
+import { SandboxAdvertChip } from '../common/SandboxAdvertChip.js';
 import { profitSummary } from '../forms/productFormModel.js';
 import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { conditionLabel } from '../../utils/labels.js';
@@ -255,12 +256,14 @@ export const PricingSummaryCard: React.FC<{
   currency: string;
   primaryAction: ProductPrimaryAction;
   externalUrl?: string;
+  // The live listing is a sandbox advert, which has no OLX page to open.
+  sandboxAdvert?: boolean;
   busy?: boolean;
   onEdit: () => void;
   onPublish?: () => void;
   onRelist?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, busy = false, onEdit, onPublish, onRelist, onConnect }) => {
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, busy = false, onEdit, onPublish, onRelist, onConnect }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
   const primaryHandler = { publish: onPublish, relist: onRelist, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
@@ -289,7 +292,9 @@ export const PricingSummaryCard: React.FC<{
         {primaryAction === 'edit' ? (
           <>
             <Button fullWidth variant="contained" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ minHeight: 44 }}>Edit product</Button>
-            {externalUrl && (
+            {sandboxAdvert ? (
+              <SandboxAdvertChip sx={{ alignSelf: 'center', flexShrink: 0 }} />
+            ) : externalUrl && (
               <Button fullWidth variant="outlined" component="a" href={externalUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewIcon />} sx={{ minHeight: 44 }}>Open on OLX</Button>
             )}
           </>
@@ -330,7 +335,7 @@ export const OlxInsightsCard: React.FC<{
 }> = ({ listing, isOlx, sandbox = false, loading = false, error, onRetry, statusTitle, statusLabel, statusExplanation, statusColor }) => (
   <Card
     title="Statistics"
-    subtitle="OLX-reported status and metrics only"
+    subtitle={sandbox ? 'Simulated by the OLX sandbox' : 'OLX-reported status and metrics only'}
     action={sandbox ? <Chip size="small" color="warning" variant="outlined" label="Sandbox" /> : undefined}
   >
     {loading ? (
@@ -345,7 +350,9 @@ export const OlxInsightsCard: React.FC<{
           <Typography variant="caption" color="text.secondary">{statusTitle}</Typography>
           <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
             <Chip size="small" label={statusLabel} color={statusColor} variant="outlined" />
-            {listing.externalUrl && <Button component="a" href={listing.externalUrl} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewIcon />}>Open OLX</Button>}
+            {sandbox && listing.status === 'live'
+              ? <SandboxAdvertChip />
+              : listing.externalUrl && <Button component="a" href={listing.externalUrl} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewIcon />}>Open OLX</Button>}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>{statusExplanation}</Typography>
           {listing.lastSyncAt && <Typography variant="caption" color="text.secondary">Last checked {formatDateTime(listing.lastSyncAt)}</Typography>}

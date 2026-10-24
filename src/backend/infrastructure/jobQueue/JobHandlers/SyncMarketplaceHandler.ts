@@ -247,10 +247,15 @@ export class SyncMarketplaceHandler {
       if (s.externalUrl !== undefined) {
         listing.recordExternalUrl(s.externalUrl);
       }
-      if (s.marketplaceCategory !== undefined) {
+      // A missing or null provider category is not evidence of a change, so the
+      // last verified category survives (#278). Only a different verified leaf
+      // becomes a mismatch candidate.
+      if (s.marketplaceCategory) {
         const proposedCategory = listing.marketplaceCategory;
         listing.recordMarketplaceCategory(s.marketplaceCategory);
-        mismatchCandidates.push({ listing, currentCategory: s.marketplaceCategory, proposedCategory });
+        if (s.marketplaceCategory.providerCategoryId !== proposedCategory?.providerCategoryId) {
+          mismatchCandidates.push({ listing, currentCategory: s.marketplaceCategory, proposedCategory });
+        }
       }
       const statusEvent = this.reconcileStatus(listing, s);
       if (statusEvent) statusEvents.push(statusEvent);
@@ -294,7 +299,7 @@ export class SyncMarketplaceHandler {
             events: analyticsEvents,
           });
         }
-        if (marketplace && this.deps.recommendCategoryMismatch) {
+        if (marketplace && this.deps.recommendCategoryMismatch && mismatchCandidates.length > 0) {
           if (!reconciliationAccount) {
             throw new InvalidStateError(
               'Marketplace account binding is required before category reconciliation'

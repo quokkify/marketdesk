@@ -7,6 +7,7 @@ import ListingsPage, { parseListingStatusParam, withListingStatusParam } from '.
 
 const mockCapture: { table?: ListingsTableProps } = {};
 const mockUseListings = jest.fn();
+const mockMarketplaces: Array<{ id: string; sandbox: boolean }> = [];
 
 jest.mock('../services/hooks/index.js', () => ({
   useListings: (params: unknown) => mockUseListings(params),
@@ -15,8 +16,11 @@ jest.mock('../services/hooks/index.js', () => ({
 
 jest.mock('../hooks/useMarketplaceLookup.js', () => ({
   useMarketplaceLookup: () => ({
+    marketplaces: mockMarketplaces,
     resolveMarketplaceName: (id: string) => id,
     resolveMarketplaceKey: () => 'olx',
+    resolveMarketplaceSandbox: (id: string) =>
+      mockMarketplaces.some((marketplace) => marketplace.id === id && marketplace.sandbox),
   }),
 }));
 
@@ -109,6 +113,27 @@ describe('ListingsPage status filter', () => {
     expect(renderAt('/listings?status=error')).not.toContain(PARTIAL_FILTER_CAPTION);
     mockUseListings.mockReturnValue(loaded(FULL_PAGE));
     expect(renderAt('/listings')).not.toContain(PARTIAL_FILTER_CAPTION);
+  });
+
+  it('passes the marketplace sandbox flag to the listings table', () => {
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: true });
+
+    renderAt('/listings');
+
+    expect(mockCapture.table?.resolveMarketplaceSandbox?.('marketplace-olx')).toBe(true);
+    expect(mockCapture.table?.resolveMarketplaceSandbox?.('marketplace-other')).toBe(false);
+  });
+
+  it('says that views and favourites are simulated while a marketplace runs in the sandbox', () => {
+    const notice =
+      'Sandbox data: views and favourites are simulated by the OLX sandbox and grow on every refresh.';
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: true });
+    const sandbox = renderAt('/listings');
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: false });
+    const real = renderAt('/listings');
+
+    expect(sandbox).toContain(notice);
+    expect(real).not.toContain(notice);
   });
 
   it('ignores unknown and repeated statuses in the URL', () => {
