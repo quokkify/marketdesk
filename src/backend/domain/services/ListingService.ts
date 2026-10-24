@@ -62,14 +62,23 @@ export class ListingService {
       listingRepo: IListingRepository;
       productRepo: IProductRepository;
     }) => {
+      let productChanged = false;
       if (remoteImageUrls.length > 0) {
         product.clearImages();
         for (const imageUrl of remoteImageUrls) {
           const added = product.addImage(imageUrl);
           if (added.isErr()) return added;
         }
-        await repos.productRepo.save(product);
+        productChanged = true;
       }
+      // A live listing puts the product on sale. Status moves forward only, so
+      // only a draft changes; active or later statuses stay as they are.
+      if (product.status === 'draft') {
+        const activated = product.transitionTo('active');
+        if (activated.isErr()) return activated;
+        productChanged = true;
+      }
+      if (productChanged) await repos.productRepo.save(product);
       await repos.listingRepo.save(listing);
       return Ok(undefined);
     };

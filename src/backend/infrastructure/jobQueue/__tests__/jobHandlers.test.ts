@@ -15,7 +15,7 @@ import type {
   SyncedListing,
 } from '../../../domain/services/MarketplaceAdapter';
 import type { DomainEvent, IEventPublisher } from '../../../domain/ports/IEventPublisher';
-import type { MarketplaceKey } from '../../../../shared/types';
+import type { ListingStatus, MarketplaceKey, ProductStatus } from '../../../../shared/types';
 import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 import { Product } from '../../../domain/entities/Product';
@@ -2111,6 +2111,82 @@ describe('PublishListingHandler', () => {
       []
     );
     expect(result.finalized).toBe(true);
+  });
+
+  describe('product lifecycle on a successful publish', () => {
+    function lifecycleFixture(productStatus: ProductStatus, listingStatus: ListingStatus) {
+      const productRepo = new InMemoryProductRepository();
+      const listingRepo = new InMemoryListingRepository();
+      const marketplaceRepo = new InMemoryMarketplaceRepository();
+      const product = unwrap(Product.create({
+        id: 'p-lifecycle',
+        workspaceId: 'w-1',
+        sku: 'sku-lifecycle',
+        name: 'Lifecycle widget',
+        description: 'A complete product description for lifecycle regression testing.',
+        costPrice: null,
+        sellingPrice: money(40),
+        condition: 'good',
+        category: 'electronics',
+        status: productStatus,
+      }));
+      const marketplace = unwrap(Marketplace.create({
+        id: 'm-lifecycle',
+        workspaceId: 'w-1',
+        key: 'olx',
+        name: 'OLX',
+        connected: true,
+      }));
+      const listing = unwrap(Listing.create({
+        id: 'l-lifecycle',
+        productId: product.id,
+        marketplaceId: marketplace.id,
+        price: money(44),
+        status: listingStatus,
+      }));
+      productRepo.items.set(product.id, product);
+      marketplaceRepo.items.set(marketplace.id, marketplace);
+      listingRepo.items.set(listing.id, listing);
+      const listingService = new ListingService(
+        listingRepo,
+        productRepo,
+        marketplaceRepo,
+        new RecordingEventPublisher(),
+      );
+      const adapter = fakeAdapter({ publish: jest.fn(async () => publishResult) });
+      const handler = makePublishHandler(resolverFor(adapter).resolver, undefined, listingService);
+      const job = (mode: 'publish' | 'relist') => ({
+        operationId: `op-lifecycle-${mode}`,
+        mode,
+        listingUpdatedAt: listing.updatedAt.toISOString(),
+        marketplaceKey: 'olx' as const,
+        marketplaceId: marketplace.id,
+        listingId: listing.id,
+        input,
+      });
+      return { handler, productRepo, listingRepo, job };
+    }
+
+    it('activates a draft product whose listing goes live (regression)', async () => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture('draft', 'draft');
+
+      await expect(handler.handle(job('publish'))).resolves.toMatchObject({ finalized: true });
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe('active');
+    });
+
+    it.each<[ProductStatus, ProductStatus]>([
+      ['draft', 'active'],
+      ['attention', 'attention'],
+    ])('relisting an expired listing moves a %s product to %s', async (from, to) => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture(from, 'expired');
+
+      await expect(handler.handle(job('relist'))).resolves.toMatchObject({ finalized: true });
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe(to);
+    });
   });
 });
 
