@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   buildPublishListingInput,
   categoryConflictEvidenceLines,
+  categoryLookupUnavailable,
+  CategoryLookupUnavailableNotice,
   editRequestedByNavigation,
   mainPreviewImageSx,
   isProductRecheckStale,
@@ -12,9 +14,11 @@ import {
   PublicationReadinessAction,
   productHermesDisabledReason,
   productHermesSuccessMessage,
+  productPrimaryAction,
   ProductRecheckReview,
   PublishPreviewReview,
   productScopedHermesRunInput,
+  publicationReviewSubtitle,
   remoteMarketplaceChipColor,
   remoteMarketplacePresentation,
   selectPrimaryListing,
@@ -422,5 +426,96 @@ describe('ListingDetailsPage presentation', () => {
     expect(editRequestedByNavigation({ publicationReview: { listingId: 'l-1', mode: 'relist' } })).toBe(false);
     expect(editRequestedByNavigation(null)).toBe(false);
     expect(editRequestedByNavigation(undefined)).toBe(false);
+  });
+});
+
+describe('product detail primary action', () => {
+  const draftListing: Listing = { ...listing, status: 'draft' };
+
+  it('publishes a draft to a connected OLX account', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: undefined, olxConnected: true })
+    ).toBe('publish');
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: draftListing, olxConnected: true })
+    ).toBe('publish');
+  });
+
+  it('asks to connect OLX before a product can be published', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: undefined, olxConnected: false })
+    ).toBe('connect');
+    expect(
+      productPrimaryAction({
+        productStatus: 'active',
+        olxListing: { ...listing, status: 'expired' },
+        olxConnected: false,
+      })
+    ).toBe('connect');
+  });
+
+  it('edits live and sold products and relists expired or failed listings', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'active', olxListing: listing, olxConnected: true })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({ productStatus: 'active', olxListing: listing, olxConnected: false })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({ productStatus: 'sold', olxListing: draftListing, olxConnected: true })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({
+        productStatus: 'active',
+        olxListing: { ...listing, status: 'expired' },
+        olxConnected: true,
+      })
+    ).toBe('relist');
+    expect(
+      productPrimaryAction({
+        productStatus: 'attention',
+        olxListing: { ...listing, status: 'error', marketplaceListingId: undefined },
+        olxConnected: true,
+      })
+    ).toBe('relist');
+  });
+
+  it('does not offer a relist the server refuses for a failed listing that still references an OLX advert', () => {
+    expect(
+      productPrimaryAction({
+        productStatus: 'attention',
+        olxListing: { ...listing, status: 'error', marketplaceListingId: 'olx-123' },
+        olxConnected: true,
+      })
+    ).toBe('edit');
+  });
+});
+
+describe('OLX category lookup availability', () => {
+  it('treats a missing or unavailable taxonomy endpoint as unavailable', () => {
+    expect(categoryLookupUnavailable({ status: 404, data: {} })).toBe(true);
+    expect(categoryLookupUnavailable({ status: 503, data: {} })).toBe(true);
+    expect(categoryLookupUnavailable({ status: 400, data: {} })).toBe(false);
+    expect(categoryLookupUnavailable(new Error('Network down'))).toBe(false);
+    expect(categoryLookupUnavailable(undefined)).toBe(false);
+  });
+
+  it('explains an unavailable OLX category lookup in one alert with the server message', () => {
+    const html = renderToStaticMarkup(
+      <CategoryLookupUnavailableNotice message="OLX category search is temporarily unavailable" />
+    );
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('OLX category lookup is unavailable');
+    expect(html).toContain('OLX category search is temporarily unavailable');
+    expect(html).toContain('Categories cannot be searched or verified here right now.');
+  });
+});
+
+describe('publication review subtitle', () => {
+  it('labels a sandbox OLX publication review', () => {
+    expect(publicationReviewSubtitle('olx', true)).toBe('OLX · Sandbox');
+    expect(publicationReviewSubtitle('olx', false)).toBe('OLX');
+    expect(publicationReviewSubtitle(undefined, false)).toBe('Marketplace');
   });
 });
