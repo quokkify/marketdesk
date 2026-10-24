@@ -9,7 +9,7 @@ import { useMe, useWorkspace } from '../services/hooks/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { setUser, logout } from '../state/slices/authSlice.js';
 import { setWorkspace } from '../state/slices/workspaceSlice.js';
-import { setThemeMode, shouldResetThemeForPrincipal } from '../state/slices/uiSlice.js';
+import { setThemeMode } from '../state/slices/uiSlice.js';
 import { useGetUserPreferencesQuery } from '../state/api/settingsApi.js';
 import type { WorkspaceState } from '../state/slices/workspaceSlice.js';
 
@@ -37,15 +37,22 @@ export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ childre
   const principalKey = settingsPrincipal
     ? `${settingsPrincipal.workspaceId}:${settingsPrincipal.userId}`
     : null;
-  const previousPrincipal = useRef<string | null>(null);
+  const themeAppliedFor = useRef<string | null>(null);
   const preferences = useGetUserPreferencesQuery(settingsPrincipal ?? skipToken);
+  const savedThemeMode = preferences.currentData?.themeMode;
 
+  // The theme public/theme-boot.js painted stays until the principal's saved theme is known. It is
+  // applied once per principal, so a later refetch never overrides what the user has chosen since,
+  // and signing out forgets it so the next sign-in applies its own.
   useLayoutEffect(() => {
-    if (shouldResetThemeForPrincipal(previousPrincipal.current, principalKey)) {
-      dispatch(setThemeMode('system'));
+    if (!principalKey) {
+      themeAppliedFor.current = null;
+      return;
     }
-    previousPrincipal.current = principalKey;
-  }, [principalKey, dispatch]);
+    if (!savedThemeMode || themeAppliedFor.current === principalKey) return;
+    themeAppliedFor.current = principalKey;
+    dispatch(setThemeMode(savedThemeMode));
+  }, [principalKey, savedThemeMode, dispatch]);
 
   useEffect(() => {
     if (me.isError) dispatch(logout());
@@ -76,12 +83,6 @@ export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (workspace.data) dispatch(setWorkspace(toWorkspaceState(workspace.data)));
   }, [workspace.data, dispatch]);
-
-  const currentThemeMode = preferences.currentData?.themeMode;
-
-  useEffect(() => {
-    if (currentThemeMode) dispatch(setThemeMode(currentThemeMode));
-  }, [currentThemeMode, principalKey, dispatch]);
 
   return <>{children}</>;
 };
