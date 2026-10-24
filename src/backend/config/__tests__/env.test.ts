@@ -8,6 +8,7 @@ import {
   positiveInt,
   resolveDatabaseSslMode,
   resolveJwtSecret,
+  resolveOlxAdapterMode,
   resolvePublicBaseUrl,
 } from '../env';
 
@@ -48,6 +49,19 @@ describe('positiveInt', () => {
       expect(() => positiveInt(value, 1024, 'MAX_FILE_SIZE')).toThrow(/positive integer/);
     },
   );
+});
+
+describe('resolveOlxAdapterMode', () => {
+  it('defaults to the stub sandbox and accepts stub or real', () => {
+    expect(resolveOlxAdapterMode(undefined)).toBe('stub');
+    expect(resolveOlxAdapterMode('  ')).toBe('stub');
+    expect(resolveOlxAdapterMode('stub')).toBe('stub');
+    expect(resolveOlxAdapterMode(' real ')).toBe('real');
+  });
+
+  it.each(['sandbox', 'REAL', 'reall'])('refuses OLX_ADAPTER_MODE=%s', (value) => {
+    expect(() => resolveOlxAdapterMode(value)).toThrow(/OLX_ADAPTER_MODE must be stub or real/);
+  });
 });
 
 describe('resolvePublicBaseUrl', () => {

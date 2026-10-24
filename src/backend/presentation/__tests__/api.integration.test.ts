@@ -3,6 +3,7 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import type { OlxAdapterMode } from '../../config/env';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -568,7 +569,7 @@ async function buildTestApp(
     marketplaceOAuthService?: (
       marketplaceRepo: InMemoryMarketplaceRepository
     ) => MarketplaceOAuthService;
-    olxAdapterMode?: string;
+    olxAdapterMode?: OlxAdapterMode;
     hermesStatus?: AppDeps['hermesStatus'];
     marketplaceImportService?: MarketplaceImportService;
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
@@ -610,7 +611,7 @@ async function buildTestApp(
       options.categoryCorrectionOperationService ?? stubCategoryCorrectionOperationService(),
     olxTaxonomyResolver: options.olxTaxonomyResolver,
     marketplaceOAuthReturnUrl: 'http://localhost:5173/marketplaces',
-    olxAdapterMode: options.olxAdapterMode,
+    olxAdapterMode: options.olxAdapterMode ?? 'stub',
     workspaceRepo: workspaceRepo as IWorkspaceRepository,
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore,

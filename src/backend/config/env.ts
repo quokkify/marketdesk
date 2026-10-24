@@ -41,6 +41,17 @@ function parseCategoryIds(value: string | undefined): Record<string, number> {
   );
 }
 
+// 'stub' is the labelled sandbox that never calls OLX; 'real' calls the OLX Partner API.
+export type OlxAdapterMode = 'stub' | 'real';
+
+export function resolveOlxAdapterMode(value: string | undefined): OlxAdapterMode {
+  const mode = value?.trim() || 'stub';
+  if (mode !== 'stub' && mode !== 'real') {
+    throw new Error('OLX_ADAPTER_MODE must be stub or real');
+  }
+  return mode;
+}
+
 const DEFAULT_PUBLIC_BASE_URL = 'http://localhost:3000';
 
 function parseHttpUrl(value: string): URL | null {
@@ -189,7 +200,7 @@ export const env = {
   marketplaces: {
     olx: {
       market: process.env.OLX_MARKET || 'PL',
-      adapterMode: process.env.OLX_ADAPTER_MODE || 'stub',
+      adapterMode: resolveOlxAdapterMode(process.env.OLX_ADAPTER_MODE),
       apiBaseUrl: process.env.OLX_API_BASE_URL || 'https://www.olx.pl/api/partner',
       authUrl: process.env.OLX_AUTH_URL || 'https://www.olx.pl/oauth/authorize',
       tokenUrl: process.env.OLX_TOKEN_URL || 'https://www.olx.pl/api/open/oauth/token',

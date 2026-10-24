@@ -23,6 +23,7 @@ import { evaluateOlxCategory, type OlxCategoryGuardResult } from '../../../domai
 import type { OlxTrustedTaxonomyResolver } from '../../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 import { ok, paginated } from '../formatters/ResponseFormatter';
+import type { OlxAdapterMode } from '../../../config/env';
 
 
 function routeParam(value: string | string[] | undefined): string {
@@ -46,19 +47,21 @@ export interface ListingControllerDeps {
   olxQuotaService?: OlxPublicationQuotaService;
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
-  // OLX adapter mode; anything but 'real' is sandbox. Omitted means 'stub', like buildApp.
-  olxAdapterMode?: string;
+  // OLX adapter mode from OLX_ADAPTER_MODE.
+  olxAdapterMode: OlxAdapterMode;
 }
 
 export class ListingController {
   constructor(
     private readonly listings: ListingApplicationService,
     private readonly listingRepo: IListingRepository,
-    private readonly deps: ListingControllerDeps = {},
+    private readonly deps: ListingControllerDeps,
   ) {}
 
+  // Only an explicit stub mode is the sandbox. Anything else fails closed to real
+  // OLX rules, like PublishListingUseCase, so a sandbox category is refused.
   private get olxSandbox(): boolean {
-    return (this.deps.olxAdapterMode ?? 'stub') !== 'real';
+    return this.deps.olxAdapterMode === 'stub';
   }
 
 
