@@ -29,17 +29,17 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
-const PG_UNIQUE_VIOLATION = '23505';
+// Postgres constraint violations that escaped a controller, typically the loser of
+// a race that a find-then-write pre-check could not close. The driver message names
+// the constraint and echoes the conflicting values, so a generic message replaces it.
+const PG_CONFLICT_MESSAGES = new Map<string, string>([
+  ['23505', 'Resource already exists'], // unique_violation
+  ['23503', 'Request conflicts with related records'], // foreign_key_violation
+]);
 
-// A Postgres unique-constraint violation that escaped a controller, typically the
-// loser of a race that a find-then-insert pre-check could not close.
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === PG_UNIQUE_VIOLATION
-  );
+function pgConflictMessage(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? PG_CONFLICT_MESSAGES.get(error.code) : undefined;
 }
 
 // Map a DomainError (or arbitrary error) to an HTTP status code (§5 / §19).
@@ -70,7 +70,7 @@ export function statusForError(error: unknown): number {
         return 500;
     }
   }
-  if (isUniqueViolation(error)) {
+  if (pgConflictMessage(error)) {
     return 409;
   }
   return 500;
@@ -95,9 +95,9 @@ export function toErrorBody(error: unknown): ErrorBody {
       ...(error.details ? { details: error.details } : {}),
     };
   }
-  // The driver message names the constraint and echoes the conflicting values.
-  if (isUniqueViolation(error)) {
-    return { code: ERROR_CODES.CONFLICT, message: 'Resource already exists' };
+  const conflictMessage = pgConflictMessage(error);
+  if (conflictMessage) {
+    return { code: ERROR_CODES.CONFLICT, message: conflictMessage };
   }
   // Never leak internal error details/stack traces in production.
   const message =

@@ -294,7 +294,8 @@ async function buildE2E(): Promise<E2EContext> {
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo
   );
   const listingService = new ListingApplicationService(
     listingRepo,
@@ -448,6 +449,108 @@ describe('E2E product/listing/Hermes flow (in-memory, no DB)', () => {
     expect(read.body.data.status).toBe('live');
     expect(read.body.data.marketplaceListingId).toBe('olx-external-1');
     expect(read.body.data.publishedAt).toBeTruthy();
+  });
+
+  it('refuses to delete a product while its listing is live and keeps the product', async () => {
+    const { app, listingRepo } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-LIVE-DELETE',
+        name: 'Live Widget',
+        description: 'A widget whose live listing must block deleting the product.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+    const listingId = seedListing(listingRepo, productId);
+    const publish = await request(app)
+      .post(`/api/listings/${listingId}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(publish.status).toBe(200);
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(409);
+    expect(remove.body.error).toEqual({
+      code: 'CONFLICT',
+      message: 'Remove the live listing from the marketplace before deleting this product',
+    });
+    const read = await request(app)
+      .get(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(read.status).toBe(200);
+  });
+
+  it('deletes a product that has no marketplace listing', async () => {
+    const { app } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-DELETE',
+        name: 'Disposable Widget',
+        description: 'A widget without any listing that can be deleted right away.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(200);
+    expect(remove.body.data).toEqual({
+      id: productId,
+      deleted: true,
+      imageCleanup: { removed: [], failed: [] },
+    });
+    const read = await request(app)
+      .get(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(read.status).toBe(404);
+  });
+
+  it('maps a product delete blocked by a database reference (pg 23503) to 409', async () => {
+    const { app, deps } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-RESTRICTED',
+        name: 'Referenced Widget',
+        description: 'A widget whose delete is restricted by a database reference.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+    jest.spyOn(deps.productRepo, 'delete').mockRejectedValueOnce(
+      Object.assign(new Error('violates foreign key constraint "fk_secret"'), { code: '23503' })
+    );
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(409);
+    expect(remove.body.error).toEqual({
+      code: 'CONFLICT',
+      message: 'Request conflicts with related records',
+    });
   });
 
   it('relist performs an actual republish (not a no-op) and finalizes live (C6)', async () => {

@@ -100,6 +100,17 @@ describe('buildContainer (composition root)', () => {
     expect(deps.authUserStore).toBeDefined();
   });
 
+  it('shares one image storage between uploads and product deletion', () => {
+    const { deps } = build();
+    // Private fields: sharing the instance shares its per-workspace lock.
+    const uploadStorage = (deps.productImageUploadService as unknown as { storage: unknown })
+      .storage;
+    const cleanupStorage = (deps.productService as unknown as { imageStorage: unknown })
+      .imageStorage;
+    expect(uploadStorage).toBeDefined();
+    expect(cleanupStorage).toBe(uploadStorage);
+  });
+
   it('wires the optional ports (price history + id generator)', () => {
     const { deps } = build();
     expect(deps.priceHistoryReader).toBeDefined();

@@ -12,6 +12,7 @@
 // container unit test). Absent overrides, the real config-backed clients are used.
 
 import { randomBytes, randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { Pool, PoolClient } from 'pg';
 import type { Redis } from 'ioredis';
 
@@ -79,6 +80,7 @@ import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTa
 import { RedisMarketplaceOAuthStateStore } from '../../infrastructure/cache/RedisMarketplaceOAuthStateStore';
 import { RedisMarketplaceOAuthRefreshLock } from '../../infrastructure/cache/RedisMarketplaceOAuthRefreshLock';
 import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCredentialVault';
+import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
 import { HermesAI, loadHermesConfig } from '../../infrastructure/external/HermesAI';
@@ -112,6 +114,7 @@ import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHer
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
+import { ProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import {
   ProductRecheckService,
   type OlxTaxonomyResolverFactory,
@@ -447,11 +450,23 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     idGenerator
   );
 
-  // 8. Application services (the facades buildApp consumes).
+  // 8. Application services (the facades buildApp consumes). One image storage
+  //    serves uploads and the cleanup after a product delete, so both share its
+  //    per-workspace lock.
+  const productImageStorage = new FilesystemProductImageStorage(
+    path.resolve(process.cwd(), env.upload.uploadDir),
+    randomUUID,
+    {
+      maxWorkspaceBytes: env.upload.maxWorkspaceBytes,
+      maxWorkspaceFiles: env.upload.maxWorkspaceFiles,
+    }
+  );
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo,
+    productImageStorage
   );
   const productAIDraftService = new ProductAIDraftService(aiProvider);
   const productRecheckService = new ProductRecheckService(
@@ -718,6 +733,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productAIDraftService,
     productRecheckService,
     productAssistanceGraph,
+    productImageUploadService: new ProductImageUploadService(
+      productImageStorage,
+      env.upload.maxFileSize
+    ),
     listingService,
     hermesService,
     hermesStatus: () => aiProviderSelector.status(),

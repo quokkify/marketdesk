@@ -225,7 +225,8 @@ async function build(): Promise<Ctx> {
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo
   );
   const listingService = new ListingApplicationService(
     listingRepo,
