@@ -65,12 +65,19 @@ function useWorkspaceId(): string | undefined {
   return useAppSelector((s) => s.workspace.id) ?? undefined;
 }
 
-type ProductsOpts = Parameters<typeof useGetProductsQuery>[1];
-type ListingsOpts = Parameters<typeof useGetListingsQuery>[1];
-type HermesOpts = Parameters<typeof useGetHermesEventsQuery>[1];
-type OverviewOpts = Parameters<typeof useGetAnalyticsOverviewQuery>[1];
-type RevenueOpts = Parameters<typeof useGetAnalyticsRevenueQuery>[1];
-type ListingMetricsOpts = Parameters<typeof useGetAnalyticsListingsQuery>[1];
+// The query hooks are generic over `selectFromResult`. Forwarding their options type as it comes
+// pins that generic to `Record<string, any>`, which turns a wrapper's `data` into `any`.
+type QueryOptions<Hook extends (...args: never[]) => unknown> = Omit<
+  NonNullable<Parameters<Hook>[1]>,
+  'selectFromResult'
+>;
+
+type ProductsOpts = QueryOptions<typeof useGetProductsQuery>;
+type ListingsOpts = QueryOptions<typeof useGetListingsQuery>;
+type HermesOpts = QueryOptions<typeof useGetHermesEventsQuery>;
+type OverviewOpts = QueryOptions<typeof useGetAnalyticsOverviewQuery>;
+type RevenueOpts = QueryOptions<typeof useGetAnalyticsRevenueQuery>;
+type ListingMetricsOpts = QueryOptions<typeof useGetAnalyticsListingsQuery>;
 
 // ---- Products ----
 export function useProducts(params: ProductListParams = {}, options?: ProductsOpts) {
