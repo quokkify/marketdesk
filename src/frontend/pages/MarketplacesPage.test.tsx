@@ -7,7 +7,8 @@ import type { MarketplaceCardProps } from '../components/marketplaces/Marketplac
 import type { MarketplaceConfigureDrawerProps } from '../components/marketplaces/MarketplaceConfigureDrawer';
 import type { MarketplaceSummaryBarProps } from '../components/marketplaces/MarketplaceSummaryBar';
 import { ROADMAP_CARD_COPY } from '../components/marketplaces/RoadmapMarketplaceCard';
-import MarketplacesPage, { SANDBOX_CONNECTED_TOAST } from './MarketplacesPage';
+import type { MarketplaceOAuthStatus } from '../state/api/index.js';
+import MarketplacesPage, { oauthReturnToast } from './MarketplacesPage';
 
 // Props the page last passed to its children. Server rendering never runs
 // effects and ignores state updates after render, so tests drive the page's
@@ -399,8 +400,42 @@ describe('MarketplacesPage', () => {
     expect(mockConnect).toHaveBeenCalledWith({ id: 'marketplace-olx' });
     expect(assign).toHaveBeenCalledWith('https://auth.example.test/authorize');
   });
+});
 
-  it('announces a sandbox connection without implying real OLX calls', () => {
-    expect(SANDBOX_CONNECTED_TOAST).toBe('Sandbox OLX connected — no real marketplace calls are made');
+describe('oauthReturnToast', () => {
+  function checkStatus(overrides: Partial<MarketplaceOAuthStatus> = {}): MarketplaceOAuthStatus {
+    return {
+      connected: true,
+      marketplaceId: 'marketplace-olx',
+      providerKey: 'olx',
+      account: { id: 'account-1', handle: 'seller', status: 'connected', scopes: ['read', 'write'] },
+      refreshable: true,
+      sandbox: false,
+      ...overrides,
+    };
+  }
+
+  it('gives a real account the plain toast even when the return URL says sandbox=1', () => {
+    // The wording depends on the server's check() result alone, so a
+    // user-supplied `?sandbox=1` on a real deployment cannot reach it.
+    expect(oauthReturnToast).toHaveLength(1);
+    expect(oauthReturnToast(checkStatus())).toEqual({
+      message: 'OLX account connected.',
+      severity: 'success',
+    });
+  });
+
+  it('announces a sandbox account without implying real OLX calls', () => {
+    expect(oauthReturnToast(checkStatus({ sandbox: true }))).toEqual({
+      message: 'Sandbox OLX connected — no real marketplace calls are made',
+      severity: 'success',
+    });
+  });
+
+  it('reports an error when check() says the account is not connected', () => {
+    expect(oauthReturnToast(checkStatus({ connected: false, sandbox: true }))).toEqual({
+      message: 'OLX account is not connected.',
+      severity: 'error',
+    });
   });
 });

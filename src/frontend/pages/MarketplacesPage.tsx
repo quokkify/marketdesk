@@ -8,6 +8,7 @@ import type { Marketplace, MarketplaceKey, SyncMode } from '@shared/types';
 import { MARKETPLACE_KEY_LIST, MARKETPLACE_NAMES } from '@shared/constants';
 import type {
   MarketplaceImportPreview,
+  MarketplaceOAuthStatus,
   SaveMarketplaceAppCredentialsInput,
 } from '../state/api/index.js';
 import {
@@ -42,7 +43,19 @@ const ROADMAP_MARKETPLACES = MARKETPLACE_KEY_LIST.filter((key) => key !== LIVE_M
 
 const IMPORT_STATUSES = ['active', 'new', 'moderation', 'limited', 'expired', 'removed', 'rejected'];
 
-export const SANDBOX_CONNECTED_TOAST = 'Sandbox OLX connected — no real marketplace calls are made';
+const SANDBOX_CONNECTED_TOAST = 'Sandbox OLX connected — no real marketplace calls are made';
+
+// Toast for a completed OLX OAuth return. The wording follows the server's
+// check() result alone: a `sandbox` URL param is user input and must never
+// turn a real connection into a sandbox claim.
+export function oauthReturnToast(status: MarketplaceOAuthStatus): {
+  message: string;
+  severity: ToastSeverity;
+} {
+  if (!status.connected) return { message: 'OLX account is not connected.', severity: 'error' };
+  if (status.sandbox) return { message: SANDBOX_CONNECTED_TOAST, severity: 'success' };
+  return { message: 'OLX account connected.', severity: 'success' };
+}
 
 function errorMessage(err: unknown): string {
   if (err && typeof err === 'object') {
@@ -99,7 +112,6 @@ const MarketplacesPage: React.FC = () => {
   useEffect(() => {
     const oauthResult = searchParams.get('oauth');
     const marketplaceId = searchParams.get('marketplaceId');
-    const sandboxReturn = searchParams.get('sandbox') === '1';
     const resultKey = `${oauthResult ?? ''}:${marketplaceId ?? ''}:${searchParams.get('code') ?? ''}`;
     if (!oauthResult || handledOAuthResult.current === resultKey) return;
     handledOAuthResult.current = resultKey;
@@ -125,14 +137,8 @@ const MarketplacesPage: React.FC = () => {
     void checkMarketplace(marketplaceId)
       .unwrap()
       .then((status) => {
-        if (!status.connected) throw new Error('OLX account is not connected');
-        dispatch(
-          enqueueToast({
-            message: sandboxReturn || status.sandbox ? SANDBOX_CONNECTED_TOAST : 'OLX account connected.',
-            severity: 'success',
-          }),
-        );
-        void refetch();
+        dispatch(enqueueToast(oauthReturnToast(status)));
+        if (status.connected) void refetch();
       })
       .catch((err: unknown) => {
         dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
