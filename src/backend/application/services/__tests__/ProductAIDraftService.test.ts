@@ -163,7 +163,8 @@ describe('ProductAIDraftService', () => {
 
     await new ProductAIDraftService(hermes).generateDraft(titleRequest);
 
-    const product = analyzeListing.mock.calls[0]?.[0] as Product | undefined;
+    // The stub declares no parameters, so the recorded call is read as unknown arguments.
+    const [product] = (analyzeListing.mock.calls[0] ?? []) as unknown as [Product?];
     expect(product?.description).toBe('');
   });
 

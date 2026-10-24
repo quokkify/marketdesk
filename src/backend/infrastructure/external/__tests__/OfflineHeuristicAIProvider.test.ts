@@ -286,7 +286,7 @@ describe('OfflineHeuristicAIProvider', () => {
       'regression: the bare word "new" does not count as a named condition ($name)',
       async ({ name, condition, expected }) => {
         // Only full condition phrases ("Like new", "Good condition") count: "New" starts brands.
-        const title = await provider.generateTitle(buildProduct({ name, condition }), null);
+        const title = await provider.generateTitle(buildProduct({ name, condition }));
 
         expect(title).toBe(expected);
       },
