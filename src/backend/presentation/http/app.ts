@@ -230,7 +230,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.workspaceRepo,
       deps.settingsRepo,
       deps.marketplaceRepo,
-      deps.marketplaceOAuthService
+      deps.marketplaceOAuthService,
+      deps.olxAdapterMode ?? 'stub'
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
   };

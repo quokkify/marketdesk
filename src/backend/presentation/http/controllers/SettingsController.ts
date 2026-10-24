@@ -2,7 +2,10 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ISettingsRepository } from '../../../application/ports/ISettingsRepository';
 import type { IWorkspaceRepository } from '../../../domain/repositories/interfaces/IWorkspaceRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
-import type { MarketplaceOAuthService } from '../../../application/services/MarketplaceOAuthService';
+import type {
+  MarketplaceOAuthService,
+  MarketplaceOAuthStatus,
+} from '../../../application/services/MarketplaceOAuthService';
 import { Workspace } from '../../../domain/entities/Workspace';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import type {
@@ -13,12 +16,17 @@ import type {
 } from '../../../../shared/types';
 import { ok } from '../formatters/ResponseFormatter';
 
+// check() reports `sandbox` for a stored sandbox account once the OLX sandbox connection is
+// merged; it is optional here so this compiles on either side of that change.
+type MarketplaceOAuthStatusWithSandbox = MarketplaceOAuthStatus & { sandbox?: boolean };
+
 export class SettingsController {
   constructor(
     private readonly workspaces: IWorkspaceRepository,
     private readonly settings: ISettingsRepository,
     private readonly marketplaces: IMarketplaceRepository,
-    private readonly oauth: MarketplaceOAuthService
+    private readonly oauth: MarketplaceOAuthService,
+    private readonly olxAdapterMode: string
   ) {}
 
   private async workspace(workspaceId: string) {
@@ -150,21 +158,25 @@ export class SettingsController {
     const marketplaces = await this.marketplaces.findByWorkspace(workspaceId);
     const marketplaceItems: IntegrationSettingsStatus[] = await Promise.all(
       marketplaces.map(async (marketplace) => {
-        let configured = false;
-        if (marketplace.key === 'olx' && typeof this.oauth.getAppCredentialStatus === 'function') {
-          const status = await this.oauth.getAppCredentialStatus({
-            marketplaceId: marketplace.id,
-            workspaceId,
-          });
-          configured = status.configured;
-        }
+        const connected = marketplace.isConnected();
+        const isOlx = marketplace.key === 'olx';
+        const status: MarketplaceOAuthStatusWithSandbox | null = isOlx
+          ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
+          : null;
         return {
           category: 'marketplace' as const,
           id: marketplace.id,
           providerKey: marketplace.key,
           name: marketplace.name,
-          available: marketplace.key === 'olx',
-          configured,
+          available: isOlx,
+          configured: connected,
+          connected,
+          account: status?.account
+            ? { handle: status.account.handle, status: status.account.status }
+            : null,
+          // Same meaning as the Marketplaces list: the adapter runs in sandbox mode. A leftover
+          // sandbox account still counts when the adapter is real.
+          sandbox: isOlx && (this.olxAdapterMode !== 'real' || status?.sandbox === true),
         };
       })
     );
@@ -182,7 +194,7 @@ export class SettingsController {
         category: 'api_keys',
         id: 'api_keys',
         name: 'API keys',
-        available: true,
+        available: false,
         configured: apiKeySummary.active > 0,
         apiKeySummary,
       },
