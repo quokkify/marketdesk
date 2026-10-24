@@ -15,6 +15,7 @@ import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import type {
+  AutonomyDecision,
   CategoryRecreationChangePayload,
   CategoryRecreationOperationAction,
   HermesEvent,
@@ -31,17 +32,15 @@ import {
   isSeoRecommendation,
   recommendationFieldLabel,
 } from '../../utils/labels.js';
-import { HermesSeverityBadge, HermesStatusBadge, AutonomyDecisionBadge } from '../common/Badge.js';
+import { HermesSeverityBadge, HermesStatusBadge } from '../common/Badge.js';
 import { ApprovalButtons } from './ApprovalButtons.js';
 import { ConfirmDialog } from '../common/ConfirmDialog.js';
 
-// Event-view fields that the API may not send yet. Both are optional so the card
-// renders the same truthful copy for events that carry neither.
+// Event-view field that the API may not send yet. It is optional so the card renders
+// the same truthful copy for events that do not carry it.
 export interface HermesEventExtras {
   /** Marketplace-side state of an applied change as the API records it: queued, retry_required or not_required. */
   marketplaceSync?: string | null;
-  /** Which provider produced the suggestion; `offline` means the built-in heuristics. */
-  source?: 'hermes' | 'offline';
 }
 
 export interface HermesEventCardProps {
@@ -126,19 +125,34 @@ export function hermesLifecycleCopy(
 export const HermesLifecycleCaption: React.FC<{
   status: HermesEvent['status'];
   marketplaceSync?: HermesEventExtras['marketplaceSync'];
-}> = ({ status, marketplaceSync }) => (
-  <Typography
-    variant="caption"
-    color={
-      status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention
-        ? 'warning.dark'
-        : 'text.secondary'
-    }
-    sx={{ display: 'block', mt: 0.75 }}
-  >
-    {hermesLifecycleCopy(status, marketplaceSync)}
-  </Typography>
-);
+}> = ({ status, marketplaceSync }) => {
+  const needsAttention =
+    status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention === true;
+  return (
+    <Typography
+      variant="caption"
+      // warning.dark falls below 4.5:1 on the dark theme's surfaces; warning.main passes there.
+      sx={(theme) => ({
+        display: 'block',
+        mt: 0.75,
+        color: needsAttention
+          ? theme.palette.mode === 'dark'
+            ? theme.palette.warning.main
+            : theme.palette.warning.dark
+          : theme.palette.text.secondary,
+      })}
+    >
+      {hermesLifecycleCopy(status, marketplaceSync)}
+    </Typography>
+  );
+};
+
+// What the autonomy settings decided when the event was recorded. It is a decision, not
+// the event's current state, which the status chip shows.
+const AUTONOMY_DECISION_COPY: Record<AutonomyDecision, string> = {
+  auto_apply: 'Autonomy decision: apply without review',
+  pending_review: 'Autonomy decision: review required',
+};
 
 const HeuristicChip: React.FC = () => (
   <Tooltip title="Produced by MarketDesk's built-in rules, not by Hermes" arrow describeChild>
@@ -490,7 +504,6 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           >
             <HermesSeverityBadge severity={event.severity} />
             <HermesStatusBadge status={event.status} />
-            {event.autonomyDecision && <AutonomyDecisionBadge decision={event.autonomyDecision} />}
             <Chip size="small" variant="outlined" label={hermesTypeLabel(event.type)} sx={{ fontWeight: 500 }} />
             {event.source === 'offline' && <HeuristicChip />}
           </Stack>
@@ -500,6 +513,11 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{event.detail}</Typography>
           )}
           <HermesLifecycleCaption status={event.status} marketplaceSync={event.marketplaceSync} />
+          {event.autonomyDecision && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {AUTONOMY_DECISION_COPY[event.autonomyDecision]}
+            </Typography>
+          )}
 
           {event.productId && (
             <Stack
