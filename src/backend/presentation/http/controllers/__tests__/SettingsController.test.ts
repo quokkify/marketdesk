@@ -8,6 +8,7 @@ import { Marketplace } from '../../../../domain/entities/Marketplace';
 import type { IWorkspaceRepository } from '../../../../domain/repositories/interfaces/IWorkspaceRepository';
 import { InMemoryMarketplaceRepository, unwrap } from '../../../../domain/testkit/support';
 import type { IntegrationSettingsStatus, MarketplaceKey } from '../../../../../shared/types';
+import type { OlxAdapterMode } from '../../../../config/env';
 import { SettingsController } from '../SettingsController';
 
 const WORKSPACE_ID = 'ws-1';
@@ -19,9 +20,6 @@ interface MarketplaceRow {
   connected?: boolean;
 }
 
-// The OAuth status carries `sandbox` once the OLX sandbox connection is merged.
-type OAuthStatus = MarketplaceOAuthStatus & { sandbox: boolean };
-
 async function seedMarketplaces(...rows: MarketplaceRow[]) {
   const repo = new InMemoryMarketplaceRepository();
   for (const row of rows) {
@@ -30,7 +28,7 @@ async function seedMarketplaces(...rows: MarketplaceRow[]) {
   return repo;
 }
 
-function oauthStatus(overrides: Partial<OAuthStatus> = {}): OAuthStatus {
+function oauthStatus(overrides: Partial<MarketplaceOAuthStatus> = {}): MarketplaceOAuthStatus {
   return {
     connected: true,
     marketplaceId: 'marketplace-olx',
@@ -61,7 +59,7 @@ async function readIntegrations(
   marketplaces: InMemoryMarketplaceRepository,
   settings: ISettingsRepository,
   oauth: MarketplaceOAuthService,
-  olxAdapterMode = 'stub'
+  olxAdapterMode: OlxAdapterMode = 'stub'
 ): Promise<IntegrationSettingsStatus[]> {
   const json = jest.fn();
   const status = jest.fn().mockReturnValue({ json });
@@ -143,6 +141,33 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
     expect(item.account).toEqual({ handle: 'seller@example.test', status: 'error' });
   });
 
+  // In real mode check() disconnects a leftover sandbox account, so the marketplace row read
+  // before it still says connected. The answer of check() decides.
+  it('reports a leftover sandbox account that the check disconnected as not connected', async () => {
+    const { oauth, settings } = fixtures(
+      jest.fn().mockResolvedValue(
+        oauthStatus({
+          connected: false,
+          account: { id: 'account-1', handle: 'OLX sandbox account', status: 'error', scopes: [] },
+          sandbox: true,
+        })
+      )
+    );
+    const repo = await seedMarketplaces(OLX_ROW);
+
+    const item = marketplaceItem(
+      await readIntegrations(repo, settings, oauth, 'real'),
+      'marketplace-olx'
+    );
+
+    expect(item).toMatchObject({
+      connected: false,
+      configured: false,
+      account: { handle: 'OLX sandbox account', status: 'error' },
+      sandbox: true,
+    });
+  });
+
   it('never exposes scopes, token expiry or credentials from the OAuth status', async () => {
     const { oauth, settings } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
@@ -204,12 +229,12 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
     expect(item).toMatchObject({ connected: false, account: null, sandbox: true });
   });
 
-  it.each(['stub', 'mock'])('treats the %s adapter mode as sandbox', async (adapterMode) => {
+  it('treats the stub adapter mode as sandbox', async () => {
     const { oauth, settings } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, adapterMode),
+      await readIntegrations(repo, settings, oauth, 'stub'),
       'marketplace-olx'
     );
 
@@ -240,19 +265,6 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
     );
 
     expect(item.sandbox).toBe(true);
-  });
-
-  it('flags OLX as sandbox from the adapter mode when the status predates the sandbox field', async () => {
-    const legacyStatus: Partial<OAuthStatus> = oauthStatus();
-    delete legacyStatus.sandbox;
-    const { oauth, settings } = fixtures(jest.fn().mockResolvedValue(legacyStatus));
-    const repo = await seedMarketplaces(OLX_ROW);
-
-    const stub = await readIntegrations(repo, settings, oauth, 'stub');
-    const real = await readIntegrations(repo, settings, oauth, 'real');
-
-    expect(marketplaceItem(stub, 'marketplace-olx').sandbox).toBe(true);
-    expect(marketplaceItem(real, 'marketplace-olx').sandbox).toBe(false);
   });
 
   it('never flags roadmap channels as sandbox', async () => {

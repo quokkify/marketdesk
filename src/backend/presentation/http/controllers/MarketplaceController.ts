@@ -15,6 +15,7 @@ import { DomainError, InvalidStateError, NotFoundError } from '../../../domain/s
 import { presentMarketplace } from '../../../application/dto/presenters';
 import { ok } from '../formatters/ResponseFormatter';
 import type { ErrorLogger } from '../middleware/ErrorHandlingMiddleware';
+import type { OlxAdapterMode } from '../../../config/env';
 
 
 function routeParam(value: string | string[] | undefined): string {
@@ -36,12 +37,13 @@ export class MarketplaceController {
     private readonly imports: MarketplaceImportService,
     private readonly olxQuotas: OlxPublicationQuotaService | undefined,
     private readonly oauthReturnUrl: string,
-    private readonly olxAdapterMode: string,
+    private readonly olxAdapterMode: OlxAdapterMode,
     private readonly logger?: ErrorLogger,
   ) {}
 
+  // Same rule as ListingController: only the stub mode is the sandbox.
   private get olxSandbox(): boolean {
-    return this.olxAdapterMode !== 'real';
+    return this.olxAdapterMode === 'stub';
   }
 
   private present(marketplace: Marketplace) {
