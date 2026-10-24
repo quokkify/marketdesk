@@ -72,7 +72,7 @@ test('init-env is idempotent', ...)
 - Test: `src/backend/presentation/__tests__/api.integration.test.ts` (register cases), `src/frontend/pages/LoginPage.test.tsx` (new, renderToStaticMarkup style used in repo).
 
 **Interfaces:**
-- `registerSchema.workspaceName`: `z.string().trim().min(1).max(120).optional()`; `AuthController.register` derives `workspaceName ?? defaultWorkspaceName(email)` where `defaultWorkspaceName('kamil@x.pl') === "kamil's workspace"`; a workspace and the OLX marketplace row are always created; duplicate-email race (pg 23505) maps to 409.
+- `registerSchema.workspaceName`: `z.string().trim().max(120).nullish().transform(name => name || undefined)` (a blank or null name means "no name"); `AuthController.register` derives `workspaceName ?? defaultWorkspaceName(email)` where `defaultWorkspaceName('kamil@x.pl') === "kamil's workspace"`; a workspace and the OLX marketplace row are always created; duplicate-email race (pg 23505) maps to 409.
 
 - [ ] **Step 1: Failing tests** — `register without workspaceName provisions a default workspace and OLX row` (expects `token` payload with `workspaceId`, `GET /api/marketplaces` returns one OLX row); `LoginPage registration marks Workspace name required`.
 - [ ] **Step 2: Run, verify fail.** `SKIP_REDIS_TESTS=true npx jest src/backend/presentation/__tests__/api.integration.test.ts -t register`
@@ -103,7 +103,7 @@ test('init-env is idempotent', ...)
 
 **Interfaces:**
 - `MarketplaceOAuthServiceDeps.sandbox?: { enabled: boolean; successUrl: string }`.
-- `start()` when `sandbox.enabled`: upsert account `{ handle: 'OLX sandbox account', status: 'connected', scopes: ['read','write','v2'], credentials: vault.encrypt({ accessToken: 'sandbox', tokenType: 'Bearer', scopes, expiresAt: now + 10 years }) }`, call `marketplace.connect()` + `marketplaceRepo.save`, return `{ authorizationUrl: `${successUrl}?oauth=success&marketplaceId=<id>&sandbox=1`, state: 'sandbox', expiresAt, sandbox: true }` (`MarketplaceOAuthStartResult` gains optional `sandbox?: boolean`). `check()` returns `sandbox: true` in `MarketplaceOAuthStatus` when the stored handle is the sandbox handle. No app credentials required in sandbox mode.
+- `start()` when `sandbox.enabled`: upsert account `{ handle: 'OLX sandbox account', status: 'connected', scopes: ['read','write','v2'], credentials: vault.encrypt({ accessToken: 'sandbox', tokenType: 'sandbox', scopes, expiresAt: now + 10 years }) }`, call `marketplace.connect()` + `marketplaceRepo.save`, return `{ authorizationUrl: `${successUrl}?oauth=success&marketplaceId=<id>&sandbox=1`, state: 'sandbox', expiresAt, sandbox: true }` (`MarketplaceOAuthStartResult` gains optional `sandbox?: boolean`). `check()` returns `sandbox: true` in `MarketplaceOAuthStatus` when the decrypted tokens carry the sandbox token type or access token (falling back to the sandbox handle when no tokens are stored). No app credentials required in sandbox mode.
 - `MarketplaceView.sandbox = env.marketplaces.olx.adapterMode !== 'real'` for `key === 'olx'`.
 - Container passes `sandbox: { enabled: adapterMode !== 'real', successUrl: env.marketplaces.olx.oauthSuccessUrl }`.
 
