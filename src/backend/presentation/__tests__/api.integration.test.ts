@@ -11,11 +11,7 @@ import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
 import { signToken } from '../http/middleware/AuthMiddleware';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../http/ports/IAuthUserStore';
+import { InMemoryAuthStore } from '../testkit/support';
 import { Ok, Err } from '../../domain/shared/Result';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { Product } from '../../domain/entities/Product';
@@ -89,27 +85,6 @@ const appliedEvent: HermesEventView = {
   proposedChange: null,
   createdAt: iso,
 };
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 function stubProductService(): ProductApplicationService {
   return {
