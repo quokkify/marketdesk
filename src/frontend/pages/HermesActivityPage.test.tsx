@@ -69,16 +69,32 @@ const query = <T,>(data: T | undefined, overrides: Record<string, unknown> = {})
   ...overrides,
 });
 
-const feed = (items: HermesEvent[], total: number, overrides: Record<string, unknown> = {}) => ({
-  data: { pages: [{ items, total, page: 1, limit: 20, totalPages: 1 }], pageParams: [0] },
-  isLoading: false,
-  isFetching: false,
-  isFetchingNextPage: false,
-  hasNextPage: items.length < total,
-  isError: false,
-  error: undefined,
-  refetch: jest.fn(),
-  fetchNextPage: jest.fn(),
+// A settled feed for the current filter set: RTK Query reports the same result as `data`
+// and as `currentData`.
+const feed = (items: HermesEvent[], total: number, overrides: Record<string, unknown> = {}) => {
+  const result = { pages: [{ items, total, page: 1, limit: 20, totalPages: 1 }], pageParams: [0] };
+  return {
+    data: result,
+    currentData: result,
+    isLoading: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    hasNextPage: items.length < total,
+    isError: false,
+    error: undefined,
+    refetch: jest.fn(),
+    fetchNextPage: jest.fn(),
+    ...overrides,
+  };
+};
+
+// What RTK Query reports right after the filters changed. `data` still holds the previous
+// filter set's result and `isLoading` stays false, but nothing exists for the new filter
+// set yet, so `currentData` is undefined.
+const afterFilterChange = (overrides: Record<string, unknown> = {}) => ({
+  ...feed(LATEST_EVENTS, LATEST_EVENTS.length),
+  currentData: undefined,
+  hasNextPage: false,
   ...overrides,
 });
 
@@ -426,6 +442,17 @@ describe('Hermes feed states', () => {
     expect(html).not.toContain('Something went wrong');
   });
 
+  it('shows a failed refresh only over the events of the current filter set', () => {
+    mockUseHermesEventFeed.mockImplementation(() =>
+      feed([], 0, { isError: true, error: { status: 500 } }),
+    );
+
+    const html = render();
+
+    expect(html).toContain('Something went wrong');
+    expect(html).not.toContain('The feed could not be refreshed');
+  });
+
   it('offers a retry when the feed cannot be loaded', () => {
     mockUseHermesEventFeed.mockImplementation(() =>
       query(undefined, { isLoading: false, isError: true, error: { status: 500 }, hasNextPage: false }),
@@ -435,5 +462,55 @@ describe('Hermes feed states', () => {
 
     expect(html).toContain('Something went wrong');
     expect(html).toContain('Try again');
+  });
+});
+
+// Regression guards: RTK Query keeps the previous arguments' result in `data`, so a page that
+// reads `data` shows the old tab's cards while the new tab loads, fails or is not requested.
+describe('Hermes feed after the filters change', () => {
+  it('regression guard: shows skeleton cards, not the previous tab, while the new filter set loads', () => {
+    mockUseHermesEventFeed.mockImplementation(() => afterFilterChange({ isFetching: true }));
+
+    const html = render({ initialTab: 'alerts' });
+
+    expect(html).toContain('MuiSkeleton');
+    expect(html).not.toContain('Review price');
+    expect(html).not.toContain('The feed could not be refreshed');
+  });
+
+  it('regression guard: shows the error state, not the previous tab under a false warning, when the new request fails', () => {
+    mockUseHermesEventFeed.mockImplementation(() =>
+      afterFilterChange({ isError: true, error: { status: 500 } }),
+    );
+
+    const html = render({ initialTab: 'alerts' });
+
+    expect(html).toContain('Something went wrong');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('Review price');
+    expect(html).not.toContain('These events are what was loaded before');
+    expect(html).not.toContain('MuiSkeleton');
+  });
+
+  it('regression guard: shows the filters empty state and no rows when the tab and the selects match nothing', () => {
+    mockUseHermesEventFeed.mockImplementation(() => afterFilterChange({ isUninitialized: true }));
+
+    const html = render({ initialTab: 'completed', initialStatusFilter: ['pending_review'] });
+
+    expect(mockUseHermesEventFeed).toHaveBeenLastCalledWith(null);
+    expect(html).toContain('No events match these filters');
+    expect(html).not.toContain('Review price');
+    expect(html).not.toContain('MuiSkeleton');
+    expect(html).not.toContain('Something went wrong');
+  });
+
+  it('passes select filters that fit the tab through to the server', () => {
+    render({ initialTab: 'completed', initialStatusFilter: ['applied'], initialSeverityFilter: ['success'] });
+
+    expect(mockUseHermesEventFeed).toHaveBeenLastCalledWith({
+      status: ['applied'],
+      severity: ['success'],
+      sort: '-createdAt',
+    });
   });
 });

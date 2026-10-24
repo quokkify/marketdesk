@@ -282,23 +282,32 @@ function useHermesMetrics(): HermesMetric[] {
 }
 
 export interface HermesActivityPageProps {
-  /** Tab shown first. The route renders the page without props, which means All. */
+  /** Filters shown first. The route renders the page without props: the All tab and no selects. */
   initialTab?: HermesActivityTab;
+  initialStatusFilter?: HermesEventStatus[];
+  initialSeverityFilter?: HermesSeverity[];
 }
 
-const HermesActivityPage: React.FC<HermesActivityPageProps> = ({ initialTab = 'all' }) => {
+const HermesActivityPage: React.FC<HermesActivityPageProps> = ({
+  initialTab = 'all',
+  initialStatusFilter = [],
+  initialSeverityFilter = [],
+}) => {
   const navigate = useNavigate();
 
   const [activityTab, setActivityTab] = useState<HermesActivityTab>(initialTab);
-  const [statusFilter, setStatusFilter] = useState<HermesEventStatus[]>([]);
-  const [severityFilter, setSeverityFilter] = useState<HermesSeverity[]>([]);
+  const [statusFilter, setStatusFilter] = useState<HermesEventStatus[]>(initialStatusFilter);
+  const [severityFilter, setSeverityFilter] = useState<HermesSeverity[]>(initialSeverityFilter);
 
   const filters = useMemo(
     () => hermesFeedFilters(activityTab, statusFilter, severityFilter),
     [activityTab, statusFilter, severityFilter],
   );
   const feed = useHermesEventFeed(filters);
-  const { items, total } = flattenHermesFeed(feed.data);
+  // RTK Query keeps the previous filter set's result in `data` and reports `isLoading` false once
+  // any data exists, so only `currentData`, the result for this exact filter set, may be shown.
+  const { items, total } = flattenHermesFeed(feed.currentData);
+  const feedLoading = feed.currentData === undefined && feed.isFetching;
 
   const status = useHermesStatus();
   const overview = useAnalyticsOverview();
@@ -437,7 +446,7 @@ const HermesActivityPage: React.FC<HermesActivityPageProps> = ({ initialTab = 'a
 
       {feed.isError && items.length === 0 ? (
         <ErrorRetry error={feed.error} onRetry={feed.refetch} />
-      ) : feed.isLoading ? (
+      ) : feedLoading ? (
         <LoadingSkeleton lines={6} height={112} />
       ) : items.length === 0 ? (
         <EmptyState
