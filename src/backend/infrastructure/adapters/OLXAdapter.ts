@@ -79,6 +79,8 @@ const OLX_STATUS_TO_LOCAL: Record<string, SyncedListing['status']> = {
 
 export interface OlxAdapterConfig {
   baseUrl?: string;
+  // Public base URL of this backend; relative image paths are sent to OLX on it.
+  publicBaseUrl?: string;
   requirePublishDetails?: boolean;
   categoryIds?: Record<string, number>;
   defaultCategoryId?: number;
@@ -151,6 +153,7 @@ interface OlxResponseEnvelope<T> {
 
 export class OLXAdapter extends BaseMarketplaceAdapter {
   private readonly baseUrl: string;
+  private readonly publicBaseUrl: string | undefined;
 
   constructor(
     http?: MarketplaceHttpClient,
@@ -163,6 +166,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   ) {
     super(http ?? new StubMarketplaceHttpClient(OLXAdapter.stubResponder), 'olx', options);
     this.baseUrl = (config.baseUrl ?? OLX_PARTNER_BASE_URL).replace(/\/$/, '');
+    this.publicBaseUrl = config.publicBaseUrl?.replace(/\/+$/, '');
   }
 
   protected async doPublish(input: ListingPublishInput): Promise<PublishResult> {
@@ -234,7 +238,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         currency: input.currency,
         negotiable: this.config.priceNegotiable ?? false,
       },
-      images: input.imageUrls.map((url) => ({ url })),
+      images: input.imageUrls.map((url) => ({ url: this.publicImageUrl(url) })),
     };
     if (this.config.cityId) {
       body.location = {
@@ -263,6 +267,14 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     }
     if (attributes.length > 0) body.attributes = attributes;
     return body;
+  }
+
+  // OLX fetches advert images itself, so an image stored as a root-relative path
+  // (an upload) is sent as an absolute URL on the public base URL. Absolute URLs
+  // pass through unchanged.
+  private publicImageUrl(url: string): string {
+    if (!this.publicBaseUrl || !url.startsWith('/') || url.startsWith('//')) return url;
+    return `${this.publicBaseUrl}${url}`;
   }
 
   protected async doDelist(externalListingId: string): Promise<void> {

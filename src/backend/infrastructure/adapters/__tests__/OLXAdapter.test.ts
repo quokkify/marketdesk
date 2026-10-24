@@ -94,6 +94,37 @@ describe('OLXAdapter', () => {
     ]);
   });
 
+  it('sends relative upload image URLs as absolute URLs on the public base URL', async () => {
+    const bodies: unknown[] = [];
+    const http = mockClient((config) => {
+      bodies.push(config.body);
+      return config.method === 'POST'
+        ? { status: 201, data: { id: 123, status: 'active' } }
+        : { status: 204, data: {} };
+    });
+    const adapter = new OLXAdapter(http, fastOptions, {
+      ...realConfig,
+      publicBaseUrl: 'https://marketdesk.example.com/',
+    });
+    const input: ListingPublishInput = {
+      ...publishInput,
+      imageUrls: ['/uploads/workspaces/abc/products/photo.jpg', 'https://img/2.jpg'],
+    };
+
+    await adapter.publish(input);
+    await adapter.updateListing('123', { price: 299 }, input);
+
+    const images = [
+      { url: 'https://marketdesk.example.com/uploads/workspaces/abc/products/photo.jpg' },
+      { url: 'https://img/2.jpg' },
+    ];
+    expect(bodies).toEqual([
+      expect.objectContaining({ images }),
+      expect.objectContaining({ images }),
+    ]);
+    expect(input.imageUrls).toEqual(['/uploads/workspaces/abc/products/photo.jpg', 'https://img/2.jpg']);
+  });
+
   it('maps a real empty OLX thread list to zero conversations and messages', async () => {
     const http = mockClient((config) => config.url.endsWith('/threads')
       ? { status: 200, data: [] }

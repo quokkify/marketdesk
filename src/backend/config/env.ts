@@ -40,6 +40,35 @@ function parseCategoryIds(value: string | undefined): Record<string, number> {
   );
 }
 
+const DEFAULT_PUBLIC_BASE_URL = 'http://localhost:3000';
+
+function parseHttpUrl(value: string): URL | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// Public base URL of this backend. OLX downloads advert images itself, so the OLX
+// adapter turns relative /uploads paths into absolute URLs on this base. Unset, it
+// is the origin of OLX_REDIRECT_URI, which already points at this backend.
+export function resolvePublicBaseUrl(
+  configured: string | undefined,
+  olxRedirectUri: string | undefined,
+): string {
+  const value = configured?.trim();
+  if (value) {
+    const parsed = parseHttpUrl(value);
+    if (!parsed || parsed.search || parsed.hash) {
+      throw new Error('PUBLIC_BASE_URL must be an absolute http(s) URL without query or fragment');
+    }
+    return value.replace(/\/+$/, '');
+  }
+  return parseHttpUrl(olxRedirectUri?.trim() ?? '')?.origin ?? DEFAULT_PUBLIC_BASE_URL;
+}
+
 // Value prefix of the development fallback below. assertStartupConfiguration
 // recognises it so the fallback can never reach a real boot by accident.
 const DEV_ONLY_SECRET_PREFIX = 'dev-only-insecure-';
@@ -75,6 +104,7 @@ export const env = {
   appPort: parseInt(process.env.APP_PORT || '3000', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
   trustProxy: process.env.TRUST_PROXY === 'true',
+  publicBaseUrl: resolvePublicBaseUrl(process.env.PUBLIC_BASE_URL, process.env.OLX_REDIRECT_URI),
 
   // Database
   database: {

@@ -277,6 +277,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     httpClients: olxHttpClient ? { olx: olxHttpClient } : undefined,
     olx: {
       baseUrl: env.marketplaces.olx.apiBaseUrl,
+      publicBaseUrl: env.publicBaseUrl,
       requirePublishDetails: env.marketplaces.olx.adapterMode === 'real',
       categoryIds: env.marketplaces.olx.categoryIds,
       cityId: env.marketplaces.olx.cityId,

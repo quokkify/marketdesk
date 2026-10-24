@@ -8,6 +8,7 @@ import {
   positiveInt,
   resolveDatabaseSslMode,
   resolveJwtSecret,
+  resolvePublicBaseUrl,
 } from '../env';
 
 describe('resolveDatabaseSslMode', () => {
@@ -47,6 +48,37 @@ describe('positiveInt', () => {
       expect(() => positiveInt(value, 1024, 'MAX_FILE_SIZE')).toThrow(/positive integer/);
     },
   );
+});
+
+describe('resolvePublicBaseUrl', () => {
+  const redirectUri = 'https://marketdesk.example.com/api/marketplaces/olx/oauth/callback';
+
+  it('uses PUBLIC_BASE_URL, keeping a path prefix and dropping trailing slashes', () => {
+    expect(resolvePublicBaseUrl(' https://shop.example.com/desk/ ', redirectUri)).toBe(
+      'https://shop.example.com/desk',
+    );
+  });
+
+  it('derives the origin of OLX_REDIRECT_URI when PUBLIC_BASE_URL is unset', () => {
+    expect(resolvePublicBaseUrl(undefined, redirectUri)).toBe('https://marketdesk.example.com');
+    expect(resolvePublicBaseUrl('  ', redirectUri)).toBe('https://marketdesk.example.com');
+  });
+
+  it.each([undefined, '', 'not a url', 'ftp://files.example.com/callback'])(
+    'falls back to http://localhost:3000 for OLX_REDIRECT_URI %p',
+    (value) => {
+      expect(resolvePublicBaseUrl(undefined, value)).toBe('http://localhost:3000');
+    },
+  );
+
+  it.each([
+    'shop.example.com',
+    'ftp://shop.example.com',
+    'https://shop.example.com/?x=1',
+    'https://shop.example.com/#top',
+  ])('rejects PUBLIC_BASE_URL %s', (value) => {
+    expect(() => resolvePublicBaseUrl(value, redirectUri)).toThrow(/PUBLIC_BASE_URL/);
+  });
 });
 
 describe('resolveJwtSecret (S1 fail-closed JWT secret)', () => {
