@@ -37,7 +37,8 @@ const STUB_CATEGORY_MAP: Record<string, number> = {
 
 // Stub transport only. Every read of a sandbox advert adds these counts, so
 // repeated syncs show deterministic, growing engagement. The read counts live at
-// module scope because the workers build a fresh adapter for every job.
+// module scope because the workers build a fresh adapter for every job; they are
+// in memory only and reset when the process restarts.
 const STUB_VIEWS_PER_READ = 7;
 const STUB_FAVORITES_PER_READ = 1;
 const stubAdvertReads = new Map<string, number>();
@@ -727,8 +728,10 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         },
       };
     }
-    const reads = (stubAdvertReads.get(externalId) ?? 0) + 1;
-    stubAdvertReads.set(externalId, reads);
+    // Only a read of a named advert grows its counts, so other requests add no key.
+    const advertId = idMatch?.[1];
+    const reads = advertId ? (stubAdvertReads.get(advertId) ?? 0) + 1 : 0;
+    if (advertId) stubAdvertReads.set(advertId, reads);
     return {
       status: 200,
       data: {

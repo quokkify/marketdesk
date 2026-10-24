@@ -5,6 +5,7 @@ import {
   HttpRequestConfig,
   HttpResponse,
   HttpError,
+  type StubResponder,
 } from '../MarketplaceHttpClient';
 import {
   MarketplaceAuthenticationError,
@@ -945,6 +946,17 @@ describe('OLXAdapter', () => {
 
     expect(published.externalUrl).toBeNull();
     expect(fetched?.externalUrl).toBeNull();
+  });
+
+  it('stub transport counts reads only for a matched advert id', async () => {
+    // The responder is private; a request that names no advert must not add a counter.
+    const responder = (OLXAdapter as unknown as { stubResponder: StubResponder }).stubResponder;
+
+    const other = await responder({ method: 'GET', url: 'https://www.olx.pl/api/partner/categories/1001' });
+    const again = await responder({ method: 'GET', url: 'https://www.olx.pl/api/partner/categories/1001' });
+
+    expect(other.data).toMatchObject({ metrics: { views: 0, favorites: 0, messages: 0 } });
+    expect(again.data).toMatchObject({ metrics: { views: 0, favorites: 0, messages: 0 } });
   });
 
   it('stub transport grows advert metrics by 7 views and 1 favourite on every read', async () => {
