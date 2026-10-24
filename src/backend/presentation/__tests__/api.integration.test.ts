@@ -49,6 +49,7 @@ import {
 } from '../../domain/testkit/support';
 import { InMemoryWorkspaceRepository } from '../../application/testkit/support';
 import { InMemorySettingsRepository } from '../../infrastructure/persistence/repositories/InMemorySettingsRepository';
+import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
 
 const iso = new Date().toISOString();
 
@@ -1132,6 +1133,39 @@ describe('Presentation API', () => {
       const res = await auth(request(app).get('/api/listings/listing-preview/marketplace-categories?query=widgets'));
       expect(res.status).toBe(503);
       expect(res.body.error.message).toBe('OLX category search is temporarily unavailable');
+    });
+
+    it('searches and records a sandbox OLX category through the listing endpoints in stub mode', async () => {
+      const { app, listingRepo } = await buildTestApp({
+        olxTaxonomyResolver: async () => new StubOlxTaxonomyResolver(),
+      });
+      await seedPreviewListing(listingRepo, null);
+
+      const search = await auth(
+        request(app).get('/api/listings/listing-preview/marketplace-categories?query=cam')
+      );
+      const recorded = await auth(
+        request(app).put('/api/listings/listing-preview/marketplace-category')
+      ).send({ providerCategoryId: '1001' });
+      const preview = await auth(
+        request(app).post('/api/listings/listing-preview/publish-preview')
+      ).send({});
+
+      expect(search.status).toBe(200);
+      expect(search.body.data).toEqual([
+        { providerCategoryId: '1001', name: 'Cameras', path: ['Electronics', 'Cameras'] },
+      ]);
+      expect(recorded.status).toBe(200);
+      expect(recorded.body.data.marketplaceCategory).toMatchObject({
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        isLeaf: true,
+      });
+      expect(preview.status).toBe(200);
+      expect(preview.body.data.warnings).toEqual([]);
+      expect(preview.body.data.canPublish).toBe(true);
     });
 
     it('returns publish preview without publishing or enqueueing', async () => {

@@ -75,6 +75,7 @@ import { BullJobQueue } from '../../infrastructure/jobQueue/BullJobQueue';
 import { MarketplaceAdapterFactory } from '../../infrastructure/adapters/MarketplaceAdapterFactory';
 import { FetchMarketplaceHttpClient } from '../../infrastructure/adapters/FetchMarketplaceHttpClient';
 import { OlxTaxonomyResolver } from '../../infrastructure/adapters/OlxTaxonomyResolver';
+import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
 import { RedisMarketplaceOAuthStateStore } from '../../infrastructure/cache/RedisMarketplaceOAuthStateStore';
 import { RedisMarketplaceOAuthRefreshLock } from '../../infrastructure/cache/RedisMarketplaceOAuthRefreshLock';
 import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCredentialVault';
@@ -108,7 +109,10 @@ import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHer
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
-import { ProductRecheckService } from '../../application/services/ProductRecheckService';
+import {
+  ProductRecheckService,
+  type OlxTaxonomyResolverFactory,
+} from '../../application/services/ProductRecheckService';
 import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 import { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
@@ -328,6 +332,20 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       successUrl: env.marketplaces.olx.oauthSuccessUrl,
     },
   });
+  // While the OLX adapter is not real, category search and verification use the fixed
+  // sandbox taxonomy, which needs no OLX access token and never calls OLX.
+  const olxTaxonomyResolver: OlxTaxonomyResolverFactory =
+    env.marketplaces.olx.adapterMode === 'real'
+      ? async (marketplaceId) => {
+          const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
+          const http = new FetchMarketplaceHttpClient({
+            defaultHeaders: buildOlxHeaders(accessToken),
+            timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+            livePublishEnabled: false,
+          });
+          return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
+        }
+      : async () => new StubOlxTaxonomyResolver();
   const olxPublicationQuotaService = new OlxPublicationQuotaService(
     marketplaceRepo,
     marketplaceAccountRepo,
@@ -428,15 +446,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaceRepo,
     marketplaceAccountRepo,
     activityLogRepo,
-    async (marketplaceId) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
-      const http = new FetchMarketplaceHttpClient({
-        defaultHeaders: buildOlxHeaders(accessToken),
-        timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-        livePublishEnabled: false,
-      });
-      return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
-    },
+    olxTaxonomyResolver,
     idGenerator
   );
   const productAssistanceGraph = new ProductAssistanceGraph(
@@ -703,15 +713,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaceOAuthService,
     marketplaceSyncScheduler,
     marketplaceImportService,
-    olxTaxonomyResolver: async (marketplaceId) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
-      const http = new FetchMarketplaceHttpClient({
-        defaultHeaders: buildOlxHeaders(accessToken),
-        timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-        livePublishEnabled: false,
-      });
-      return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
-    },
+    olxTaxonomyResolver,
     olxPublicationQuotaService,
     categoryCorrectionOperationService,
     marketplaceOAuthReturnUrl: env.marketplaces.olx.oauthSuccessUrl,
