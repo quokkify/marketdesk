@@ -19,27 +19,28 @@ export function useProductDeletion(onDeleted: (product: Product) => void) {
   const dispatch = useAppDispatch();
   const [deleteProduct, { isLoading: deleting }] = useDeleteProduct();
   const [target, setTarget] = useState<Product | null>(null);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
 
   const requestDelete = (product: Product) => {
     setError(null);
     setTarget(product);
+    setOpen(true);
   };
 
   const cancel = () => {
     if (inFlight.current) return;
-    setTarget(null);
-    setError(null);
+    setOpen(false);
   };
 
   const confirm = async () => {
-    if (!target || inFlight.current) return;
+    if (!open || !target || inFlight.current) return;
     inFlight.current = true;
     setError(null);
     try {
       await deleteProduct(target.id).unwrap();
-      setTarget(null);
+      setOpen(false);
       dispatch(enqueueToast({ message: `Deleted ${target.name}.`, severity: 'success' }));
       onDeleted(target);
     } catch (err) {
@@ -53,7 +54,8 @@ export function useProductDeletion(onDeleted: (product: Product) => void) {
     requestDelete,
     dialog: (
       <DeleteProductDialog
-        product={target}
+        open={open}
+        productName={target?.name ?? ''}
         deleting={deleting}
         error={error}
         onCancel={cancel}

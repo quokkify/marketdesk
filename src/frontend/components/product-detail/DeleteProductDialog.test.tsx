@@ -7,7 +7,8 @@ type DialogElement = React.ReactElement<React.ComponentProps<typeof ConfirmDialo
 
 function dialog(props: Partial<React.ComponentProps<typeof DeleteProductDialog>>): DialogElement {
   return DeleteProductDialog({
-    product: { name: 'Wireless Headphones Pro' },
+    open: true,
+    productName: 'Wireless Headphones Pro',
     deleting: false,
     error: null,
     onCancel: () => undefined,
@@ -41,8 +42,15 @@ describe('DeleteProductDialog', () => {
     expect(message).toContain('Remove the live OLX listing before deleting this product.');
   });
 
-  it('locks the dialog while the delete is in flight and stays closed without a product', () => {
+  it('locks the dialog while the delete is in flight', () => {
     expect(dialog({ deleting: true }).props).toMatchObject({ loading: true, confirmLabel: 'Deleting…' });
-    expect(dialog({ product: null }).props.open).toBe(false);
+  });
+
+  it('keeps the product name while the dialog closes', () => {
+    const closing = dialog({ open: false });
+    const message = renderToStaticMarkup(<>{closing.props.message}</>);
+
+    expect(closing.props.open).toBe(false);
+    expect(message).toContain('Wireless Headphones Pro and its MarketDesk listings');
   });
 });
