@@ -13,11 +13,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 
 import { buildApp, type AppDeps } from '../../presentation/http/app';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../../presentation/http/ports/IAuthUserStore';
+import { InMemoryAuthStore } from '../../presentation/testkit/support';
 
 import {
   InMemoryProductRepository,
@@ -59,40 +55,14 @@ import { ListingApplicationService } from '../../application/services/ListingApp
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 
-import {
-  PublishListingHandler,
-  type PublishAttemptCheckpoint,
-  type PublishAttemptStore,
-} from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
+import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
+import { SyncPublishQueue, inMemoryPublishAttempts } from '../../infrastructure/testkit/support';
 import type { MarketplaceAdapterResolver } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import type { IMarketplaceAdapter, PublishResult } from '../../domain/services/MarketplaceAdapter';
-
-import type { IJobQueue, PublishListingJob } from '../../application/ports/IJobQueue';
 
 const WORKSPACE_ID = 'ws-1';
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'secret123';
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 // A fake marketplace adapter that "publishes" successfully and returns an external id.
 function fakeAdapter(externalId: string): IMarketplaceAdapter {
@@ -108,26 +78,6 @@ function fakeAdapter(externalId: string): IMarketplaceAdapter {
     sync: async () => [],
     fetchListing: async () => null,
   };
-}
-
-// A synchronous publish queue: enqueue immediately runs the real PublishListingHandler,
-// finalizing the listing via the domain ListingService (Group 10 fix under test).
-class SyncPublishQueue implements IJobQueue<PublishListingJob> {
-  constructor(private readonly handler: PublishListingHandler) {}
-  async enqueue(data: PublishListingJob): Promise<void> {
-    await this.handler.handle(data);
-  }
-  async enqueueAll(
-    items: Array<{ data: PublishListingJob; options?: { jobId?: string } }>
-  ): Promise<void> {
-    const jobIds = items
-      .map((item) => item.options?.jobId)
-      .filter((jobId): jobId is string => !!jobId);
-    if (jobIds.length !== items.length || new Set(jobIds).size !== jobIds.length) {
-      throw new Error('SyncPublishQueue bulk enqueue requires unique jobIds');
-    }
-    for (const item of items) await this.enqueue(item.data);
-  }
 }
 
 interface E2EContext {
@@ -194,46 +144,7 @@ async function buildE2E(): Promise<E2EContext> {
   const adapterResolver: MarketplaceAdapterResolver = {
     create: () => fakeAdapter('olx-external-1'),
   };
-  const checkpoints = new Map<string, PublishAttemptCheckpoint>();
-  const publishAttempts: PublishAttemptStore = {
-    find: async (operationId) => checkpoints.get(operationId) ?? null,
-    begin: async (operationId, listingId, marketplaceKey, listingUpdatedAt) => {
-      const checkpoint: PublishAttemptCheckpoint = {
-        operationId,
-        listingId,
-        marketplaceKey,
-        listingUpdatedAt,
-        status: 'publishing',
-        externalListingId: null,
-        externalUrl: null,
-        publishedAt: null,
-        remoteStatus: null,
-        remoteImageUrls: [],
-      };
-      checkpoints.set(operationId, checkpoint);
-      return { created: true, checkpoint };
-    },
-    markPublished: async (operationId, result) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, {
-        ...checkpoint,
-        status: 'published',
-        externalListingId: result.externalListingId,
-        externalUrl: result.externalUrl ?? null,
-        publishedAt: result.publishedAt,
-        remoteStatus: result.remoteStatus ?? null,
-        remoteImageUrls: result.remoteImageUrls ?? [],
-      });
-    },
-    markFinalized: async (operationId) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, { ...checkpoint, status: 'finalized' });
-    },
-    markAbandoned: async (operationId) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, { ...checkpoint, status: 'abandoned' });
-    },
-  };
+  const publishAttempts = inMemoryPublishAttempts();
   const publishHandler = new PublishListingHandler(
     adapterResolver,
     events,
