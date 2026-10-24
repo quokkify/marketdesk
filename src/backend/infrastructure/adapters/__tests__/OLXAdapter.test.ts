@@ -905,4 +905,26 @@ describe('OLXAdapter', () => {
     const fetched = await adapter.fetchListing('olx-abc');
     expect(fetched?.status).toBe('live');
   });
+
+  it('stub transport returns a sandbox advert URL on create and read', async () => {
+    const adapter = new OLXAdapter(undefined, fastOptions);
+
+    const published = await adapter.publish(publishInput);
+    const fetched = await adapter.fetchListing(published.externalListingId);
+
+    expect(published.externalUrl).toBe(
+      `https://www.olx.pl/d/oferta/sandbox-${published.externalListingId}`,
+    );
+    expect(fetched?.externalUrl).toBe(published.externalUrl);
+  });
+
+  it('stub transport grows advert metrics by 7 views and 1 favourite on every read', async () => {
+    // The sync worker builds a fresh adapter for every job, so growth must
+    // survive across adapter instances.
+    const [first] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
+    const [second] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
+
+    expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 0, messages: 0 });
+    expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 0, messages: 0 });
+  });
 });

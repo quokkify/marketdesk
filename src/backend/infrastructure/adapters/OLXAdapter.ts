@@ -35,6 +35,17 @@ const STUB_CATEGORY_MAP: Record<string, number> = {
   sports: 6000,
 };
 
+// Stub transport only. Every read of a sandbox advert adds these counts, so
+// repeated syncs show deterministic, growing engagement. The read counts live at
+// module scope because the workers build a fresh adapter for every job.
+const STUB_VIEWS_PER_READ = 7;
+const STUB_FAVORITES_PER_READ = 1;
+const stubAdvertReads = new Map<string, number>();
+
+function stubAdvertUrl(advertId: string): string {
+  return `https://www.olx.pl/d/oferta/sandbox-${advertId}`;
+}
+
 const OLX_CONDITION_MAP: Record<string, string> = {
   new: 'new',
   like_new: 'used',
@@ -672,13 +683,24 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
     const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}`;
     if (config.method === 'POST') {
-      return { status: 201, data: { id: `olx-${Date.now()}`, status: 'active' } };
+      return { status: 201, data: { id: externalId, status: 'active', url: stubAdvertUrl(externalId) } };
     }
     if (config.method === 'PUT' || config.method === 'DELETE') {
       return { status: 204, data: {} };
     }
     if (config.method === 'GET' && config.url.endsWith('/threads')) {
       return { status: 200, data: [] };
+    }
+    if (config.method === 'GET' && config.url.endsWith('/statistics')) {
+      // Statistics repeat the counts of the latest advert read without adding a read.
+      const reads = stubAdvertReads.get(externalId) ?? 0;
+      return {
+        status: 200,
+        data: {
+          advert_views: reads * STUB_VIEWS_PER_READ,
+          users_observing: reads * STUB_FAVORITES_PER_READ,
+        },
+      };
     }
     if (config.method === 'GET' && config.url.endsWith('/adverts')) {
       return {
@@ -696,12 +718,19 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         },
       };
     }
+    const reads = (stubAdvertReads.get(externalId) ?? 0) + 1;
+    stubAdvertReads.set(externalId, reads);
     return {
       status: 200,
       data: {
         id: externalId,
         status: 'active',
-        metrics: { views: 0, favorites: 0, messages: 0 },
+        url: stubAdvertUrl(externalId),
+        metrics: {
+          views: reads * STUB_VIEWS_PER_READ,
+          favorites: reads * STUB_FAVORITES_PER_READ,
+          messages: 0,
+        },
       },
     };
   };
