@@ -604,7 +604,8 @@ const DashboardPage: React.FC = () => {
             value={<KpiValue value={kpi.value} caption={kpi.caption} />}
             deltaPct={kpi.deltaPct}
             deltaLabel={DASHBOARD_DELTA_LABEL}
-            icon={<SoftIcon tone={kpi.tone}>{KPI_ICONS[kpi.key]}</SoftIcon>}
+            icon={KPI_ICONS[kpi.key]}
+            tone={kpi.tone}
             loading={kpiLoading[kpi.key]}
           />
         ))}
