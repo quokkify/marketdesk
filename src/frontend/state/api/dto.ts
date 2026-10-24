@@ -273,6 +273,9 @@ export interface HermesEventListParams {
   offset?: number;
 }
 
+// Filters of the paged Hermes feed; the feed endpoint owns limit and offset.
+export type HermesEventFeedParams = Omit<HermesEventListParams, 'limit' | 'offset'>;
+
 // Product-scoped Hermes run body — workspace is derived from the authenticated session.
 export interface HermesRunInput {
   trigger?: 'scheduled' | 'manual' | 'event';
