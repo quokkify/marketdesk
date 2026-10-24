@@ -12,6 +12,7 @@ import {
   type IAIProvider,
 } from '../../domain/ports/IAIProvider';
 import { ValidationError } from '../../domain/shared/DomainError';
+import { redactSensitiveText } from '../../domain/shared/redactSensitiveText';
 import { Err, Ok, type Result } from '../../domain/shared/Result';
 import { Money } from '../../domain/valueObjects/Money';
 
@@ -75,16 +76,38 @@ export interface ProductDraftLogger {
   warn(context: Record<string, unknown>, message: string): void;
 }
 
-// Only the name and message of a provider failure and of its cause, which carries the transport
-// detail of a ServiceUnavailableError. Other error properties can hold request data or headers.
-function failureDetails(error: unknown): { name: string; message: string; cause?: string } {
-  if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown provider error' };
-  const cause: unknown = (error as { cause?: unknown }).cause;
+interface ErrorSummary {
+  name: string;
+  code?: string;
+  message: string;
+}
+
+// Deep enough for a fetch failure, whose reason (ECONNREFUSED, ENOTFOUND) sits two causes below
+// the provider error, and bounded so that a cause cycle ends.
+const MAX_CAUSE_DEPTH = 3;
+
+// Only the name, code and message of an error. Other properties can hold request data or
+// headers, and the message can be provider text, so it gets the startup log's redaction.
+function summarizeError(error: Error): ErrorSummary {
+  const code: unknown = (error as { code?: unknown }).code;
   return {
     name: error.name,
-    message: error.message,
-    ...(cause instanceof Error ? { cause: `${cause.name}: ${cause.message}` } : {}),
+    ...(typeof code === 'string' ? { code } : {}),
+    message: redactSensitiveText(error.message),
   };
+}
+
+// A provider failure and its chain of causes, which carries the transport detail of a
+// ServiceUnavailableError.
+function failureDetails(error: unknown): ErrorSummary & { causes?: ErrorSummary[] } {
+  if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown provider error' };
+  const causes: ErrorSummary[] = [];
+  let cause: unknown = (error as { cause?: unknown }).cause;
+  while (cause instanceof Error && causes.length < MAX_CAUSE_DEPTH) {
+    causes.push(summarizeError(cause));
+    cause = (cause as { cause?: unknown }).cause;
+  }
+  return { ...summarizeError(error), ...(causes.length > 0 ? { causes } : {}) };
 }
 
 export class ProductAIDraftService {

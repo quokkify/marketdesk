@@ -229,12 +229,61 @@ describe('ProductAIDraftService provider failure log', () => {
       {
         error: {
           name: 'ServiceUnavailableError',
+          code: 'SERVICE_UNAVAILABLE',
           message: 'Hermes AI is not reachable in this environment',
-          cause: 'Error: Hermes API request timed out after 30000ms',
+          causes: [{ name: 'Error', message: 'Hermes API request timed out after 30000ms' }],
         },
       },
       'AI draft enrichment failed; the draft keeps only its deterministic fields',
     );
+  });
+
+  // fetch reports a refused or unresolvable Hermes host as TypeError "fetch failed"; the reason
+  // is one cause further down.
+  it('follows the cause chain down to the transport reason of a fetch failure', async () => {
+    const warn = jest.fn();
+    const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8642'), {
+      code: 'ECONNREFUSED',
+    });
+    const fetchFailed = Object.assign(new TypeError('fetch failed'), { cause: refused });
+    const outage = new ServiceUnavailableError(
+      'Hermes AI is not reachable in this environment',
+      fetchFailed,
+    );
+
+    await new ProductAIDraftService(failingWith(outage), { warn }).generateDraft(titleRequest);
+
+    expect(warn.mock.calls[0][0].error.causes).toEqual([
+      { name: 'TypeError', message: 'fetch failed' },
+      { name: 'Error', code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 127.0.0.1:8642' },
+    ]);
+  });
+
+  // The message of a non-2xx Hermes answer is provider text, so it gets the redaction of the
+  // startup error log.
+  it('redacts URLs and credentials in the logged messages', async () => {
+    const warn = jest.fn();
+    const outage = new ServiceUnavailableError(
+      'Hermes AI is not reachable in this environment',
+      new Error('Upstream https://hermes.example.test/v1?token=leaky failed; password=hunter2'),
+    );
+
+    await new ProductAIDraftService(failingWith(outage), { warn }).generateDraft(titleRequest);
+
+    expect(warn.mock.calls[0][0].error.causes).toEqual([
+      { name: 'Error', message: 'Upstream [redacted-connection-string] failed; password=[redacted]' },
+    ]);
+  });
+
+  it('follows at most three causes, even when a cause points back at itself', async () => {
+    const warn = jest.fn();
+    const looping = new Error('loops');
+    Object.assign(looping, { cause: looping });
+
+    await new ProductAIDraftService(failingWith(looping), { warn }).generateDraft(titleRequest);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0].error.causes).toHaveLength(3);
   });
 
   it('logs neither request data nor other properties of the error', async () => {
