@@ -182,18 +182,21 @@ test('treats quoted placeholders and empty quotes as unset but keeps a quoted re
   );
 });
 
-test('judges a repeated key by its last definition, as dotenv does', () => {
+test('a placeholder before a real value does not make the key unset: the last definition decides', () => {
   const realSecret = 'my-own-jwt-secret-that-is-long-enough-0123456789';
   withProject(
     {
       '.env.example': ENV_EXAMPLE,
-      '.env': `JWT_SECRET=${realSecret}\nJWT_SECRET=your_jwt_secret_key_change_in_production\n`,
+      '.env': `JWT_SECRET=your_jwt_secret_key_change_in_production\nJWT_SECRET=${realSecret}\n`,
     },
     (dir) => {
-      const result = initEnv({ cwd: dir, log: quiet });
+      const warnings = [];
 
-      assert.ok(result.generated.includes('JWT_SECRET'));
-      assert.equal(decodedBytes(dotenv.parse(readEnv(dir)).JWT_SECRET), 32);
+      const result = initEnv({ cwd: dir, log: quiet, warn: (message) => warnings.push(message) });
+
+      assert.ok(!result.generated.includes('JWT_SECRET'), 'the last definition is real, so the key is set');
+      assert.equal(dotenv.parse(readEnv(dir)).JWT_SECRET, realSecret);
+      assert.deepEqual(warnings, [], 'an overridden placeholder is not worth a warning');
     },
   );
 });
@@ -276,11 +279,11 @@ test('keeps a real secret written YAML-style as "KEY: value"', () => {
 // whitespace. A matcher that only knows spaces and tabs misses a secret written this way, appends
 // a second definition, and that one wins.
 for (const [name, definition] of [
-  ['a leading byte order mark', (value) => `﻿${CREDENTIALS_KEY}=${value}`],
-  ['a leading no-break space', (value) => ` ${CREDENTIALS_KEY}=${value}`],
+  ['a leading byte order mark', (value) => `\uFEFF${CREDENTIALS_KEY}=${value}`],
+  ['a leading no-break space', (value) => `\u00A0${CREDENTIALS_KEY}=${value}`],
   ['a leading form feed', (value) => `\f${CREDENTIALS_KEY}=${value}`],
-  ['no-break spaces around the equals sign', (value) => `${CREDENTIALS_KEY} = ${value}`],
-  ['a no-break space after export', (value) => `export ${CREDENTIALS_KEY}=${value}`],
+  ['no-break spaces around the equals sign', (value) => `${CREDENTIALS_KEY}\u00A0=\u00A0${value}`],
+  ['a no-break space after export', (value) => `export\u00A0${CREDENTIALS_KEY}=${value}`],
 ]) {
   test(`keeps a real secret written with ${name}`, () => {
     assertRealSecretKept(definition);
@@ -291,13 +294,13 @@ test('replaces a placeholder behind a byte order mark in place and keeps the mar
   withProject(
     {
       '.env.example': ENV_EXAMPLE,
-      '.env': '﻿JWT_SECRET=your_jwt_secret_key_change_in_production\nNODE_ENV=development\n',
+      '.env': '\uFEFFJWT_SECRET=your_jwt_secret_key_change_in_production\nNODE_ENV=development\n',
     },
     (dir) => {
       initEnv({ cwd: dir, log: quiet });
 
       const text = readEnv(dir);
-      assert.ok(text.startsWith('﻿JWT_SECRET='), 'the line is rewritten where it was');
+      assert.ok(text.startsWith('\uFEFFJWT_SECRET='), 'the line is rewritten where it was');
       assert.equal(text.split('\n').filter((line) => line.includes('JWT_SECRET=')).length, 1);
       assert.equal(decodedBytes(dotenv.parse(text).JWT_SECRET), 32);
     },
@@ -314,6 +317,46 @@ test('never rewrites a real secret written as "KEY : value", which Compose reads
     assert.ok(readEnv(dir).startsWith(`${line}\n`), 'the line stays exactly as written');
   });
 });
+
+// A real value for a key, then the same key again without one. Replacing the later line would put a
+// generated secret next to the real one, and a different MARKETPLACE_CREDENTIALS_KEY makes stored
+// marketplace credentials unreadable. dotenv and Compose also disagree about which of these
+// spellings they read at all (dotenv ignores a blank before the colon and a colon without a blank
+// after it), so a rewrite can turn a line dotenv ignored into one that overrides the real value.
+// The only safe move is to leave both lines alone and say which ones they are.
+for (const [name, repeated] of [
+  ['"KEY : your_..." (dotenv ignores it)', `${CREDENTIALS_KEY} : your_marketplace_credentials_key`],
+  ['"KEY:your_..." (dotenv ignores it)', `${CREDENTIALS_KEY}:your_marketplace_credentials_key`],
+  ['"KEY: your_..."', `${CREDENTIALS_KEY}: your_marketplace_credentials_key`],
+  ['"KEY=your_..."', `${CREDENTIALS_KEY}=your_marketplace_credentials_key`],
+  ['"export KEY=your_..."', `export ${CREDENTIALS_KEY}=your_marketplace_credentials_key`],
+  ['an empty "KEY="', `${CREDENTIALS_KEY}=`],
+]) {
+  test(`leaves a real secret and a later ${name} untouched and warns about the repeated line`, () => {
+    const realKey = Buffer.alloc(32, 5).toString('base64');
+    const original = [`${CREDENTIALS_KEY}=${realKey}`, 'NODE_ENV=development', repeated, ''].join('\n');
+    withProject({ '.env.example': ENV_EXAMPLE, '.env': original }, (dir) => {
+      const warnings = [];
+
+      const result = initEnv({ cwd: dir, log: quiet, warn: (message) => warnings.push(message) });
+
+      assert.deepEqual(result.generated, ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'HERMES_WEBHOOK_SECRET']);
+      const text = readEnv(dir);
+      assert.ok(text.startsWith(original), 'both lines stay exactly as written, other secrets come after');
+      assert.equal(text.split('\n').filter((line) => line.includes(CREDENTIALS_KEY)).length, 2);
+      assert.equal(
+        dotenv.parse(text)[CREDENTIALS_KEY],
+        dotenv.parse(original)[CREDENTIALS_KEY],
+        'dotenv must read the same value as before the run',
+      );
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], new RegExp(CREDENTIALS_KEY));
+      assert.match(warnings[0], /\bline 1\b/);
+      assert.match(warnings[0], /\bline 3\b/);
+      assert.ok(!warnings[0].includes(realKey), 'a warning must not print a secret');
+    });
+  });
+}
 
 test('replaces an "export KEY=your_..." placeholder in place and keeps the export prefix', () => {
   withProject(
@@ -440,6 +483,30 @@ test('CLI still runs when it is started through a symlink', () => {
     assert.equal(run.status, 0, run.stderr);
     assert.ok(existsSync(join(dir, '.env')), 'a symlinked entrypoint must not silently do nothing');
     assert.match(run.stdout, /JWT_SECRET/);
+  });
+});
+
+test('CLI warns on stderr about a repeated secret, exits 0 and does not say there was nothing to do', () => {
+  const realKey = Buffer.alloc(32, 5).toString('base64');
+  const own = Buffer.alloc(32, 8).toString('base64');
+  const original = [
+    `JWT_SECRET=${own}`,
+    `JWT_REFRESH_SECRET=${own}`,
+    `HERMES_WEBHOOK_SECRET=${own}`,
+    `${CREDENTIALS_KEY}=${realKey}`,
+    `${CREDENTIALS_KEY}=your_marketplace_credentials_key`,
+    '',
+  ].join('\n');
+  withProject({ '.env.example': ENV_EXAMPLE, '.env': original }, (dir) => {
+    const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stderr, /MARKETPLACE_CREDENTIALS_KEY.*\bline 4\b.*\bline 5\b/);
+    assert.doesNotMatch(run.stdout, /nothing to do/);
+    assert.equal(readEnv(dir), original, 'nothing may be written');
+    for (const value of [own, realKey]) {
+      assert.ok(!run.stdout.includes(value) && !run.stderr.includes(value), 'a secret leaked');
+    }
   });
 });
 

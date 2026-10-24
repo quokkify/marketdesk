@@ -45,8 +45,11 @@ function needsSecret(value) {
 function fillSecrets(text) {
   let result = text;
   const generated = [];
+  const warnings = [];
   // New lines follow the file's own line ending, so a CRLF file does not end up with both.
   const eol = /\r?\n/.exec(text)?.[0] ?? '\n';
+  // Edits never change the number of lines, so a line number found in `result` is the file's.
+  const lineOf = (match) => result.slice(0, match.index).split('\n').length;
 
   for (const key of SECRET_KEYS) {
     // Same line grammar as dotenv and Compose: optional indentation and `export`, blanks around
@@ -55,8 +58,22 @@ function fillSecrets(text) {
       `^(${BLANK}*(?:export${BLANK}+)?${key})(${BLANK}*)([=:])([^\\r\\n]*)`,
       'gm',
     );
-    const last = [...result.matchAll(definition)].at(-1);
+    const definitions = [...result.matchAll(definition)];
+    const last = definitions.at(-1);
     if (last && !needsSecret(effectiveValue(last[4]))) continue;
+
+    // A real value earlier in the file is the one the user chose. A generated secret after it
+    // would override it, and a different MARKETPLACE_CREDENTIALS_KEY makes stored credentials
+    // unreadable. dotenv and Compose do not even agree which spellings are a definition, so a
+    // rewrite could turn a line dotenv ignores into one that wins. Leave both lines and name them.
+    const real = definitions.findLast((match) => !needsSecret(effectiveValue(match[4])));
+    if (real) {
+      warnings.push(
+        `${key} was left as it is: line ${lineOf(real)} sets it and line ${lineOf(last)} defines it ` +
+          'again without a real value. Delete the line you do not want, then run this again.',
+      );
+      continue;
+    }
 
     const secret = generateSecret();
     if (last) {
@@ -71,10 +88,10 @@ function fillSecrets(text) {
     generated.push(key);
   }
 
-  return { text: result, generated };
+  return { text: result, generated, warnings };
 }
 
-export function initEnv({ cwd = process.cwd(), log = console.log } = {}) {
+export function initEnv({ cwd = process.cwd(), log = console.log, warn = console.warn } = {}) {
   const examplePath = resolve(cwd, '.env.example');
   const envPath = resolve(cwd, '.env');
   const created = !existsSync(envPath);
@@ -83,7 +100,9 @@ export function initEnv({ cwd = process.cwd(), log = console.log } = {}) {
     throw new Error('.env.example not found. Run this from the repository root.');
   }
 
-  const { text, generated } = fillSecrets(readFileSync(created ? examplePath : envPath, 'utf8'));
+  const { text, generated, warnings } = fillSecrets(
+    readFileSync(created ? examplePath : envPath, 'utf8'),
+  );
 
   if (created) {
     writeFileSync(envPath, text, { mode: 0o600, flag: 'wx' });
@@ -94,11 +113,10 @@ export function initEnv({ cwd = process.cwd(), log = console.log } = {}) {
     writeFileSync(envPath, text);
   }
 
-  log(
-    generated.length > 0
-      ? `Generated ${generated.join(', ')}`
-      : '.env already has every secret set; nothing to do',
-  );
+  for (const warning of warnings) warn(warning);
+  if (generated.length > 0) log(`Generated ${generated.join(', ')}`);
+  else if (warnings.length > 0) log('Generated nothing: fix the lines named above, then run this again');
+  else log('.env already has every secret set; nothing to do');
   return { created, generated };
 }
 
