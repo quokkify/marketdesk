@@ -1,5 +1,7 @@
 // Canonical MarketDesk navigation: mobile drawer, automatic medium rail, and
 // user-collapsible wide desktop sidebar with an edge-straddling affordance.
+// Geometry and colours follow the PRD shell (250px sidebar, primary-weak
+// active item, danger pill for pending Hermes reviews, account card).
 import React from 'react';
 import {
   Avatar,
@@ -13,15 +15,15 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Stack,
   Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
+import type { Theme } from '@mui/material/styles';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
-import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
@@ -32,7 +34,6 @@ import {
   NAV_ITEMS,
   SIDEBAR_WIDTH,
   SIDEBAR_COLLAPSED_WIDTH,
-  TOPBAR_HEIGHT,
   APP_NAME,
 } from '../../utils/constants.js';
 
@@ -48,6 +49,9 @@ export function isPrimaryNavActive(current: string, target: string): boolean {
   if (target === '/') return current === '/';
   return current === target || current.startsWith(`${target}/`);
 }
+
+const avatarGradient = (t: Theme) =>
+  `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.secondary.main})`;
 
 export const Sidebar: React.FC = () => {
   const theme = useTheme();
@@ -72,6 +76,7 @@ export const Sidebar: React.FC = () => {
   const primaryItems = NAV_ITEMS.filter((item) => item.path !== '/settings');
   const settingsItem = NAV_ITEMS.find((item) => item.path === '/settings');
   const userLabel = user?.email ?? 'Account';
+  const workspaceLabel = workspaceName || 'Workspace loading';
   const avatarLetter = (user?.email ?? workspaceName ?? 'U').charAt(0).toUpperCase();
   const pendingReviewCount = pendingReviews.currentData?.total;
 
@@ -95,43 +100,41 @@ export const Sidebar: React.FC = () => {
 
   const renderNavItem = (item: (typeof NAV_ITEMS)[number]) => {
     const active = isPrimaryNavActive(location.pathname, item.path);
-    const isHermes = item.path === '/hermes';
+    const pendingCount = item.path === '/hermes' && pendingReviewCount ? pendingReviewCount : 0;
     const Icon = item.icon;
-    const pendingLabel =
-      isHermes && pendingReviewCount
-        ? `, ${pendingReviewCount} pending ${pendingReviewCount === 1 ? 'review' : 'reviews'}`
-        : '';
+    const pendingLabel = pendingCount
+      ? `, ${pendingCount} pending ${pendingCount === 1 ? 'review' : 'reviews'}`
+      : '';
     const button = (
       <ListItemButton
         key={item.path}
         selected={active}
         onClick={() => handleNavigate(item.path)}
         aria-label={`${item.label}${pendingLabel}`}
+        aria-current={active ? 'page' : undefined}
         sx={{
-          mb: 0.5,
-          minHeight: 44,
-          borderRadius: 2,
+          flexGrow: 0,
+          minHeight: 40,
+          gap: showLabels ? '11px' : 0,
+          px: showLabels ? '11px' : 1,
+          py: '9px',
+          borderRadius: '11px',
           justifyContent: showLabels ? 'flex-start' : 'center',
-          px: showLabels ? 1.5 : 1,
+          color: 'text.secondary',
+          '&:hover': { bgcolor: 'surface2' },
           '&.Mui-selected': {
-            bgcolor: 'action.selected',
-            '&:hover': { bgcolor: 'action.selected' },
+            bgcolor: 'primary.weak',
+            color: 'primary.main',
+            '&:hover': { bgcolor: 'primary.weak' },
           },
         }}
       >
-        <ListItemIcon
-          sx={{
-            minWidth: 0,
-            mr: showLabels ? 2 : 0,
-            justifyContent: 'center',
-            color: active ? 'primary.main' : 'text.secondary',
-          }}
-        >
+        <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
           <Badge
-            color="primary"
-            badgeContent={isHermes ? pendingReviewCount : undefined}
+            color="error"
+            badgeContent={pendingCount}
             max={99}
-            invisible={!isHermes || !pendingReviewCount}
+            invisible={showLabels || !pendingCount}
             overlap="circular"
           >
             <Icon fontSize="small" />
@@ -140,8 +143,28 @@ export const Sidebar: React.FC = () => {
         {showLabels && (
           <ListItemText
             primary={item.label}
-            slotProps={{ primary: { variant: 'body2', sx: { fontWeight: active ? 700 : 500 } } }}
+            sx={{ my: 0 }}
+            slotProps={{
+              primary: { sx: { fontSize: '0.84375rem', fontWeight: active ? 700 : 600 } },
+            }}
           />
+        )}
+        {showLabels && pendingCount > 0 && (
+          <Box
+            component="span"
+            sx={{
+              px: '7px',
+              borderRadius: '20px',
+              bgcolor: 'error.weak',
+              color: 'error.main',
+              fontSize: '0.6875rem',
+              fontWeight: 700,
+              lineHeight: '18px',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {pendingCount > 99 ? '99+' : pendingCount}
+          </Box>
         )}
       </ListItemButton>
     );
@@ -155,14 +178,25 @@ export const Sidebar: React.FC = () => {
   };
 
   const content = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        px: showLabels ? '14px' : 1,
+        py: '18px',
+      }}
+    >
       <Box
         sx={{
           display: 'flex',
           alignItems: 'center',
-          gap: 1.25,
-          px: showLabels ? 2.5 : 2.25,
-          minHeight: TOPBAR_HEIGHT,
+          justifyContent: showLabels ? 'flex-start' : 'center',
+          gap: '11px',
+          px: showLabels ? 1 : 0,
+          pt: '6px',
+          pb: '20px',
           flexShrink: 0,
         }}
       >
@@ -171,91 +205,123 @@ export const Sidebar: React.FC = () => {
           src="/marketdesk-mark.svg"
           alt=""
           aria-hidden="true"
-          sx={{ width: 32, height: 32, display: 'block', flexShrink: 0 }}
+          sx={{
+            width: 34,
+            height: 34,
+            display: 'block',
+            flexShrink: 0,
+            borderRadius: '50%',
+            boxShadow: (t) => `0 4px 12px ${alpha(t.palette.primary.main, 0.35)}`,
+          }}
         />
         {showLabels && (
-          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              noWrap
+              sx={{
+                fontSize: '0.96875rem',
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+                lineHeight: 1,
+              }}
+            >
+              {APP_NAME}
+            </Typography>
             <Typography
               variant="overline"
-              color="primary.main"
               noWrap
               sx={{
                 display: 'block',
-                fontSize: 9,
-                lineHeight: 1.1,
-                fontWeight: 800,
-                letterSpacing: 1.2,
+                mt: '3px',
+                color: 'textMuted',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                lineHeight: 1.2,
               }}
             >
               Marketplace OS
-            </Typography>
-            <Typography variant="h6" noWrap sx={{ fontWeight: 800, lineHeight: 1.25 }}>
-              {APP_NAME}
             </Typography>
           </Box>
         )}
       </Box>
 
+      {showLabels && (
+        <Typography
+          variant="overline"
+          component="div"
+          sx={{ px: '10px', pt: '6px', pb: 1, color: 'textMuted' }}
+        >
+          Menu
+        </Typography>
+      )}
       <List
         component="nav"
         aria-label="Primary navigation"
-        sx={{ px: showLabels ? 1.5 : 1, py: 1.5, flexGrow: 1 }}
+        disablePadding
+        sx={{ display: 'flex', flexDirection: 'column', gap: '2px', flexGrow: 1 }}
       >
         {primaryItems.map(renderNavItem)}
       </List>
 
-      <Stack spacing={1} sx={{ px: showLabels ? 1.5 : 1, pb: 1.5 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
         {settingsItem && renderNavItem(settingsItem)}
         {showLabels ? (
           <Box
             component="button"
             type="button"
             onClick={(event) => setAccountMenuAnchor(event.currentTarget)}
-            aria-label={`${workspaceName || 'Workspace loading'} · ${userLabel}`}
+            aria-label={`${workspaceLabel} · ${userLabel}`}
             aria-haspopup="menu"
             aria-expanded={Boolean(accountMenuAnchor)}
             sx={{
               width: '100%',
               display: 'flex',
               alignItems: 'center',
-              gap: 1,
-              p: 1,
-              borderRadius: 2.5,
-              bgcolor: 'action.hover',
-              border: (t) => `1px solid ${t.palette.divider}`,
+              gap: '10px',
+              mt: '12px',
+              p: '13px',
+              borderRadius: '14px',
+              bgcolor: 'surface2',
+              border: 1,
+              borderColor: 'divider',
               color: 'inherit',
               textAlign: 'left',
               cursor: 'pointer',
               font: 'inherit',
-              '&:hover': { bgcolor: 'action.selected' },
+              transition: theme.transitions.create('border-color'),
+              '&:hover': { borderColor: 'borderStrong' },
+              '&:focus-visible': {
+                outline: `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
+              },
             }}
           >
             <Avatar
-              sx={{ width: 34, height: 34, bgcolor: 'primary.main', fontSize: 14, flexShrink: 0 }}
+              sx={{
+                width: 34,
+                height: 34,
+                flexShrink: 0,
+                background: avatarGradient,
+                color: 'common.white',
+                fontSize: 13,
+                fontWeight: 700,
+              }}
             >
               {avatarLetter}
             </Avatar>
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-              <Tooltip title={workspaceName || 'Workspace loading'} placement="top-start">
-                <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>
-                  {workspaceName || 'Workspace loading'}
+              <Tooltip title={workspaceLabel} placement="top-start">
+                <Typography noWrap sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>
+                  {workspaceLabel}
                 </Typography>
               </Tooltip>
               <Tooltip title={userLabel} placement="top-start">
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', lineHeight: 1.15, overflowWrap: 'anywhere' }}
-                >
+                <Typography noWrap sx={{ fontSize: '0.6875rem', color: 'textMuted' }}>
                   {userLabel}
                 </Typography>
               </Tooltip>
             </Box>
-            <KeyboardArrowDownRoundedIcon
-              color="disabled"
-              fontSize="small"
-              sx={{ transform: accountMenuAnchor ? 'rotate(180deg)' : 'none' }}
-            />
+            <UnfoldMoreRoundedIcon aria-hidden="true" sx={{ fontSize: 16, color: 'textMuted' }} />
           </Box>
         ) : (
           <Tooltip title={`${workspaceName || 'Workspace'} · ${userLabel}`} placement="right">
@@ -263,15 +329,24 @@ export const Sidebar: React.FC = () => {
               onClick={(event) => setAccountMenuAnchor(event.currentTarget)}
               aria-haspopup="menu"
               aria-expanded={Boolean(accountMenuAnchor)}
-              sx={{ justifyContent: 'center', px: 1 }}
+              sx={{ justifyContent: 'center', px: 1, mt: '12px' }}
             >
-              <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14 }}>
+              <Avatar
+                sx={{
+                  width: 32,
+                  height: 32,
+                  background: avatarGradient,
+                  color: 'common.white',
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
                 {avatarLetter}
               </Avatar>
             </ListItemButton>
           </Tooltip>
         )}
-      </Stack>
+      </Box>
       <Menu
         anchorEl={accountMenuAnchor}
         open={Boolean(accountMenuAnchor)}
@@ -346,7 +421,9 @@ export const Sidebar: React.FC = () => {
               width: 30,
               height: 30,
               zIndex: 1,
-              border: (t) => `1px solid ${t.palette.divider}`,
+              borderRadius: '50%',
+              border: 1,
+              borderColor: 'divider',
               bgcolor: 'background.paper',
               color: 'text.secondary',
               boxShadow: 1,
