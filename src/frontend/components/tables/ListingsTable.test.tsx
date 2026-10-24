@@ -78,6 +78,24 @@ describe('ListingsTable product identity', () => {
   });
 });
 
+describe('ListingsTable sandbox marketplace', () => {
+  it('labels listings on a sandbox marketplace', () => {
+    const sandbox = renderToStaticMarkup(
+      <ListingsTable
+        listings={[listing()]}
+        resolveMarketplaceName={() => 'OLX'}
+        resolveMarketplaceSandbox={() => true}
+      />,
+    );
+    const real = renderToStaticMarkup(
+      <ListingsTable listings={[listing()]} resolveMarketplaceName={() => 'OLX'} />,
+    );
+
+    expect(sandbox).toContain('Sandbox');
+    expect(real).not.toContain('Sandbox');
+  });
+});
+
 describe('ListingsTable external marketplace link', () => {
   it('renders a safe external OLX link for live listings', () => {
     const html = renderToStaticMarkup(
@@ -188,10 +206,10 @@ describe('ListingsTable destructive delist action', () => {
       />,
     );
 
-    expect(live).toContain('Снять с площадки и вернуть в черновики');
-    expect(draft).not.toContain('Снять с площадки и вернуть в черновики');
-    expect(unresolved).not.toContain('Снять с площадки и вернуть в черновики');
-    expect(nonOlx).not.toContain('Снять с площадки и вернуть в черновики');
+    expect(live).toContain('Remove from marketplace and return to draft');
+    expect(draft).not.toContain('Remove from marketplace and return to draft');
+    expect(unresolved).not.toContain('Remove from marketplace and return to draft');
+    expect(nonOlx).not.toContain('Remove from marketplace and return to draft');
   });
 
   it('retains an ambiguous operation until reconciliation, then starts with a fresh UUID', () => {

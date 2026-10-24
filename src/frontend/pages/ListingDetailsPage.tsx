@@ -4,9 +4,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import {
   Alert,
+  AlertTitle,
   Box,
   Button,
   Checkbox,
+  Divider,
   FormControlLabel,
   Stack,
   TextField,
@@ -19,6 +21,7 @@ import type {
   HermesEvent,
   Listing,
   Marketplace,
+  Product,
   ProductCategoryProvenance,
   ProductRecheckResult,
   ProductImprovementSuggestions,
@@ -34,6 +37,8 @@ import {
   useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
+  useUploadProductImage,
+  useDeleteProductImage,
   useUpdateListing,
   useRelistListing,
   useDelistListingToDraft,
@@ -48,9 +53,11 @@ import {
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
+import { useProductDeletion } from '../hooks/useProductDeletion.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
-import { formatDateTime } from '../utils/formatters.js';
+import { formatDateTime, formatMoney } from '../utils/formatters.js';
+import { isSandboxMarketplace } from '../utils/sandbox.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyState } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyEvent } from '../workflows/publicationJourneyGraph.js';
@@ -75,8 +82,13 @@ import {
   ProductGalleryCard,
   ProductIdentityHero,
   productDetailRailSx,
+  ProductActivityCard,
+  productActivityItems,
+  ProductHermesCard,
   ProductTimelineCard,
+  PublicationReadinessSection,
 } from '../components/product-detail/ProductDetailSections.js';
+import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 
 export { mainPreviewImageSx };
 
@@ -84,6 +96,52 @@ export const MIN_QUOTA_OVERRIDE_REASON_LENGTH = 10;
 export const MAX_QUOTA_OVERRIDE_REASON_LENGTH = 500;
 export const PUBLICATION_READINESS_RECHECK_LABEL = 'Check again';
 export const PUBLICATION_READINESS_CHECKING_LABEL = 'Checking…';
+
+// The catalogue row menu navigates here with { editProduct: true } to open the edit form.
+export function editRequestedByNavigation(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as { editProduct?: unknown }).editProduct === true
+  );
+}
+
+// The pricing card's main action: publish a draft, relist an ended listing,
+// ask for an OLX connection first, or edit a live or sold product. The server
+// refuses to relist a failed listing that still references an OLX advert, so
+// that case falls back to editing.
+export function productPrimaryAction(input: {
+  productStatus: Product['status'];
+  olxListing: Listing | undefined;
+  olxConnected: boolean;
+}): ProductPrimaryAction {
+  const listing = input.olxListing;
+  if (input.productStatus === 'sold' || listing?.status === 'live') return 'edit';
+  if (listing?.status === 'error' && listing.marketplaceListingId) return 'edit';
+  if (!input.olxConnected) return 'connect';
+  if (listing?.status === 'expired' || listing?.status === 'error') return 'relist';
+  return 'publish';
+}
+
+// Category search and verification answer 404 when no trusted OLX taxonomy is
+// available for the listing and 503 when OLX category search cannot be reached.
+export function categoryLookupUnavailable(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null | undefined)?.status;
+  return status === 404 || status === 503;
+}
+
+export const CategoryLookupUnavailableNotice: React.FC<{ message: string }> = ({ message }) => (
+  <Alert severity="warning">
+    <AlertTitle>OLX category lookup is unavailable</AlertTitle>
+    <Box component="span" sx={{ display: 'block' }}>{message}</Box>
+    Categories cannot be searched or verified here right now.
+  </Alert>
+);
+
+export function publicationReviewSubtitle(marketplaceKey: string | undefined, sandbox: boolean): string {
+  const name = marketplaceKey ? marketplaceKey.toUpperCase() : 'Marketplace';
+  return sandbox ? `${name} · Sandbox` : name;
+}
 
 export function productScopedHermesRunInput(productId: string): HermesRunInput {
   return { trigger: 'manual', productId };
@@ -434,6 +492,8 @@ const ListingDetailsPage: React.FC = () => {
   const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
+  const [uploadProductImage] = useUploadProductImage();
+  const [deleteProductImage] = useDeleteProductImage();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
   const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
@@ -445,6 +505,7 @@ const ListingDetailsPage: React.FC = () => {
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
   const [runHermes, { isLoading: analyzing }] = useRunHermes();
+  const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
@@ -465,6 +526,7 @@ const ListingDetailsPage: React.FC = () => {
   const [submittingPublication, setSubmittingPublication] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const [analysisState, setAnalysisState] = useState<ProductHermesAnalysisState>({ status: 'idle' });
+  const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const consumedNavigationReview = useRef<string | null>(null);
   const consumedCreationJourney = useRef<string | null>(null);
   const previewInFlight = useRef(false);
@@ -485,6 +547,9 @@ const ListingDetailsPage: React.FC = () => {
   const recheckListing = listingItems.find(
     (listing) => resolveMarketplaceKey(listing.marketplaceId) === 'olx'
   );
+  const olxMarketplace = marketplaces?.find((marketplace) => marketplace.key === 'olx');
+  const resolveMarketplaceSandbox = (marketplaceId: string) =>
+    isSandboxMarketplace(marketplaces?.find((marketplace) => marketplace.id === marketplaceId));
   const priceHistory = usePriceHistory(primaryListing?.id ?? '', { skip: !primaryListing });
   const primaryMarketplaceName = primaryListing
     ? resolveMarketplaceName(primaryListing.marketplaceId)
@@ -509,6 +574,7 @@ const ListingDetailsPage: React.FC = () => {
     setQuotaOverrideReason('');
     setCategoryOptions([]);
     setCategorySearch('');
+    setCategoryLookupError(null);
   };
 
   const refreshAfterRecommendation = async () => {
@@ -660,6 +726,7 @@ const ListingDetailsPage: React.FC = () => {
         setProviderCategoryId(preview.marketplaceCategory?.providerCategoryId ?? '');
         setCategoryOptions([]);
         setCategorySearch('');
+        setCategoryLookupError(null);
         publicationReviewOpen.current = true;
         setPublishCandidate({ listing, preview, mode, journey });
       } catch (err) {
@@ -674,6 +741,21 @@ const ListingDetailsPage: React.FC = () => {
 
   const handleRelist = (listing: Listing) => void beginPublicationReview(listing, 'relist');
   const handlePublish = (listing: Listing) => void beginPublicationReview(listing, 'publish');
+
+  // The pricing card opens the same publication review as the listings table;
+  // a product without an OLX listing gets its draft listing first.
+  const handlePublishToOlx = async () => {
+    if (recheckListing) {
+      await beginPublicationReview(recheckListing, 'publish');
+      return;
+    }
+    try {
+      const listing = await createListing({ productId, marketplaceKey: 'olx' }).unwrap();
+      await beginPublicationReview(listing, 'publish');
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
 
   const handleConfirmPublish = async () => {
     if (!publishCandidate || submissionInFlight.current) return;
@@ -720,11 +802,18 @@ const ListingDetailsPage: React.FC = () => {
 
   const handleVerifyCategory = async (selectedId = providerCategoryId) => {
     if (!publishCandidate || !selectedId.trim()) return;
+    let listing: Listing;
     try {
-      const listing = await setMarketplaceCategory({
+      listing = await setMarketplaceCategory({
         id: publishCandidate.listing.id,
         providerCategoryId: selectedId.trim(),
       }).unwrap();
+    } catch (err) {
+      if (categoryLookupUnavailable(err)) setCategoryLookupError(errorMessage(err));
+      else dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+      return;
+    }
+    try {
       const preview = await publishListingPreview(listing.id).unwrap();
       const journey = await advanceJourney(
         { phase: 'listing_draft', productId: listing.productId, listingId: listing.id },
@@ -749,7 +838,8 @@ const ListingDetailsPage: React.FC = () => {
       }).unwrap();
       setCategoryOptions(options);
     } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+      if (categoryLookupUnavailable(err)) setCategoryLookupError(errorMessage(err));
+      else dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
 
@@ -795,6 +885,7 @@ const ListingDetailsPage: React.FC = () => {
         setProviderCategoryId(preview.marketplaceCategory?.providerCategoryId ?? '');
         setCategoryOptions([]);
         setCategorySearch('');
+        setCategoryLookupError(null);
         setQuotaOverrideAccepted(false);
         setQuotaOverrideReason('');
         publicationReviewOpen.current = true;
@@ -806,6 +897,12 @@ const ListingDetailsPage: React.FC = () => {
   }, [createListing, dispatch, listingItems, listings.isError, listings.isFetching,
     listings.isLoading, location.pathname, location.state, marketplaces, navigate,
     product.data, productId, publishListingPreview]);
+
+  useEffect(() => {
+    if (!product.data || !editRequestedByNavigation(location.state)) return;
+    navigate(location.pathname, { replace: true, state: null });
+    setEditOpen(true);
+  }, [location.pathname, location.state, navigate, product.data]);
 
   useEffect(() => {
     const review = (
@@ -868,98 +965,29 @@ const ListingDetailsPage: React.FC = () => {
 
   const p = product.data;
   const images = p.images ?? [];
+  const primaryAction = productPrimaryAction({
+    productStatus: p.status,
+    olxListing: recheckListing,
+    olxConnected: Boolean(olxMarketplace?.connected),
+  });
+  const hermesNote = analyzing
+    ? 'Hermes is analyzing this product only. Any recommendation will remain review-only.'
+    : analysisState.status === 'idle'
+      ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
+      : analysisState.message;
+  const improvementsStale = Boolean(
+    improvements &&
+      (improvements.productId !== p.id ||
+        improvements.productUpdatedAt !== p.updatedAt ||
+        (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt))
+  );
 
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
         Back to products
       </Button>
-      <ProductIdentityHero product={p} onEdit={() => setEditOpen(true)} />
-      <Button
-        variant="outlined"
-        disabled={analyzing || Boolean(analyzeDisabledReason)}
-        onClick={handleAnalyzeWithHermes}
-        sx={{ mt: 2 }}
-      >
-        {analyzing ? 'Analyzing with Hermes…' : 'Analyze with Hermes'}
-      </Button>
-      <Alert severity={analysisState.status === 'error' ? 'error' : 'info'} sx={{ mt: 1.5 }}>
-        {analyzing
-          ? 'Hermes is analyzing this product only. Any recommendation will remain review-only.'
-          : analysisState.status === 'idle'
-            ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
-            : analysisState.message}
-      </Alert>
-
-      <Card
-        title="Publication readiness check"
-        subtitle="Checks the current saved product without publishing or applying suggestions"
-        sx={{ my: 2 }}
-        action={
-          <PublicationReadinessAction
-            rechecking={rechecking}
-            disabled={!recheckListing}
-            onClick={() => void handleRecheck()}
-          />
-        }
-      >
-        {!recheckResult ? (
-          <Typography variant="body2" color="text.secondary">
-            Run a fresh check to validate required fields and the exact marketplace leaf category.
-          </Typography>
-        ) : (
-          <ProductRecheckReview
-            result={recheckResult}
-            currentProductId={p.id}
-            currentProductUpdatedAt={p.updatedAt}
-            currentListingId={recheckListing?.id}
-            currentListingUpdatedAt={recheckListing?.updatedAt}
-            onEdit={() => setEditOpen(true)}
-            onMarketplaceEdit={() => navigate('/marketplaces')}
-          />
-        )}
-      </Card>
-
-      <Card
-        title="Product assistant"
-        subtitle="Hermes suggests text and price changes for your review"
-        sx={{ mb: 2 }}
-        action={
-          <Button variant="outlined" disabled={proposingImprovements}
-            onClick={() => void handleProposeImprovements()}>
-            {proposingImprovements ? 'Preparing suggestions…' : 'Suggest improvements'}
-          </Button>
-        }
-      >
-        {improvements && (improvements.productId !== p.id || improvements.productUpdatedAt !== p.updatedAt ||
-          (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt)) ? (
-          <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
-        ) : improvements ? (
-          <Stack spacing={1.5}>
-            {improvements.copy.map((suggestion, index) => (
-              <Box key={`${suggestion.field}-${index}`}>
-                <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
-                <Typography variant="body2">{suggestion.proposedValue}</Typography>
-                <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
-              </Box>
-            ))}
-            {improvements.price && (
-              <Box>
-                <Typography variant="subtitle2">Suggested price: {improvements.price.suggestedPrice} {currency}</Typography>
-                <Typography variant="body2">{improvements.price.reasoning}</Typography>
-              </Box>
-            )}
-            {improvements.copy.length === 0 && !improvements.price && (
-              <Typography variant="body2">No suggestions for this product.</Typography>
-            )}
-            <Alert severity="info">Suggestions are for review only. Edit the product or listing to apply them.</Alert>
-          </Stack>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Ask Hermes for wording and price ideas. Nothing is changed automatically.
-          </Typography>
-        )}
-      </Card>
+      <ProductIdentityHero product={p} onEdit={() => setEditOpen(true)} onDelete={() => requestDelete(p)} />
 
       <Box sx={productDetailGridSx} data-testid="product-detail-layout">
         <Stack spacing={{ xs: 2, lg: 3 }} sx={{ minWidth: 0 }}>
@@ -1003,6 +1031,7 @@ const ListingDetailsPage: React.FC = () => {
               currency={currency}
               resolveMarketplaceName={resolveMarketplaceName}
               resolveMarketplaceKey={resolveMarketplaceKey}
+              resolveMarketplaceSandbox={resolveMarketplaceSandbox}
               onRowClick={(listing) => setPriceListing(listing)}
               onRelist={handleRelist}
               onPublish={handlePublish}
@@ -1051,7 +1080,17 @@ const ListingDetailsPage: React.FC = () => {
           sx={productDetailRailSx}
           data-testid="product-detail-rail"
         >
-          <PricingSummaryCard product={p} currency={currency} onEdit={() => setEditOpen(true)} />
+          <PricingSummaryCard
+            product={p}
+            currency={currency}
+            primaryAction={primaryAction}
+            externalUrl={recheckListing?.status === 'live' ? recheckListing.externalUrl : undefined}
+            busy={publicationActionsLocked || creatingListing || listings.isLoading || listings.isError}
+            onEdit={() => setEditOpen(true)}
+            onPublish={() => void handlePublishToOlx()}
+            onRelist={recheckListing ? () => handleRelist(recheckListing) : undefined}
+            onConnect={() => navigate('/marketplaces')}
+          />
           <OlxInsightsCard
             listing={primaryListing}
             loading={listings.isLoading || listings.isFetching}
@@ -1064,6 +1103,7 @@ const ListingDetailsPage: React.FC = () => {
               marketplaces?.find((marketplace) => marketplace.id === primaryListing.marketplaceId)
                 ?.key === 'olx'
             )}
+            sandbox={isSandboxMarketplace(olxMarketplace)}
             statusTitle={remoteMarketplace.title}
             statusLabel={remoteMarketplace.status}
             statusExplanation={
@@ -1073,17 +1113,23 @@ const ListingDetailsPage: React.FC = () => {
             }
             statusColor={remoteMarketplaceChipColor(primaryListing)}
           />
-          <Card
-            title="Hermes recommendations"
-            subtitle="Real pending recommendations for this product"
-            sx={{ borderColor: 'primary.main', bgcolor: 'background.paper' }}
+          <ProductHermesCard
+            analyzing={analyzing}
+            analyzeDisabled={Boolean(analyzeDisabledReason)}
+            suggesting={proposingImprovements}
+            note={hermesNote}
+            noteIsError={analysisState.status === 'error'}
+            onAnalyze={() => void handleAnalyzeWithHermes()}
+            onSuggest={() => void handleProposeImprovements()}
           >
             {hermesEvents.isLoading || hermesEvents.isFetching ? (
               <LoadingSkeleton lines={2} height={96} />
             ) : hermesEvents.isError ? (
               <ErrorRetry error={hermesEvents.error} onRetry={hermesEvents.refetch} />
             ) : recommendations.length === 0 ? (
-              <Alert severity="info">No pending recommendations for this product.</Alert>
+              <Typography variant="body2" color="text.secondary">
+                No pending recommendations for this product.
+              </Typography>
             ) : (
               <Stack spacing={1.5}>
                 <SeoRecommendationQueue
@@ -1105,15 +1151,86 @@ const ListingDetailsPage: React.FC = () => {
                 </Typography>
               </Stack>
             )}
-          </Card>
+            {improvements && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>Suggested improvements</Typography>
+                {improvementsStale ? (
+                  <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {improvements.copy.map((suggestion, index) => (
+                      <Box key={`${suggestion.field}-${index}`}>
+                        <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
+                        <Typography variant="body2">{suggestion.proposedValue}</Typography>
+                        <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
+                      </Box>
+                    ))}
+                    {improvements.price && (
+                      <Box>
+                        <Typography variant="subtitle2">Suggested price: {formatMoney(improvements.price.suggestedPrice, currency)}</Typography>
+                        <Typography variant="body2">{improvements.price.reasoning}</Typography>
+                      </Box>
+                    )}
+                    {improvements.copy.length === 0 && !improvements.price && (
+                      <Typography variant="body2">No suggestions for this product.</Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      Suggestions are for review only. Edit the product or listing to apply them.
+                    </Typography>
+                  </Stack>
+                )}
+              </Box>
+            )}
+            <Divider />
+            <PublicationReadinessSection
+              action={
+                <PublicationReadinessAction
+                  rechecking={rechecking}
+                  disabled={!recheckListing}
+                  onClick={() => void handleRecheck()}
+                />
+              }
+            >
+              {!recheckResult ? (
+                <Typography variant="body2" color="text.secondary">
+                  Run a fresh check to validate required fields and the exact marketplace leaf category.
+                </Typography>
+              ) : (
+                <ProductRecheckReview
+                  result={recheckResult}
+                  currentProductId={p.id}
+                  currentProductUpdatedAt={p.updatedAt}
+                  currentListingId={recheckListing?.id}
+                  currentListingUpdatedAt={recheckListing?.updatedAt}
+                  onEdit={() => setEditOpen(true)}
+                  onMarketplaceEdit={() => navigate('/marketplaces')}
+                />
+              )}
+            </PublicationReadinessSection>
+          </ProductHermesCard>
+          <ProductActivityCard
+            items={productActivityItems(priceHistory.data ?? [], recommendations, currency)}
+            loading={listings.isLoading || priceHistory.isLoading || hermesEvents.isLoading}
+            error={priceHistory.isError ? priceHistory.error : hermesEvents.isError ? hermesEvents.error : undefined}
+            onRetry={() => {
+              if (priceHistory.isError) void priceHistory.refetch();
+              if (hermesEvents.isError) void hermesEvents.refetch();
+            }}
+          />
         </Stack>
       </Box>
+
+      {deleteDialog}
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit product" maxWidth="md">
         <ProductForm
           initial={p}
           submitting={updating}
           onSubmit={handleEdit}
+          onUploadImage={(file) => uploadProductImage(file).unwrap()}
+          onDeleteImage={async (imageId) => {
+            await deleteProductImage(imageId).unwrap();
+          }}
           onCancel={() => setEditOpen(false)}
         />
       </Modal>
@@ -1129,7 +1246,10 @@ const ListingDetailsPage: React.FC = () => {
               ? 'Confirm possible OLX fee'
               : 'Publication review'
         }
-        subtitle={publishCandidate?.preview.marketplaceKey?.toUpperCase() ?? 'Marketplace'}
+        subtitle={publicationReviewSubtitle(
+          publishCandidate?.preview.marketplaceKey,
+          publishCandidate ? resolveMarketplaceSandbox(publishCandidate.listing.marketplaceId) : false
+        )}
         maxWidth="xs"
         actions={
           <Stack direction="row" spacing={1}>
@@ -1164,7 +1284,10 @@ const ListingDetailsPage: React.FC = () => {
         {publishCandidate && (
           <Stack spacing={2}>
             <PublishPreviewReview preview={publishCandidate.preview} />
-            {publishCandidate.preview.marketplaceKey === 'olx' && (
+            {publishCandidate.preview.marketplaceKey === 'olx' && categoryLookupError && (
+              <CategoryLookupUnavailableNotice message={categoryLookupError} />
+            )}
+            {publishCandidate.preview.marketplaceKey === 'olx' && !categoryLookupError && (
               <Stack spacing={1}>
                 <TextField
                   label="Search OLX categories"

@@ -8,7 +8,8 @@ export interface CreateProductDTO {
   sku: string;
   name: string;
   description: string;
-  costPrice: number;
+  // null when the purchase cost is unknown.
+  costPrice: number | null;
   sellingPrice: number;
   // ISO-4217 currency. When omitted, the workspace currency is used.
   currency?: string;

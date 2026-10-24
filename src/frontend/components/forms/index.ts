@@ -9,9 +9,11 @@ export {
   productToValues,
   validateProductValues,
   marginWarning,
+  productFieldErrorsFromApi,
   toProductSubmissionValues,
 } from './productFormModel.js';
 export type {
+  ApiFieldErrors,
   ProductFormValues,
   ProductSubmissionValues,
   ProductFieldErrors,
