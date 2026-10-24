@@ -9,6 +9,7 @@ import {
   buildWizardMarketplaceOptions,
   firstWizardStepWithErrors,
   NoMarketplaceConnectedCard,
+  ProductWizardForm,
   validateWizardStep,
   verifyWizardMarketplaceReadiness,
   WizardReviewSummary,
@@ -226,6 +227,28 @@ describe('ProductWizardForm review step', () => {
     const html = render(<WizardReviewSummary values={reviewValues()} currency="PLN" marketplace={olx!} />);
 
     expect(html).toContain('Sandbox');
+  });
+});
+
+describe('ProductWizardForm marketplace step', () => {
+  it('labels a sandbox OLX connection on the marketplace step', () => {
+    const marketplaceStep = (connection: Marketplace) =>
+      render(
+        <ProductWizardForm
+          initialDraft={{ values: reviewValues(), activeStep: 4, targetMarketplace: null }}
+          marketplaces={[connection]}
+          currency="PLN"
+          onSubmit={() => undefined}
+          onUploadImage={() => Promise.reject(new Error('not used'))}
+        />
+      );
+    const sandbox = marketplaceStep({ ...marketplace(), sandbox: true } as Marketplace);
+    const real = marketplaceStep(marketplace());
+
+    expect(sandbox).toContain('id="target-marketplace-label"');
+    expect(sandbox).toContain('Sandbox');
+    expect(real).toContain('id="target-marketplace-label"');
+    expect(real).not.toContain('Sandbox');
   });
 });
 
