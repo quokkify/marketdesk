@@ -79,6 +79,25 @@ describe('resolvePublicBaseUrl', () => {
   ])('rejects PUBLIC_BASE_URL %s', (value) => {
     expect(() => resolvePublicBaseUrl(value, redirectUri)).toThrow(/PUBLIC_BASE_URL/);
   });
+
+  it('rebuilds PUBLIC_BASE_URL from origin and path, so a bare ? or # never reaches an image URL', () => {
+    expect(resolvePublicBaseUrl('https://shop.example.com?', redirectUri)).toBe('https://shop.example.com');
+    expect(resolvePublicBaseUrl('https://shop.example.com/desk/#', redirectUri)).toBe(
+      'https://shop.example.com/desk',
+    );
+  });
+
+  it('rejects credentials in PUBLIC_BASE_URL without echoing them', () => {
+    let message = '';
+    try {
+      resolvePublicBaseUrl('https://seller:s3cret@shop.example.com', redirectUri);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+
+    expect(message).toMatch(/PUBLIC_BASE_URL/);
+    expect(message).not.toContain('s3cret');
+  });
 });
 
 describe('resolveJwtSecret (S1 fail-closed JWT secret)', () => {
@@ -148,15 +167,81 @@ describe('assertStartupConfiguration (fail-fast boot)', () => {
 
   // A development-mode configuration that is valid; each test breaks exactly one thing.
   function config(
-    overrides: { nodeEnv?: string; jwtSecret?: string; credentialsKey?: string } = {},
+    overrides: {
+      nodeEnv?: string;
+      jwtSecret?: string;
+      credentialsKey?: string;
+      olxAdapterMode?: string;
+      publicBaseUrl?: string;
+      publicBaseUrlConfigured?: boolean;
+    } = {},
   ): typeof env {
     return {
       ...env,
       nodeEnv: overrides.nodeEnv ?? 'development',
       jwt: { ...env.jwt, secret: overrides.jwtSecret ?? strongJwtSecret },
       marketplaceCredentialsKey: overrides.credentialsKey ?? validCredentialsKey,
+      publicBaseUrl: overrides.publicBaseUrl ?? env.publicBaseUrl,
+      publicBaseUrlConfigured: overrides.publicBaseUrlConfigured ?? env.publicBaseUrlConfigured,
+      marketplaces: {
+        ...env.marketplaces,
+        olx: {
+          ...env.marketplaces.olx,
+          adapterMode: overrides.olxAdapterMode ?? env.marketplaces.olx.adapterMode,
+        },
+      },
     };
   }
+
+  describe('PUBLIC_BASE_URL while OLX runs for real', () => {
+    const realBoot = (publicBaseUrl: string, publicBaseUrlConfigured = true) => () =>
+      assertStartupConfiguration(
+        config({ olxAdapterMode: 'real', publicBaseUrl, publicBaseUrlConfigured }),
+      );
+
+    it('refuses an empty PUBLIC_BASE_URL with a one-line hint', () => {
+      const boot = realBoot('http://localhost:3000', false);
+
+      expect(boot).toThrow(/PUBLIC_BASE_URL is empty while OLX_ADAPTER_MODE=real/);
+      expect(boot).toThrow(/Fix: set PUBLIC_BASE_URL to the public URL of this backend/);
+      expect(boot).not.toThrow(/npm run env:init/);
+    });
+
+    it.each([
+      'http://localhost:3000',
+      'http://app.localhost',
+      'http://127.0.0.1:3000',
+      'http://[::1]:3000',
+      'http://[::ffff:127.0.0.1]:3000',
+      'http://10.0.0.5',
+      'http://172.20.0.3',
+      'http://192.168.1.10',
+      'http://169.254.10.1',
+      'http://[fd00::5]',
+      'http://backend:3000',
+    ])('refuses the loopback or private PUBLIC_BASE_URL %s', (publicBaseUrl) => {
+      expect(realBoot(publicBaseUrl)).toThrow(
+        /PUBLIC_BASE_URL points at a loopback or private address while OLX_ADAPTER_MODE=real/,
+      );
+    });
+
+    it('accepts a public PUBLIC_BASE_URL', () => {
+      expect(realBoot('https://marketdesk.example.com')).not.toThrow();
+      expect(realBoot('https://203.0.113.10')).not.toThrow();
+    });
+
+    it('keeps the local fallback while OLX runs in the sandbox', () => {
+      expect(() =>
+        assertStartupConfiguration(
+          config({
+            olxAdapterMode: 'stub',
+            publicBaseUrl: 'http://localhost:3000',
+            publicBaseUrlConfigured: false,
+          }),
+        ),
+      ).not.toThrow();
+    });
+  });
 
   it('accepts a strong JWT secret together with a base64 32-byte credentials key', () => {
     expect(() => assertStartupConfiguration(config())).not.toThrow();

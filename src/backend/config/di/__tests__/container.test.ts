@@ -14,6 +14,18 @@ import { buildApp } from '../../../presentation/http/app';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
 import { env } from '../../env';
 import { StubOlxTaxonomyResolver } from '../../../infrastructure/adapters/StubOlxTaxonomyResolver';
+import { MarketplaceAdapterFactory } from '../../../infrastructure/adapters/MarketplaceAdapterFactory';
+
+// Records the factory configuration and still builds the real factory.
+jest.mock('../../../infrastructure/adapters/MarketplaceAdapterFactory', () => {
+  const actual = jest.requireActual('../../../infrastructure/adapters/MarketplaceAdapterFactory');
+  return {
+    ...actual,
+    MarketplaceAdapterFactory: jest.fn(
+      (config: unknown) => new actual.MarketplaceAdapterFactory(config),
+    ),
+  };
+});
 
 // --- Doubles -----------------------------------------------------------------
 
@@ -98,6 +110,16 @@ describe('buildContainer (composition root)', () => {
     expect(deps.marketplaceRepo).toBeDefined();
     expect(deps.workspaceRepo).toBeDefined();
     expect(deps.authUserStore).toBeDefined();
+  });
+
+  it('passes the public base URL to the OLX adapter factory', () => {
+    build();
+
+    expect(MarketplaceAdapterFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        olx: expect.objectContaining({ publicBaseUrl: env.publicBaseUrl }),
+      }),
+    );
   });
 
   it('shares one image storage between uploads and product deletion', () => {

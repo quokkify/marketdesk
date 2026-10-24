@@ -56,6 +56,7 @@ With the default `.env`, OLX runs as a labelled sandbox (`OLX_ADAPTER_MODE=stub`
 - Publishing still goes through the category review and confirmation, against built-in stand-ins for the OLX category tree and the publication quota. Sandbox adverts get placeholder `https://www.olx.pl/d/oferta/sandbox-…` links that do not exist on olx.pl.
 - Importing existing OLX adverts is unavailable, and there are no real sales or traffic, so analytics stay mostly empty.
 - `OLX_ADAPTER_MODE=real` switches to the real OLX Partner API and needs approved credentials; see [OLX real API readiness](docs/olx-real-api-readiness.md). A stored sandbox connection is refused in real mode and has to be reconnected. Do not publish, relist, or mutate real marketplace data without explicit authorization.
+- Real mode also needs `PUBLIC_BASE_URL`, the public address of this backend from which OLX downloads advert photos; the app refuses to start in real mode while it is empty, loopback or private.
 
 AI assistance follows `HERMES_PROVIDER_MODE` (default `auto`): Hermes while its Agent API server is configured and reachable, built-in offline heuristics otherwise. Offline suggestions say that Hermes was not consulted and always wait for human review. `hermes` never falls back, and `offline` never calls Hermes.
 
