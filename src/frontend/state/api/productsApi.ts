@@ -122,14 +122,19 @@ export const productsApi = baseApi.injectEndpoints({
     deleteProduct: builder.mutation<{ id: string }, string>({
       query: (id) => ({ url: `/products/${id}`, method: 'DELETE' }),
       transformResponse: (_res: ApiResponse<unknown>, _meta, id) => ({ id }),
-      // Analytics queries are tagged per endpoint (no LIST id), so the bare type refetches them all.
-      invalidatesTags: (_result, _error, id) => [
-        { type: 'Product', id },
-        { type: 'Product', id: 'LIST' },
-        { type: 'Listing', id: 'LIST' },
-        'Analytics',
-        { type: 'HermesEvent', id: 'LIST' },
-      ],
+      // RTK Query also invalidates after a rejected mutation; a refused delete (such as the
+      // live-listing guard's 409) changed nothing, so it refetches nothing. Analytics queries are
+      // tagged per endpoint (no LIST id), so the bare type refetches them all.
+      invalidatesTags: (_result, error, id) =>
+        error
+          ? []
+          : [
+              { type: 'Product', id },
+              { type: 'Product', id: 'LIST' },
+              { type: 'Listing', id: 'LIST' },
+              'Analytics',
+              { type: 'HermesEvent', id: 'LIST' },
+            ],
     }),
 
     createProductListing: builder.mutation<Listing, CreateProductListingInput>({
