@@ -558,9 +558,16 @@ describe('dashboard marketplace and Hermes states', () => {
     expect(copy).not.toMatch(/automatic|autonomous|monitor|reviews your listings/i);
   });
 
-  it('points an empty Hermes card at the manual way to get a suggestion', () => {
-    expect(hermesActivityEmptyState(true).description).toContain('analyze a product');
-    expect(hermesActivityEmptyState(false).description).toContain('analyze it with Hermes');
+  it('points an empty Hermes card at the manual way to get a suggestion, naming no provider', () => {
+    expect(hermesActivityEmptyState(true).description).toBe(
+      'Suggestions appear here after you open a product and use Analyze.'
+    );
+    expect(hermesActivityEmptyState(false).description).toBe(
+      'Connect OLX and publish a product, then open it and use Analyze to see suggestions here.'
+    );
+    for (const connected of [true, false]) {
+      expect(hermesActivityEmptyState(connected).description).not.toMatch(/hermes|heuristic/i);
+    }
   });
 
   it('summarises the sales chart for assistive technology from the same 30-day totals', () => {

@@ -113,13 +113,13 @@ export function hermesActivityEmptyState(hasConnectedMarketplace: boolean): Dash
     return {
       title: 'Connect a marketplace to start',
       description:
-        'Connect OLX and publish a product, then analyze it with Hermes to see suggestions here.',
+        'Connect OLX and publish a product, then open it and use Analyze to see suggestions here.',
       action: { label: 'Connect marketplace', path: '/marketplaces' },
     };
   }
   return {
     title: 'No Hermes activity yet',
-    description: 'Suggestions appear here after you analyze a product with Hermes.',
+    description: 'Suggestions appear here after you open a product and use Analyze.',
     action: { label: 'Analyze a product', path: '/products' },
   };
 }

@@ -340,6 +340,24 @@ describe('hermesEmptyState', () => {
     expect(hermesEmptyState('completed', false).title).toBe('Nothing completed yet');
   });
 
+  it('points at the analyze button without naming a provider, since its label differs per provider', () => {
+    const copy = HERMES_ACTIVITY_TABS.flatMap(({ value }) => {
+      const state = hermesEmptyState(value, false);
+      return [state.title, state.description];
+    }).join(' ');
+
+    expect(copy).not.toMatch(/hermes|heuristic/i);
+    expect(hermesEmptyState('all', false).description).toBe(
+      'Open a product and use Analyze, or change filters to see recorded suggestions, alerts, and completed actions.',
+    );
+    expect(hermesEmptyState('suggestions', false).description).toBe(
+      'Suggestions appear here after you open a product and use Analyze.',
+    );
+    expect(hermesEmptyState('alerts', false).description).toBe(
+      'Warnings and critical findings from product analysis appear here.',
+    );
+  });
+
   it('blames the filters, not the feed, while status or severity selects are in use', () => {
     for (const tab of ['all', 'suggestions', 'alerts', 'completed'] as const) {
       expect(hermesEmptyState(tab, true)).toEqual({

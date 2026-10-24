@@ -173,7 +173,8 @@ describe('Hermes banner', () => {
     expect(html).toContain('Configure');
     expect(html).toContain('Select product to analyze');
     expect(html).toContain('Whole-catalogue runs are not started from the UI');
-    expect(html).toContain('Analyze with Hermes');
+    expect(html).toContain('Choose a product and use Analyze for review-only recommendations.');
+    expect(html).not.toContain('Analyze with Hermes');
     expect(html).not.toContain('Run Hermes');
   });
 
@@ -417,7 +418,8 @@ describe('Hermes feed states', () => {
     const html = render();
 
     expect(html).toContain('No product analysis activity');
-    expect(html).toContain('Select a product and use Analyze with Hermes');
+    expect(html).toContain('Open a product and use Analyze, or change filters');
+    expect(html).not.toContain('Analyze with Hermes');
   });
 
   it.each([
