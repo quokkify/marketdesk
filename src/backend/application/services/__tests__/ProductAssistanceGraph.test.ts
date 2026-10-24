@@ -116,6 +116,28 @@ describe('ProductAssistanceGraph', () => {
     });
   });
 
+  // After a switch from stub to real on the same database, a listing published in the sandbox
+  // keeps its simulated views. Its category still carries the sandbox taxonomy marker.
+  it('gives no views for a listing published in the sandbox once OLX runs for real', async () => {
+    const ai = new OfflineHeuristicAIProvider();
+    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
+    const listing = unwrap(Listing.create({
+      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
+      marketplaceCategory: {
+        providerCategoryId: '1001', name: 'Cameras', path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy', confidence: 1, isLeaf: true,
+        taxonomyVerifiedAt: '2026-10-24T10:00:00.000Z', taxonomyStaleAt: '2026-10-25T10:00:00.000Z',
+        sandbox: true,
+      },
+    }));
+    const s = setup({ sandboxMode: false, listing, ai });
+
+    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+
+    expect(result.price?.reasoning).not.toMatch(/views/);
+    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
+  });
+
   it('rejects a listing that does not belong to the scoped product before calling Hermes', async () => {
     const s = setup();
     s.findListing.mockResolvedValueOnce({ id: 'l1', productId: 'other', marketplaceId: 'm1',

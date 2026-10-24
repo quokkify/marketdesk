@@ -111,8 +111,12 @@ export class ProductAssistanceGraph {
           } : null,
         }, 'balanced'));
         // The OLX sandbox simulates views on every sync. They are no demand signal, so a
-        // sandbox listing gets none and the price reasoning cannot cite them.
-        const simulatedViews = this.options.sandboxMode === true && marketplace?.key === 'olx';
+        // sandbox listing gets none and the price reasoning cannot cite them. A listing published
+        // in the sandbox keeps those views after a switch to real mode; only the sandbox
+        // taxonomy marks its category, so the marker still names it.
+        const simulatedViews =
+          listing?.marketplaceCategory?.sandbox === true ||
+          (this.options.sandboxMode === true && marketplace?.key === 'olx');
         const price = listing ? priceSuggestionSchema.parse(await this.ai.suggestPrice({
           listing, recentViews: simulatedViews ? 0 : listing.views ?? 0, conversionRate: 0,
           costPrice: product.costPrice?.amount,
