@@ -937,16 +937,14 @@ describe('OLXAdapter', () => {
     expect(fetched?.status).toBe('live');
   });
 
-  it('stub transport returns a sandbox advert URL on create and read', async () => {
+  it('stub transport never invents a public advert URL', async () => {
     const adapter = new OLXAdapter(undefined, fastOptions);
 
     const published = await adapter.publish(publishInput);
     const fetched = await adapter.fetchListing(published.externalListingId);
 
-    expect(published.externalUrl).toBe(
-      `https://www.olx.pl/d/oferta/sandbox-${published.externalListingId}`,
-    );
-    expect(fetched?.externalUrl).toBe(published.externalUrl);
+    expect(published.externalUrl).toBeNull();
+    expect(fetched?.externalUrl).toBeNull();
   });
 
   it('stub transport grows advert metrics by 7 views and 1 favourite on every read', async () => {

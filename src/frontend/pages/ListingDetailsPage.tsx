@@ -489,7 +489,8 @@ const ListingDetailsPage: React.FC = () => {
     { skip: !productId }
   );
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
-  const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
+  const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
+    useMarketplaceLookup();
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
   const [uploadProductImage] = useUploadProductImage();
@@ -548,8 +549,6 @@ const ListingDetailsPage: React.FC = () => {
     (listing) => resolveMarketplaceKey(listing.marketplaceId) === 'olx'
   );
   const olxMarketplace = marketplaces?.find((marketplace) => marketplace.key === 'olx');
-  const resolveMarketplaceSandbox = (marketplaceId: string) =>
-    isSandboxMarketplace(marketplaces?.find((marketplace) => marketplace.id === marketplaceId));
   const priceHistory = usePriceHistory(primaryListing?.id ?? '', { skip: !primaryListing });
   const primaryMarketplaceName = primaryListing
     ? resolveMarketplaceName(primaryListing.marketplaceId)
@@ -1085,6 +1084,10 @@ const ListingDetailsPage: React.FC = () => {
             currency={currency}
             primaryAction={primaryAction}
             externalUrl={recheckListing?.status === 'live' ? recheckListing.externalUrl : undefined}
+            sandboxAdvert={
+              recheckListing?.status === 'live' &&
+              resolveMarketplaceSandbox(recheckListing.marketplaceId)
+            }
             busy={publicationActionsLocked || creatingListing || listings.isLoading || listings.isError}
             onEdit={() => setEditOpen(true)}
             onPublish={() => void handlePublishToOlx()}

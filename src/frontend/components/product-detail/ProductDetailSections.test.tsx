@@ -217,6 +217,15 @@ describe('product detail pricing card actions', () => {
     expect(html).not.toContain('Publish to OLX');
   });
 
+  it('labels a live sandbox advert instead of opening OLX', () => {
+    const html = render(<PricingSummaryCard product={product} currency="PLN" primaryAction="edit" externalUrl={listing.externalUrl} sandboxAdvert onEdit={() => undefined} />);
+
+    expect(html).toContain('Edit product');
+    expect(html).toContain('Sandbox advert');
+    expect(html).not.toContain('Open on OLX');
+    expect(html).not.toContain('href="https://www.olx.pl');
+  });
+
   it('asks to connect OLX instead of offering a publish action that cannot work', () => {
     const onConnect = jest.fn();
     const draft = { ...product, status: 'draft' as const };
@@ -265,6 +274,16 @@ describe('product detail statistics card', () => {
     expect(sandbox).toContain('Sandbox');
     expect(real).not.toContain('Sandbox');
     expect(noListing).toContain('Sandbox');
+  });
+
+  it('labels a live sandbox advert instead of opening OLX', () => {
+    const live = render(<OlxInsightsCard listing={listing} isOlx sandbox statusTitle="OLX listing" statusLabel="Active on OLX" statusExplanation="Provider status" statusColor="success" />);
+    const draft = render(<OlxInsightsCard listing={{ ...listing, status: 'draft', externalUrl: undefined }} isOlx sandbox statusTitle="OLX listing" statusLabel="Not synced" statusExplanation="Provider status" statusColor="default" />);
+
+    expect(live).toContain('Sandbox advert');
+    expect(live).not.toContain('Open OLX');
+    expect(live).not.toContain('href="https://www.olx.pl');
+    expect(draft).not.toContain('Sandbox advert');
   });
 });
 

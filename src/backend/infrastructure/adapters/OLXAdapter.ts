@@ -42,10 +42,6 @@ const STUB_VIEWS_PER_READ = 7;
 const STUB_FAVORITES_PER_READ = 1;
 const stubAdvertReads = new Map<string, number>();
 
-function stubAdvertUrl(advertId: string): string {
-  return `https://www.olx.pl/d/oferta/sandbox-${advertId}`;
-}
-
 const OLX_CONDITION_MAP: Record<string, string> = {
   new: 'new',
   like_new: 'used',
@@ -694,8 +690,9 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   private static stubResponder: StubResponder = (config): HttpResponse => {
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
     const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}`;
+    // Sandbox adverts have no OLX page, so the stub never returns a public URL.
     if (config.method === 'POST') {
-      return { status: 201, data: { id: externalId, status: 'active', url: stubAdvertUrl(externalId) } };
+      return { status: 201, data: { id: externalId, status: 'active' } };
     }
     if (config.method === 'PUT' || config.method === 'DELETE') {
       return { status: 204, data: {} };
@@ -737,7 +734,6 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       data: {
         id: externalId,
         status: 'active',
-        url: stubAdvertUrl(externalId),
         metrics: {
           views: reads * STUB_VIEWS_PER_READ,
           favorites: reads * STUB_FAVORITES_PER_READ,

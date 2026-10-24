@@ -52,7 +52,7 @@ import { SyncPublishQueue, inMemoryPublishAttempts } from '../../infrastructure/
 
 const SUCCESS_URL = 'http://localhost:5173/marketplaces';
 const PUBLIC_BASE_URL = 'http://localhost:3000';
-const SANDBOX_ADVERT_URL = 'https://www.olx.pl/d/oferta/sandbox-';
+
 const UPLOADED_PHOTO =
   '/uploads/workspaces/0123456789abcdef01234567/products/5f0c2a4e-8d1b-4c3a-9e2f-1a2b3c4d5e6f.jpg';
 
@@ -262,10 +262,9 @@ describe('sandbox publish journey (OLX stub mode)', () => {
 
     const live = await auth(request(app).get(`/api/listings/${listingId}`));
     expect(live.body.data.status).toBe('live');
-    expect(live.body.data.externalUrl).toMatch(/^https:\/\/www\.olx\.pl\/d\/oferta\/sandbox-/);
-    expect(live.body.data.externalUrl).toBe(
-      `${SANDBOX_ADVERT_URL}${live.body.data.marketplaceListingId}`
-    );
+    expect(live.body.data.marketplaceListingId).toMatch(/^olx-/);
+    // A sandbox advert has no OLX page, so the API returns no public link for it.
+    expect(live.body.data.externalUrl).toBeUndefined();
 
     const published = await auth(request(app).get(`/api/products/${productId}`));
     expect(published.body.data).toMatchObject({ status: 'active', images: [UPLOADED_PHOTO] });

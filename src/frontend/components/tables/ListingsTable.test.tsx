@@ -125,6 +125,25 @@ describe('ListingsTable external marketplace link', () => {
 
     expect(html).not.toContain('View on OLX');
   });
+
+  it('labels a live sandbox advert instead of linking to OLX', () => {
+    const sandboxRow = (row: Listing) => renderToStaticMarkup(
+      <ListingsTable
+        listings={[row]}
+        resolveMarketplaceName={() => 'OLX'}
+        resolveMarketplaceSandbox={() => true}
+      />,
+    );
+    const withUrl = sandboxRow(listing({ externalUrl: 'https://www.olx.pl/d/oferta/olx-1' }));
+    const withoutUrl = sandboxRow(listing());
+    const draft = sandboxRow(listing({ status: 'draft' }));
+
+    expect(withUrl).toContain('Sandbox advert');
+    expect(withUrl).not.toContain('View on OLX');
+    expect(withUrl).not.toContain('href="https://www.olx.pl');
+    expect(withoutUrl).toContain('Sandbox advert');
+    expect(draft).not.toContain('Sandbox advert');
+  });
 });
 
 describe('ListingsTable publication actions', () => {
@@ -156,6 +175,21 @@ describe('ListingsTable destructive delist action', () => {
     expect(html).toContain('will not be republished automatically');
     expect(html).toContain('does not restore a consumed quota unit');
     expect(html).toContain('category and quota preview');
+  });
+
+  it('labels a sandbox advert in the confirmation instead of linking to it', () => {
+    const html = renderToStaticMarkup(
+      <DelistConfirmationContent
+        listing={listing({ externalUrl: 'https://www.olx.pl/d/oferta/olx-1' })}
+        marketplaceName="OLX"
+        isOlx
+        sandbox
+      />,
+    );
+
+    expect(html).toContain('Sandbox advert');
+    expect(html).not.toContain('Open the current remote advert');
+    expect(html).not.toContain('href="https://www.olx.pl');
   });
 
   it('does not infer OLX quota risk from a marketplace display name', () => {

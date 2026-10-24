@@ -32,6 +32,7 @@ import { formatMoney } from '../../utils/formatters.js';
 import { ListingStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
+import { SandboxAdvertChip } from '../common/SandboxAdvertChip.js';
 
 export interface ListingsTableProps {
   listings?: Listing[];
@@ -55,10 +56,12 @@ export function DelistConfirmationContent({
   listing,
   marketplaceName,
   isOlx,
+  sandbox = false,
 }: {
   listing: Listing;
   marketplaceName: string;
   isOlx: boolean;
+  sandbox?: boolean;
 }) {
   return (
     <Stack spacing={2}>
@@ -67,10 +70,14 @@ export function DelistConfirmationContent({
       <Typography><strong>Product:</strong> {listing.productName || 'Untitled product'}</Typography>
       <Typography><strong>Listing:</strong> {listing.id}</Typography>
       <Typography><strong>External ID:</strong> {listing.marketplaceListingId}</Typography>
-      {listing.externalUrl && (
-        <Link href={listing.externalUrl} target="_blank" rel="noopener noreferrer">
-          Open the current remote advert for reconciliation
-        </Link>
+      {sandbox ? (
+        <SandboxAdvertChip sx={{ alignSelf: 'flex-start' }} />
+      ) : (
+        listing.externalUrl && (
+          <Link href={listing.externalUrl} target="_blank" rel="noopener noreferrer">
+            Open the current remote advert for reconciliation
+          </Link>
+        )
       )}
       <Typography>
         Only this listing will return to draft. Product data and photos remain. The advert will not be republished automatically.
@@ -251,7 +258,9 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                         {listing.syncError}
                       </Typography>
                     )}
-                    {listing.externalUrl && listing.status === 'live' && (
+                    {listing.status === 'live' && resolveMarketplaceSandbox?.(listing.marketplaceId) ? (
+                      <SandboxAdvertChip sx={{ display: 'flex', width: 'fit-content', mt: 0.5, height: 18 }} />
+                    ) : listing.externalUrl && listing.status === 'live' && (
                       <Link
                         href={listing.externalUrl}
                         target="_blank"
@@ -361,6 +370,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                 ? resolveMarketplaceName(delistListing.marketplaceId)
                 : delistListing.marketplaceId}
               isOlx={resolveMarketplaceKey?.(delistListing.marketplaceId) === 'olx'}
+              sandbox={resolveMarketplaceSandbox?.(delistListing.marketplaceId) ?? false}
             />
           )}
           {delistDialog.failure && (

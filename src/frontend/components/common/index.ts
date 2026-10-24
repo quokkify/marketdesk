@@ -28,3 +28,4 @@ export type { PageHeaderProps } from './PageHeader.js';
 export { LoadingSkeleton, PageSkeleton } from './Skeleton.js';
 export { Toast } from './Toast.js';
 export { PageStub } from './PageStub.js';
+export { SandboxAdvertChip } from './SandboxAdvertChip.js';

@@ -37,7 +37,8 @@ export function withListingStatusParam(
 const ListingsPage: React.FC = () => {
   const navigate = useNavigate();
   const currency = useAppSelector((s) => s.workspace.currency);
-  const { resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
+  const { resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
+    useMarketplaceLookup();
   const [searchParams, setSearchParams] = useSearchParams();
   const statusParam = searchParams.get(STATUS_PARAM);
   const statusFilter = useMemo(() => parseListingStatusParam(statusParam), [statusParam]);
@@ -130,6 +131,7 @@ const ListingsPage: React.FC = () => {
           currency={currency}
           resolveMarketplaceName={resolveMarketplaceName}
           resolveMarketplaceKey={resolveMarketplaceKey}
+          resolveMarketplaceSandbox={resolveMarketplaceSandbox}
           productHref={(l) => `/products/${l.productId}`}
           onRowClick={(l) => navigate(`/products/${l.productId}`)}
           onRelist={handleRelist}
