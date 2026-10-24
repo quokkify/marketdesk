@@ -82,6 +82,13 @@ export interface SetOlxQuotaInput {
   staleAt: string;
 }
 
+// A category guard reason keeps its own name when it already names the
+// category, such as category_sandbox; any other reason gains the prefix.
+function categoryQuotaReason(reason: string | undefined): string {
+  const value = reason ?? 'invalid';
+  return value.startsWith('category_') ? value : `category_${value}`;
+}
+
 export class OlxPublicationQuotaService {
   private readonly now: () => Date;
   private readonly sandboxMode: boolean;
@@ -179,7 +186,7 @@ export class OlxPublicationQuotaService {
     });
     if (!categoryDecision.allowed || !category) {
       return this.unknown(
-        `category_${categoryDecision.reason ?? 'invalid'}`,
+        categoryQuotaReason(categoryDecision.reason),
         undefined,
         category?.providerCategoryId,
         false,
@@ -231,7 +238,7 @@ export class OlxPublicationQuotaService {
     });
     if (!categoryDecision.allowed || !category) {
       const decision = this.unknown(
-        `category_${categoryDecision.reason ?? 'invalid'}`,
+        categoryQuotaReason(categoryDecision.reason),
         undefined,
         category?.providerCategoryId,
         false,

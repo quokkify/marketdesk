@@ -137,7 +137,7 @@ describe('OlxPublicationQuotaService', () => {
     })).resolves.toMatchObject({ reason: 'marketplace_account_unknown', requiresOverride: false });
     await expect(service.preview({
       marketplace, product, listing: unknownCategoryListing,
-    })).resolves.toMatchObject({ reason: 'category_category_missing', requiresOverride: false });
+    })).resolves.toMatchObject({ reason: 'category_missing', requiresOverride: false });
   });
 
   it('fails quota preview closed before reading quota for stale category metadata', async () => {
@@ -406,7 +406,7 @@ describe('OlxPublicationQuotaService', () => {
         override: { confirmed: true, reason: 'Accept possible OLX publication fee' },
       });
 
-      const refused = { decision: 'block', reason: 'category_category_sandbox', requiresOverride: false };
+      const refused = { decision: 'block', reason: 'category_sandbox', requiresOverride: false };
       expect(preview).toMatchObject(refused);
       expect(decision).toMatchObject(refused);
       expect(quotaRepo.quotas[0].consumed).toBe(0);
