@@ -35,11 +35,30 @@ export interface PaginationMeta {
 const PG_CONFLICT_MESSAGES = new Map<string, string>([
   ['23505', 'Resource already exists'], // unique_violation
   ['23503', 'Request conflicts with related records'], // foreign_key_violation
+  // restrict_violation: PostgreSQL 18 reports ON DELETE RESTRICT with it.
+  ['23001', 'Request conflicts with related records'],
 ]);
 
-function pgConflictMessage(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
-  return typeof error.code === 'string' ? PG_CONFLICT_MESSAGES.get(error.code) : undefined;
+export interface PgConstraintConflict {
+  code: string;
+  constraint: string | null;
+  table: string | null;
+  // Generic client message; the driver's own message stays in the server log.
+  message: string;
+}
+
+export function pgConstraintConflict(error: unknown): PgConstraintConflict | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  const code = error.code;
+  const message = typeof code === 'string' ? PG_CONFLICT_MESSAGES.get(code) : undefined;
+  if (typeof code !== 'string' || !message) return null;
+  const { constraint, table } = error as { constraint?: unknown; table?: unknown };
+  return {
+    code,
+    constraint: typeof constraint === 'string' ? constraint : null,
+    table: typeof table === 'string' ? table : null,
+    message,
+  };
 }
 
 // Map a DomainError (or arbitrary error) to an HTTP status code (§5 / §19).
@@ -70,7 +89,7 @@ export function statusForError(error: unknown): number {
         return 500;
     }
   }
-  if (pgConflictMessage(error)) {
+  if (pgConstraintConflict(error)) {
     return 409;
   }
   return 500;
@@ -95,9 +114,9 @@ export function toErrorBody(error: unknown): ErrorBody {
       ...(error.details ? { details: error.details } : {}),
     };
   }
-  const conflictMessage = pgConflictMessage(error);
-  if (conflictMessage) {
-    return { code: ERROR_CODES.CONFLICT, message: conflictMessage };
+  const conflict = pgConstraintConflict(error);
+  if (conflict) {
+    return { code: ERROR_CODES.CONFLICT, message: conflict.message };
   }
   // Never leak internal error details/stack traces in production.
   const message =
