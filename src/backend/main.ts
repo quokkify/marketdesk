@@ -7,8 +7,8 @@ import pino from 'pino';
 import {
   assertStartupConfiguration,
   env,
+  insecureDevJwtAllowed,
   isDevelopment,
-  isProduction,
   isTest,
 } from './config/env.js';
 import { createPool } from './config/database.js';
@@ -59,7 +59,7 @@ const startServer = async () => {
     // Refuse to boot on missing or placeholder secrets before touching any resource, so a
     // fresh `.env` fails with one actionable message instead of a half-working process.
     assertStartupConfiguration(env);
-    if (!isProduction && process.env.ALLOW_INSECURE_DEV_JWT === 'true') {
+    if (insecureDevJwtAllowed(env)) {
       logger.warn(
         'ALLOW_INSECURE_DEV_JWT=true: JWT secret checks are relaxed. Use it for local development only.',
       );
@@ -89,7 +89,7 @@ const startServer = async () => {
     logger.info(
       {
         olxAdapterMode: env.marketplaces.olx.adapterMode,
-        hermesProviderMode: process.env.HERMES_PROVIDER_MODE ?? 'auto',
+        hermesProviderMode: env.hermes.providerMode,
       },
       'Runtime modes',
     );

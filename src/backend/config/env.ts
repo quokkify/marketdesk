@@ -44,26 +44,19 @@ function parseCategoryIds(value: string | undefined): Record<string, number> {
 // recognises it so the fallback can never reach a real boot by accident.
 const DEV_ONLY_SECRET_PREFIX = 'dev-only-insecure-';
 
-// Resolve a JWT signing secret fail-closed. In production a missing secret, an
-// empty secret, or a leftover `your_`-prefixed placeholder is fatal (throws at
-// boot) so the app never signs tokens with a guessable key. Outside production
-// a clearly-marked dev-only value is returned when unset so imports in tests and
-// `ALLOW_INSECURE_DEV_JWT=true` development stay frictionless; a normal boot
-// refuses it in assertStartupConfiguration. (S1)
+// Resolve a JWT signing secret. Outside production a clearly-marked dev-only value is returned
+// when unset so imports in tests and `ALLOW_INSECURE_DEV_JWT=true` development stay frictionless;
+// a normal boot refuses it in assertStartupConfiguration. In production an unset, empty or
+// `your_`-prefixed secret resolves to an empty one instead of throwing at import: nothing can be
+// signed or verified with it, so an entrypoint that never runs the gate still fails closed, and
+// the gate reports it together with every other startup problem. (S1)
 export function resolveJwtSecret(
   value: string | undefined,
   name: string,
   isProd: boolean = runningInProduction,
 ): string {
   const isPlaceholder = value === undefined || value === '' || value.startsWith('your_');
-  if (isProd) {
-    if (isPlaceholder) {
-      throw new Error(
-        `${name} must be set to a strong, non-placeholder value in production`,
-      );
-    }
-    return value;
-  }
+  if (isProd) return isPlaceholder ? '' : value;
   return value && !isPlaceholder ? value : `${DEV_ONLY_SECRET_PREFIX}${name.toLowerCase()}`;
 }
 
@@ -75,6 +68,9 @@ export const env = {
   appPort: parseInt(process.env.APP_PORT || '3000', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
   trustProxy: process.env.TRUST_PROXY === 'true',
+  // Local development only: tolerate a placeholder JWT_SECRET. Read once here, so the boot gate
+  // and the boot warning decide from the same value (see insecureDevJwtAllowed).
+  allowInsecureDevJwt: process.env.ALLOW_INSECURE_DEV_JWT === 'true',
 
   // Database
   database: {
@@ -97,11 +93,13 @@ export const env = {
     password: process.env.REDIS_PASSWORD || '',
   },
 
-  // JWT — secrets resolved fail-closed (throws in production on a missing/placeholder value).
+  // JWT. The signing secret resolves fail-closed (see resolveJwtSecret). The refresh secret is
+  // reserved for refresh tokens, which are not implemented: nothing signs or verifies with it,
+  // so it is neither required nor validated.
   jwt: {
     secret: resolveJwtSecret(process.env.JWT_SECRET, 'JWT_SECRET'),
-    expiration: process.env.JWT_EXPIRATION || '24h',
-    refreshSecret: resolveJwtSecret(process.env.JWT_REFRESH_SECRET, 'JWT_REFRESH_SECRET'),
+    expiration: process.env.JWT_EXPIRATION || '7d',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || '',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
 
@@ -205,14 +203,25 @@ function isValidCredentialsKey(value: string): boolean {
 }
 
 // Test mode and ALLOW_INSECURE_DEV_JWT=true (local `npm run dev`) may sign tokens with the
-// development secret. Production never may, whatever the flag says.
-function insecureDevJwtAllowed(e: typeof env): boolean {
+// development secret. Production never may, whatever the flag says. The boot gate and the boot
+// warning both ask this.
+export function insecureDevJwtAllowed(
+  e: Pick<typeof env, 'nodeEnv' | 'allowInsecureDevJwt'>,
+): boolean {
   if (e.nodeEnv === 'production') return false;
-  return e.nodeEnv === 'test' || process.env.ALLOW_INSECURE_DEV_JWT === 'true';
+  return e.nodeEnv === 'test' || e.allowInsecureDevJwt;
 }
 
+const FIX_WITH_ENV_INIT = 'Fix: run `npm run env:init`.';
+// env:init only fills a value that is empty or a placeholder, so a short or malformed one has to
+// be replaced by hand.
+const FIX_WITH_OPENSSL = 'Fix: replace it with the output of `openssl rand -base64 32`.';
+const CREDENTIALS_KEY_WARNING =
+  'If accounts are already connected, restore the original key instead: ' +
+  'a different key makes stored marketplace credentials unreadable.';
+
 // Boot gate, called by main.ts before any resource is touched. Throws one error that names
-// every missing or invalid secret and the command that fixes it, so a `.env` copied from
+// every missing or invalid secret, each with the fix that applies to it, so a `.env` copied from
 // `.env.example` fails loudly instead of leaving a server that answers /health while every
 // /api route is missing. The message never contains the rejected values.
 export function assertStartupConfiguration(e: typeof env): void {
@@ -220,23 +229,26 @@ export function assertStartupConfiguration(e: typeof env): void {
 
   if (!insecureDevJwtAllowed(e)) {
     if (isPlaceholderSecret(e.jwt.secret)) {
-      problems.push('JWT_SECRET is empty or still a placeholder');
+      problems.push(`JWT_SECRET is empty or still a placeholder. ${FIX_WITH_ENV_INIT}`);
     } else if (e.jwt.secret.length < MIN_JWT_SECRET_LENGTH) {
-      problems.push(`JWT_SECRET is shorter than ${MIN_JWT_SECRET_LENGTH} characters`);
+      problems.push(
+        `JWT_SECRET is shorter than ${MIN_JWT_SECRET_LENGTH} characters. ${FIX_WITH_OPENSSL}`,
+      );
     }
   }
 
   if (e.marketplaceCredentialsKey === '') {
-    problems.push('MARKETPLACE_CREDENTIALS_KEY is empty');
+    problems.push(`MARKETPLACE_CREDENTIALS_KEY is empty. ${FIX_WITH_ENV_INIT}`);
   } else if (!isValidCredentialsKey(e.marketplaceCredentialsKey)) {
-    problems.push('MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key');
+    problems.push(
+      'MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key. ' +
+        `${FIX_WITH_OPENSSL} ${CREDENTIALS_KEY_WARNING}`,
+    );
   }
 
   if (problems.length > 0) {
     throw new Error(
-      `Invalid startup configuration: ${problems.join('; ')}. ` +
-        'Fix: run `npm run env:init` to generate every secret in .env, ' +
-        'or set each one yourself, for example to the output of `openssl rand -base64 32`.',
+      `Invalid startup configuration:\n${problems.map((problem) => `- ${problem}`).join('\n')}`,
     );
   }
 }
