@@ -9,6 +9,7 @@ import PercentIcon from '@mui/icons-material/PercentOutlined';
 import DownloadIcon from '@mui/icons-material/DownloadOutlined';
 import ImageIcon from '@mui/icons-material/ImageOutlined';
 import { Link, useSearchParams } from 'react-router-dom';
+import type { Marketplace } from '@shared/types';
 import { useAnalyticsListings, useAnalyticsOverview, useMarketplaces } from '../services/hooks/index.js';
 import type { AnalyticsQueryParams, ListingPerformance } from '../state/api/index.js';
 import { useAppSelector } from '../state/hooks.js';
@@ -16,7 +17,7 @@ import { formatCurrency, formatNumber } from '../utils/formatters.js';
 import { Card } from '../components/common/Card.js';
 import { SandboxDataNotice } from '../components/common/SandboxDataNotice.js';
 import { StatCard } from '../components/common/StatCard.js';
-import { hasSandboxMarketplace } from '../utils/sandbox.js';
+import { hasSandboxMarketplace, isSandboxMarketplace } from '../utils/sandbox.js';
 import { RevenueChart, ViewsChart, ConversionChart } from '../components/charts/index.js';
 import { AnalyticsTable } from '../components/tables/index.js';
 
@@ -32,15 +33,22 @@ export function analyticsRangeForPreset(preset: Exclude<AnalyticsPreset, 'custom
   return { from: isoDay(start), to: isoDay(end) };
 }
 
-export function analyticsCsv(rows: ListingPerformance[]): string {
+// The Sandbox column marks rows whose views and watchers the OLX sandbox simulated. It stays
+// blank when the row's marketplace is not in the loaded marketplace list.
+export function analyticsCsv(
+  rows: ListingPerformance[],
+  marketplaces: ReadonlyArray<Pick<Marketplace, 'id' | 'sandbox'>> | undefined,
+): string {
   const escape = (value: unknown) => {
     const raw = String(value ?? '');
     const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
     return `"${safe.replace(/"/g, '""')}"`;
   };
-  const header = ['Listing', 'Product', 'Marketplace', 'Currency', 'Revenue', 'Profit', 'Sales', 'Views', 'Conversion'];
+  const sandboxById = new Map((marketplaces ?? []).map((marketplace) => [marketplace.id, isSandboxMarketplace(marketplace)]));
+  const header = ['Listing', 'Product', 'Marketplace', 'Sandbox', 'Currency', 'Revenue', 'Profit', 'Sales', 'Views', 'Conversion'];
   return [header, ...rows.map((row) => [
-    row.listingId, row.productName ?? row.productId, row.marketplaceName ?? row.marketplaceId, row.currency,
+    row.listingId, row.productName ?? row.productId, row.marketplaceName ?? row.marketplaceId,
+    sandboxById.get(row.marketplaceId) ?? '', row.currency,
     row.revenue, row.profit, row.sales, row.views, row.conversion,
   ])].map((row) => row.map(escape).join(',')).join('\n');
 }
@@ -142,7 +150,7 @@ const AnalyticsPage: React.FC = () => {
   }, [rows]);
 
   const downloadCsv = () => {
-    const url = URL.createObjectURL(new Blob([analyticsCsv(rows)], { type: 'text/csv;charset=utf-8' }));
+    const url = URL.createObjectURL(new Blob([analyticsCsv(rows, marketplaces.data)], { type: 'text/csv;charset=utf-8' }));
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = `analytics-${from}-${to}.csv`; anchor.click();
     URL.revokeObjectURL(url);
   };
