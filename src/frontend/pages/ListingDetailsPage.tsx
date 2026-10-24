@@ -19,6 +19,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
+  AIProviderSource,
   HermesEvent,
   HermesStatusView,
   Listing,
@@ -180,10 +181,40 @@ export function productHermesAnalyzingNote(
   return `${subject} this product only. Any recommendation will remain review-only.`;
 }
 
-export function productHermesSuccessMessage(eventCount: number): string {
-  return eventCount
-    ? 'Hermes SEO suggestion is ready for human review.'
-    : 'Hermes found no new SEO suggestion for this product.';
+// Who answered a product analysis. Its suggestions record their provider, so they decide; a run
+// without suggestions falls back to the provider status read beside it. Unknown when neither
+// says or the suggestions disagree, so no provider is ever credited by guess.
+export function productAnalysisProvider(
+  events: ReadonlyArray<Pick<HermesEvent, 'source'>>,
+  statusProvider: HermesStatusView['activeProvider'] | undefined
+): AIProviderSource | undefined {
+  if (events.length === 0) return statusProvider;
+  const sources = new Set(events.map((event) => event.source));
+  const [source] = sources;
+  return sources.size === 1 ? source : undefined;
+}
+
+const ANALYSIS_PROVIDER_NAMES: Record<AIProviderSource, string> = {
+  hermes: 'Hermes',
+  offline: 'Offline heuristics',
+};
+
+export function productHermesSuccessMessage(
+  eventCount: number,
+  provider: AIProviderSource | undefined
+): string {
+  if (eventCount === 0) {
+    return provider
+      ? `${ANALYSIS_PROVIDER_NAMES[provider]} found no new SEO suggestion for this product.`
+      : 'No new SEO suggestion was found for this product.';
+  }
+  if (!provider) {
+    return eventCount === 1
+      ? 'An SEO suggestion is ready for human review.'
+      : `${eventCount} SEO suggestions are ready for human review.`;
+  }
+  const changes = eventCount === 1 ? 'an SEO change' : `${eventCount} SEO changes`;
+  return `${ANALYSIS_PROVIDER_NAMES[provider]} suggested ${changes} for human review.`;
 }
 
 export const PublicationReadinessAction: React.FC<{
@@ -523,7 +554,8 @@ const ListingDetailsPage: React.FC = () => {
     { skip: !productId }
   );
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
-  const activeProvider = useHermesStatus().data?.activeProvider;
+  const hermesStatus = useHermesStatus();
+  const activeProvider = hermesStatus.data?.activeProvider;
   const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
     useMarketplaceLookup();
 
@@ -722,9 +754,17 @@ const ListingDetailsPage: React.FC = () => {
     }
     setAnalysisState({ status: 'idle' });
     try {
-      const events = await runHermes(productScopedHermesRunInput(productId)).unwrap();
+      // The status is read again beside the run, so a page left open while Hermes went offline
+      // never credits Hermes for an answer the offline heuristics gave.
+      const [events, status] = await Promise.all([
+        runHermes(productScopedHermesRunInput(productId)).unwrap(),
+        hermesStatus.refetch(),
+      ]);
       await hermesEvents.refetch();
-      const message = productHermesSuccessMessage(events.length);
+      const message = productHermesSuccessMessage(
+        events.length,
+        productAnalysisProvider(events, status.isSuccess ? status.data?.activeProvider : undefined)
+      );
       setAnalysisState({ status: 'success', message });
       dispatch(
         enqueueToast({

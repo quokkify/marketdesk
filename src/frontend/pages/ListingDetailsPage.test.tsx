@@ -13,6 +13,7 @@ import {
   PUBLICATION_READINESS_CHECKING_LABEL,
   PUBLICATION_READINESS_RECHECK_LABEL,
   PublicationReadinessAction,
+  productAnalysisProvider,
   productHermesAnalyzingNote,
   productHermesDisabledReason,
   productHermesSuccessMessage,
@@ -112,13 +113,48 @@ describe('ListingDetailsPage presentation', () => {
     );
   });
 
-  it('uses review-only product-scoped success copy for analysis results', () => {
-    expect(productHermesSuccessMessage(1)).toBe(
-      'Hermes SEO suggestion is ready for human review.'
+  it('credits the provider that answered the analysis and stays neutral when it is unknown', () => {
+    expect(productHermesSuccessMessage(1, 'hermes')).toBe(
+      'Hermes suggested an SEO change for human review.'
     );
-    expect(productHermesSuccessMessage(0)).toBe(
+    expect(productHermesSuccessMessage(2, 'offline')).toBe(
+      'Offline heuristics suggested 2 SEO changes for human review.'
+    );
+    expect(productHermesSuccessMessage(1, undefined)).toBe(
+      'An SEO suggestion is ready for human review.'
+    );
+    expect(productHermesSuccessMessage(3, undefined)).toBe(
+      '3 SEO suggestions are ready for human review.'
+    );
+    expect(productHermesSuccessMessage(0, 'hermes')).toBe(
       'Hermes found no new SEO suggestion for this product.'
     );
+    expect(productHermesSuccessMessage(0, 'offline')).toBe(
+      'Offline heuristics found no new SEO suggestion for this product.'
+    );
+    expect(productHermesSuccessMessage(0, undefined)).toBe(
+      'No new SEO suggestion was found for this product.'
+    );
+  });
+
+  it('never credits Hermes when the offline heuristics answered or the provider is unknown', () => {
+    for (const count of [0, 1, 2]) {
+      expect(productHermesSuccessMessage(count, 'offline')).not.toContain('Hermes');
+      expect(productHermesSuccessMessage(count, undefined)).not.toContain('Hermes');
+    }
+  });
+
+  it('takes the provider from the returned suggestions before the provider status', () => {
+    const offline = { source: 'offline' as const };
+    const hermes = { source: 'hermes' as const };
+
+    expect(productAnalysisProvider([offline], 'hermes')).toBe('offline');
+    expect(productAnalysisProvider([hermes, hermes], 'offline')).toBe('hermes');
+    expect(productAnalysisProvider([], 'offline')).toBe('offline');
+    expect(productAnalysisProvider([], 'hermes')).toBe('hermes');
+    expect(productAnalysisProvider([], undefined)).toBeUndefined();
+    expect(productAnalysisProvider([{}], 'hermes')).toBeUndefined();
+    expect(productAnalysisProvider([offline, hermes], 'hermes')).toBeUndefined();
   });
 
   it('marks a recheck stale immediately when the saved product version changes', () => {
