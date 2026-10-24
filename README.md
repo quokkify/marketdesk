@@ -61,7 +61,7 @@ AI assistance follows `HERMES_PROVIDER_MODE` (default `auto`): Hermes while its 
 
 ## Architecture
 
-React 19 + TypeScript 6 frontend (MUI 9, Vite 8) · Node.js + Express 5 API · PostgreSQL 18 · Redis 8 · Docker Compose. Node.js 22+ is supported and the Docker image runs Node.js 24. Schema changes are 42 ordered SQL migrations (`001` to `040`) that a one-shot Compose service applies before the app starts. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA; separately published component images are an optional topology.
+React 19 + TypeScript 6 frontend (MUI 9, Vite 8) · Node.js + Express 5 API · PostgreSQL 18 · Redis 8 · Docker Compose. Node.js 22+ is supported and the Docker image runs Node.js 24. Schema changes are ordered SQL migrations in `src/backend/persistence/migrations` that a one-shot Compose service applies before the app starts. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA; separately published component images are an optional topology.
 
 ## Documentation
 
