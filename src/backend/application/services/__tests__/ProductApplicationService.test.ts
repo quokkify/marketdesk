@@ -70,7 +70,7 @@ describe('ProductApplicationService catalogue search', () => {
 describe('ProductApplicationService.deleteProduct', () => {
   const OWN_UPLOAD = '11111111-1111-4111-8111-111111111111';
   const SHARED_UPLOAD = '22222222-2222-4222-8222-222222222222';
-  const LIVE_LISTING_MESSAGE = 'Remove the live listing from the marketplace before deleting this product';
+  const LIVE_LISTING_MESSAGE = 'This product is still live on OLX. Unpublish it first.';
 
   const uploadUrl = (id: string, extension: string) =>
     `/uploads/workspaces/0123456789abcdef01234567/products/${id}.${extension}`;
@@ -131,21 +131,22 @@ describe('ProductApplicationService.deleteProduct', () => {
       );
       listings.items.set(listing.id, listing);
     }
+    const logger = { error: jest.fn() };
     const service = new ProductApplicationService(
       products,
       {} as CreateProductUseCase,
       {} as UpdateProductUseCase,
       listings,
-      storage
+      storage,
+      logger
     );
-    return { service, products, unlinked };
+    return { service, products, unlinked, logger };
   }
 
-  it.each<[string, { status: ListingStatus; marketplaceListingId: string | null }]>([
-    ['live', { status: 'live', marketplaceListingId: 'olx-1' }],
-    ['expired but still on the marketplace', { status: 'expired', marketplaceListingId: 'olx-1' }],
-  ])('refuses to delete a product whose listing is %s', async (_label, listing) => {
-    const { service, products, unlinked } = setup({ listing });
+  it('refuses to delete a product while its listing is live on OLX', async () => {
+    const { service, products, unlinked } = setup({
+      listing: { status: 'live', marketplaceListingId: 'olx-1' },
+    });
 
     const result = await service.deleteProduct('p-target', 'ws-1');
 
@@ -154,6 +155,20 @@ describe('ProductApplicationService.deleteProduct', () => {
     expect(result.error.message).toBe(LIVE_LISTING_MESSAGE);
     expect(products.items.has('p-target')).toBe(true);
     expect(unlinked).toEqual([]);
+  });
+
+  it.each<[ListingStatus, string | null]>([
+    ['draft', null],
+    ['draft', 'olx-1'],
+    ['expired', 'olx-1'],
+    ['error', 'olx-1'],
+  ])('deletes a product whose listing is %s with marketplace listing id %p', async (status, marketplaceListingId) => {
+    const { service, products } = setup({ listing: { status, marketplaceListingId } });
+
+    const result = await service.deleteProduct('p-target', 'ws-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(products.items.has('p-target')).toBe(false);
   });
 
   it('deletes a product with a draft listing and unlinks uploads no other product uses', async () => {
@@ -172,8 +187,8 @@ describe('ProductApplicationService.deleteProduct', () => {
     expect(unlinked).toEqual([['ws-1', OWN_UPLOAD]]);
   });
 
-  it('keeps the delete and reports an upload that could not be unlinked', async () => {
-    const { service, products } = setup({ failingStorage: true });
+  it('keeps the delete, reports an upload that could not be unlinked and logs the cause', async () => {
+    const { service, products, logger } = setup({ failingStorage: true });
 
     const result = await service.deleteProduct('p-target', 'ws-1');
 
@@ -183,6 +198,14 @@ describe('ProductApplicationService.deleteProduct', () => {
       imageCleanup: { removed: [], failed: [OWN_UPLOAD] },
     });
     expect(products.items.has('p-target')).toBe(false);
+    expect(logger.error).toHaveBeenCalledWith(
+      {
+        productId: 'p-target',
+        imageId: OWN_UPLOAD,
+        err: expect.objectContaining({ message: 'EACCES: permission denied' }),
+      },
+      'Product image cleanup failed after the product delete'
+    );
   });
 
   it('reads a product of another workspace as not found and deletes nothing', async () => {

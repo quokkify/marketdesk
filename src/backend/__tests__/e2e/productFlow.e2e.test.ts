@@ -392,7 +392,7 @@ describe('E2E product/listing/Hermes flow (in-memory, no DB)', () => {
     expect(remove.status).toBe(409);
     expect(remove.body.error).toEqual({
       code: 'CONFLICT',
-      message: 'Remove the live listing from the marketplace before deleting this product',
+      message: 'This product is still live on OLX. Unpublish it first.',
     });
     const read = await request(app)
       .get(`/api/products/${productId}`)

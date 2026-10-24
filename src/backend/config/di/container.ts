@@ -466,7 +466,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     createProductUC,
     updateProductUC,
     listingRepo,
-    productImageStorage
+    productImageStorage,
+    overrides.logger
   );
   const productAIDraftService = new ProductAIDraftService(aiProvider);
   const productRecheckService = new ProductRecheckService(
