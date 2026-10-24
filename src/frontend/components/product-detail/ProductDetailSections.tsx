@@ -525,13 +525,17 @@ export const ProductActivityCard: React.FC<{
   </Card>
 );
 
-const ANALYZING_LABELS: Record<HermesStatusView['activeProvider'], string> = {
-  hermes: 'Analyzing with Hermes…',
-  offline: 'Analyzing with offline heuristics…',
+const ANALYZE_LABELS: Record<
+  HermesStatusView['activeProvider'] | 'unknown',
+  { idle: string; running: string }
+> = {
+  hermes: { idle: 'Analyze with Hermes', running: 'Analyzing with Hermes…' },
+  offline: { idle: 'Analyze (offline heuristics)', running: 'Analyzing with offline heuristics…' },
+  unknown: { idle: 'Analyze', running: 'Analyzing…' },
 };
 
 // Hermes actions for one product. Everything Hermes produces stays review-only.
-// The running label names the provider that answers; it stays neutral while unknown.
+// The analyze button names the provider that answers; it stays neutral while the status is unknown.
 export const ProductHermesCard: React.FC<{
   analyzing: boolean;
   analyzeDisabled: boolean;
@@ -554,7 +558,7 @@ export const ProductHermesCard: React.FC<{
     <Stack spacing={2}>
       <Stack spacing={1}>
         <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
-          {analyzing ? (activeProvider ? ANALYZING_LABELS[activeProvider] : 'Analyzing…') : 'Analyze with Hermes'}
+          {ANALYZE_LABELS[activeProvider ?? 'unknown'][analyzing ? 'running' : 'idle']}
         </Button>
         <Button fullWidth variant="outlined" disabled={suggesting} onClick={onSuggest}>
           {suggesting ? 'Preparing suggestions…' : 'Suggest improvements'}

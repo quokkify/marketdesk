@@ -342,6 +342,7 @@ describe('product detail Hermes card', () => {
       analyzeDisabled: false,
       suggesting: false,
       note: 'Runs only the enabled listing SEO agent for this product.',
+      activeProvider: 'hermes',
       onAnalyze,
       onSuggest,
       children: <p>Pending recommendations</p>,
@@ -358,23 +359,29 @@ describe('product detail Hermes card', () => {
     expect(html).toContain('Pending recommendations');
   });
 
-  it('names the active provider while the analysis runs and stays neutral while it is unknown', () => {
-    const analyzingLabel = (activeProvider?: 'hermes' | 'offline') => {
-      const tree = ProductHermesCard({
-        analyzing: true,
-        analyzeDisabled: false,
-        suggesting: false,
-        note: 'Analyzing this product only.',
-        activeProvider,
-        onAnalyze: () => undefined,
-        onSuggest: () => undefined,
-      }) as ElementLike;
-      return textContent(findByType(tree, Button)[0]);
-    };
+  const analyzeButtonLabel = (analyzing: boolean, activeProvider?: 'hermes' | 'offline') => {
+    const tree = ProductHermesCard({
+      analyzing,
+      analyzeDisabled: false,
+      suggesting: false,
+      note: 'Analyzing this product only.',
+      activeProvider,
+      onAnalyze: () => undefined,
+      onSuggest: () => undefined,
+    }) as ElementLike;
+    return textContent(findByType(tree, Button)[0]);
+  };
 
-    expect(analyzingLabel('hermes')).toBe('Analyzing with Hermes…');
-    expect(analyzingLabel('offline')).toBe('Analyzing with offline heuristics…');
-    expect(analyzingLabel(undefined)).toBe('Analyzing…');
+  it('names the provider that will answer before the analysis starts and stays neutral while it is unknown', () => {
+    expect(analyzeButtonLabel(false, 'hermes')).toBe('Analyze with Hermes');
+    expect(analyzeButtonLabel(false, 'offline')).toBe('Analyze (offline heuristics)');
+    expect(analyzeButtonLabel(false, undefined)).toBe('Analyze');
+  });
+
+  it('names the active provider while the analysis runs and stays neutral while it is unknown', () => {
+    expect(analyzeButtonLabel(true, 'hermes')).toBe('Analyzing with Hermes…');
+    expect(analyzeButtonLabel(true, 'offline')).toBe('Analyzing with offline heuristics…');
+    expect(analyzeButtonLabel(true, undefined)).toBe('Analyzing…');
   });
 
   it('disables analysis with its reason and reports a failed run as an alert', () => {
