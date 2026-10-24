@@ -13,9 +13,18 @@ export const AppThemeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const resolvedMode = resolveThemeMode(mode, prefersDark);
   const theme = resolvedMode === 'dark' ? darkTheme : lightTheme;
 
+  // public/theme-boot.js set <html data-theme> and its background before React
+  // mounted; keep both in step when the mode changes.
+  const background = theme.palette.background.default;
+  React.useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = resolvedMode;
+    root.style.backgroundColor = background;
+  }, [resolvedMode, background]);
+
   return (
     <MuiThemeProvider theme={theme}>
-      <CssBaseline />
+      <CssBaseline enableColorScheme />
       {children}
     </MuiThemeProvider>
   );
