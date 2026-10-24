@@ -9,7 +9,6 @@ export {
   ListingStatusBadge,
   HermesSeverityBadge,
   HermesStatusBadge,
-  AutonomyDecisionBadge,
   ConnectionBadge,
 } from './Badge.js';
 export type { BadgeProps } from './Badge.js';

@@ -1,5 +1,6 @@
 import type { HermesEvent, HermesStatusView, Marketplace } from '@shared/types';
 import {
+  HERMES_ACTIVITY_TABS,
   HERMES_OFFLINE_TOOLTIP,
   buildHermesMetrics,
   countEventsSince,
@@ -185,13 +186,44 @@ describe('hermesWatching', () => {
         marketplace({ id: 'a' }),
         marketplace({ id: 'b', key: 'allegro', connected: false }),
       ])),
-    ).toEqual({ kind: 'ready', sentence: 'Watching 12 live listings on 1 marketplace', sandbox: false });
+    ).toEqual({
+      kind: 'ready',
+      sentence: '12 live listings on 1 marketplace · Hermes runs when you analyze a product',
+      sandbox: false,
+    });
   });
 
   it('uses singular and plural nouns', () => {
     expect(
       hermesWatching(ready({ liveListingCount: 1 }), ready([])),
-    ).toMatchObject({ sentence: 'Watching 1 live listing on 0 marketplaces' });
+    ).toMatchObject({
+      sentence: '1 live listing on 0 marketplaces · Hermes runs when you analyze a product',
+    });
+  });
+
+  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  it('never claims background Hermes work, which this build does not run', () => {
+    const ready = hermesWatching(
+      { data: { liveListingCount: 12 }, isLoading: false, isError: false },
+      { data: [marketplace({ sandbox: true })], isLoading: false, isError: false },
+    );
+    const offline = { activeProvider: 'offline', mode: 'auto', hermesReachable: null } as HermesStatusView;
+    const copy = [
+      ready.kind === 'ready' ? ready.sentence : '',
+      ...HERMES_ACTIVITY_TABS.flatMap(({ value }) =>
+        [hermesEmptyState(value, false), hermesEmptyState(value, true)].flatMap((state) => [
+          state.title,
+          state.description,
+        ]),
+      ),
+      ...[undefined, offline].flatMap((status) => {
+        const chip = hermesStatusChip(status, { isError: false });
+        return [chip.label, chip.tooltip ?? ''];
+      }),
+    ].join(' ');
+
+    expect(ready.kind).toBe('ready');
+    expect(copy).not.toMatch(/automatic|autonomous|monitor|watching|reviews your listings/i);
   });
 
   it('flags sandbox only while a connected marketplace is a sandbox', () => {
@@ -306,6 +338,24 @@ describe('hermesEmptyState', () => {
     expect(hermesEmptyState('suggestions', false).title).toBe('No suggestions to review');
     expect(hermesEmptyState('alerts', false).title).toBe('No alerts');
     expect(hermesEmptyState('completed', false).title).toBe('Nothing completed yet');
+  });
+
+  it('points at the analyze button without naming a provider, since its label differs per provider', () => {
+    const copy = HERMES_ACTIVITY_TABS.flatMap(({ value }) => {
+      const state = hermesEmptyState(value, false);
+      return [state.title, state.description];
+    }).join(' ');
+
+    expect(copy).not.toMatch(/hermes|heuristic/i);
+    expect(hermesEmptyState('all', false).description).toBe(
+      'Open a product and use Analyze, or change filters to see recorded suggestions, alerts, and completed actions.',
+    );
+    expect(hermesEmptyState('suggestions', false).description).toBe(
+      'Suggestions appear here after you open a product and use Analyze.',
+    );
+    expect(hermesEmptyState('alerts', false).description).toBe(
+      'Warnings and critical findings from product analysis appear here.',
+    );
   });
 
   it('blames the filters, not the feed, while status or severity selects are in use', () => {

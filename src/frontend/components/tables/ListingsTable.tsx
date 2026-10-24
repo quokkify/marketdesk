@@ -29,6 +29,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import type { Listing, Marketplace } from '@shared/types';
 import type { ListingDelistOperation } from '../../state/api/dto.js';
 import { formatMoney } from '../../utils/formatters.js';
+import { newOperationId } from '../../utils/operationId.js';
 import { ListingStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
@@ -52,6 +53,22 @@ export interface ListingsTableProps {
   actionsDisabled?: boolean;
 }
 
+// What the delist action is called. A sandbox advert has no OLX counterpart, so there the
+// action only returns the listing to draft.
+export function delistActionLabels(sandbox: boolean): {
+  action: string;
+  title: string;
+  confirm: string;
+} {
+  return sandbox
+    ? { action: 'Return to draft', title: 'Return to draft?', confirm: 'Return to draft' }
+    : {
+        action: 'Remove from marketplace and return to draft',
+        title: 'Remove from marketplace and return to draft?',
+        confirm: 'Remove from marketplace',
+      };
+}
+
 export function DelistConfirmationContent({
   listing,
   marketplaceName,
@@ -65,7 +82,13 @@ export function DelistConfirmationContent({
 }) {
   return (
     <Stack spacing={2}>
-      <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      {sandbox ? (
+        <Alert severity="warning">
+          Sandbox: this returns the listing to draft. No OLX advert or quota is involved.
+        </Alert>
+      ) : (
+        <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      )}
       <Typography><strong>Marketplace:</strong> {marketplaceName}</Typography>
       <Typography><strong>Product:</strong> {listing.productName || 'Untitled product'}</Typography>
       <Typography><strong>Listing:</strong> {listing.id}</Typography>
@@ -80,9 +103,10 @@ export function DelistConfirmationContent({
         )
       )}
       <Typography>
-        Only this listing will return to draft. Product data and photos remain. The advert will not be republished automatically.
+        Only this listing will return to draft. Product data and photos remain.
+        {!sandbox && ' The advert will not be republished automatically.'}
       </Typography>
-      {isOlx && (
+      {isOlx && !sandbox && (
         <Alert severity="warning">
           OLX does not restore a consumed quota unit after removal. Publishing again may be unavailable or paid and must pass category and quota preview.
         </Alert>
@@ -169,8 +193,12 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
     initialDelistDialogState,
   );
   const [delistBusy, setDelistBusy] = useState(false);
+  // Set when the dialog opens: closing clears the listing at once, and the dialog must keep
+  // its wording while it fades out.
+  const [delistSandbox, setDelistSandbox] = useState(false);
   const delistListing = delistDialog.listing;
   const delistOperationId = delistDialog.operationId;
+  const delistLabels = delistActionLabels(delistSandbox);
   if (error) return <ErrorRetry error={error} onRetry={onRetry} />;
 
   if (!loading && (!listings || listings.length === 0)) {
@@ -332,17 +360,20 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                       && Boolean(listing.marketplaceListingId)
                       && resolveMarketplaceKey?.(listing.marketplaceId) === 'olx'
                       && (
-                      <Tooltip title="Remove from marketplace and return to draft">
+                      <Tooltip
+                        title={delistActionLabels(resolveMarketplaceSandbox?.(listing.marketplaceId) ?? false).action}
+                      >
                         <IconButton
                           size="small"
                           color="error"
                           disabled={actionsDisabled || delistBusy}
                           onClick={(e) => {
                             e.stopPropagation();
+                            setDelistSandbox(resolveMarketplaceSandbox?.(listing.marketplaceId) ?? false);
                             dispatchDelistDialog({
                               type: 'open',
                               listing,
-                              operationId: crypto.randomUUID(),
+                              operationId: newOperationId(),
                             });
                           }}
                         >
@@ -361,7 +392,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Remove from marketplace and return to draft?</DialogTitle>
+        <DialogTitle>{delistLabels.title}</DialogTitle>
         <DialogContent>
           {delistListing && (
             <DelistConfirmationContent
@@ -370,7 +401,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                 ? resolveMarketplaceName(delistListing.marketplaceId)
                 : delistListing.marketplaceId}
               isOlx={resolveMarketplaceKey?.(delistListing.marketplaceId) === 'olx'}
-              sandbox={resolveMarketplaceSandbox?.(delistListing.marketplaceId) ?? false}
+              sandbox={delistSandbox}
             />
           )}
           {delistDialog.failure && (
@@ -390,7 +421,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               disabled={delistBusy}
               onClick={() => dispatchDelistDialog({
                 type: 'reconciled_live',
-                operationId: crypto.randomUUID(),
+                operationId: newOperationId(),
               })}
             >
               I confirmed the advert is still live — start a new operation
@@ -433,7 +464,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               }
             }}
           >
-            Remove from marketplace
+            {delistLabels.confirm}
           </Button>
         </DialogActions>
       </Dialog>

@@ -61,19 +61,21 @@ export function hermesFeedFilters(
   };
 }
 
+// The product page's analyze button names the provider that answers (Hermes or the offline
+// heuristics), so these point at it as "Analyze" and name no provider.
 const EMPTY_STATES: Record<HermesActivityTab, { title: string; description: string }> = {
   all: {
     title: 'No product analysis activity',
     description:
-      'Select a product and use Analyze with Hermes, or change filters to see recorded suggestions, alerts, and completed actions.',
+      'Open a product and use Analyze, or change filters to see recorded suggestions, alerts, and completed actions.',
   },
   suggestions: {
     title: 'No suggestions to review',
-    description: 'Suggestions appear here after you run Analyze with Hermes on a product.',
+    description: 'Suggestions appear here after you open a product and use Analyze.',
   },
   alerts: {
     title: 'No alerts',
-    description: 'Warnings and critical findings from Hermes appear here.',
+    description: 'Warnings and critical findings from product analysis appear here.',
   },
   completed: {
     title: 'Nothing completed yet',
@@ -182,6 +184,8 @@ export type HermesWatching =
 const countOf = (count: number, noun: string) => `${count} ${count === 1 ? noun : `${noun}s`}`;
 
 // The banner sentence from the live listing count and the connected marketplaces.
+// Nothing schedules Hermes in this build, so the sentence says when it runs instead
+// of claiming it watches the listings.
 export function hermesWatching(
   overview: QueryOf<{ liveListingCount: number }>,
   marketplaces: QueryOf<ReadonlyArray<Pick<Marketplace, 'connected' | 'sandbox'>>>,
@@ -191,7 +195,7 @@ export function hermesWatching(
   const connected = marketplaces.data.filter((marketplace) => marketplace.connected);
   return {
     kind: 'ready',
-    sentence: `Watching ${countOf(overview.data.liveListingCount, 'live listing')} on ${countOf(connected.length, 'marketplace')}`,
+    sentence: `${countOf(overview.data.liveListingCount, 'live listing')} on ${countOf(connected.length, 'marketplace')} · Hermes runs when you analyze a product`,
     sandbox: connected.some((marketplace) => marketplace.sandbox),
   };
 }

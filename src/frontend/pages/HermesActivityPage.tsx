@@ -209,8 +209,8 @@ export const HermesHero: React.FC<{
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', opacity: 0.92 }}>
         <InfoOutlinedIcon aria-hidden="true" sx={{ fontSize: 16, mt: '2px' }} />
         <Typography variant="caption">
-          Whole-catalogue runs are not started from the UI. Choose a product and use Analyze with
-          Hermes for review-only recommendations.
+          Whole-catalogue runs are not started from the UI. Choose a product and use Analyze for
+          review-only recommendations.
         </Typography>
       </Stack>
     </Stack>

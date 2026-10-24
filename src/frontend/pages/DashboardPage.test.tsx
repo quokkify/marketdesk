@@ -1,10 +1,20 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Marketplace } from '@shared/types';
+import { Badge } from '../components/common/Badge';
 import type { AttentionItem } from './dashboardPresentation';
 import { AttentionRow, MarketplaceRow, QuickActionTile } from './DashboardPage';
 
 const noop = () => undefined;
+
+type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
+
+function findElements(node: React.ReactNode, match: (element: ElementLike) => boolean): ElementLike[] {
+  if (Array.isArray(node)) return node.flatMap((child) => findElements(child, match));
+  if (!React.isValidElement(node)) return [];
+  const element = node as ElementLike;
+  return [...(match(element) ? [element] : []), ...findElements(element.props.children, match)];
+}
 
 function marketplace(overrides: Partial<Marketplace & { sandbox: boolean }> = {}): Marketplace {
   return {
@@ -41,6 +51,17 @@ describe('dashboard marketplace overview row', () => {
     expect(html).toContain('>Sandbox<');
     expect(html).toContain('>OLX<');
     expect(html).toContain('>Connected<');
+  });
+
+  it('gives the Sandbox badge the warning tone every other sandbox label uses', () => {
+    const row = MarketplaceRow({ marketplace: marketplace({ sandbox: true }), onOpen: noop }) as ElementLike;
+    const sandboxBadges = findElements(
+      row,
+      (element) => element.type === Badge && element.props.label === 'Sandbox',
+    );
+
+    expect(sandboxBadges).toHaveLength(1);
+    expect(sandboxBadges[0]!.props.color).toBe('warning');
   });
 
   it('never claims sandbox mode for a real marketplace', () => {

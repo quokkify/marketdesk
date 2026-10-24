@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Divider,
   FormControlLabel,
   Stack,
@@ -18,7 +19,9 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
+  AIProviderSource,
   HermesEvent,
+  HermesStatusView,
   Listing,
   Marketplace,
   Product,
@@ -49,6 +52,7 @@ import {
   useCreateProductListing,
   usePriceHistory,
   useHermesEvents,
+  useHermesStatus,
   useRunHermes,
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
@@ -163,10 +167,54 @@ export function productHermesDisabledReason(input: {
   return null;
 }
 
-export function productHermesSuccessMessage(eventCount: number): string {
-  return eventCount
-    ? 'Hermes SEO suggestion is ready for human review.'
-    : 'Hermes found no new SEO suggestion for this product.';
+// Names the provider that answers the run: offline heuristics stand in while Hermes is
+// unavailable. Neutral while the provider status is still unknown.
+export function productHermesAnalyzingNote(
+  activeProvider: HermesStatusView['activeProvider'] | undefined
+): string {
+  const subject =
+    activeProvider === 'hermes'
+      ? 'Hermes is analyzing'
+      : activeProvider === 'offline'
+        ? 'Offline heuristics are analyzing'
+        : 'Analyzing';
+  return `${subject} this product only. Any recommendation will remain review-only.`;
+}
+
+// Who answered a product analysis. Its suggestions record their provider, so they decide; a run
+// without suggestions falls back to the provider status read beside it. Unknown when neither
+// says or the suggestions disagree, so no provider is ever credited by guess.
+export function productAnalysisProvider(
+  events: ReadonlyArray<Pick<HermesEvent, 'source'>>,
+  statusProvider: HermesStatusView['activeProvider'] | undefined
+): AIProviderSource | undefined {
+  if (events.length === 0) return statusProvider;
+  const sources = new Set(events.map((event) => event.source));
+  const [source] = sources;
+  return sources.size === 1 ? source : undefined;
+}
+
+const ANALYSIS_PROVIDER_NAMES: Record<AIProviderSource, string> = {
+  hermes: 'Hermes',
+  offline: 'Offline heuristics',
+};
+
+export function productHermesSuccessMessage(
+  eventCount: number,
+  provider: AIProviderSource | undefined
+): string {
+  if (eventCount === 0) {
+    return provider
+      ? `${ANALYSIS_PROVIDER_NAMES[provider]} found no new SEO suggestion for this product.`
+      : 'No new SEO suggestion was found for this product.';
+  }
+  if (!provider) {
+    return eventCount === 1
+      ? 'An SEO suggestion is ready for human review.'
+      : `${eventCount} SEO suggestions are ready for human review.`;
+  }
+  const changes = eventCount === 1 ? 'an SEO change' : `${eventCount} SEO changes`;
+  return `${ANALYSIS_PROVIDER_NAMES[provider]} suggested ${changes} for human review.`;
 }
 
 export const PublicationReadinessAction: React.FC<{
@@ -241,7 +289,8 @@ export function selectPrimaryListing(
 
 export function remoteMarketplacePresentation(
   listing: Listing | undefined,
-  marketplaceName: string
+  marketplaceName: string,
+  sandbox = false
 ) {
   const label = listing?.remoteStatusLabel;
   const isPending = listing?.isRemotePending === true;
@@ -255,10 +304,17 @@ export function remoteMarketplacePresentation(
     explanation: isPending
       ? `${marketplaceName} is still moderating or activating this listing. Metrics may be unavailable until it becomes active.`
       : label
-        ? `Current listing status reported by ${marketplaceName}. This is separate from the product status in MarketDesk.`
+        ? `Current listing status reported by ${sandbox ? `the ${marketplaceName} sandbox` : marketplaceName}. This is separate from the product status in MarketDesk.`
         : `${marketplaceName} has not reported a listing status yet.`,
     externalUrl: listing?.externalUrl,
   };
+}
+
+// A sandbox advert has no OLX counterpart, so only a real delist reports a removed remote advert.
+export function delistSuccessMessage(sandbox: boolean): string {
+  return sandbox
+    ? 'Listing returned to draft (sandbox).'
+    : 'Remote advert removed; listing returned to draft. Nothing was republished.';
 }
 
 export function selectProductRecommendations(
@@ -416,6 +472,15 @@ export const PublishPreviewReview: React.FC<{ preview: PublishListingPreview }> 
 
   return (
     <Stack spacing={1.25}>
+      {preview.sandbox && (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label="Sandbox"
+          sx={{ alignSelf: 'flex-start' }}
+        />
+      )}
       <Typography variant="body2">
         {preview.canPublish
           ? `Review the exact provider category before queueing ${preview.payload?.productName ?? 'this listing'} for publication.`
@@ -489,6 +554,8 @@ const ListingDetailsPage: React.FC = () => {
     { skip: !productId }
   );
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
+  const hermesStatus = useHermesStatus();
+  const activeProvider = hermesStatus.data?.activeProvider;
   const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
     useMarketplaceLookup();
 
@@ -553,7 +620,11 @@ const ListingDetailsPage: React.FC = () => {
   const primaryMarketplaceName = primaryListing
     ? resolveMarketplaceName(primaryListing.marketplaceId)
     : 'Marketplace';
-  const remoteMarketplace = remoteMarketplacePresentation(primaryListing, primaryMarketplaceName);
+  const remoteMarketplace = remoteMarketplacePresentation(
+    primaryListing,
+    primaryMarketplaceName,
+    primaryListing ? resolveMarketplaceSandbox(primaryListing.marketplaceId) : false
+  );
   const recommendations = selectProductRecommendations(hermesEvents.data?.items ?? [], productId);
   const recommendationTotal = hermesEvents.data?.total ?? recommendations.length;
   const analyzeDisabledReason = productHermesDisabledReason({
@@ -683,9 +754,17 @@ const ListingDetailsPage: React.FC = () => {
     }
     setAnalysisState({ status: 'idle' });
     try {
-      const events = await runHermes(productScopedHermesRunInput(productId)).unwrap();
+      // The status is read again beside the run, so a page left open while Hermes went offline
+      // never credits Hermes for an answer the offline heuristics gave.
+      const [events, status] = await Promise.all([
+        runHermes(productScopedHermesRunInput(productId)).unwrap(),
+        hermesStatus.refetch(),
+      ]);
       await hermesEvents.refetch();
-      const message = productHermesSuccessMessage(events.length);
+      const message = productHermesSuccessMessage(
+        events.length,
+        productAnalysisProvider(events, status.isSuccess ? status.data?.activeProvider : undefined)
+      );
       setAnalysisState({ status: 'success', message });
       dispatch(
         enqueueToast({
@@ -970,7 +1049,7 @@ const ListingDetailsPage: React.FC = () => {
     olxConnected: Boolean(olxMarketplace?.connected),
   });
   const hermesNote = analyzing
-    ? 'Hermes is analyzing this product only. Any recommendation will remain review-only.'
+    ? productHermesAnalyzingNote(activeProvider)
     : analysisState.status === 'idle'
       ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
       : analysisState.message;
@@ -1043,8 +1122,7 @@ const ListingDetailsPage: React.FC = () => {
                 if (operation.state === 'executed') {
                   dispatch(
                     enqueueToast({
-                      message:
-                        'Remote advert removed; listing returned to draft. Nothing was republished.',
+                      message: delistSuccessMessage(resolveMarketplaceSandbox(listing.marketplaceId)),
                       severity: 'success',
                     })
                   );
@@ -1118,6 +1196,7 @@ const ListingDetailsPage: React.FC = () => {
           />
           <ProductHermesCard
             analyzing={analyzing}
+            activeProvider={activeProvider}
             analyzeDisabled={Boolean(analyzeDisabledReason)}
             suggesting={proposingImprovements}
             note={hermesNote}

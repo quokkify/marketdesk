@@ -2,6 +2,7 @@ import type { HermesEvent, HermesSeverity, Listing, Marketplace, Product } from 
 import type { AnalyticsOverview, AnalyticsQueryParams } from '../state/api/index.js';
 import { formatMoney, formatNumber } from '../utils/formatters.js';
 import { hermesTypeLabel, isSeoRecommendation } from '../utils/labels.js';
+import { isSandboxMarketplace } from '../utils/sandbox.js';
 
 export const DASHBOARD_EVENT_LIMIT = 8;
 export const DASHBOARD_SECTION_LIMIT = 4;
@@ -54,12 +55,6 @@ export function marketplaceOperationalSummary(marketplace: Marketplace): string 
   const segments = [`${marketplace.syncMode} sync`];
   if (marketplace.errorCount > 0) segments.push(`${marketplace.errorCount} errors`);
   return segments.join(' · ');
-}
-
-export function isSandboxMarketplace(marketplace: Marketplace): boolean {
-  // The sandbox flag arrives with the OLX sandbox work; read it defensively until the shared
-  // Marketplace type carries it everywhere.
-  return (marketplace as Marketplace & { sandbox?: boolean }).sandbox === true;
 }
 
 export function marketplaceDisplayName(marketplace: Marketplace): string {
@@ -118,13 +113,13 @@ export function hermesActivityEmptyState(hasConnectedMarketplace: boolean): Dash
     return {
       title: 'Connect a marketplace to start',
       description:
-        'Connect OLX and publish a product, then analyze it with Hermes to see suggestions here.',
+        'Connect OLX and publish a product, then open it and use Analyze to see suggestions here.',
       action: { label: 'Connect marketplace', path: '/marketplaces' },
     };
   }
   return {
     title: 'No Hermes activity yet',
-    description: 'Suggestions appear here after you analyze a product with Hermes.',
+    description: 'Suggestions appear here after you open a product and use Analyze.',
     action: { label: 'Analyze a product', path: '/products' },
   };
 }

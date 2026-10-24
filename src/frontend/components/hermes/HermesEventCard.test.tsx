@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { Theme } from '@mui/material/styles';
 import type {
   CategoryRecreationChangePayload,
   HermesEvent,
   ProductCategoryConflictChangePayload,
 } from '@shared/types';
+import { darkTheme } from '../../theme/darkTheme';
+import { lightTheme } from '../../theme/lightTheme';
 import {
   CategoryRecreationReview,
   HermesEventCard,
@@ -244,6 +247,34 @@ describe('HermesEventCard activity presentation', () => {
     expect(html).toContain('>Apply<');
     expect(html).not.toContain('Product context');
   });
+
+  const chipCount = (html: string) => html.match(/class="[^"]*MuiChip-root/g)?.length ?? 0;
+
+  it('shows one status chip and names a review decision in the caption', () => {
+    const html = renderToStaticMarkup(
+      <HermesEventCard event={{ ...pendingEvent, autonomyDecision: 'pending_review' }} />,
+    );
+
+    expect(html).toContain('Pending review');
+    expect(html).not.toContain('Awaiting approval');
+    expect(html).toContain('Autonomy decision: review required');
+    expect(chipCount(html)).toBe(chipCount(renderToStaticMarkup(<HermesEventCard event={pendingEvent} />)));
+  });
+
+  it('names an auto-apply decision in the caption instead of a second status chip', () => {
+    const html = renderToStaticMarkup(
+      <HermesEventCard event={{ ...pendingEvent, status: 'applied', autonomyDecision: 'auto_apply' }} />,
+    );
+
+    expect(html).not.toContain('Auto-applied');
+    expect(html).toContain('Autonomy decision: apply without review');
+  });
+
+  it('adds no autonomy line when the event records no decision', () => {
+    expect(renderToStaticMarkup(<HermesEventCard event={pendingEvent} />)).not.toContain(
+      'Autonomy decision',
+    );
+  });
 });
 
 describe('applied event copy', () => {
@@ -286,9 +317,13 @@ describe('applied event copy', () => {
   });
 });
 
-type CaptionElement = React.ReactElement<{ color: string; children: string }>;
-const captionFor = (props: Parameters<typeof HermesLifecycleCaption>[0]) =>
-  HermesLifecycleCaption(props) as CaptionElement;
+type CaptionProps = Parameters<typeof HermesLifecycleCaption>[0];
+type CaptionElement = React.ReactElement<{
+  sx: (theme: Theme) => { color: string };
+  children: string;
+}>;
+const captionFor = (props: CaptionProps) => HermesLifecycleCaption(props) as CaptionElement;
+const captionColor = (props: CaptionProps, theme: Theme) => captionFor(props).props.sx(theme).color;
 
 describe('HermesEventCard provenance and marketplace sync', () => {
   const applied: HermesEventCardProps['event'] = {
@@ -335,17 +370,27 @@ describe('HermesEventCard provenance and marketplace sync', () => {
     },
   );
 
-  it('keeps a retry-required update visible as a warning and the rest neutral', () => {
-    const retry = captionFor({ status: 'applied', marketplaceSync: 'retry_required' });
-    const queued = captionFor({ status: 'applied', marketplaceSync: 'queued' });
-    const unknown = captionFor({ status: 'applied', marketplaceSync: 'something_new' });
-    const pending = captionFor({ status: 'pending_review', marketplaceSync: 'retry_required' });
+  const retry: CaptionProps = { status: 'applied', marketplaceSync: 'retry_required' };
 
-    expect(retry.props.color).toBe('warning.dark');
-    expect(retry.props.children).toBe('Applied in MarketDesk · marketplace update needs a retry');
-    expect(queued.props.color).toBe('text.secondary');
-    expect(unknown.props.color).toBe('text.secondary');
-    expect(pending.props.color).toBe('text.secondary');
+  it('keeps a retry-required update visible as a warning and the rest neutral', () => {
+    const neutral: CaptionProps[] = [
+      { status: 'applied', marketplaceSync: 'queued' },
+      { status: 'applied', marketplaceSync: 'something_new' },
+      { status: 'pending_review', marketplaceSync: 'retry_required' },
+    ];
+
+    expect(captionFor(retry).props.children).toBe(
+      'Applied in MarketDesk · marketplace update needs a retry',
+    );
+    expect(captionColor(retry, lightTheme)).toBe(lightTheme.palette.warning.dark);
+    for (const props of neutral) {
+      expect(captionColor(props, lightTheme)).toBe(lightTheme.palette.text.secondary);
+      expect(captionColor(props, darkTheme)).toBe(darkTheme.palette.text.secondary);
+    }
+  });
+
+  it('uses warning.main for a retry-required update in dark mode, where warning.dark lacks contrast', () => {
+    expect(captionColor(retry, darkTheme)).toBe(darkTheme.palette.warning.main);
   });
 
   it('marks suggestions produced by the offline heuristics', () => {

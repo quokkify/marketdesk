@@ -54,6 +54,13 @@ describe('productFormModel below-cost pricing', () => {
     expect(toProductSubmissionValues(values).allowBelowCost).toBe(true);
   });
 
+  it('starts a new product with an unknown cost and submits it as null', () => {
+    const values = emptyProductValues();
+
+    expect(values.costPrice).toBeNull();
+    expect(toProductSubmissionValues(values).costPrice).toBeNull();
+  });
+
   it('preserves blank imported cost prices through edit submission', () => {
     const values = productToValues({
       id: 'product-1',

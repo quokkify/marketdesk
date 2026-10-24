@@ -12,7 +12,6 @@ import type {
   ListingStatus,
   HermesSeverity,
   HermesEventStatus,
-  AutonomyDecision,
   MarketplaceAccountStatus,
 } from '@shared/types';
 
@@ -129,11 +128,6 @@ const HERMES_STATUS_META: Record<HermesEventStatus, BadgeMeta> = {
   reverted: { label: 'Reverted', color: 'default' },
 };
 
-const DECISION_META: Record<AutonomyDecision, BadgeMeta> = {
-  auto_apply: { label: 'Auto-applied', color: 'secondary' },
-  pending_review: { label: 'Awaiting approval', color: 'warning' },
-};
-
 const CONNECTION_META: Record<MarketplaceAccountStatus, BadgeMeta> = {
   connected: { label: 'Connected', color: 'success' },
   disconnected: { label: 'Disconnected', color: 'default' },
@@ -154,10 +148,6 @@ export const HermesSeverityBadge: React.FC<{ severity: HermesSeverity }> = ({ se
 
 export const HermesStatusBadge: React.FC<{ status: HermesEventStatus }> = ({ status }) => (
   <Badge {...resolveMeta(HERMES_STATUS_META, status)} />
-);
-
-export const AutonomyDecisionBadge: React.FC<{ decision: AutonomyDecision }> = ({ decision }) => (
-  <Badge {...resolveMeta(DECISION_META, decision)} />
 );
 
 export const ConnectionBadge: React.FC<{ status: MarketplaceAccountStatus }> = ({ status }) => (

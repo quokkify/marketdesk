@@ -63,6 +63,28 @@ describe('canonical MarketDesk shell contract', () => {
       subtitle: 'Marketplace operations workspace.',
     });
   });
+
+  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  it('never claims background Hermes work in any route subtitle', () => {
+    const paths = [
+      '/',
+      ...Object.values(APP_ROUTE_PATHS),
+      '/products/new',
+      '/products/product-123',
+      '/unexpected',
+    ];
+    const subtitles = paths.map((path) => resolveTopBarRoute(path).subtitle);
+
+    expect(subtitles.join(' ')).not.toMatch(
+      /automatic|autonomous|monitor|watching|reviews your listings/i,
+    );
+  });
+
+  it('describes the Hermes page as a record of what the agent did', () => {
+    expect(resolveTopBarRoute('/hermes').subtitle).toBe(
+      'Everything your AI agent did across your listings.',
+    );
+  });
 });
 
 describe('command palette shortcut hint', () => {
