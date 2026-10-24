@@ -63,16 +63,14 @@ function forgeWithEmptyKey(payload: Record<string, unknown>): string {
   return `${unsigned}.${signature}`;
 }
 
+// The refusal of any other OLX_ADAPTER_MODE or of an invalid PUBLIC_BASE_URL is reported by the
+// boot gate; main.boot.test.ts covers it from raw variables.
 describe('resolveOlxAdapterMode', () => {
   it('defaults to the stub sandbox and accepts stub or real', () => {
     expect(resolveOlxAdapterMode(undefined)).toBe('stub');
     expect(resolveOlxAdapterMode('  ')).toBe('stub');
     expect(resolveOlxAdapterMode('stub')).toBe('stub');
     expect(resolveOlxAdapterMode(' real ')).toBe('real');
-  });
-
-  it.each(['sandbox', 'REAL', 'reall'])('refuses OLX_ADAPTER_MODE=%s', (value) => {
-    expect(() => resolveOlxAdapterMode(value)).toThrow(/OLX_ADAPTER_MODE must be stub or real/);
   });
 });
 
@@ -97,32 +95,11 @@ describe('resolvePublicBaseUrl', () => {
     },
   );
 
-  it.each([
-    'shop.example.com',
-    'ftp://shop.example.com',
-    'https://shop.example.com/?x=1',
-    'https://shop.example.com/#top',
-  ])('rejects PUBLIC_BASE_URL %s', (value) => {
-    expect(() => resolvePublicBaseUrl(value, redirectUri)).toThrow(/PUBLIC_BASE_URL/);
-  });
-
   it('rebuilds PUBLIC_BASE_URL from origin and path, so a bare ? or # never reaches an image URL', () => {
     expect(resolvePublicBaseUrl('https://shop.example.com?', redirectUri)).toBe('https://shop.example.com');
     expect(resolvePublicBaseUrl('https://shop.example.com/desk/#', redirectUri)).toBe(
       'https://shop.example.com/desk',
     );
-  });
-
-  it('rejects credentials in PUBLIC_BASE_URL without echoing them', () => {
-    let message = '';
-    try {
-      resolvePublicBaseUrl('https://seller:s3cret@shop.example.com', redirectUri);
-    } catch (error) {
-      message = (error as Error).message;
-    }
-
-    expect(message).toMatch(/PUBLIC_BASE_URL/);
-    expect(message).not.toContain('s3cret');
   });
 });
 
