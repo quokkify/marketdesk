@@ -18,6 +18,14 @@ describe('correction operation listing migration (043)', () => {
     );
   });
 
+  // schema.sql declares the foreign key validated, so one run must converge without waiting for
+  // migration 026 to replay.
+  it('validates the re-added foreign key in the same run, only while it is not validated', () => {
+    expect(migration).toMatch(
+      /conname = 'category_correction_operations_listing_id_fkey'\s+AND NOT convalidated\s+\) THEN\s+ALTER TABLE category_correction_operations\s+VALIDATE CONSTRAINT category_correction_operations_listing_id_fkey;/
+    );
+  });
+
   it('keeps schema.sql in step with the migration', () => {
     const table = schema.match(
       /CREATE TABLE IF NOT EXISTS category_correction_operations \([\s\S]*?\n\);/

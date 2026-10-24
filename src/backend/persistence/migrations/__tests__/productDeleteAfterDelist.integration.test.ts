@@ -102,6 +102,21 @@ describeDb('product delete after a listing delist (PostgreSQL integration)', () 
     ).rejects.toMatchObject({ code: expect.stringMatching(/^(23001|23503)$/) });
   });
 
+  it('leaves the relaxed foreign key validated after a single run', async () => {
+    if (!ready) return;
+    await seedDelistedProduct();
+
+    await client.query(readMigration('043_correction_operation_listing_set_null.sql'));
+
+    const constraint = await client.query(`
+      SELECT convalidated AS validated, confdeltype AS on_delete
+        FROM pg_constraint
+       WHERE conrelid = 'category_correction_operations'::regclass
+         AND conname = 'category_correction_operations_listing_id_fkey'
+    `);
+    expect(constraint.rows).toEqual([{ validated: true, on_delete: 'n' }]);
+  });
+
   it('deletes the product after migration 043 and keeps the delist audit row', async () => {
     if (!ready) return;
     const migration = readMigration('043_correction_operation_listing_set_null.sql');
