@@ -112,6 +112,8 @@ export interface PublishListingPreview {
   listingId: string;
   status: ListingStatus;
   marketplaceKey?: Marketplace['key'];
+  // True when the publication would go to the OLX sandbox, not to real OLX.
+  sandbox: boolean;
   payload: {
     productName: string;
     description: string;
@@ -129,6 +131,20 @@ export interface PublishListingPreview {
     decision: string;
     reason: string;
     subcategoryId?: string;
+  };
+  // The OLX category guard's verdict; absent unless the listing targets OLX.
+  categoryDecision?: {
+    allowed: boolean;
+    requiresReview: boolean;
+    reason?:
+      | 'category_missing'
+      | 'category_not_leaf'
+      | 'taxonomy_unverified'
+      | 'taxonomy_stale'
+      | 'category_low_confidence'
+      | 'category_sandbox'
+      | 'semantic_mismatch';
+    message?: string;
   };
 }
 

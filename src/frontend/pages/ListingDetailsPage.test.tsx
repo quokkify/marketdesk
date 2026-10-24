@@ -236,6 +236,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-projector',
       status: 'draft',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: {
         productName: 'AOPEN QH11 projector',
         description: 'HD projector',
@@ -275,6 +276,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-frezarka',
       status: 'expired',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX quota blocks publication: quota_unknown'],
@@ -297,6 +299,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-projector',
       status: 'draft',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX taxonomy verification is stale', 'OLX quota blocks publication: quota_unknown'],
@@ -319,6 +322,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-frezarka',
       status: 'expired',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX quota blocks publication: quota_unknown'],
@@ -327,6 +331,28 @@ describe('ListingDetailsPage presentation', () => {
     const html = renderToStaticMarkup(<PublishPreviewReview preview={preview} />);
     expect(html).toContain('operation-scoped fee-risk confirmation');
     expect(html).toContain('Quota confirmation required');
+  });
+
+  it('labels a publication that would go to the OLX sandbox with a Sandbox chip', () => {
+    const preview: PublishListingPreview = {
+      dryRun: true,
+      canPublish: true,
+      quotaOverrideEligibility: { eligible: false, reason: null },
+      listingId: 'listing-1',
+      status: 'draft',
+      marketplaceKey: 'olx',
+      sandbox: true,
+      payload: null,
+      marketplaceCategory: null,
+      warnings: [],
+      categoryDecision: { allowed: true, requiresReview: false },
+    };
+
+    const sandbox = renderToStaticMarkup(<PublishPreviewReview preview={preview} />);
+    const real = renderToStaticMarkup(<PublishPreviewReview preview={{ ...preview, sandbox: false }} />);
+
+    expect(sandbox).toContain('>Sandbox<');
+    expect(real).not.toContain('Sandbox');
   });
 
   it('centers the full-size preview without stretching it across both axes', () => {

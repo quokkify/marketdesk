@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Divider,
   FormControlLabel,
   Stack,
@@ -433,6 +434,15 @@ export const PublishPreviewReview: React.FC<{ preview: PublishListingPreview }> 
 
   return (
     <Stack spacing={1.25}>
+      {preview.sandbox && (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label="Sandbox"
+          sx={{ alignSelf: 'flex-start' }}
+        />
+      )}
       <Typography variant="body2">
         {preview.canPublish
           ? `Review the exact provider category before queueing ${preview.payload?.productName ?? 'this listing'} for publication.`
