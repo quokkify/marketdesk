@@ -65,6 +65,6 @@ Uploaded files are in `./uploads/` and are not removed by `down -v`.
 
 - Check `docker compose ps` and `docker compose logs app migrate postgres redis`.
 - If the app cannot reach PostgreSQL or Redis, confirm the services are healthy and `DB_SSL_MODE=disable` is set in `.env`.
-- If `docker compose up` stops with `MARKETPLACE_CREDENTIALS_KEY must be set`, or `docker compose ps` shows the app restarting, run `npm run env:init` and start again. `docker compose logs app` names every secret that is missing or still a placeholder.
+- If `docker compose up` stops with `MARKETPLACE_CREDENTIALS_KEY must be set`, or `docker compose ps` shows the app restarting, read `docker compose logs app`. It names each of `JWT_SECRET` and `MARKETPLACE_CREDENTIALS_KEY` that is empty, a placeholder, too short, or malformed, with the fix for that problem. `npm run env:init` fixes an empty or placeholder value. Replace a short or malformed value with the output of `openssl rand -base64 32`; if a marketplace account is already connected, restore the original `MARKETPLACE_CREDENTIALS_KEY` instead.
 - The UI/API can run without Hermes; Hermes-assisted calls require a working host service at `HERMES_API_URL` and a matching `HERMES_API_KEY`.
 - PostgreSQL data is stored in the Compose `postgres_data` volume. Do not remove it unless you intend to reset the local database.
