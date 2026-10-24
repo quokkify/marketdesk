@@ -29,6 +29,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import type { Listing, Marketplace } from '@shared/types';
 import type { ListingDelistOperation } from '../../state/api/dto.js';
 import { formatMoney } from '../../utils/formatters.js';
+import { newOperationId } from '../../utils/operationId.js';
 import { ListingStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
@@ -348,7 +349,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                             dispatchDelistDialog({
                               type: 'open',
                               listing,
-                              operationId: crypto.randomUUID(),
+                              operationId: newOperationId(),
                             });
                           }}
                         >
@@ -396,7 +397,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               disabled={delistBusy}
               onClick={() => dispatchDelistDialog({
                 type: 'reconciled_live',
-                operationId: crypto.randomUUID(),
+                operationId: newOperationId(),
               })}
             >
               I confirmed the advert is still live — start a new operation
