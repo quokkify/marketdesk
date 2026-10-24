@@ -28,8 +28,6 @@ import {
   syncAllToast,
 } from './dashboardPresentation';
 
-const NBSP = '\u00A0';
-
 function marketplace(overrides: Partial<Marketplace> = {}): Marketplace {
   return {
     id: 'marketplace-1',
@@ -234,8 +232,8 @@ describe('dashboard KPI row', () => {
     const kpis = dashboardKpis({ overview: overview(), criticalPendingTotal: 2, currency: 'PLN' });
 
     expect(kpis.map((kpi) => [kpi.key, kpi.label, kpi.value])).toEqual([
-      ['revenue', 'Revenue', `1${NBSP}200${NBSP}zł`],
-      ['profit', 'Profit', `300${NBSP}zł`],
+      ['revenue', 'Revenue', '1 200 zł'],
+      ['profit', 'Profit', '300 zł'],
       ['activeListings', 'Active listings', '3'],
       ['attention', 'Needs attention', '4'],
     ]);
@@ -248,8 +246,8 @@ describe('dashboard KPI row', () => {
       currency: 'PLN',
     });
 
-    expect(kpis[0].value).toBe('€10');
-    expect(kpis[0].caption).toBe(`Inventory value 1${NBSP}050${NBSP}zł`);
+    expect(kpis[0].value).toBe('10 EUR');
+    expect(kpis[0].caption).toBe('Inventory value 1 050 zł');
     expect(kpis.slice(1).map((kpi) => kpi.caption)).toEqual([undefined, undefined, undefined]);
   });
 
@@ -352,7 +350,7 @@ describe('dashboard KPI row', () => {
       currency: 'PLN',
     });
 
-    expect(kpis.map((kpi) => kpi.value)).toEqual([`0${NBSP}zł`, `0${NBSP}zł`, '0', '0']);
+    expect(kpis.map((kpi) => kpi.value)).toEqual(['0 zł', '0 zł', '0', '0']);
     expect(kpis.map((kpi) => kpi.deltaPct)).toEqual([undefined, undefined, undefined, undefined]);
   });
 
@@ -549,10 +547,10 @@ describe('dashboard marketplace and Hermes states', () => {
 
   it('summarises the sales chart for assistive technology from the same 30-day totals', () => {
     expect(salesChartSummary(overview(), 'PLN')).toBe(
-      `Revenue and profit over the last 30 days: revenue 1${NBSP}200${NBSP}zł, profit 300${NBSP}zł.`
+      'Revenue and profit over the last 30 days: revenue 1 200 zł, profit 300 zł.'
     );
     expect(salesChartSummary(overview({ profit: null }), 'PLN')).toBe(
-      `Revenue and profit over the last 30 days: revenue 1${NBSP}200${NBSP}zł, profit unavailable.`
+      'Revenue and profit over the last 30 days: revenue 1 200 zł, profit unavailable.'
     );
     expect(salesChartSummary(overview({ revenue: null, profit: null }), 'PLN')).toBe(
       'Revenue and profit over the last 30 days: revenue unavailable, profit unavailable.'

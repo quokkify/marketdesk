@@ -26,7 +26,7 @@ import {
 } from '../services/hooks/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
-import { formatRelativeTime } from '../utils/formatters.js';
+import { formatRelative } from '../utils/formatters.js';
 import { hermesTypeLabel } from '../utils/labels.js';
 import { StatCard } from '../components/common/StatCard.js';
 import { Card } from '../components/common/Card.js';
@@ -317,7 +317,7 @@ const HermesEventRow: React.FC<{ event: HermesEvent; onOpen: () => void }> = ({
         </Typography>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-        {formatRelativeTime(event.createdAt)}
+        {formatRelative(event.createdAt)}
       </Typography>
     </Stack>
   </ButtonBase>
@@ -364,7 +364,7 @@ const RecentEventRow: React.FC<{ event: HermesEvent; onOpen: () => void }> = ({
         color="text.secondary"
         sx={{ flexShrink: 0, minWidth: 72, textAlign: 'right', whiteSpace: 'nowrap' }}
       >
-        {formatRelativeTime(event.createdAt)}
+        {formatRelative(event.createdAt)}
       </Typography>
     </Stack>
   </ButtonBase>
