@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   DelistConfirmationContent,
   ListingsTable,
+  delistActionLabels,
   delistDialogReducer,
   initialDelistDialogState,
 } from './ListingsTable';
@@ -190,7 +191,37 @@ describe('ListingsTable destructive delist action', () => {
     expect(html).not.toContain('removes the remote advert');
     expect(html).not.toContain('does not restore a consumed quota unit');
     expect(html).not.toContain('unavailable or paid');
+    expect(html).toContain('Only this listing will return to draft. Product data and photos remain.');
+    expect(html).not.toContain('republished');
     expect(html).toContain('olx-1');
+  });
+
+  it('calls the sandbox action Return to draft on the row, the dialog title and its button', () => {
+    expect(delistActionLabels(true)).toEqual({
+      action: 'Return to draft',
+      title: 'Return to draft?',
+      confirm: 'Return to draft',
+    });
+    expect(delistActionLabels(false)).toEqual({
+      action: 'Remove from marketplace and return to draft',
+      title: 'Remove from marketplace and return to draft?',
+      confirm: 'Remove from marketplace',
+    });
+
+    const sandboxRow = renderToStaticMarkup(
+      <ListingsTable
+        listings={[listing()]}
+        resolveMarketplaceKey={() => 'olx'}
+        resolveMarketplaceSandbox={() => true}
+        onDelistToDraft={async () => ({
+          id: 'operation-5', listingId: 'listing-1', marketplaceId: 'marketplace-1',
+          state: 'executed', result: null,
+        })}
+      />,
+    );
+
+    expect(sandboxRow).toContain('aria-label="Return to draft"');
+    expect(sandboxRow).not.toContain('Remove from marketplace');
   });
 
   it('labels a sandbox advert in the confirmation instead of linking to it', () => {
