@@ -4,6 +4,7 @@ import { Pagination, Typography } from '@mui/material';
 import type { Product } from '@shared/types';
 import {
   CatalogueFooter,
+  ProductRowActions,
   ProductsCards,
   ProductsTable,
   productRowMenuItems,
@@ -119,18 +120,34 @@ describe('ProductsTable catalogue hierarchy', () => {
 });
 
 describe('product row actions menu', () => {
-  it('lists Open and Edit and routes each to its handler before closing the menu', () => {
+  it('lists Open, Edit and Delete and routes each to its handler before closing the menu', () => {
     const onOpen = jest.fn();
     const onEdit = jest.fn();
+    const onDelete = jest.fn();
     const close = jest.fn();
-    const items = productRowMenuItems(product, { onOpen, onEdit }, close) as ElementLike[];
+    const items = productRowMenuItems(product, { onOpen, onEdit, onDelete }, close) as ElementLike[];
 
-    expect(items.map((item) => textContent(item))).toEqual(['Open', 'Edit']);
+    expect(items.map((item) => textContent(item))).toEqual(['Open', 'Edit', 'Delete']);
     (items[0]!.props.onClick as () => void)();
     expect(onOpen).toHaveBeenCalledWith(product);
     (items[1]!.props.onClick as () => void)();
     expect(onEdit).toHaveBeenCalledWith(product);
-    expect(close).toHaveBeenCalledTimes(2);
+    (items[2]!.props.onClick as () => void)();
+    expect(onDelete).toHaveBeenCalledWith(product);
+    expect(close).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives every table row and card the delete handler', () => {
+    const onDelete = jest.fn();
+    const table = ProductsTable({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
+    const cards = ProductsCards({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
+    const rowActions = [...findByType(table, ProductRowActions), ...findByType(cards, ProductRowActions)];
+
+    expect(rowActions).toHaveLength(2);
+    expect(rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)).toEqual([
+      onDelete,
+      onDelete,
+    ]);
   });
 
   it('omits actions that have no handler', () => {

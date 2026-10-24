@@ -50,6 +50,7 @@ import { enqueueToast } from '../state/slices/uiSlice.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
+import { useProductDeletion } from '../hooks/useProductDeletion.js';
 import { CatalogueFooter, ProductsCards, ProductsTable } from '../components/tables/index.js';
 import {
   hasCatalogueFilters,
@@ -132,6 +133,14 @@ const ProductsPage: React.FC = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const { requestDelete, dialog: deleteDialog } = useProductDeletion((deleted) =>
+    setSelectedIds((current) => {
+      if (!current.has(deleted.id)) return current;
+      const next = new Set(current);
+      next.delete(deleted.id);
+      return next;
+    })
+  );
   const wizardOpen = query.get('newProduct') === '1';
 
   const navigateCatalogue = useCallback(
@@ -798,6 +807,7 @@ const ProductsPage: React.FC = () => {
             onSortChange={(sort) => navigateCatalogue({ sort, page: 0 })}
             onOpen={openProduct}
             onEdit={editProduct}
+            onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
@@ -817,6 +827,7 @@ const ProductsPage: React.FC = () => {
             currency={currency}
             onOpen={openProduct}
             onEdit={editProduct}
+            onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
@@ -887,6 +898,7 @@ const ProductsPage: React.FC = () => {
         onAlternate={keepDraftAndClose}
         onConfirm={discardDraftAndClose}
       />
+      {deleteDialog}
     </Box>
   );
 };

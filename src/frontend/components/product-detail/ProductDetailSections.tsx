@@ -9,15 +9,21 @@ import {
   Collapse,
   Divider,
   IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
@@ -59,43 +65,94 @@ const EmptyState: React.FC<{ title: string; detail: string }> = ({ title, detail
   </Stack>
 );
 
+// Overflow entries for the product hero; plain elements so the wiring stays
+// checkable without a DOM.
+export function productHeroMenuItems(onDelete: () => void, close: () => void): React.ReactElement[] {
+  return [
+    <MenuItem
+      key="delete"
+      onClick={() => {
+        close();
+        onDelete();
+      }}
+      sx={{ color: 'error.main' }}
+    >
+      <ListItemIcon>
+        <DeleteOutlineIcon fontSize="small" color="error" />
+      </ListItemIcon>
+      <ListItemText>Delete product</ListItemText>
+    </MenuItem>,
+  ];
+}
+
 export const ProductIdentityHero: React.FC<{
   product: Product;
   onEdit: () => void;
-}> = ({ product, onEdit }) => (
-  <Box
-    component="section"
-    aria-labelledby="product-detail-title"
-    sx={{
-      mb: { xs: 2, md: 3 },
-      p: { xs: 2, md: 3 },
-      borderRadius: 3,
-      border: '1px solid',
-      borderColor: 'divider',
-      bgcolor: 'background.paper',
-      backgroundImage: (theme) => `linear-gradient(135deg, ${theme.palette.primary.main}12, transparent 48%)`,
-    }}
-  >
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
-      <Box sx={{ minWidth: 0 }}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
-          <ProductStatusBadge status={product.status} />
-          <Chip size="small" variant="outlined" label={conditionLabel(product.condition)} />
-          {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+  onDelete?: () => void;
+}> = ({ product, onEdit, onDelete }) => {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  return (
+    <Box
+      component="section"
+      aria-labelledby="product-detail-title"
+      sx={{
+        mb: { xs: 2, md: 3 },
+        p: { xs: 2, md: 3 },
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        backgroundImage: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.07)}, transparent 48%)`,
+      }}
+    >
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
+            <ProductStatusBadge status={product.status} />
+            <Chip size="small" variant="outlined" label={conditionLabel(product.condition)} />
+            {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+          </Stack>
+          <Typography id="product-detail-title" component="h1" variant="h2" sx={{ overflowWrap: 'anywhere' }}>
+            {product.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            {`SKU ${product.sku || 'unavailable'} · Updated ${formatRelative(product.updatedAt)}`}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' }, alignItems: 'center' }}>
+          <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
+            Edit product
+          </Button>
+          {onDelete && (
+            <>
+              <IconButton
+                aria-label={`More actions for ${product.name}`}
+                aria-haspopup="menu"
+                aria-controls={menuAnchor ? menuId : undefined}
+                aria-expanded={menuAnchor ? 'true' : undefined}
+                onClick={(event) => setMenuAnchor(event.currentTarget)}
+                sx={{ width: 38, height: 38, borderRadius: 1, border: 1, borderColor: 'divider' }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+              <Menu
+                id={menuId}
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                {productHeroMenuItems(onDelete, () => setMenuAnchor(null))}
+              </Menu>
+            </>
+          )}
         </Stack>
-        <Typography id="product-detail-title" component="h1" variant="h2" sx={{ overflowWrap: 'anywhere' }}>
-          {product.name}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          {`SKU ${product.sku || 'unavailable'} · Updated ${formatRelative(product.updatedAt)}`}
-        </Typography>
-      </Box>
-      <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ alignSelf: { sm: 'flex-start' } }}>
-        Edit product
-      </Button>
-    </Stack>
-  </Box>
-);
+      </Stack>
+    </Box>
+  );
+};
 
 export const ProductGalleryCard: React.FC<{
   name: string;

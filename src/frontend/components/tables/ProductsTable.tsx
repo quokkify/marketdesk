@@ -24,6 +24,7 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -156,6 +157,7 @@ function UpdatedAt({ value }: { value: string }) {
 export interface ProductRowHandlers {
   onOpen?: (product: Product) => void;
   onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
 }
 
 // Menu entries for one catalogue row; built as plain elements so the order and
@@ -187,6 +189,16 @@ export function productRowMenuItems(
           <EditOutlinedIcon fontSize="small" />
         </ListItemIcon>
         <ListItemText>Edit</ListItemText>
+      </MenuItem>
+    );
+  }
+  if (handlers.onDelete) {
+    items.push(
+      <MenuItem key="delete" onClick={run(handlers.onDelete)} sx={{ color: 'error.main' }}>
+        <ListItemIcon>
+          <DeleteOutlineIcon fontSize="small" color="error" />
+        </ListItemIcon>
+        <ListItemText>Delete</ListItemText>
       </MenuItem>
     );
   }
@@ -270,6 +282,7 @@ export interface ProductsCollectionProps {
   onRetry?: () => void;
   onOpen?: (product: Product) => void;
   onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
   sort?: string;
   onSortChange?: (sort: string) => void;
   currency?: string;
@@ -432,7 +445,7 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                   <TableCell align="right">
                     <ProductRowActions
                       product={product}
-                      handlers={{ onOpen: props.onOpen, onEdit: props.onEdit }}
+                      handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
                     />
                   </TableCell>
                 </TableRow>
@@ -490,7 +503,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
               <ProductStatusBadge status={product.status} />
               <ProductRowActions
                 product={product}
-                handlers={{ onOpen: props.onOpen, onEdit: props.onEdit }}
+                handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
               />
             </Stack>
             <Stack

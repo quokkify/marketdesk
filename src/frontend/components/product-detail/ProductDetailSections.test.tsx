@@ -12,6 +12,7 @@ import {
   ProductActivityCard,
   productActivityItems,
   ProductHermesCard,
+  productHeroMenuItems,
   PublicationReadinessSection,
   ProductCategoryEvidence,
   ProductDescriptionCard,
@@ -230,6 +231,27 @@ describe('product detail pricing card actions', () => {
     const html = render(<PricingSummaryCard product={product} currency="PLN" primaryAction="relist" onRelist={() => undefined} onEdit={() => undefined} />);
 
     expect(html).toContain('Relist on OLX');
+  });
+});
+
+describe('product detail hero actions', () => {
+  it('delete action present in the hero overflow menu', () => {
+    const onDelete = jest.fn();
+    const close = jest.fn();
+    const html = render(<ProductIdentityHero product={product} onEdit={() => undefined} onDelete={onDelete} />);
+    const items = productHeroMenuItems(onDelete, close) as ElementLike[];
+
+    expect(html).toContain('aria-label="More actions for Wireless Headphones Pro"');
+    expect(items.map((item) => textContent(item))).toEqual(['Delete product']);
+    (items[0]!.props.onClick as () => void)();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no overflow menu when the product cannot be deleted from here', () => {
+    const html = render(<ProductIdentityHero product={product} onEdit={() => undefined} />);
+
+    expect(html).not.toContain('More actions for');
   });
 });
 

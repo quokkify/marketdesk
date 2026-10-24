@@ -51,6 +51,7 @@ import {
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
+import { useProductDeletion } from '../hooks/useProductDeletion.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
 import { formatDateTime, formatMoney } from '../utils/formatters.js';
@@ -500,6 +501,7 @@ const ListingDetailsPage: React.FC = () => {
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
   const [runHermes, { isLoading: analyzing }] = useRunHermes();
+  const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
@@ -981,7 +983,7 @@ const ListingDetailsPage: React.FC = () => {
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
         Back to products
       </Button>
-      <ProductIdentityHero product={p} onEdit={() => setEditOpen(true)} />
+      <ProductIdentityHero product={p} onEdit={() => setEditOpen(true)} onDelete={() => requestDelete(p)} />
 
       <Box sx={productDetailGridSx} data-testid="product-detail-layout">
         <Stack spacing={{ xs: 2, lg: 3 }} sx={{ minWidth: 0 }}>
@@ -1213,6 +1215,8 @@ const ListingDetailsPage: React.FC = () => {
           />
         </Stack>
       </Box>
+
+      {deleteDialog}
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit product" maxWidth="md">
         <ProductForm
