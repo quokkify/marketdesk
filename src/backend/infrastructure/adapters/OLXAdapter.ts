@@ -642,6 +642,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   }
 
   private async extractMarketplaceCategory(data: OlxAdvertResponse) {
+    // An advert without a category key carries no category evidence at all.
+    if (data.category === undefined) return undefined;
     if (!data.category || typeof data.category === 'string' || data.category.id === undefined) return null;
     try {
       return await this.taxonomy.verify(String(data.category.id));

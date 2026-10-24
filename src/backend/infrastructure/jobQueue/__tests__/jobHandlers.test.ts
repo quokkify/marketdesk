@@ -27,6 +27,8 @@ import {
   ReconciliationRequiredError,
 } from '../../../domain/shared/DomainError';
 import type { MarketplaceHttpClient } from '../../adapters/MarketplaceHttpClient';
+import { OLXAdapter } from '../../adapters/OLXAdapter';
+import { MarketplaceAdapterFactory } from '../../adapters/MarketplaceAdapterFactory';
 import {
   InMemoryListingRepository,
   InMemoryMarketplaceRepository,
@@ -1026,6 +1028,121 @@ describe('SyncMarketplaceHandler', () => {
     ).rejects.toThrow('adapter down');
     expect(marketplace.errorCount).toBe(1);
     expect(marketplaceStore.save).toHaveBeenCalled();
+  });
+
+  describe('verified marketplace category (#278)', () => {
+    const verifiedCategory: MarketplaceCategoryMetadata = {
+      providerCategoryId: '1001',
+      name: 'Cameras',
+      path: ['Electronics', 'Cameras'],
+      source: 'provider_taxonomy',
+      confidence: 1,
+      isLeaf: true,
+      taxonomyVerifiedAt: '2026-10-24T08:00:00.000Z',
+      taxonomyStaleAt: '2026-10-25T08:00:00.000Z',
+    };
+
+    async function seedLiveListing(ids: { listing: string; marketplace: string; external: string }) {
+      const listings = new InMemoryListingRepository();
+      await listings.save(unwrap(Listing.create({
+        id: ids.listing,
+        productId: `p-${ids.listing}`,
+        marketplaceId: ids.marketplace,
+        price: money(120),
+        status: 'live',
+        marketplaceListingId: ids.external,
+        marketplaceCategory: verifiedCategory,
+        publishedAt: new Date('2026-10-24T08:00:00.000Z'),
+      })));
+      const marketplaces = new InMemoryMarketplaceRepository();
+      await marketplaces.save(unwrap(Marketplace.create({
+        id: ids.marketplace, workspaceId: 'w-1', key: 'olx', name: 'OLX', connected: true,
+      })));
+      return { listings, marketplaces };
+    }
+
+    it.each<[string, Record<string, unknown>]>([
+      ['without category', {}],
+      ['with a null category', { category: null }],
+    ])('verified category survives a sync payload %s', async (_label, categoryField) => {
+      const http: MarketplaceHttpClient = {
+        request: jest.fn(async (config) => {
+          if (config.url.endsWith('/threads')) return { status: 200, data: [] };
+          if (config.url.endsWith('/statistics')) return { status: 200, data: null };
+          return {
+            status: 200,
+            data: { data: { id: 'ext-verified', status: 'active', ...categoryField } },
+          };
+        }) as MarketplaceHttpClient['request'],
+      };
+      const adapter = new OLXAdapter(http, { sleep: async () => {}, maxRetries: 0, baseRetryDelayMs: 0 });
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-verified', marketplace: 'm-verified', external: 'ext-verified',
+      });
+      const persist = jest.fn(async (input: { listings: Listing[] }) => listings.saveAll(input.listings));
+      const handler = new SyncMarketplaceHandler({ create: () => adapter }, {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        persistAndReconcileProductCategories: persist,
+      });
+
+      await handler.handle({ marketplaceKey: 'olx', marketplaceId: 'm-verified', externalListingIds: [] });
+
+      expect((await listings.findById('l-verified'))?.marketplaceCategory).toEqual(verifiedCategory);
+      expect(persist).toHaveBeenCalledWith(expect.objectContaining({ mismatchCandidates: [] }));
+    });
+
+    it('stub-mode sync with an externally identified listing completes', async () => {
+      // Stub mode wires the default stub OLX transport and no token provider,
+      // so no marketplace account binding exists for category reconciliation.
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-sandbox', marketplace: 'm-sandbox', external: 'olx-sandbox-1',
+      });
+      const recommendCategoryMismatch = jest.fn(async () => undefined);
+      const handler = new SyncMarketplaceHandler(new MarketplaceAdapterFactory(), {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        recommendCategoryMismatch,
+      });
+
+      const result = await handler.handle({
+        marketplaceKey: 'olx', marketplaceId: 'm-sandbox', externalListingIds: [],
+      });
+
+      expect(result).toMatchObject({ persisted: 1, marketplaceUpdated: true });
+      const stored = await listings.findById('l-sandbox');
+      expect(stored?.status).toBe('live');
+      expect(stored?.lastSyncAt).not.toBeNull();
+      expect(stored?.marketplaceCategory).toEqual(verifiedCategory);
+      expect(recommendCategoryMismatch).not.toHaveBeenCalled();
+    });
+
+    it('refreshes a re-verified unchanged category without proposing a mismatch', async () => {
+      const reverified: MarketplaceCategoryMetadata = {
+        ...verifiedCategory,
+        taxonomyVerifiedAt: '2026-10-24T20:00:00.000Z',
+        taxonomyStaleAt: '2026-10-25T20:00:00.000Z',
+      };
+      const adapter = fakeAdapter({
+        sync: jest.fn(async (): Promise<SyncedListing[]> => [{
+          externalListingId: 'ext-same', status: 'live', remoteStatus: 'active', marketplaceCategory: reverified,
+        }]),
+      });
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-same', marketplace: 'm-same', external: 'ext-same',
+      });
+      const persist = jest.fn(async (input: { listings: Listing[] }) => listings.saveAll(input.listings));
+      const handler = new SyncMarketplaceHandler(resolverFor(adapter).resolver, {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        persistAndReconcileProductCategories: persist,
+      });
+
+      await handler.handle({ marketplaceKey: 'olx', marketplaceId: 'm-same', externalListingIds: [] });
+
+      expect((await listings.findById('l-same'))?.marketplaceCategory).toEqual(reverified);
+      expect(persist).toHaveBeenCalledWith(expect.objectContaining({ mismatchCandidates: [] }));
+    });
   });
 });
 

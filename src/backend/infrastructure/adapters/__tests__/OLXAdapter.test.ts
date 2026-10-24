@@ -115,8 +115,24 @@ describe('OLXAdapter', () => {
       conversations: 0,
       messages: 0,
       messageMetricStatus: 'available',
-      marketplaceCategory: null,
+      marketplaceCategory: undefined,
     });
+  });
+
+  it.each<[string, null | undefined, Record<string, unknown>]>([
+    ['no category key', undefined, {}],
+    ['an explicit null category', null, { category: null }],
+    ['a free-text category', null, { category: 'Electronics' }],
+    ['a category without an id', null, { category: { name: 'Electronics' } }],
+  ])('reports %s in a synced advert as marketplaceCategory %p', async (_label, expected, categoryField) => {
+    const http = mockClient((config) => config.url.endsWith('/threads')
+      ? { status: 200, data: [] }
+      : { status: 200, data: { data: { id: 9, status: 'active', ...categoryField } } });
+    const adapter = new OLXAdapter(http, fastOptions);
+
+    const [synced] = await adapter.sync(['olx-9']);
+
+    expect(synced.marketplaceCategory).toBe(expected);
   });
 
   it('refuses real publish when only the broad category map is available', async () => {
