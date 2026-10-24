@@ -91,6 +91,8 @@ function fillSecrets(text) {
   return { text: result, generated, warnings };
 }
 
+// `warn` gets one message for each key left alone because an earlier line already sets it. The CLI
+// turns that into exit code 1.
 export function initEnv({ cwd = process.cwd(), log = console.log, warn = console.warn } = {}) {
   const examplePath = resolve(cwd, '.env.example');
   const envPath = resolve(cwd, '.env');
@@ -128,7 +130,16 @@ const isEntrypoint =
   fileURLToPath(import.meta.url) === realpathSync(process.argv[1]);
 if (isEntrypoint) {
   try {
-    initEnv();
+    // A key left alone means the .env is still not usable, so exit 1: `npm run env:init &&
+    // docker compose up` must stop there until the repeated line is fixed.
+    let skipped = 0;
+    initEnv({
+      warn: (message) => {
+        skipped += 1;
+        console.warn(message);
+      },
+    });
+    if (skipped > 0) process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;

@@ -486,7 +486,8 @@ test('CLI still runs when it is started through a symlink', () => {
   });
 });
 
-test('CLI warns on stderr about a repeated secret, exits 0 and does not say there was nothing to do', () => {
+// A .env with a key that env:init cannot fix on its own must stop `npm run env:init && docker compose up`.
+test('CLI warns on stderr about a repeated secret, exits 1 and does not say there was nothing to do', () => {
   const realKey = Buffer.alloc(32, 5).toString('base64');
   const own = Buffer.alloc(32, 8).toString('base64');
   const original = [
@@ -500,12 +501,35 @@ test('CLI warns on stderr about a repeated secret, exits 0 and does not say ther
   withProject({ '.env.example': ENV_EXAMPLE, '.env': original }, (dir) => {
     const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
 
-    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.status, 1, run.stderr);
     assert.match(run.stderr, /MARKETPLACE_CREDENTIALS_KEY.*\bline 4\b.*\bline 5\b/);
+    assert.match(run.stdout, /Generated nothing/);
     assert.doesNotMatch(run.stdout, /nothing to do/);
     assert.equal(readEnv(dir), original, 'nothing may be written');
     for (const value of [own, realKey]) {
       assert.ok(!run.stdout.includes(value) && !run.stderr.includes(value), 'a secret leaked');
+    }
+  });
+});
+
+test('CLI exits 1 for a skipped key even when it generated the other secrets, and keeps them', () => {
+  const realKey = Buffer.alloc(32, 5).toString('base64');
+  const original = [
+    `${CREDENTIALS_KEY}=${realKey}`,
+    `${CREDENTIALS_KEY}=your_marketplace_credentials_key`,
+    '',
+  ].join('\n');
+  withProject({ '.env.example': ENV_EXAMPLE, '.env': original }, (dir) => {
+    const run = spawnSync(process.execPath, [scriptPath], { cwd: dir, encoding: 'utf8' });
+
+    assert.equal(run.status, 1, run.stderr);
+    assert.match(run.stdout, /^Generated JWT_SECRET, JWT_REFRESH_SECRET, HERMES_WEBHOOK_SECRET$/m);
+    assert.match(run.stderr, /MARKETPLACE_CREDENTIALS_KEY.*\bline 1\b.*\bline 2\b/);
+    const text = readEnv(dir);
+    assert.ok(text.startsWith(original), 'the repeated lines stay exactly as written');
+    const values = dotenv.parse(text);
+    for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'HERMES_WEBHOOK_SECRET']) {
+      assert.equal(decodedBytes(values[key]), 32, `${key} must still be generated`);
     }
   });
 });
