@@ -84,7 +84,8 @@ export interface DelistListingToDraftInput {
 
 export interface ListingDelistOperation {
   id: string;
-  listingId: string;
+  // null once the product, and with it the listing, was deleted.
+  listingId: string | null;
   marketplaceId: string;
   state: 'requested' | 'approved' | 'executing' | 'executed' | 'failed';
   result:

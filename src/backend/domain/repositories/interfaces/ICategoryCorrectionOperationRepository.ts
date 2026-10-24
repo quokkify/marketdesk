@@ -12,7 +12,8 @@ export interface CategoryCorrectionOperation {
   id: string;
   workspaceId: string;
   recommendationEventId: string | null;
-  listingId: string;
+  // NULL once a product delete removed the listing; the result keeps its id.
+  listingId: string | null;
   marketplaceId: string;
   kind: CategoryCorrectionOperationKind;
   state: CategoryCorrectionOperationState;
