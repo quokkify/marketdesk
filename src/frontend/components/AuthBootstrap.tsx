@@ -23,6 +23,17 @@ function toWorkspaceState(ws: Workspace): WorkspaceState {
   };
 }
 
+// Only a token the server rejects ends a restored session. A failed request (offline, 429, 5xx)
+// says nothing about the token, and logging out on it throws away a valid session.
+export function isSessionRejected(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error.status === 401 || error.status === 403)
+  );
+}
+
 export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const token = useAppSelector((s) => s.auth.token);
@@ -48,8 +59,8 @@ export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [principalKey, dispatch]);
 
   useEffect(() => {
-    if (me.isError) dispatch(logout());
-  }, [me.isError, dispatch]);
+    if (isSessionRejected(me.error)) dispatch(logout());
+  }, [me.error, dispatch]);
 
   useEffect(() => {
     if (!me.data) return;
