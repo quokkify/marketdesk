@@ -3,6 +3,7 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import express from 'express';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -10,6 +11,9 @@ import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
 import { signToken } from '../http/middleware/AuthMiddleware';
+import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
+import { createAuthRoutes } from '../http/routes/auth';
+import type { AuthController } from '../http/controllers/AuthController';
 import type {
   IAuthUserStore,
   AuthUserRecord,
@@ -572,6 +576,7 @@ async function buildTestApp(
     hermesStatus?: AppDeps['hermesStatus'];
     marketplaceImportService?: MarketplaceImportService;
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
+    enableRateLimit?: boolean;
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -650,7 +655,7 @@ async function buildTestApp(
   }
   return {
     app: buildApp(deps, {
-      enableRateLimit: false,
+      enableRateLimit: options.enableRateLimit ?? false,
       applicationVersion: options.applicationVersion,
     }),
     authUserStore,
@@ -884,6 +889,84 @@ describe('Presentation API', () => {
       expect(res.status).toBe(500);
       expect(await workspaceRepo.findAll()).toHaveLength(0);
       expect(marketplaceRepo.items.size).toBe(1);
+    });
+
+    // Regression guard: the /me limiter used to run before authentication and key by IP, so
+    // everyone behind one proxy shared one allowance, and the 429 that followed logged users out.
+    describe('GET /me', () => {
+      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1' })}`;
+      const me = (app: express.Express, authorization?: string) => {
+        const req = request(app).get('/api/auth/me');
+        return authorization ? req.set('Authorization', authorization) : req;
+      };
+
+      it('returns the current user for a valid token', async () => {
+        const { app } = await buildTestApp();
+
+        const res = await me(app, bearer('u-1'));
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          success: true,
+          data: { id: 'u-1', email: 'demo@example.com', workspaceId: 'ws-1' },
+        });
+      });
+
+      it('gives each user their own rate limit allowance, even from one IP', async () => {
+        const { app, authUserStore } = await buildTestApp({ enableRateLimit: true });
+        authUserStore.users.push({
+          id: 'u-2',
+          email: 'second@example.com',
+          passwordHash: 'unused',
+          workspaceId: 'ws-1',
+          createdAt: new Date(),
+        });
+
+        const firstOfA = await me(app, bearer('u-1'));
+        const secondOfA = await me(app, bearer('u-1'));
+        const firstOfB = await me(app, bearer('u-2'));
+
+        expect(firstOfA.headers['ratelimit-remaining']).toBe('99');
+        expect(secondOfA.headers['ratelimit-remaining']).toBe('98');
+        expect(firstOfB.headers['ratelimit-remaining']).toBe('99');
+      });
+
+      it('rejects a bad token before the limiter, so it spends no allowance', async () => {
+        const { app } = await buildTestApp({ enableRateLimit: true });
+
+        const missing = await me(app);
+        const forged = await me(app, 'Bearer not-a-jwt');
+        const valid = await me(app, bearer('u-1'));
+
+        expect(missing.status).toBe(401);
+        expect(forged.status).toBe(401);
+        expect(missing.headers['ratelimit-remaining']).toBeUndefined();
+        expect(forged.headers['ratelimit-remaining']).toBeUndefined();
+        expect(valid.headers['ratelimit-remaining']).toBe('99');
+      });
+
+      it('answers a user over the allowance with a 429 envelope and leaves other users alone', async () => {
+        const controller = {
+          me: async (req: express.Request, res: express.Response) => {
+            res.json({ userId: req.user?.userId });
+          },
+        } as unknown as AuthController;
+        const app = express();
+        app.use('/api/auth', createAuthRoutes(controller, undefined, meRateLimiter(2)));
+
+        const first = await me(app, bearer('u-1'));
+        const second = await me(app, bearer('u-1'));
+        const rejected = await me(app, bearer('u-1'));
+        const other = await me(app, bearer('u-2'));
+
+        expect([first.status, second.status]).toEqual([200, 200]);
+        expect(rejected.status).toBe(429);
+        expect(rejected.body).toEqual({
+          success: false,
+          error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' },
+        });
+        expect(other.status).toBe(200);
+      });
     });
   });
 

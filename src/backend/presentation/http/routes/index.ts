@@ -1,5 +1,6 @@
 // Assembles the /api router from already-constructed controllers. Applies auth and
-// rate limiting policy (§18): /auth is public (100/min), every other resource is
+// rate limiting policy (§18): /auth is public (100/min) except /auth/me, which is
+// limited per user after authentication; every other resource is
 // authenticated (1000/min keyed by workspaceId) and workspace-scoped; listing
 // price operations additionally get the sensitive limiter (10/min).
 
@@ -16,6 +17,7 @@ import type { ProductImageUploadController } from '../controllers/ProductImageUp
 import { authMiddleware, requireWorkspace } from '../middleware/AuthMiddleware';
 import {
   publicRateLimiter,
+  meRateLimiter,
   authenticatedRateLimiter,
   sensitiveRateLimiter,
   uploadRateLimiter,
@@ -59,6 +61,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const rateLimit = options.enableRateLimit ?? false;
 
   const publicLimiter: RequestHandler | undefined = rateLimit ? publicRateLimiter() : undefined;
+  const meLimiter: RequestHandler | undefined = rateLimit ? meRateLimiter() : undefined;
   const authLimiter: RequestHandler | undefined = rateLimit
     ? authenticatedRateLimiter()
     : undefined;
@@ -71,7 +74,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   api.get('/application-info', ...(publicLimiter ? [publicLimiter] : []), (_req, res) =>
     ok(res, { version: options.applicationVersion ?? 'Development' })
   );
-  api.use('/auth', createAuthRoutes(c.auth, publicLimiter));
+  api.use('/auth', createAuthRoutes(c.auth, publicLimiter, meLimiter));
   api.get(
     '/marketplaces/:provider/oauth/callback',
     ...(publicLimiter ? [publicLimiter] : []),
