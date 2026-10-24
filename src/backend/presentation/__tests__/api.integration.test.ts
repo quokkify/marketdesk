@@ -496,6 +496,7 @@ async function buildTestApp(
       marketplaceRepo: InMemoryMarketplaceRepository
     ) => MarketplaceOAuthService;
     olxAdapterMode?: string;
+    marketplaceImportService?: MarketplaceImportService;
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -524,7 +525,7 @@ async function buildTestApp(
     marketplaceOAuthService:
       options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
-    marketplaceImportService: stubMarketplaceImportService(),
+    marketplaceImportService: options.marketplaceImportService ?? stubMarketplaceImportService(),
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
       ? undefined
       : (options.olxPublicationQuotaService ?? stubOlxPublicationQuotaService()),
@@ -1027,7 +1028,7 @@ describe('Presentation API', () => {
     });
 
     it('previews existing OLX adverts through a read-only import endpoint', async () => {
-      const { app } = await buildTestApp();
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
       const res = await auth(
         request(app).post('/api/marketplaces/marketplace-olx/import-preview')
       ).send({
@@ -1053,7 +1054,7 @@ describe('Presentation API', () => {
     });
 
     it('imports selected OLX adverts only after an explicit import request', async () => {
-      const { app } = await buildTestApp();
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
       const res = await auth(request(app).post('/api/marketplaces/marketplace-olx/import')).send({
         externalListingIds: ['olx-1'],
       });
@@ -1068,6 +1069,37 @@ describe('Presentation API', () => {
         listingId: 'listing-imported',
       });
     });
+
+    it.each([
+      ['import-preview', {}],
+      ['import', { externalListingIds: ['olx-1'] }],
+    ])(
+      'POST /api/marketplaces/:id/%s returns 422 in sandbox mode without reaching the import service',
+      async (route, body) => {
+        const preview = jest.fn();
+        const importListings = jest.fn();
+        const { app } = await buildTestApp({
+          olxAdapterMode: 'stub',
+          marketplaceImportService: {
+            preview,
+            import: importListings,
+          } as unknown as MarketplaceImportService,
+        });
+
+        const res = await auth(
+          request(app).post(`/api/marketplaces/marketplace-olx/${route}`)
+        ).send(body);
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatchObject({
+          code: 'INVALID_STATE',
+          message: 'Marketplace import is not available in sandbox mode',
+        });
+        expect(preview).not.toHaveBeenCalled();
+        expect(importListings).not.toHaveBeenCalled();
+      }
+    );
+
     it('reads and validates authenticated OLX quota operator contracts', async () => {
       const { app } = await buildTestApp();
       const read = await auth(request(app).get('/api/marketplaces/marketplace-olx/quotas'));

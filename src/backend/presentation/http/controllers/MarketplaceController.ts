@@ -21,6 +21,12 @@ function routeParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
+// The sandbox account has no OLX adverts to read, and its token must never reach the
+// OLX partner API, so import is refused while the OLX adapter is not real.
+function sandboxImportUnavailable(): InvalidStateError {
+  return new InvalidStateError('Marketplace import is not available in sandbox mode');
+}
+
 export class MarketplaceController {
   constructor(
     private readonly marketplaceRepo: IMarketplaceRepository,
@@ -34,8 +40,12 @@ export class MarketplaceController {
     private readonly logger?: ErrorLogger,
   ) {}
 
+  private get olxSandbox(): boolean {
+    return this.olxAdapterMode !== 'real';
+  }
+
   private present(marketplace: Marketplace) {
-    return presentMarketplace(marketplace, { olxSandbox: this.olxAdapterMode !== 'real' });
+    return presentMarketplace(marketplace, { olxSandbox: this.olxSandbox });
   }
 
   listQuotas = async (req: Request, res: Response): Promise<void> => {
@@ -175,6 +185,7 @@ export class MarketplaceController {
   };
 
   importPreview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (this.olxSandbox) return next(sandboxImportUnavailable());
     const result = await this.imports.preview({
       marketplaceId: routeParam(req.params.id),
       workspaceId: req.user!.workspaceId!,
@@ -186,6 +197,7 @@ export class MarketplaceController {
   };
 
   importApply = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (this.olxSandbox) return next(sandboxImportUnavailable());
     const result = await this.imports.import({
       marketplaceId: routeParam(req.params.id),
       workspaceId: req.user!.workspaceId!,
