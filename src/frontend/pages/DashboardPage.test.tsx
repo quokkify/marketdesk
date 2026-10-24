@@ -54,7 +54,7 @@ describe('dashboard marketplace overview row', () => {
   });
 
   it('gives the Sandbox badge the warning tone every other sandbox label uses', () => {
-    const row = MarketplaceRow({ marketplace: marketplace({ sandbox: true }), onOpen: noop });
+    const row = MarketplaceRow({ marketplace: marketplace({ sandbox: true }), onOpen: noop }) as ElementLike;
     const sandboxBadges = findElements(
       row,
       (element) => element.type === Badge && element.props.label === 'Sandbox',
