@@ -1,6 +1,7 @@
-import { presentListing, presentMarketplace } from './presenters';
+import { presentHermesEvent, presentListing, presentMarketplace } from './presenters';
 import { Listing } from '../../domain/entities/Listing';
 import { Marketplace } from '../../domain/entities/Marketplace';
+import { HermesEvent } from '../../domain/entities/HermesEvent';
 import { unwrap, money } from '../../domain/testkit/support';
 import type { MarketplaceKey } from '../../../shared/types';
 
@@ -84,5 +85,32 @@ describe('presentMarketplace', () => {
 
   it('never flags other marketplaces as sandbox', () => {
     expect(presentMarketplace(marketplace('allegro'), { olxSandbox: true }).sandbox).toBe(false);
+  });
+});
+
+describe('presentHermesEvent', () => {
+  function titleEvent(source?: 'hermes' | 'offline') {
+    return unwrap(
+      HermesEvent.create({
+        id: 'event-1',
+        workspaceId: 'workspace-1',
+        productId: 'product-1',
+        type: 'suggested_better_title',
+        severity: 'info',
+        title: 'Improve product title for search',
+        detail: 'Camera - Good condition. Heuristic offline suggestion; Hermes was not consulted.',
+        proposedChange: { kind: 'title', field: 'title', from: 'Camera', to: 'Camera - Good condition' },
+        source,
+      }),
+    );
+  }
+
+  it('shows which provider produced an AI-made event', () => {
+    expect(presentHermesEvent(titleEvent('offline')).source).toBe('offline');
+    expect(presentHermesEvent(titleEvent('hermes')).source).toBe('hermes');
+  });
+
+  it('leaves the source out when no provider is recorded', () => {
+    expect(presentHermesEvent(titleEvent()).source).toBeUndefined();
   });
 });

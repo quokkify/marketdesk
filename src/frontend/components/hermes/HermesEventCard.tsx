@@ -35,8 +35,17 @@ import { HermesSeverityBadge, HermesStatusBadge, AutonomyDecisionBadge } from '.
 import { ApprovalButtons } from './ApprovalButtons.js';
 import { ConfirmDialog } from '../common/ConfirmDialog.js';
 
+// Event-view fields that the API may not send yet. Both are optional so the card
+// renders the same truthful copy for events that carry neither.
+export interface HermesEventExtras {
+  /** Marketplace-side state of an applied change as the API records it: queued, retry_required or not_required. */
+  marketplaceSync?: string | null;
+  /** Which provider produced the suggestion; `offline` means the built-in heuristics. */
+  source?: 'hermes' | 'offline';
+}
+
 export interface HermesEventCardProps {
-  event: HermesEvent;
+  event: HermesEvent & HermesEventExtras;
   showActions?: boolean;
   onResolved?: () => void;
   approveLabel?: string;
@@ -83,18 +92,59 @@ export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'
   );
 };
 
-export function hermesLifecycleCopy(status: HermesEvent['status']): string {
+// Plain-language note for the sync states the API records. Every other value, including
+// not_required, yields no note, so the card never prints a state word it does not know.
+function marketplaceSyncNote(
+  marketplaceSync: HermesEventExtras['marketplaceSync'],
+): { text: string; needsAttention: boolean } | null {
+  switch (marketplaceSync) {
+    case 'queued': return { text: 'marketplace update queued', needsAttention: false };
+    case 'retry_required': return { text: 'marketplace update needs a retry', needsAttention: true };
+    default: return null;
+  }
+}
+
+export function hermesLifecycleCopy(
+  status: HermesEvent['status'],
+  marketplaceSync?: HermesEventExtras['marketplaceSync'],
+): string {
   switch (status) {
     case 'pending_decision': return 'Hermes is evaluating whether this change requires review.';
     case 'pending_review': return 'A recorded decision is required before MarketDesk can continue.';
     case 'applying': return 'The approved change is queued or applying; provider completion is not yet confirmed.';
-    case 'applied': return 'MarketDesk recorded this action as completed.';
+    case 'applied': {
+      const note = marketplaceSyncNote(marketplaceSync);
+      return note ? `Applied in MarketDesk · ${note.text}` : 'Applied in MarketDesk';
+    }
     case 'dismissed': return 'This suggestion was dismissed without applying the proposed change.';
     case 'failed': return 'The action failed. Review the details before deciding what to do next.';
     case 'reverting': return 'The reversal is in progress; completion is not yet confirmed.';
     case 'reverted': return 'MarketDesk recorded the action as reverted.';
   }
 }
+
+export const HermesLifecycleCaption: React.FC<{
+  status: HermesEvent['status'];
+  marketplaceSync?: HermesEventExtras['marketplaceSync'];
+}> = ({ status, marketplaceSync }) => (
+  <Typography
+    variant="caption"
+    color={
+      status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention
+        ? 'warning.dark'
+        : 'text.secondary'
+    }
+    sx={{ display: 'block', mt: 0.75 }}
+  >
+    {hermesLifecycleCopy(status, marketplaceSync)}
+  </Typography>
+);
+
+const HeuristicChip: React.FC = () => (
+  <Tooltip title="Produced by MarketDesk's built-in rules, not by Hermes" arrow describeChild>
+    <Chip size="small" variant="outlined" color="warning" label="Heuristic" />
+  </Tooltip>
+);
 
 export function hermesEventDismissOnly(event: HermesEvent): boolean {
   return !event.proposedChange || event.type === 'create_listing' || event.type === 'product_category_conflict';
@@ -387,6 +437,7 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             ) : (
               <Chip size="small" label={hermesTypeLabel(event.type)} variant="outlined" />
             )}
+            {event.source === 'offline' && <HeuristicChip />}
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 800 }}>
               {fieldLabel}
             </Typography>
@@ -441,15 +492,14 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             <HermesStatusBadge status={event.status} />
             {event.autonomyDecision && <AutonomyDecisionBadge decision={event.autonomyDecision} />}
             <Chip size="small" variant="outlined" label={hermesTypeLabel(event.type)} sx={{ fontWeight: 500 }} />
+            {event.source === 'offline' && <HeuristicChip />}
           </Stack>
 
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{event.title}</Typography>
           {event.detail && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{event.detail}</Typography>
           )}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-            {hermesLifecycleCopy(event.status)}
-          </Typography>
+          <HermesLifecycleCaption status={event.status} marketplaceSync={event.marketplaceSync} />
 
           {event.productId && (
             <Stack

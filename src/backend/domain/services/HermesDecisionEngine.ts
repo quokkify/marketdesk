@@ -11,6 +11,7 @@
 // drops (> 20%), so those never auto-apply regardless of tier. Title, price and
 // description changes made while the AI provider answers from its offline heuristics
 // (AIProviderSourceAware) always go to review, whatever the tier and guardrails say.
+// Every AI-made event records its source, and offline ones say so in their detail.
 
 import { Result, Ok, Err } from '../shared/Result';
 import { ValidationError, InvalidStateError, NotFoundError } from '../shared/DomainError';
@@ -18,6 +19,7 @@ import { HermesEvent } from '../entities/HermesEvent';
 import { Product } from '../entities/Product';
 import { Money } from '../valueObjects/Money';
 import type {
+  AIProviderSource,
   AutonomyLevel,
   AutonomyDecision,
   HermesEventType,
@@ -30,7 +32,11 @@ import type { IProductRepository } from '../repositories/interfaces/IProductRepo
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
-import { isAIProviderSourceAware, type IAIProvider } from '../ports/IAIProvider';
+import {
+  isAIProviderSourceAware,
+  OFFLINE_AI_NOTICE,
+  type IAIProvider,
+} from '../ports/IAIProvider';
 import {
   listingSeoProfile,
   listingSeoInputSchema,
@@ -51,6 +57,14 @@ interface Suggestion {
 export type IdFactory = () => string;
 
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
+
+// Adds the offline notice unless the provider already wrote it into the detail.
+function withOfflineNotice(detail: string): string {
+  if (detail.includes(OFFLINE_AI_NOTICE)) return detail;
+  const text = detail.trim();
+  if (text === '') return OFFLINE_AI_NOTICE;
+  return /[.!?]$/.test(text) ? `${text} ${OFFLINE_AI_NOTICE}` : `${text}. ${OFFLINE_AI_NOTICE}`;
+}
 
 export class HermesDecisionEngine {
   constructor(
@@ -74,13 +88,15 @@ export class HermesDecisionEngine {
       const answeredOffline = offlineBefore || (await this.aiAnswersOffline());
 
       for (const suggestion of suggestions) {
-        const reviewOnly =
-          answeredOffline &&
-          suggestion.change !== null &&
-          AI_MADE_CHANGE_KINDS.has(suggestion.change.kind);
-        let decision: AutonomyDecision = reviewOnly
-          ? 'pending_review'
-          : this.determineAutonomy(workspace.autonomyLevel, suggestion.type, suggestion.severity);
+        // Suggestions no AI produced (relist, more photos) carry no source.
+        let source: AIProviderSource | null = null;
+        if (suggestion.change !== null && AI_MADE_CHANGE_KINDS.has(suggestion.change.kind)) {
+          source = answeredOffline ? 'offline' : 'hermes';
+        }
+        let decision: AutonomyDecision =
+          source === 'offline'
+            ? 'pending_review'
+            : this.determineAutonomy(workspace.autonomyLevel, suggestion.type, suggestion.severity);
         const created = HermesEvent.create({
           id: this.idFactory(),
           workspaceId: workspace.id,
@@ -88,9 +104,10 @@ export class HermesDecisionEngine {
           type: suggestion.type,
           severity: suggestion.severity,
           title: suggestion.title,
-          detail: suggestion.detail,
+          detail: source === 'offline' ? withOfflineNotice(suggestion.detail) : suggestion.detail,
           proposedChange: suggestion.change,
           status: decision === 'auto_apply' ? 'pending_decision' : 'pending_review',
+          source,
         });
         if (created.isErr()) continue;
         const event = created.value;
@@ -171,10 +188,14 @@ export class HermesDecisionEngine {
     let source = rawSeoSourceFingerprint(rawInput);
     let input: ReturnType<typeof listingSeoInputSchema.parse>;
     let output: Awaited<ReturnType<IAIProvider['analyzeListingSeo']>>;
+    let aiSource: AIProviderSource;
     try {
       input = listingSeoInputSchema.parse(rawInput);
       source = seoSourceFingerprint(input);
+      // Asked before and after the call, as in run(): any offline answer labels the events.
+      const offlineBefore = await this.aiAnswersOffline();
       output = await this.aiProvider.analyzeListingSeo(input, workspace.creativityPreset);
+      aiSource = offlineBefore || (await this.aiAnswersOffline()) ? 'offline' : 'hermes';
     } catch (error) {
       await this.eventRepo.recordAgentRecommendationOutcome({
         id: this.idFactory(),
@@ -246,6 +267,7 @@ export class HermesDecisionEngine {
         recommendation.field === 'description'
           ? 'update_description'
           : 'suggested_better_title';
+      const detail = `${recommendation.rationale} Review-only suggestion from listing-seo@${listingSeoProfile.version} (${workspace.creativityPreset}); recommendation:${fingerprint}; source:${source}; provenance workspace=${workspace.id} product=${product.id}. This may improve discoverability but does not guarantee a sale.`;
       const created = HermesEvent.create({
         id: this.idFactory(),
         workspaceId: workspace.id,
@@ -253,10 +275,11 @@ export class HermesDecisionEngine {
         type,
         severity: 'info',
         title: `Listing SEO suggestion: ${recommendation.field}`,
-        detail: `${recommendation.rationale} Review-only suggestion from listing-seo@${listingSeoProfile.version} (${workspace.creativityPreset}); recommendation:${fingerprint}; source:${source}; provenance workspace=${workspace.id} product=${product.id}. This may improve discoverability but does not guarantee a sale.`,
+        detail: aiSource === 'offline' ? withOfflineNotice(detail) : detail,
         proposedChange,
         status: 'pending_review',
         autonomyDecision: 'pending_review',
+        source: aiSource,
       });
       if (created.isErr()) continue;
       const event = created.value;

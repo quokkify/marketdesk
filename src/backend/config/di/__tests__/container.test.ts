@@ -126,6 +126,27 @@ describe('buildContainer (composition root)', () => {
     expect(typeof deps.hermesStatus).toBe('function');
   });
 
+  it.each(['offline', 'hermes'] as const)(
+    'reports the env-configured provider mode %s through the status function',
+    async (mode) => {
+      const originalMode = env.hermes.providerMode;
+      const originalFetch = globalThis.fetch;
+      // A configured key in the developer environment must not reach a real Hermes.
+      globalThis.fetch = jest.fn(async () => {
+        throw new TypeError('fetch failed');
+      }) as typeof fetch;
+      env.hermes.providerMode = mode;
+      try {
+        const { deps } = build();
+
+        await expect(deps.hermesStatus?.()).resolves.toMatchObject({ mode, activeProvider: mode });
+      } finally {
+        env.hermes.providerMode = originalMode;
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+
   it('builds an Express app from the resolved deps without throwing', () => {
     const { deps } = build();
     const app = buildApp(deps, { enableRateLimit: false, corsOrigin: '*' });

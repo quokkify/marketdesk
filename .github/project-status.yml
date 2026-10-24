@@ -4,10 +4,13 @@ maturity: prototype
 implementation: active
 production_readiness: not-ready
 supported_runtime:
-  application: Node.js 22+ / TypeScript / React
+  application: Node.js 22+ (the Docker image runs Node.js 24) / TypeScript 6 / Express 5 / React 19
   services: PostgreSQL 18 / Redis 8 / Docker Compose
-current_release: marketdesk-v0.20.0
+current_release: backend-v0.21.1, frontend-v0.21.1, assets-v0.21.1
 known_gaps:
   - Marketplace surfaces beyond the guarded OLX integration remain unfinished roadmap work.
+  - The default local OLX connection is a labelled sandbox (OLX_ADAPTER_MODE=stub). It makes no real OLX calls, cannot import adverts, and has no real sales or traffic. A real connection needs approved OLX Partner API credentials.
+  - Without a reachable Hermes Agent API server, AI assistance uses built-in offline heuristics. They are labelled as offline and every suggestion waits for review.
+  - Security, API keys, Telegram, notifications, and bulk product actions are not available yet.
   - Production deployment is environment-specific and is not certified by this repository.
 next_milestone: Finish the remaining marketplace surfaces and complete a production-readiness review.

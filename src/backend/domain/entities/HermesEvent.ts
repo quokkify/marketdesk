@@ -6,6 +6,7 @@
 import { Result, Ok, Err } from '../shared/Result';
 import { ValidationError, InvalidStateError } from '../shared/DomainError';
 import type {
+  AIProviderSource,
   HermesEventType,
   HermesSeverity,
   HermesEventStatus,
@@ -28,7 +29,11 @@ export interface CreateHermesEventProps {
   autonomyDecision?: AutonomyDecision | null;
   createdAt?: Date;
   resolvedAt?: Date | null;
+  // Who produced an AI-made change: Hermes or the offline heuristics. Null otherwise.
+  source?: AIProviderSource | null;
 }
+
+const AI_PROVIDER_SOURCES: readonly AIProviderSource[] = ['hermes', 'offline'];
 
 const PRICE_EVENT_TYPES: HermesEventType[] = [
   'suggested_lower_price',
@@ -50,6 +55,7 @@ export class HermesEvent {
     private _autonomyDecision: AutonomyDecision | null,
     public readonly createdAt: Date,
     private _resolvedAt: Date | null,
+    public readonly source: AIProviderSource | null,
   ) {}
 
   static create(props: CreateHermesEventProps): Result<HermesEvent> {
@@ -82,6 +88,11 @@ export class HermesEvent {
       );
     }
 
+    const source = props.source ?? null;
+    if (source !== null && !AI_PROVIDER_SOURCES.includes(source)) {
+      return Err(new ValidationError(`Unknown HermesEvent source: ${source}`));
+    }
+
     const changeCheck = HermesEvent.validateProposedChange(
       props.type,
       props.proposedChange,
@@ -102,6 +113,7 @@ export class HermesEvent {
         props.autonomyDecision ?? null,
         props.createdAt ?? new Date(),
         resolvedAt,
+        source,
       ),
     );
   }

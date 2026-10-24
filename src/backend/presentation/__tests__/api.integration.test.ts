@@ -56,6 +56,8 @@ import { OfflineHeuristicAIProvider } from '../../infrastructure/external/Offlin
 import { HermesAI } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
+import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
+import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 
 const iso = new Date().toISOString();
 
@@ -506,6 +508,53 @@ function unconfiguredHermesStatus(): NonNullable<AppDeps['hermesStatus']> {
   return () => selector.status();
 }
 
+// The production assistance graph with HERMES_PROVIDER_MODE=hermes: no offline fallback,
+// so a Hermes outage reaches the HTTP layer.
+async function hermesModeAssistanceGraph(): Promise<ProductAssistanceGraph> {
+  const config = {
+    apiUrl: 'http://127.0.0.1:8642/v1',
+    apiKey: 'local-hermes-key',
+    model: 'hermes-agent',
+    maxTokens: 256,
+    timeoutMs: 1_000,
+  };
+  const ai = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient(config), config),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: 'hermes',
+    probe: new HermesHealthProbe(config),
+  });
+  const products = new InMemoryProductRepository();
+  const cost = Money.of(10, 'PLN');
+  const price = Money.of(20, 'PLN');
+  if (cost.isErr() || price.isErr()) throw new Error('money fixture failed');
+  const product = Product.create({
+    id: 'p-real',
+    workspaceId: 'ws-1',
+    sku: 'S-REAL',
+    name: 'Real widget',
+    description: 'A real widget for listing and publish preview tests',
+    costPrice: cost.value,
+    sellingPrice: price.value,
+    condition: 'good',
+    category: 'misc',
+  });
+  if (product.isErr()) throw product.error;
+  await products.save(product.value);
+  return new ProductAssistanceGraph(
+    new ProductAIDraftService(ai),
+    {
+      recheck: async () => {
+        throw new Error('Publication recheck is not part of this test');
+      },
+    },
+    products,
+    new InMemoryListingRepository(),
+    new InMemoryMarketplaceRepository(),
+    ai
+  );
+}
+
 async function buildTestApp(
   options: {
     olxPublicationQuotaService?: OlxPublicationQuotaService;
@@ -522,6 +571,7 @@ async function buildTestApp(
     olxAdapterMode?: string;
     hermesStatus?: AppDeps['hermesStatus'];
     marketplaceImportService?: MarketplaceImportService;
+    productAssistanceGraph?: AppDeps['productAssistanceGraph'];
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -544,6 +594,7 @@ async function buildTestApp(
     listingService: stubListingService(),
     hermesService: options.hermesService ?? stubHermesService(),
     hermesStatus: options.hermesStatus,
+    productAssistanceGraph: options.productAssistanceGraph,
     analyticsService: stubAnalyticsService(),
     productRepo: productRepo as IProductRepository,
     listingRepo: listingRepo as IListingRepository,
@@ -926,6 +977,23 @@ describe('Presentation API', () => {
       expect(res.body.data.id).toBeDefined();
     });
 
+    it('create accepts costPrice null for a product whose cost is unknown', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).post('/api/products')).send({
+        sku: 'UNKNOWN-COST-1',
+        name: 'Widget with unknown cost',
+        description: 'A widget whose purchase cost is not known yet',
+        costPrice: null,
+        sellingPrice: 20,
+        condition: 'good',
+        category: 'misc',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.costPrice).toBeNull();
+    });
+
     it('requires explicit API confirmation before creating below-cost pricing', async () => {
       const { app } = await buildTestApp();
       const body = {
@@ -968,6 +1036,7 @@ describe('Presentation API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.mode).toBe('title');
+      expect(res.body.data).toMatchObject({ source: 'offline', confidence: null });
       expect(res.body.data.fields.name).toBe('Vintage Canon camera');
       expect(res.body.data.fields.status).toBe('draft');
       expect(res.body.data.uncertainFields).toContain('sellingPrice');
@@ -1000,6 +1069,34 @@ describe('Presentation API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.fields.images).toEqual(['https://example.test/camera.jpg']);
+    });
+
+    describe('while Hermes is unreachable', () => {
+      const originalFetch = globalThis.fetch;
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+      });
+
+      it('improvements returns 503 with stable message', async () => {
+        globalThis.fetch = jest.fn(async () => {
+          throw new TypeError('fetch failed');
+        }) as typeof fetch;
+        const { app } = await buildTestApp({
+          productAssistanceGraph: await hermesModeAssistanceGraph(),
+        });
+
+        const res = await auth(request(app).post('/api/products/p-real/improvements')).send({});
+
+        expect(res.status).toBe(503);
+        expect(res.body).toEqual({
+          success: false,
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Hermes AI is not reachable in this environment',
+          },
+        });
+      });
     });
 
     it('creates a draft OLX listing for a product', async () => {

@@ -32,8 +32,12 @@ export class CreateProductUseCase {
 
     const currency = dto.currency ?? workspace.currency;
 
-    const costPrice = Money.of(dto.costPrice, currency);
-    if (costPrice.isErr()) return costPrice;
+    let costPrice: Money | null = null;
+    if (dto.costPrice !== null) {
+      const cost = Money.of(dto.costPrice, currency);
+      if (cost.isErr()) return cost;
+      costPrice = cost.value;
+    }
     const sellingPrice = Money.of(dto.sellingPrice, currency);
     if (sellingPrice.isErr()) return sellingPrice;
 
@@ -43,7 +47,7 @@ export class CreateProductUseCase {
       sku: dto.sku,
       name: dto.name,
       description: dto.description,
-      costPrice: costPrice.value,
+      costPrice,
       sellingPrice: sellingPrice.value,
       condition: dto.condition,
       category: dto.category,
