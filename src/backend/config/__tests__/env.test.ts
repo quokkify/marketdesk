@@ -1,6 +1,7 @@
 // S1: the JWT secret resolver must fail closed in production (no usable secret, so nothing can
 // be signed or verified) and return a clearly-marked dev-only value outside production.
 
+import { createHmac, createSecretKey } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCredentialVault';
 import {
@@ -51,6 +52,15 @@ describe('positiveInt', () => {
   );
 });
 
+// HMAC accepts an empty key, so a token for an app that signs with an empty secret needs no
+// secret at all to forge.
+function forgeWithEmptyKey(payload: Record<string, unknown>): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}`;
+  const signature = createHmac('sha256', '').update(unsigned).digest('base64url');
+  return `${unsigned}.${signature}`;
+}
+
 describe('resolveJwtSecret (S1 fail-closed JWT secret)', () => {
   describe('production', () => {
     const PROD = true;
@@ -66,12 +76,20 @@ describe('resolveJwtSecret (S1 fail-closed JWT secret)', () => {
       expect(resolveJwtSecret(value, 'JWT_SECRET', PROD)).toBe('');
     });
 
+    // A token signed with some other secret fails under every secret, so it would prove nothing
+    // about verification. The forgery below is genuine, and only the refusal of the empty
+    // secret itself stops it.
     it('leaves no secret that can sign or verify a token', () => {
       const secret = resolveJwtSecret(undefined, 'JWT_SECRET', PROD);
-      const tokenFromElsewhere = jwt.sign({ userId: 'u-1' }, 'a-secret-the-app-never-had');
+      const forged = forgeWithEmptyKey({ userId: 'u-1' });
 
-      expect(() => jwt.sign({ userId: 'u-1' }, secret)).toThrow();
-      expect(() => jwt.verify(tokenFromElsewhere, secret, { algorithms: ['HS256'] })).toThrow();
+      expect(
+        jwt.verify(forged, createSecretKey(Buffer.alloc(0)), { algorithms: ['HS256'] }),
+      ).toMatchObject({ userId: 'u-1' });
+      expect(() => jwt.sign({ userId: 'u-1' }, secret)).toThrow('secretOrPrivateKey must have a value');
+      expect(() => jwt.verify(forged, secret, { algorithms: ['HS256'] })).toThrow(
+        'secret or public key must be provided',
+      );
     });
 
     it('returns a real, non-placeholder secret unchanged', () => {
@@ -144,6 +162,15 @@ describe('assertStartupConfiguration (fail-fast boot)', () => {
     expect(empty).toThrow(/MARKETPLACE_CREDENTIALS_KEY is empty/);
     expect(invalid).toThrow(/MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key/);
     expect(invalid).not.toThrow(/is empty/);
+  });
+
+  it('gives a your_ credentials key the env:init hint, like any placeholder, not the openssl one', () => {
+    const boot = () =>
+      assertStartupConfiguration(config({ credentialsKey: 'your_marketplace_credentials_key' }));
+
+    expect(boot).toThrow(/MARKETPLACE_CREDENTIALS_KEY is still a placeholder.*npm run env:init/);
+    expect(boot).not.toThrow(/openssl/);
+    expect(boot).not.toThrow(/not a base64-encoded 32-byte key/);
   });
 
   it.each([

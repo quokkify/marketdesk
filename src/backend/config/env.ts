@@ -4,7 +4,8 @@ import { resolveDatabaseSslMode } from './databaseConfig';
 import { resolveHermesProviderMode } from './hermesProviderMode';
 export { resolveDatabaseSslMode, type DatabaseSslMode } from './databaseConfig';
 
-dotenv.config();
+// Quiet: dotenv would otherwise print its own "injected env" line on every import of this module.
+dotenv.config({ quiet: true });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const runningInProduction = nodeEnv === 'production';
@@ -240,9 +241,14 @@ export function assertStartupConfiguration(e: typeof env): void {
   if (e.marketplaceCredentialsKey === '') {
     problems.push(`MARKETPLACE_CREDENTIALS_KEY is empty. ${FIX_WITH_ENV_INIT}`);
   } else if (!isValidCredentialsKey(e.marketplaceCredentialsKey)) {
+    // A valid key passes whatever it starts with; only the diagnosis of an invalid one depends on
+    // the prefix. env:init replaces a placeholder like an empty value, and a placeholder is no
+    // damaged copy of a real key, so the openssl hint and the restore-the-original warning do not fit.
     problems.push(
-      'MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key. ' +
-        `${FIX_WITH_OPENSSL} ${CREDENTIALS_KEY_WARNING}`,
+      isPlaceholderSecret(e.marketplaceCredentialsKey)
+        ? `MARKETPLACE_CREDENTIALS_KEY is still a placeholder. ${FIX_WITH_ENV_INIT}`
+        : 'MARKETPLACE_CREDENTIALS_KEY is not a base64-encoded 32-byte key. ' +
+            `${FIX_WITH_OPENSSL} ${CREDENTIALS_KEY_WARNING}`,
     );
   }
 

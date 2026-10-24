@@ -124,7 +124,7 @@ describe('boot configuration', () => {
     });
     if (!auth) throw new Error('AuthMiddleware did not load');
 
-    expect(() => auth?.signToken({ userId: 'u-1' })).toThrow();
+    expect(() => auth?.signToken({ userId: 'u-1' })).toThrow('secretOrPrivateKey must have a value');
   });
 
   it.each([

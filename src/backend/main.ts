@@ -61,7 +61,7 @@ const startServer = async () => {
     assertStartupConfiguration(env);
     if (insecureDevJwtAllowed(env)) {
       logger.warn(
-        'ALLOW_INSECURE_DEV_JWT=true: JWT secret checks are relaxed. Use it for local development only.',
+        'JWT secret checks are relaxed (ALLOW_INSECURE_DEV_JWT=true or NODE_ENV=test). Use this for local development only.',
       );
     }
 
