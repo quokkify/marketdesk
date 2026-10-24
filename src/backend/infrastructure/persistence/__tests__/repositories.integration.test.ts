@@ -254,6 +254,28 @@ describeDb('PostgreSQL repositories (integration)', () => {
     expect(await repo.findById(id)).toBeNull();
   });
 
+  it('persists the provider source of an AI-made Hermes event', async () => {
+    if (skipIfNotReady()) return;
+    const repo = new EventRepository();
+    const id = randomUUID();
+    const { HermesEvent } = await import('../../../domain/entities/HermesEvent');
+    const event = unwrap(
+      HermesEvent.create({
+        id,
+        workspaceId,
+        type: 'suggested_better_title',
+        severity: 'info',
+        title: 'Improve product title for search',
+        detail: 'Camera - Good condition. Heuristic offline suggestion; Hermes was not consulted.',
+        proposedChange: { kind: 'title', field: 'title', from: 'Camera', to: 'Camera - Good condition' },
+        source: 'offline',
+      })
+    );
+    await repo.save(event);
+    expect((await repo.findById(id))?.source).toBe('offline');
+    await repo.deleteOlderThan(new Date(Date.now() + 60_000));
+  });
+
   it('records activity log entries (append-only)', async () => {
     if (skipIfNotReady()) return;
     const repo = new ActivityLogRepository();

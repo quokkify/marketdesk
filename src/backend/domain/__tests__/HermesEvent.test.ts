@@ -42,6 +42,26 @@ describe('HermesEvent creation invariants', () => {
     });
     expect(r.isOk()).toBe(true);
   });
+
+  it('records which provider produced an AI-made change', () => {
+    expect(unwrap(HermesEvent.create(priceEvent(100, 90, { source: 'offline' }))).source).toBe(
+      'offline',
+    );
+    expect(unwrap(HermesEvent.create(priceEvent(100, 90, { source: 'hermes' }))).source).toBe(
+      'hermes',
+    );
+  });
+
+  it('gives an event without a provider source a null source', () => {
+    expect(unwrap(HermesEvent.create(priceEvent(100, 90))).source).toBeNull();
+  });
+
+  it('rejects an unknown provider source', () => {
+    const r = HermesEvent.create(
+      priceEvent(100, 90, { source: 'gpt' as unknown as CreateHermesEventProps['source'] }),
+    );
+    expect(r.isErr()).toBe(true);
+  });
 });
 
 describe('HermesEvent lifecycle transitions', () => {
