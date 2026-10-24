@@ -4,6 +4,7 @@ import React, { useReducer, useState } from 'react';
 import {
   Alert,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,7 +28,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import type { Listing, Marketplace } from '@shared/types';
 import type { ListingDelistOperation } from '../../state/api/dto.js';
-import { formatCurrency } from '../../utils/formatters.js';
+import { formatMoney } from '../../utils/formatters.js';
 import { ListingStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
@@ -44,6 +45,7 @@ export interface ListingsTableProps {
   productHref?: (listing: Listing) => string;
   resolveMarketplaceName?: (marketplaceId: string) => string;
   resolveMarketplaceKey?: (marketplaceId: string) => Marketplace['key'] | undefined;
+  resolveMarketplaceSandbox?: (marketplaceId: string) => boolean;
   currency?: string;
   emptyAction?: React.ReactNode;
   actionsDisabled?: boolean;
@@ -150,6 +152,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
   productHref,
   resolveMarketplaceName,
   resolveMarketplaceKey,
+  resolveMarketplaceSandbox,
   currency,
   emptyAction,
   actionsDisabled = false,
@@ -232,6 +235,16 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                       {resolveMarketplaceName
                         ? resolveMarketplaceName(listing.marketplaceId)
                         : listing.marketplaceId}
+                      {resolveMarketplaceSandbox?.(listing.marketplaceId) && (
+                        <Chip
+                          component="span"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          label="Sandbox"
+                          sx={{ ml: 0.75, height: 18 }}
+                        />
+                      )}
                     </Typography>
                     {listing.syncError && (
                       <Typography variant="caption" color="error.main" noWrap>
@@ -258,7 +271,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formatCurrency(listing.price, currency)}
+                      {formatMoney(listing.price, currency)}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
@@ -310,7 +323,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                       && Boolean(listing.marketplaceListingId)
                       && resolveMarketplaceKey?.(listing.marketplaceId) === 'olx'
                       && (
-                      <Tooltip title="Снять с площадки и вернуть в черновики">
+                      <Tooltip title="Remove from marketplace and return to draft">
                         <IconButton
                           size="small"
                           color="error"
@@ -339,7 +352,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Снять с площадки и вернуть в черновики?</DialogTitle>
+        <DialogTitle>Remove from marketplace and return to draft?</DialogTitle>
         <DialogContent>
           {delistListing && (
             <DelistConfirmationContent
@@ -410,7 +423,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               }
             }}
           >
-            Снять с площадки
+            Remove from marketplace
           </Button>
         </DialogActions>
       </Dialog>
