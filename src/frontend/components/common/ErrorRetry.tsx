@@ -45,7 +45,7 @@ export const ErrorRetry: React.FC<ErrorRetryProps> = ({
         px: 2,
       }}
     >
-      <Stack spacing={1.5} alignItems="center">
+      <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
         <ErrorOutlineIcon sx={{ fontSize: compact ? 36 : 48, color: 'error.main', opacity: 0.9 }} />
         <Typography variant="h6">{title}</Typography>
         {detail && (

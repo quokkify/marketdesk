@@ -1,11 +1,35 @@
 import React from 'react';
 import { Button, Stack, TextField, Typography } from '@mui/material';
-import {
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import AnalyticsPage, {
   AnalyticsDateRangeControls,
   analyticsCsv,
   analyticsRangeForPreset,
 } from './AnalyticsPage';
 import type { ListingPerformance } from '../state/api';
+
+const mockMarketplaces: { data: Array<{ id: string; name: string; sandbox: boolean }> } = { data: [] };
+
+jest.mock('../services/hooks/index.js', () => ({
+  useAnalyticsOverview: () => ({ data: undefined, isLoading: false, isError: false }),
+  useAnalyticsListings: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+  useMarketplaces: () => mockMarketplaces,
+}));
+
+jest.mock('../state/hooks.js', () => ({
+  useAppSelector: () => 'PLN',
+}));
+
+jest.mock('../components/charts/index.js', () => ({
+  RevenueChart: () => null,
+  ViewsChart: () => null,
+  ConversionChart: () => null,
+}));
+
+jest.mock('../components/tables/index.js', () => ({
+  AnalyticsTable: () => null,
+}));
 
 type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
 
@@ -34,9 +58,10 @@ describe('AnalyticsDateRangeControls', () => {
     const buttons = findByType(tree, Button);
 
     expect(labels.map((label) => label.props.htmlFor).filter(Boolean)).toEqual(['analytics-from', 'analytics-to']);
-    expect(fields.map((field) => field.props.inputProps)).toEqual([
-      { 'aria-label': 'From date' }, { 'aria-label': 'To date' },
-    ]);
+    const htmlInputs = fields.map(
+      (field) => (field.props.slotProps as { htmlInput?: unknown } | undefined)?.htmlInput
+    );
+    expect(htmlInputs).toEqual([{ 'aria-label': 'From date' }, { 'aria-label': 'To date' }]);
     expect(buttons.map((button) => button.props.children)).toEqual(['7D', '30D', '90D', 'YTD']);
     (buttons[2].props.onClick as () => void)();
     expect(onPresetChange).toHaveBeenCalledWith('90d');
@@ -73,7 +98,7 @@ describe('analytics report helpers', () => {
       status: 'live', price: 120, revenue: 200, profit: 100, currency: 'PLN', sales: 2, views: 100,
       conversion: 2, watchers: 3, messages: 4,
     };
-    const csv = analyticsCsv([row]);
+    const csv = analyticsCsv([row], [{ id: 'marketplace-1', sandbox: false }]);
     expect(csv).toContain('"Currency","Revenue","Profit"');
     expect(csv).toContain('"PLN","200","100"');
     expect(csv).toContain('"Camera, ""Pro"""');
@@ -87,9 +112,47 @@ describe('analytics report helpers', () => {
       status: 'live', price: 1, revenue: null, profit: null, currency: null, sales: 0, views: 1,
       conversion: 0, watchers: 0, messages: 0,
     };
-    const csv = analyticsCsv([row]);
+    const csv = analyticsCsv([row], [{ id: 'marketplace-1', sandbox: false }]);
     expect(csv).toContain('"\'\t=HYPERLINK(""https://evil"")"');
     expect(csv).toContain('"\'\r+cmd|calc"');
     expect(csv).toContain('"\'@SUM(1+1)"');
+  });
+
+  it('marks each row with its marketplace sandbox flag, blank when the marketplace is unknown', () => {
+    const row = (listingId: string, marketplaceId: string): ListingPerformance => ({
+      listingId, productId: 'product-1', productName: 'Camera', productSku: null,
+      marketplaceId, marketplaceName: 'OLX', marketplaceListingId: null,
+      status: 'live', price: 1, revenue: null, profit: null, currency: 'PLN', sales: 0, views: 57,
+      conversion: 0, watchers: 3, messages: 0,
+    });
+    const csv = analyticsCsv(
+      [row('sandboxed', 'marketplace-olx'), row('real', 'marketplace-real'), row('unknown', 'marketplace-gone')],
+      [{ id: 'marketplace-olx', sandbox: true }, { id: 'marketplace-real', sandbox: false }],
+    );
+    const [header, sandboxed, real, unknown] = csv.split('\n').map((line) => line.split(','));
+
+    expect(header).toEqual([
+      '"Listing"', '"Product"', '"Marketplace"', '"Sandbox"', '"Currency"',
+      '"Revenue"', '"Profit"', '"Sales"', '"Views"', '"Conversion"',
+    ]);
+    expect([sandboxed![0], sandboxed![3]]).toEqual(['"sandboxed"', '"true"']);
+    expect([real![0], real![3]]).toEqual(['"real"', '"false"']);
+    expect([unknown![0], unknown![3]]).toEqual(['"unknown"', '""']);
+  });
+});
+
+describe('AnalyticsPage sandbox data', () => {
+  const notice =
+    'Sandbox data: views and watchers are simulated by the OLX sandbox and grow on every sync.';
+  const render = () => renderToStaticMarkup(<MemoryRouter><AnalyticsPage /></MemoryRouter>);
+
+  it('says that views and watchers are simulated while a marketplace runs in the sandbox', () => {
+    mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: true }];
+    const sandbox = render();
+    mockMarketplaces.data = [{ id: 'marketplace-olx', name: 'OLX', sandbox: false }];
+    const real = render();
+
+    expect(sandbox).toContain(notice);
+    expect(real).not.toContain(notice);
   });
 });

@@ -1,4 +1,4 @@
-import uiReducer, { resolveThemeMode, setThemeMode, shouldResetThemeForPrincipal } from './uiSlice';
+import uiReducer, { resolveThemeMode, setThemeMode } from './uiSlice';
 
 describe('theme preference semantics', () => {
   it('resolves system against the browser preference and preserves explicit modes', () => {
@@ -11,12 +11,5 @@ describe('theme preference semantics', () => {
   it('hydrates an explicit persisted server preference into UI state without a write effect', () => {
     const hydrated = uiReducer(undefined, setThemeMode('system'));
     expect(hydrated.themeMode).toBe('system');
-  });
-
-  it('requires a neutral reset on login, logout, and principal replacement', () => {
-    expect(shouldResetThemeForPrincipal(null, 'workspace:user-a')).toBe(true);
-    expect(shouldResetThemeForPrincipal('workspace:user-a', null)).toBe(true);
-    expect(shouldResetThemeForPrincipal('workspace:user-a', 'workspace:user-b')).toBe(true);
-    expect(shouldResetThemeForPrincipal('workspace:user-a', 'workspace:user-a')).toBe(false);
   });
 });

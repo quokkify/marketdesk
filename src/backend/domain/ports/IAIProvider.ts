@@ -16,6 +16,8 @@ export interface PriceSuggestionContext {
   recentViews: number;
   conversionRate: number;
   competitorPrice?: number;
+  // Product cost in the listing currency, when known.
+  costPrice?: number;
 }
 
 export interface PriceSuggestion {
@@ -46,4 +48,21 @@ export interface IAIProvider {
 
   // Run a MarketDesk-owned, tool-free listing SEO profile over sanitized input only.
   analyzeListingSeo(input: ListingSeoInput, preset: CreativityPreset): Promise<ListingSeoOutput>;
+}
+
+// Marks every result of the built-in offline heuristics wherever it is shown, so a
+// heuristic is never presented as Hermes output.
+export const OFFLINE_AI_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
+
+// Optional capability of a provider that may answer from built-in offline heuristics
+// instead of Hermes. HermesDecisionEngine keeps changes made while offline review-only.
+export interface AIProviderSourceAware {
+  // The source that would answer the next call.
+  activeProvider(): Promise<'hermes' | 'offline'>;
+}
+
+export function isAIProviderSourceAware(
+  provider: IAIProvider
+): provider is IAIProvider & AIProviderSourceAware {
+  return typeof (provider as Partial<AIProviderSourceAware>).activeProvider === 'function';
 }

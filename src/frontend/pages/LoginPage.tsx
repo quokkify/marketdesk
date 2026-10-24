@@ -4,7 +4,12 @@ import React, { useState } from 'react';
 import { Box, Button, Card, Stack, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import type { User } from '@shared/types';
-import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE, AUTONOMY_LEVELS } from '@shared/constants';
+import {
+  DEFAULT_CURRENCY,
+  DEFAULT_TIMEZONE,
+  AUTONOMY_LEVELS,
+  REGISTRATION_WORKSPACE_NAME_MAX_LENGTH,
+} from '@shared/constants';
 import { useLogin, useRegister } from '../services/hooks/index.js';
 import { useAppDispatch } from '../state/hooks.js';
 import { setCredentials } from '../state/slices/authSlice.js';
@@ -17,6 +22,21 @@ function errorMessage(err: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+export const WorkspaceNameField: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ value, onChange }) => (
+  <TextField
+    label="Workspace name"
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    autoComplete="organization"
+    fullWidth
+    required
+    slotProps={{ htmlInput: { maxLength: REGISTRATION_WORKSPACE_NAME_MAX_LENGTH } }}
+  />
+);
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,9 +59,13 @@ const LoginPage: React.FC = () => {
     }
 
     const trimmedWorkspaceName = workspaceName.trim();
+    if (isRegistration && !trimmedWorkspaceName) {
+      setError('Workspace name is required');
+      return;
+    }
     try {
       const result = isRegistration
-        ? register({ email, password, workspaceName: trimmedWorkspaceName || undefined })
+        ? register({ email, password, workspaceName: trimmedWorkspaceName })
         : login({ email, password });
       const { token, user: apiUser } = await result.unwrap();
       const user: User = {
@@ -97,13 +121,7 @@ const LoginPage: React.FC = () => {
               required
             />
             {isRegistration && (
-              <TextField
-                label="Workspace name"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                autoComplete="organization"
-                fullWidth
-              />
+              <WorkspaceNameField value={workspaceName} onChange={setWorkspaceName} />
             )}
             <TextField
               label="Password"
@@ -113,7 +131,7 @@ const LoginPage: React.FC = () => {
               autoComplete={isRegistration ? 'new-password' : 'current-password'}
               fullWidth
               required
-              inputProps={{ minLength: isRegistration ? 8 : undefined }}
+              slotProps={{ htmlInput: { minLength: isRegistration ? 8 : undefined } }}
               helperText={isRegistration ? 'At least 8 characters' : undefined}
             />
             {error && (

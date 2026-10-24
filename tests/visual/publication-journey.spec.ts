@@ -94,6 +94,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('shows the product creation entry point and review-only assistance', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+
   await page.goto('/products');
   await expect(page.getByText('Mirrorless camera kit').first()).toBeVisible();
   await page.getByRole('button', { name: 'New product' }).click();
@@ -117,4 +122,6 @@ test('shows the product creation entry point and review-only assistance', async 
   await page.getByRole('dialog').screenshot({
     path: `${imagePath}/03-confirm-publication.png`, animations: 'disabled',
   });
+
+  expect(consoleErrors.filter((text) => text.includes('does not recognize the'))).toEqual([]);
 });

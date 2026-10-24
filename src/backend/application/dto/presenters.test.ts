@@ -1,6 +1,9 @@
-import { presentListing } from './presenters';
+import { presentHermesEvent, presentListing, presentMarketplace } from './presenters';
 import { Listing } from '../../domain/entities/Listing';
+import { Marketplace } from '../../domain/entities/Marketplace';
+import { HermesEvent } from '../../domain/entities/HermesEvent';
 import { unwrap, money } from '../../domain/testkit/support';
+import type { MarketplaceKey } from '../../../shared/types';
 
 function listingWithExternalUrl(url: string | null, status: 'live' | 'draft' = 'live') {
   return unwrap(
@@ -59,5 +62,55 @@ describe('presentListing', () => {
     expect(unavailable.metricsAvailability?.conversations).toBe(false);
     expect(unavailable.messages).toBeNull();
     expect(unavailable.metricsAvailability?.messages).toBe(false);
+  });
+});
+
+describe('presentMarketplace', () => {
+  function marketplace(key: MarketplaceKey) {
+    return unwrap(
+      Marketplace.create({
+        id: `marketplace-${key}`,
+        workspaceId: 'ws-1',
+        key,
+        name: key,
+        connected: true,
+      }),
+    );
+  }
+
+  it('flags OLX as sandbox only while the OLX adapter is not real', () => {
+    expect(presentMarketplace(marketplace('olx'), { olxSandbox: true }).sandbox).toBe(true);
+    expect(presentMarketplace(marketplace('olx'), { olxSandbox: false }).sandbox).toBe(false);
+  });
+
+  it('never flags other marketplaces as sandbox', () => {
+    expect(presentMarketplace(marketplace('allegro'), { olxSandbox: true }).sandbox).toBe(false);
+  });
+});
+
+describe('presentHermesEvent', () => {
+  function titleEvent(source?: 'hermes' | 'offline') {
+    return unwrap(
+      HermesEvent.create({
+        id: 'event-1',
+        workspaceId: 'workspace-1',
+        productId: 'product-1',
+        type: 'suggested_better_title',
+        severity: 'info',
+        title: 'Improve product title for search',
+        detail: 'Camera - Good condition. Heuristic offline suggestion; Hermes was not consulted.',
+        proposedChange: { kind: 'title', field: 'title', from: 'Camera', to: 'Camera - Good condition' },
+        source,
+      }),
+    );
+  }
+
+  it('shows which provider produced an AI-made event', () => {
+    expect(presentHermesEvent(titleEvent('offline')).source).toBe('offline');
+    expect(presentHermesEvent(titleEvent('hermes')).source).toBe('hermes');
+  });
+
+  it('leaves the source out when no provider is recorded', () => {
+    expect(presentHermesEvent(titleEvent()).source).toBeUndefined();
   });
 });

@@ -129,6 +129,7 @@ export const {
   useSaveMarketplaceAppCredentialsMutation,
   useSyncMarketplaceMutation,
   useConnectMarketplaceMutation,
+  useCheckMarketplaceQuery,
   useLazyCheckMarketplaceQuery,
   useImportMarketplacePreviewMutation,
   useImportMarketplaceAdvertsMutation,

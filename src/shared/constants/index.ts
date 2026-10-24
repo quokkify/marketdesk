@@ -45,6 +45,29 @@ export const MARKETPLACE_NAMES: Record<MarketplaceKey, string> = {
   amazon: 'Amazon',
 };
 
+// Marketplace brand colours (PRD §4.1). The single source for channel colours;
+// they appear only as small logo chips.
+export const MARKETPLACE_BRAND_COLORS: Record<MarketplaceKey, string> = {
+  olx: '#12B6AB',
+  allegro: '#FF5A00',
+  vinted: '#09B1BA',
+  facebook: '#1877F2',
+  ebay: '#E53238',
+  etsy: '#F56400',
+  amazon: '#FF9900',
+};
+
+// Two-letter codes shown inside marketplace logo chips.
+export const MARKETPLACE_SHORT: Record<MarketplaceKey, string> = {
+  olx: 'OL',
+  allegro: 'AL',
+  vinted: 'VI',
+  facebook: 'FB',
+  ebay: 'EB',
+  etsy: 'ET',
+  amazon: 'AM',
+};
+
 // Marketplace sync modes
 export const SYNC_MODES = {
   REALTIME: 'realtime',
@@ -186,6 +209,9 @@ export const DEFAULT_TIMEZONE = 'Europe/Warsaw';
 // Product invariants
 export const PRODUCT_DESCRIPTION_MIN_LENGTH = 20;
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 2000;
+
+// Registration limits
+export const REGISTRATION_WORKSPACE_NAME_MAX_LENGTH = 120;
 
 // Pagination
 export const DEFAULT_PAGE_SIZE = 20;

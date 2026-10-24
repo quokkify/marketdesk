@@ -1,20 +1,58 @@
-// Hermes activity feed: filter by status/severity and review event cards.
-// Product analysis is launched only from an explicitly selected product.
+// Hermes activity feed: a banner that states which AI provider answers, stat tiles built
+// from endpoints that really exist, and a feed filtered by the server and grown with
+// "Load more". Product analysis is launched only from an explicitly selected product.
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Button, Chip, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  MenuItem,
+  Select,
+  Skeleton,
+  Stack,
+  Tab,
+  Tabs,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { HermesEvent, HermesEventStatus, HermesSeverity } from '@shared/types';
 import { HERMES_EVENT_STATUS_LIST, HERMES_SEVERITY_LIST } from '@shared/constants';
-import { useHermesEvents } from '../services/hooks/index.js';
-import type { HermesEventListParams } from '../state/api/index.js';
+import {
+  useAnalyticsOverview,
+  useHermesEventFeed,
+  useHermesEvents,
+  useHermesStatus,
+  useMarketplaces,
+} from '../services/hooks/index.js';
+import { APP_ROUTE_PATHS } from '../utils/constants.js';
 import { Card } from '../components/common/Card.js';
 import { EmptyState } from '../components/common/EmptyState.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { LoadingSkeleton } from '../components/common/Skeleton.js';
 import { HermesStatusBadge, HermesSeverityBadge } from '../components/common/Badge.js';
 import { HermesEventCard } from '../components/hermes/index.js';
+import {
+  HERMES_ACTIONS_SAMPLE_SIZE,
+  HERMES_ACTIVITY_TABS,
+  buildHermesMetrics,
+  flattenHermesFeed,
+  hermesEmptyState,
+  hermesFeedFilters,
+  hermesStatusChip,
+  hermesWatching,
+} from './hermesActivityState.js';
+import type {
+  HermesActivityTab,
+  HermesMetric,
+  HermesStatusChip,
+  HermesWatching,
+} from './hermesActivityState.js';
 
 const STATUS_LABELS: Record<HermesEventStatus, string> = {
   pending_decision: 'Decision pending',
@@ -34,91 +72,247 @@ const SEVERITY_LABELS: Record<HermesSeverity, string> = {
   critical: 'Critical',
 };
 
-export const HERMES_SETTINGS_PATH = '/settings#hermes';
+export const HERMES_SETTINGS_PATH = `${APP_ROUTE_PATHS.settings}?section=hermes`;
 
-export const HermesHero: React.FC<{
-  onConfigure: () => void;
-  onSelectProduct: () => void;
-}> = ({ onConfigure, onSelectProduct }) => (
-  <Card
-    sx={{ mb: 2.5, background: (t) => `linear-gradient(135deg, ${t.palette.primary.dark}, ${t.palette.primary.main})`, color: 'primary.contrastText' }}
-    contentSx={{ p: 3 }}
-  >
-    <Stack spacing={2}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ md: 'center' }}>
-        <Stack spacing={1}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <AutoAwesomeIcon />
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>Hermes AI agent</Typography>
-            <Chip size="small" label="Ready on demand" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'inherit' }} />
-          </Stack>
-          <Typography variant="body2" sx={{ opacity: 0.9 }}>
-            Review recorded suggestions. New analysis starts from one explicitly selected product.
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" color="secondary" onClick={onConfigure}>Configure</Button>
-          <Button variant="outlined" color="inherit" startIcon={<AutoAwesomeIcon />} onClick={onSelectProduct}>
-            Select product to analyze
-          </Button>
-        </Stack>
-      </Stack>
-      <Alert severity="info" sx={{ bgcolor: 'rgba(255,255,255,0.92)' }}>
-        Whole-catalogue runs are not started from the UI. Choose a product and use Analyze with Hermes for review-only recommendations.
-      </Alert>
-    </Stack>
-  </Card>
-);
+// The one literal colour pair of the page: the companion's Hermes banner gradient.
+const HERMES_BANNER_FROM = '#5B5BD6';
+const HERMES_BANNER_TO = '#A24BD6';
+const HERMES_BANNER_GRADIENT = `linear-gradient(135deg, ${HERMES_BANNER_FROM}, ${HERMES_BANNER_TO})`;
 
-export const HermesMetrics: React.FC<{ awaitingReview?: number }> = ({ awaitingReview }) => {
-  const metrics = [
-    { label: 'Actions today', value: 'Unavailable', help: 'The current API does not expose a day-scoped aggregate.' },
-    { label: 'Awaiting review', value: awaitingReview == null ? 'Unavailable' : String(awaitingReview), help: awaitingReview == null ? 'The authoritative pending-review total could not be loaded.' : 'Authoritative total across all pending-review events.' },
-    { label: 'Listings created', value: 'Unavailable', help: 'The current API does not expose a verified created-listing aggregate.' },
-    { label: 'Time saved', value: 'Unavailable', help: 'No defensible time-saved measurement is available.' },
-  ];
+const HermesProviderChip: React.FC<{ provider: HermesStatusChip }> = ({ provider }) => {
+  const chip = (
+    <Chip
+      size="small"
+      color={provider.color}
+      label={provider.label}
+      sx={[
+        { fontWeight: 700 },
+        provider.color === 'default' && {
+          bgcolor: (t) => alpha(t.palette.common.white, 0.2),
+          color: 'inherit',
+        },
+      ]}
+    />
+  );
+  return provider.tooltip ? (
+    <Tooltip title={provider.tooltip} arrow describeChild>
+      {chip}
+    </Tooltip>
+  ) : (
+    chip
+  );
+};
+
+const HermesWatchingLine: React.FC<{ watching: HermesWatching }> = ({ watching }) => {
+  if (watching.kind === 'loading') {
+    return (
+      <Skeleton
+        variant="text"
+        width={280}
+        sx={{ bgcolor: (t) => alpha(t.palette.common.white, 0.3) }}
+      />
+    );
+  }
+  if (watching.kind === 'unavailable') {
+    return (
+      <Typography variant="body2" sx={{ opacity: 0.92 }}>
+        Live listing and marketplace counts could not be loaded.
+      </Typography>
+    );
+  }
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2.5 }}>
-      {metrics.map(({ label, value, help }) => (
-        <Card key={label} sx={{ flex: 1 }} contentSx={{ p: 2 }}>
-          <Typography variant="caption" color="text.secondary">{label}</Typography>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>{value}</Typography>
-          <Typography variant="caption" color="text.secondary">{help}</Typography>
-        </Card>
-      ))}
+    <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+      <Typography variant="body2" sx={{ opacity: 0.92 }}>
+        {watching.sentence}
+      </Typography>
+      {watching.sandbox && (
+        <Chip
+          size="small"
+          label="Sandbox"
+          sx={{ bgcolor: (t) => alpha(t.palette.common.white, 0.2), color: 'inherit', fontWeight: 700 }}
+        />
+      )}
     </Stack>
   );
 };
 
-const HermesActivityPage: React.FC = () => {
+export const HermesHero: React.FC<{
+  provider: HermesStatusChip;
+  watching: HermesWatching;
+  onConfigure: () => void;
+  onSelectProduct: () => void;
+}> = ({ provider, watching, onConfigure, onSelectProduct }) => (
+  <Card
+    sx={{
+      mb: 2.5,
+      border: 'none',
+      color: 'common.white',
+      background: HERMES_BANNER_GRADIENT,
+      boxShadow: (t) => `0 12px 30px ${alpha(t.palette.primary.main, 0.28)}`,
+    }}
+    contentSx={{ p: { xs: 2.5, md: 3 } }}
+  >
+    <Stack spacing={2}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}
+      >
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', minWidth: 0 }}>
+          <Box
+            aria-hidden="true"
+            sx={{
+              width: 52,
+              height: 52,
+              flexShrink: 0,
+              borderRadius: '14px',
+              display: 'grid',
+              placeItems: 'center',
+              bgcolor: (t) => alpha(t.palette.common.white, 0.2),
+            }}
+          >
+            <AutoAwesomeIcon />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography variant="h5" component="h2" sx={{ fontWeight: 800 }}>
+                Hermes AI
+              </Typography>
+              <HermesProviderChip provider={provider} />
+            </Stack>
+            <HermesWatchingLine watching={watching} />
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            onClick={onConfigure}
+            sx={{
+              bgcolor: 'common.white',
+              color: HERMES_BANNER_FROM,
+              '&:hover': { bgcolor: (t) => alpha(t.palette.common.white, 0.88) },
+            }}
+          >
+            Configure
+          </Button>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<AutoAwesomeIcon />}
+            onClick={onSelectProduct}
+            sx={{ borderColor: (t) => alpha(t.palette.common.white, 0.55) }}
+          >
+            Select product to analyze
+          </Button>
+        </Stack>
+      </Stack>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', opacity: 0.92 }}>
+        <InfoOutlinedIcon aria-hidden="true" sx={{ fontSize: 16, mt: '2px' }} />
+        <Typography variant="caption">
+          Whole-catalogue runs are not started from the UI. Choose a product and use Analyze for
+          review-only recommendations.
+        </Typography>
+      </Stack>
+    </Stack>
+  </Card>
+);
+
+export const HermesMetrics: React.FC<{ metrics: readonly HermesMetric[] }> = ({ metrics }) => (
+  <Box
+    sx={{
+      display: 'grid',
+      gap: 2,
+      mb: 2.5,
+      gridTemplateColumns: {
+        xs: '1fr',
+        sm: 'repeat(2, minmax(0, 1fr))',
+        md: 'repeat(4, minmax(0, 1fr))',
+      },
+    }}
+  >
+    {metrics.map(({ label, value, caption }) => (
+      <Card key={label} contentSx={{ p: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+          {label}
+        </Typography>
+        {value === null ? (
+          <Skeleton variant="text" width="40%" height={44} />
+        ) : (
+          <Typography variant="h4" sx={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+            {value}
+          </Typography>
+        )}
+        {caption && (
+          <Typography variant="caption" color="text.secondary">
+            {caption}
+          </Typography>
+        )}
+      </Card>
+    ))}
+  </Box>
+);
+
+export const HermesFeedFooter: React.FC<{
+  loaded: number;
+  total: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}> = ({ loaded, total, hasMore, loadingMore, onLoadMore }) => (
+  <Stack spacing={1} sx={{ alignItems: 'center', mt: 2.5 }}>
+    <Typography variant="caption" color="text.secondary">
+      {`Showing ${loaded} of ${total}`}
+    </Typography>
+    {hasMore && (
+      <Button variant="outlined" disabled={loadingMore} onClick={onLoadMore}>
+        {loadingMore ? 'Loading…' : 'Load more'}
+      </Button>
+    )}
+  </Stack>
+);
+
+// Today's tile and the totals come from list queries: the API has no summary endpoint yet.
+// Keeping them behind one hook means a summary endpoint replaces only this function.
+function useHermesMetrics(): HermesMetric[] {
+  const awaitingReview = useHermesEvents({ status: ['pending_review'], limit: 1, sort: '-createdAt' });
+  const completed = useHermesEvents({ status: ['applied'], limit: 1, sort: '-createdAt' });
+  const dismissed = useHermesEvents({ status: ['dismissed'], limit: 1, sort: '-createdAt' });
+  const recent = useHermesEvents({ limit: HERMES_ACTIONS_SAMPLE_SIZE, sort: '-createdAt' });
+  return buildHermesMetrics({ awaitingReview, completed, dismissed, recent, now: new Date() });
+}
+
+export interface HermesActivityPageProps {
+  /** Filters shown first. The route renders the page without props: the All tab and no selects. */
+  initialTab?: HermesActivityTab;
+  initialStatusFilter?: HermesEventStatus[];
+  initialSeverityFilter?: HermesSeverity[];
+}
+
+const HermesActivityPage: React.FC<HermesActivityPageProps> = ({
+  initialTab = 'all',
+  initialStatusFilter = [],
+  initialSeverityFilter = [],
+}) => {
   const navigate = useNavigate();
 
-  const [statusFilter, setStatusFilter] = useState<HermesEventStatus[]>([]);
-  const [severityFilter, setSeverityFilter] = useState<HermesSeverity[]>([]);
-  const [activityTab, setActivityTab] = useState<'all' | 'suggestions' | 'alerts' | 'completed'>('all');
+  const [activityTab, setActivityTab] = useState<HermesActivityTab>(initialTab);
+  const [statusFilter, setStatusFilter] = useState<HermesEventStatus[]>(initialStatusFilter);
+  const [severityFilter, setSeverityFilter] = useState<HermesSeverity[]>(initialSeverityFilter);
 
-  const params = useMemo<HermesEventListParams>(() => {
-    const p: HermesEventListParams = { sort: '-createdAt', limit: 50 };
-    if (statusFilter.length) p.status = statusFilter;
-    if (severityFilter.length) p.severity = severityFilter;
-    return p;
-  }, [statusFilter, severityFilter]);
+  const filters = useMemo(
+    () => hermesFeedFilters(activityTab, statusFilter, severityFilter),
+    [activityTab, statusFilter, severityFilter],
+  );
+  const feed = useHermesEventFeed(filters);
+  // RTK Query keeps the previous filter set's result in `data` and reports `isLoading` false once
+  // any data exists, so only `currentData`, the result for this exact filter set, may be shown.
+  const { items, total } = flattenHermesFeed(feed.currentData);
+  const feedLoading = feed.currentData === undefined && feed.isFetching;
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useHermesEvents(params);
-  const { data: pendingReviewData } = useHermesEvents({ sort: '-createdAt', limit: 1, status: ['pending_review'] });
-
-  const events: HermesEvent[] = data?.items ?? [];
-  const isCompletedEvent = (event: HermesEvent): boolean =>
-    event.status === 'applied' || event.status === 'dismissed' || event.status === 'reverted';
-  const isPendingSuggestion = (event: HermesEvent): boolean =>
-    event.status === 'pending_decision' || event.status === 'pending_review';
-  const visibleEvents = useMemo(() => {
-    if (activityTab === 'completed') return events.filter(isCompletedEvent);
-    if (activityTab === 'alerts') return events.filter((event) => event.severity === 'critical' || event.severity === 'warning');
-    if (activityTab === 'suggestions') return events.filter(isPendingSuggestion);
-    return events;
-  }, [activityTab, events]);
-  const completedCount = events.filter(isCompletedEvent).length;
+  const status = useHermesStatus();
+  const overview = useAnalyticsOverview();
+  const marketplaces = useMarketplaces();
+  const metrics = useHermesMetrics();
 
   const handleStatus = (e: SelectChangeEvent<HermesEventStatus[]>) => {
     const value = e.target.value;
@@ -130,100 +324,164 @@ const HermesActivityPage: React.FC = () => {
     setSeverityFilter(typeof value === 'string' ? (value.split(',') as HermesSeverity[]) : value);
   };
 
+  const emptyState = hermesEmptyState(activityTab, statusFilter.length + severityFilter.length > 0);
+
   return (
     <Box>
-      <HermesHero onConfigure={() => navigate(HERMES_SETTINGS_PATH)} onSelectProduct={() => navigate('/products')} />
-      <HermesMetrics awaitingReview={pendingReviewData?.total} />
+      <HermesHero
+        provider={hermesStatusChip(status.data, status)}
+        watching={hermesWatching(overview, marketplaces)}
+        onConfigure={() => navigate(HERMES_SETTINGS_PATH)}
+        onSelectProduct={() => navigate(APP_ROUTE_PATHS.products)}
+      />
+      <HermesMetrics metrics={metrics} />
 
       <Card sx={{ mb: 2.5 }} contentSx={{ p: 2 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          justifyContent="space-between"
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, justifyContent: 'space-between' }}
         >
-          <Tabs value={activityTab} onChange={(_e, value) => setActivityTab(value)} variant="scrollable" allowScrollButtonsMobile>
-            <Tab value="all" label="All activity" />
-            <Tab value="suggestions" label="Suggestions" />
-            <Tab value="alerts" label="Alerts" />
-            <Tab value="completed" label={`Completed (${completedCount})`} />
+          <Tabs
+            value={activityTab}
+            onChange={(_e, value: HermesActivityTab) => setActivityTab(value)}
+            aria-label="Hermes activity"
+            variant="scrollable"
+            allowScrollButtonsMobile
+            slotProps={{ indicator: { sx: { display: 'none' } } }}
+            sx={{
+              minHeight: 40,
+              p: 0.5,
+              borderRadius: '12px',
+              bgcolor: (t) => alpha(t.palette.text.primary, 0.05),
+              '& .MuiTab-root': {
+                minHeight: 32,
+                py: 0.5,
+                px: 1.75,
+                borderRadius: '9px',
+                fontWeight: 600,
+                textTransform: 'none',
+              },
+              '& .MuiTab-root.Mui-selected': {
+                bgcolor: 'background.paper',
+                color: 'text.primary',
+                boxShadow: 1,
+              },
+            }}
+          >
+            {HERMES_ACTIVITY_TABS.map(({ value, label }) => (
+              <Tab key={value} value={value} label={label} />
+            ))}
           </Tabs>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap" useFlexGap>
-          <Select
-            size="small"
-            multiple
-            displayEmpty
-            value={statusFilter}
-            onChange={handleStatus}
-            renderValue={(selected) =>
-              selected.length === 0 ? (
-                'All statuses'
-              ) : (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                  {selected.map((s) => (
-                    <HermesStatusBadge key={s} status={s} />
-                  ))}
-                </Stack>
-              )
-            }
-            sx={{ minWidth: 200 }}
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            useFlexGap
+            sx={{ flexWrap: 'wrap' }}
           >
-            {HERMES_EVENT_STATUS_LIST.map((s) => (
-              <MenuItem key={s} value={s}>
-                {STATUS_LABELS[s]}
-              </MenuItem>
-            ))}
-          </Select>
-          <Select
-            size="small"
-            multiple
-            displayEmpty
-            value={severityFilter}
-            onChange={handleSeverity}
-            renderValue={(selected) =>
-              selected.length === 0 ? (
-                'All severities'
-              ) : (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                  {selected.map((s) => (
-                    <HermesSeverityBadge key={s} severity={s} />
-                  ))}
-                </Stack>
-              )
-            }
-            sx={{ minWidth: 200 }}
-          >
-            {HERMES_SEVERITY_LIST.map((s) => (
-              <MenuItem key={s} value={s}>
-                {SEVERITY_LABELS[s]}
-              </MenuItem>
-            ))}
-          </Select>
+            <Select
+              size="small"
+              multiple
+              displayEmpty
+              value={statusFilter}
+              onChange={handleStatus}
+              renderValue={(selected) =>
+                selected.length === 0 ? (
+                  'All statuses'
+                ) : (
+                  <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                    {selected.map((s) => (
+                      <HermesStatusBadge key={s} status={s} />
+                    ))}
+                  </Stack>
+                )
+              }
+              sx={{ minWidth: 200 }}
+            >
+              {HERMES_EVENT_STATUS_LIST.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </MenuItem>
+              ))}
+            </Select>
+            <Select
+              size="small"
+              multiple
+              displayEmpty
+              value={severityFilter}
+              onChange={handleSeverity}
+              renderValue={(selected) =>
+                selected.length === 0 ? (
+                  'All severities'
+                ) : (
+                  <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                    {selected.map((s) => (
+                      <HermesSeverityBadge key={s} severity={s} />
+                    ))}
+                  </Stack>
+                )
+              }
+              sx={{ minWidth: 200 }}
+            >
+              {HERMES_SEVERITY_LIST.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {SEVERITY_LABELS[s]}
+                </MenuItem>
+              ))}
+            </Select>
           </Stack>
           {(statusFilter.length > 0 || severityFilter.length > 0) && (
-            <Button size="small" onClick={() => { setStatusFilter([]); setSeverityFilter([]); }}>
+            <Button
+              size="small"
+              onClick={() => {
+                setStatusFilter([]);
+                setSeverityFilter([]);
+              }}
+            >
               Clear filters ({statusFilter.length + severityFilter.length})
             </Button>
           )}
         </Stack>
       </Card>
 
-      {isError ? (
-        <ErrorRetry error={error} onRetry={refetch} />
-      ) : isLoading || isFetching ? (
-        <LoadingSkeleton lines={4} height={120} />
-      ) : visibleEvents.length === 0 ? (
+      {feed.isError && items.length === 0 ? (
+        <ErrorRetry error={feed.error} onRetry={feed.refetch} />
+      ) : feedLoading ? (
+        <LoadingSkeleton lines={6} height={112} />
+      ) : items.length === 0 ? (
         <EmptyState
-          title="No product analysis activity"
-          description="Select a product and use Analyze with Hermes, or change filters to see recorded suggestions, alerts, and completed actions."
+          title={emptyState.title}
+          description={emptyState.description}
           icon={<AutoAwesomeIcon sx={{ fontSize: 48 }} />}
         />
       ) : (
-        <Stack spacing={2}>
-          {visibleEvents.map((event: HermesEvent) => (
-            <HermesEventCard key={event.id} event={event} onResolved={refetch} />
-          ))}
-        </Stack>
+        <>
+          {feed.isError && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={() => feed.refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              The feed could not be refreshed. These events are what was loaded before.
+            </Alert>
+          )}
+          <Stack spacing={2}>
+            {items.map((event: HermesEvent) => (
+              <HermesEventCard key={event.id} event={event} />
+            ))}
+          </Stack>
+          <HermesFeedFooter
+            loaded={items.length}
+            total={total}
+            hasMore={feed.hasNextPage}
+            loadingMore={feed.isFetchingNextPage}
+            onLoadMore={() => feed.fetchNextPage()}
+          />
+        </>
       )}
     </Box>
   );

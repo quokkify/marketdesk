@@ -31,6 +31,9 @@ export interface MarketplaceCategoryMetadata {
   isLeaf: boolean;
   taxonomyVerifiedAt: string;
   taxonomyStaleAt: string;
+  // Set only by the sandbox taxonomy used while the OLX adapter is not real. Real
+  // provider metadata never carries it, and real OLX refuses a category that does.
+  sandbox?: true;
 }
 
 export interface ProductCategorySource {
@@ -337,8 +340,11 @@ export interface ProductAIDraftRequest {
 
 export interface ProductAIDraft {
   mode: ProductAIDraftMode;
+  /** `offline` when Hermes did not produce the draft: offline heuristics or fallback fields. */
+  source: AIProviderSource;
   fields: ProductAIDraftFields;
-  confidence: number;
+  /** From the Hermes listing assessment; null when Hermes did not assess the draft. */
+  confidence: number | null;
   uncertainFields: Array<keyof ProductAIDraftFields>;
   missingInfoQuestions: string[];
   notes: string[];
@@ -350,6 +356,8 @@ export interface Marketplace {
   key: MarketplaceKey;
   name: string;
   connected: boolean;
+  // True for OLX while the backend runs the OLX adapter in stub (sandbox) mode.
+  sandbox: boolean;
   syncMode: SyncMode;
   lastSyncAt?: string;
   errorCount: number;
@@ -412,6 +420,8 @@ export interface HermesEvent {
   autonomyDecision?: AutonomyDecision;
   createdAt: string;
   resolvedAt?: string;
+  /** Who produced an AI-made change; absent for suggestions no AI produced and older events. */
+  source?: AIProviderSource;
 }
 
 export interface PriceHistory {
@@ -455,6 +465,27 @@ export interface ApiKey {
   lastUsedAt?: string;
   revoked: boolean;
   createdAt: string;
+}
+
+// ============================================================================
+// AI provider status (GET /api/hermes/status)
+// ============================================================================
+
+/** HERMES_PROVIDER_MODE: `auto` uses Hermes only while it is configured and reachable. */
+export const HERMES_PROVIDER_MODES = ['auto', 'hermes', 'offline'] as const;
+export type HermesProviderMode = (typeof HERMES_PROVIDER_MODES)[number];
+
+/** Who produced an AI result: Hermes, or the built-in offline heuristics. */
+export type AIProviderSource = 'hermes' | 'offline';
+
+export interface HermesStatusView {
+  mode: HermesProviderMode;
+  activeProvider: 'hermes' | 'offline';
+  hermesConfigured: boolean;
+  /** null when no reachability check ran: offline mode or Hermes not configured. */
+  hermesReachable: boolean | null;
+  /** When the probe asked Hermes; the time of this status when no check applies. */
+  checkedAt: string;
 }
 
 // ============================================================================

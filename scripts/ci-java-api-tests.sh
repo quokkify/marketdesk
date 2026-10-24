@@ -14,8 +14,8 @@ export APP_PORT=3000
 
 cd "$repo_root"
 
-# The API layer refuses to wire without a marketplace credentials key and the server then
-# answers only /health and /ready, so give the stack a throwaway key on top of .env.example.
+# The app refuses to start without a marketplace credentials key, and Compose requires the
+# variable to be exported to render the stack, so give it a throwaway key on top of .env.example.
 env_file="$(mktemp)"
 
 cleanup() {
@@ -25,6 +25,7 @@ cleanup() {
 trap cleanup EXIT
 
 credentials_key="$(openssl rand -base64 32)"
+export MARKETPLACE_CREDENTIALS_KEY="$credentials_key"
 grep -v '^MARKETPLACE_CREDENTIALS_KEY=' .env.example > "$env_file"
 printf 'MARKETPLACE_CREDENTIALS_KEY=%s\n' "$credentials_key" >> "$env_file"
 export MARKETDESK_ENV_FILE="$env_file"

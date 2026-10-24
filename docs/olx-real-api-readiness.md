@@ -33,6 +33,7 @@ OLX_CLIENT_ID=[REDACTED]
 OLX_CLIENT_SECRET=[REDACTED]
 OLX_REDIRECT_URI=https://<domain>/api/marketplaces/olx/oauth/callback
 OLX_OAUTH_SUCCESS_URL=https://<domain>/marketplaces
+PUBLIC_BASE_URL=https://<domain>
 OLX_AUTH_URL=https://www.olx.pl/oauth/authorize
 OLX_TOKEN_URL=https://www.olx.pl/api/open/oauth/token
 MARKETPLACE_CREDENTIALS_KEY=[REDACTED_BASE64_32_BYTES]

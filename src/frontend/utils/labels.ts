@@ -39,7 +39,7 @@ export const AUTONOMY_DESCRIPTIONS: Record<AutonomyLevel, string> = {
   balanced:
     'Hermes auto-applies safe, low-risk actions (relisting, descriptions, new listings) within your guardrails. Pricing and risky changes still require approval.',
   full_auto:
-    'Hermes acts autonomously across pricing, listings and content within your guardrails. You are notified after the fact and can always override.',
+    'Hermes acts autonomously across pricing, listings and content within your guardrails. Changes are applied and recorded in the activity feed.',
 };
 
 export const HERMES_TYPE_LABELS: Record<HermesEventType, string> = {

@@ -1,0 +1,152 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import type { Listing, ListingStatus } from '@shared/types';
+import type { ListingsTableProps } from '../components/tables/index.js';
+import ListingsPage, { parseListingStatusParam, withListingStatusParam } from './ListingsPage';
+
+const mockCapture: { table?: ListingsTableProps } = {};
+const mockUseListings = jest.fn();
+const mockMarketplaces: Array<{ id: string; sandbox: boolean }> = [];
+
+jest.mock('../services/hooks/index.js', () => ({
+  useListings: (params: unknown) => mockUseListings(params),
+  useDelistListingToDraft: () => [jest.fn(), { isLoading: false }],
+}));
+
+jest.mock('../hooks/useMarketplaceLookup.js', () => ({
+  useMarketplaceLookup: () => ({
+    marketplaces: mockMarketplaces,
+    resolveMarketplaceName: (id: string) => id,
+    resolveMarketplaceKey: () => 'olx',
+    resolveMarketplaceSandbox: (id: string) =>
+      mockMarketplaces.some((marketplace) => marketplace.id === id && marketplace.sandbox),
+  }),
+}));
+
+jest.mock('../state/hooks.js', () => ({
+  useAppSelector: () => 'PLN',
+}));
+
+jest.mock('../components/tables/index.js', () => ({
+  ListingsTable: (props: ListingsTableProps) => {
+    mockCapture.table = props;
+    return null;
+  },
+}));
+
+function listing(id: string, status: ListingStatus): Listing {
+  return {
+    id,
+    productId: `product-${id}`,
+    marketplaceId: 'marketplace-olx',
+    price: 100,
+    status,
+    views: null,
+    watchers: null,
+    conversations: null,
+    messages: null,
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  };
+}
+
+const LISTINGS = [listing('live-1', 'live'), listing('error-1', 'error'), listing('draft-1', 'draft')];
+// A full page as the API returns it: 100 rows, every tenth one in error.
+const FULL_PAGE = Array.from({ length: 100 }, (_, index) =>
+  listing(`listing-${index}`, index % 10 === 0 ? 'error' : 'live'),
+);
+const PARTIAL_FILTER_CAPTION = 'Filter applies to the 100 most recent listings.';
+
+function loaded(data: Listing[]) {
+  return {
+    data,
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    error: undefined,
+    refetch: jest.fn(),
+  };
+}
+
+function renderAt(url: string): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={[url]}>
+      <ListingsPage />
+    </MemoryRouter>,
+  );
+}
+
+describe('ListingsPage status filter', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete mockCapture.table;
+    mockUseListings.mockReturnValue(loaded(LISTINGS));
+  });
+
+  it('reads the status filter from the URL so sync issues deep-link to error listings', () => {
+    const html = renderAt('/listings?status=error');
+
+    expect(mockUseListings).toHaveBeenCalledWith({ sort: '-updatedAt', limit: 100, status: ['error'] });
+    expect(mockCapture.table?.listings?.map((l) => l.id)).toEqual(['error-1']);
+    expect(html).toContain('>Error</span>');
+    expect(html).not.toContain('All statuses');
+  });
+
+  it('shows every listing when the URL has no status filter', () => {
+    const html = renderAt('/listings');
+
+    expect(mockUseListings).toHaveBeenCalledWith({ sort: '-updatedAt', limit: 100 });
+    expect(mockCapture.table?.listings).toEqual(LISTINGS);
+    expect(html).toContain('All statuses');
+  });
+
+  it('says the filter covers only the most recent listings when the loaded page is full', () => {
+    mockUseListings.mockReturnValue(loaded(FULL_PAGE));
+    const html = renderAt('/listings?status=error');
+
+    expect(html).toContain(PARTIAL_FILTER_CAPTION);
+    expect(mockCapture.table?.listings).toHaveLength(10);
+  });
+
+  it('leaves the caption out when every listing is loaded or no filter is active', () => {
+    expect(renderAt('/listings?status=error')).not.toContain(PARTIAL_FILTER_CAPTION);
+    mockUseListings.mockReturnValue(loaded(FULL_PAGE));
+    expect(renderAt('/listings')).not.toContain(PARTIAL_FILTER_CAPTION);
+  });
+
+  it('passes the marketplace sandbox flag to the listings table', () => {
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: true });
+
+    renderAt('/listings');
+
+    expect(mockCapture.table?.resolveMarketplaceSandbox?.('marketplace-olx')).toBe(true);
+    expect(mockCapture.table?.resolveMarketplaceSandbox?.('marketplace-other')).toBe(false);
+  });
+
+  it('says that views and watchers are simulated while a marketplace runs in the sandbox', () => {
+    const notice =
+      'Sandbox data: views and watchers are simulated by the OLX sandbox and grow on every sync.';
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: true });
+    const sandbox = renderAt('/listings');
+    mockMarketplaces.splice(0, mockMarketplaces.length, { id: 'marketplace-olx', sandbox: false });
+    const real = renderAt('/listings');
+
+    expect(sandbox).toContain(notice);
+    expect(real).not.toContain(notice);
+  });
+
+  it('ignores unknown and repeated statuses in the URL', () => {
+    expect(parseListingStatusParam('bogus,error,live,error')).toEqual(['live', 'error']);
+    expect(parseListingStatusParam(null)).toEqual([]);
+    expect(parseListingStatusParam('')).toEqual([]);
+  });
+
+  it('writes the selected statuses to the URL and drops the param when cleared', () => {
+    const current = new URLSearchParams('status=error&page=2');
+
+    expect(withListingStatusParam(current, ['live', 'error']).toString()).toBe('status=live%2Cerror&page=2');
+    expect(withListingStatusParam(current, []).toString()).toBe('page=2');
+    expect(current.toString()).toBe('status=error&page=2');
+  });
+});

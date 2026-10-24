@@ -2,14 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('category correction operation migration', () => {
-  it('allows standalone delist audit rows without weakening the listing or workspace foreign keys', () => {
+  it('allows standalone delist audit rows and lets a product delete clear their listing', () => {
     const migration = readMigration('031_standalone_listing_delist_operations.sql');
     const schema = fs.readFileSync(path.resolve(process.cwd(), 'src/backend/persistence/schema.sql'), 'utf8');
+    const table = schema.match(
+      /CREATE TABLE IF NOT EXISTS category_correction_operations \([\s\S]*?\n\);/,
+    )?.[0];
 
     expect(migration).toContain('ALTER COLUMN recommendation_event_id DROP NOT NULL');
-    expect(schema).toContain('recommendation_event_id UUID REFERENCES hermes_events(id) ON DELETE RESTRICT');
-    expect(schema).toContain('listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE RESTRICT');
-    expect(schema).toContain('workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE');
+    expect(table).toContain('recommendation_event_id UUID REFERENCES hermes_events(id) ON DELETE RESTRICT');
+    expect(table).toContain('listing_id UUID REFERENCES listings(id) ON DELETE SET NULL');
+    expect(table).toContain('workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE');
   });
 
   it('keeps recreation rows coupled to a recommendation and allows only standalone delist to omit it', () => {

@@ -15,7 +15,7 @@ import type {
   SyncedListing,
 } from '../../../domain/services/MarketplaceAdapter';
 import type { DomainEvent, IEventPublisher } from '../../../domain/ports/IEventPublisher';
-import type { MarketplaceKey } from '../../../../shared/types';
+import type { ListingStatus, MarketplaceKey, ProductStatus } from '../../../../shared/types';
 import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 import { Product } from '../../../domain/entities/Product';
@@ -27,6 +27,8 @@ import {
   ReconciliationRequiredError,
 } from '../../../domain/shared/DomainError';
 import type { MarketplaceHttpClient } from '../../adapters/MarketplaceHttpClient';
+import { OLXAdapter } from '../../adapters/OLXAdapter';
+import { MarketplaceAdapterFactory } from '../../adapters/MarketplaceAdapterFactory';
 import {
   InMemoryListingRepository,
   InMemoryMarketplaceRepository,
@@ -1027,6 +1029,121 @@ describe('SyncMarketplaceHandler', () => {
     expect(marketplace.errorCount).toBe(1);
     expect(marketplaceStore.save).toHaveBeenCalled();
   });
+
+  describe('verified marketplace category (#278)', () => {
+    const verifiedCategory: MarketplaceCategoryMetadata = {
+      providerCategoryId: '1001',
+      name: 'Cameras',
+      path: ['Electronics', 'Cameras'],
+      source: 'provider_taxonomy',
+      confidence: 1,
+      isLeaf: true,
+      taxonomyVerifiedAt: '2026-10-24T08:00:00.000Z',
+      taxonomyStaleAt: '2026-10-25T08:00:00.000Z',
+    };
+
+    async function seedLiveListing(ids: { listing: string; marketplace: string; external: string }) {
+      const listings = new InMemoryListingRepository();
+      await listings.save(unwrap(Listing.create({
+        id: ids.listing,
+        productId: `p-${ids.listing}`,
+        marketplaceId: ids.marketplace,
+        price: money(120),
+        status: 'live',
+        marketplaceListingId: ids.external,
+        marketplaceCategory: verifiedCategory,
+        publishedAt: new Date('2026-10-24T08:00:00.000Z'),
+      })));
+      const marketplaces = new InMemoryMarketplaceRepository();
+      await marketplaces.save(unwrap(Marketplace.create({
+        id: ids.marketplace, workspaceId: 'w-1', key: 'olx', name: 'OLX', connected: true,
+      })));
+      return { listings, marketplaces };
+    }
+
+    it.each<[string, Record<string, unknown>]>([
+      ['without category', {}],
+      ['with a null category', { category: null }],
+    ])('verified category survives a sync payload %s', async (_label, categoryField) => {
+      const http: MarketplaceHttpClient = {
+        request: jest.fn(async (config) => {
+          if (config.url.endsWith('/threads')) return { status: 200, data: [] };
+          if (config.url.endsWith('/statistics')) return { status: 200, data: null };
+          return {
+            status: 200,
+            data: { data: { id: 'ext-verified', status: 'active', ...categoryField } },
+          };
+        }) as MarketplaceHttpClient['request'],
+      };
+      const adapter = new OLXAdapter(http, { sleep: async () => {}, maxRetries: 0, baseRetryDelayMs: 0 });
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-verified', marketplace: 'm-verified', external: 'ext-verified',
+      });
+      const persist = jest.fn(async (input: { listings: Listing[] }) => listings.saveAll(input.listings));
+      const handler = new SyncMarketplaceHandler({ create: () => adapter }, {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        persistAndReconcileProductCategories: persist,
+      });
+
+      await handler.handle({ marketplaceKey: 'olx', marketplaceId: 'm-verified', externalListingIds: [] });
+
+      expect((await listings.findById('l-verified'))?.marketplaceCategory).toEqual(verifiedCategory);
+      expect(persist).toHaveBeenCalledWith(expect.objectContaining({ mismatchCandidates: [] }));
+    });
+
+    it('stub-mode sync with an externally identified listing completes', async () => {
+      // Stub mode wires the default stub OLX transport and no token provider,
+      // so no marketplace account binding exists for category reconciliation.
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-sandbox', marketplace: 'm-sandbox', external: 'olx-sandbox-1',
+      });
+      const recommendCategoryMismatch = jest.fn(async () => undefined);
+      const handler = new SyncMarketplaceHandler(new MarketplaceAdapterFactory(), {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        recommendCategoryMismatch,
+      });
+
+      const result = await handler.handle({
+        marketplaceKey: 'olx', marketplaceId: 'm-sandbox', externalListingIds: [],
+      });
+
+      expect(result).toMatchObject({ persisted: 1, marketplaceUpdated: true });
+      const stored = await listings.findById('l-sandbox');
+      expect(stored?.status).toBe('live');
+      expect(stored?.lastSyncAt).not.toBeNull();
+      expect(stored?.marketplaceCategory).toEqual(verifiedCategory);
+      expect(recommendCategoryMismatch).not.toHaveBeenCalled();
+    });
+
+    it('refreshes a re-verified unchanged category without proposing a mismatch', async () => {
+      const reverified: MarketplaceCategoryMetadata = {
+        ...verifiedCategory,
+        taxonomyVerifiedAt: '2026-10-24T20:00:00.000Z',
+        taxonomyStaleAt: '2026-10-25T20:00:00.000Z',
+      };
+      const adapter = fakeAdapter({
+        sync: jest.fn(async (): Promise<SyncedListing[]> => [{
+          externalListingId: 'ext-same', status: 'live', remoteStatus: 'active', marketplaceCategory: reverified,
+        }]),
+      });
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-same', marketplace: 'm-same', external: 'ext-same',
+      });
+      const persist = jest.fn(async (input: { listings: Listing[] }) => listings.saveAll(input.listings));
+      const handler = new SyncMarketplaceHandler(resolverFor(adapter).resolver, {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+        persistAndReconcileProductCategories: persist,
+      });
+
+      await handler.handle({ marketplaceKey: 'olx', marketplaceId: 'm-same', externalListingIds: [] });
+
+      expect((await listings.findById('l-same'))?.marketplaceCategory).toEqual(reverified);
+      expect(persist).toHaveBeenCalledWith(expect.objectContaining({ mismatchCandidates: [] }));
+    });
+  });
 });
 
 describe('PublishListingHandler', () => {
@@ -1994,6 +2111,102 @@ describe('PublishListingHandler', () => {
       []
     );
     expect(result.finalized).toBe(true);
+  });
+
+  describe('product lifecycle on a successful publish', () => {
+    function lifecycleFixture(
+      productStatus: ProductStatus,
+      listingStatus: ListingStatus,
+      publish = jest.fn(async (): Promise<PublishResult> => publishResult),
+    ) {
+      const productRepo = new InMemoryProductRepository();
+      const listingRepo = new InMemoryListingRepository();
+      const marketplaceRepo = new InMemoryMarketplaceRepository();
+      const product = unwrap(Product.create({
+        id: 'p-lifecycle',
+        workspaceId: 'w-1',
+        sku: 'sku-lifecycle',
+        name: 'Lifecycle widget',
+        description: 'A complete product description for lifecycle regression testing.',
+        costPrice: null,
+        sellingPrice: money(40),
+        condition: 'good',
+        category: 'electronics',
+        status: productStatus,
+      }));
+      const marketplace = unwrap(Marketplace.create({
+        id: 'm-lifecycle',
+        workspaceId: 'w-1',
+        key: 'olx',
+        name: 'OLX',
+        connected: true,
+      }));
+      const listing = unwrap(Listing.create({
+        id: 'l-lifecycle',
+        productId: product.id,
+        marketplaceId: marketplace.id,
+        price: money(44),
+        status: listingStatus,
+      }));
+      productRepo.items.set(product.id, product);
+      marketplaceRepo.items.set(marketplace.id, marketplace);
+      listingRepo.items.set(listing.id, listing);
+      const listingService = new ListingService(
+        listingRepo,
+        productRepo,
+        marketplaceRepo,
+        new RecordingEventPublisher(),
+      );
+      const adapter = fakeAdapter({ publish });
+      const handler = makePublishHandler(resolverFor(adapter).resolver, undefined, listingService);
+      const job = (mode: 'publish' | 'relist') => ({
+        operationId: `op-lifecycle-${mode}`,
+        mode,
+        listingUpdatedAt: listing.updatedAt.toISOString(),
+        marketplaceKey: 'olx' as const,
+        marketplaceId: marketplace.id,
+        listingId: listing.id,
+        input,
+      });
+      return { handler, productRepo, listingRepo, job };
+    }
+
+    it('activates a draft product whose listing goes live (regression)', async () => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture('draft', 'draft');
+
+      await expect(handler.handle(job('publish'))).resolves.toMatchObject({ finalized: true });
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe('active');
+    });
+
+    it('leaves a draft product unchanged when the publish fails', async () => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture(
+        'draft',
+        'draft',
+        jest.fn(async (): Promise<PublishResult> => {
+          throw new Error('OLX rejected the advert');
+        }),
+      );
+
+      await expect(handler.handle(job('publish'))).rejects.toThrow('OLX rejected the advert');
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('draft');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe('draft');
+      expect(productRepo.saved).toEqual([]);
+    });
+
+    it.each<[ProductStatus, ProductStatus]>([
+      ['draft', 'active'],
+      ['attention', 'attention'],
+    ])('relisting an expired listing moves a %s product to %s', async (from, to) => {
+      const { handler, productRepo, listingRepo, job } = lifecycleFixture(from, 'expired');
+
+      await expect(handler.handle(job('relist'))).resolves.toMatchObject({ finalized: true });
+
+      expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
+      expect((await productRepo.findById('p-lifecycle'))?.status).toBe(to);
+    });
   });
 });
 

@@ -227,6 +227,59 @@ describe('CategoryCorrectionOperationService', () => {
     expect(context.publish).not.toHaveBeenCalled();
   });
 
+  it('names the listing and product in every stored result, so audit survives a product delete', async () => {
+    const subject = { listingId: 'listing-1', productId: 'product-1' };
+    const standalone = setup();
+    const requested = await standalone.service.requestStandaloneDelist({
+      operationId: 'standalone-subject', listingId: 'listing-1', workspaceId: 'ws-1', actorId: 'user-1',
+    });
+    const requestResult = { ...requested.result };
+    await standalone.service.approve({ operationId: requested.id, workspaceId: 'ws-1', actorId: 'user-1' });
+    const executed = await standalone.service.execute({
+      operationId: requested.id, workspaceId: 'ws-1', actorId: 'user-1',
+    });
+
+    const missing = setup();
+    const failing = await missing.service.requestStandaloneDelist({
+      operationId: 'standalone-missing', listingId: 'listing-1', workspaceId: 'ws-1', actorId: 'user-1',
+    });
+    await missing.service.approve({ operationId: failing.id, workspaceId: 'ws-1', actorId: 'user-1' });
+    missing.listingRepo.items.delete('listing-1');
+    const failed = await missing.service.execute({
+      operationId: failing.id, workspaceId: 'ws-1', actorId: 'user-1',
+    });
+
+    const paired = setup(); await addAndApprove(paired, 'delist');
+    const pairedDelist = await paired.service.execute({ operationId: 'delist-1', workspaceId: 'ws-1', actorId: 'user-1' });
+
+    expect(requestResult).toMatchObject(subject);
+    expect(executed).toMatchObject({ state: 'executed', result: subject });
+    expect(failed).toMatchObject({ state: 'failed', result: subject });
+    expect(pairedDelist).toMatchObject({ state: 'executed', result: subject });
+  });
+
+  it('refuses to approve or execute an operation whose listing a product delete removed', async () => {
+    const context = setup();
+    const orphanRecreate = { ...operation('recreate'), listingId: null };
+    const orphanDelist = {
+      ...operation('delist'), id: 'delist-orphan', listingId: null, state: 'approved' as const, approvedAt: now,
+    };
+    context.operations.items.set(orphanRecreate.id, orphanRecreate);
+    context.operations.items.set(orphanDelist.id, orphanDelist);
+    const deleted = 'The listing of this category correction operation was deleted';
+
+    await expect(context.service.approve({
+      operationId: orphanRecreate.id, workspaceId: 'ws-1', actorId: 'user-1',
+    })).rejects.toThrow(deleted);
+    await expect(context.service.execute({
+      operationId: orphanDelist.id, workspaceId: 'ws-1', actorId: 'user-1',
+    })).rejects.toThrow(deleted);
+
+    expect(context.operations.items.get(orphanRecreate.id)?.state).toBe('requested');
+    expect(context.operations.items.get(orphanDelist.id)?.state).toBe('approved');
+    expect(context.delist).not.toHaveBeenCalled();
+  });
+
   it('fences the reviewed OLX account identity before calling the provider', async () => {
     const context = setup();
     const requested = await context.service.requestStandaloneDelist({

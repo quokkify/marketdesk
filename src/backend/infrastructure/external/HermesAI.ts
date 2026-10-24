@@ -38,7 +38,7 @@ export function loadHermesConfig(): HermesAIConfig {
     apiKey: process.env.HERMES_API_KEY ?? '',
     model: process.env.HERMES_MODEL ?? DEFAULT_HERMES_MODEL,
     maxTokens: Number.parseInt(process.env.HERMES_MAX_TOKENS ?? '2048', 10),
-    timeoutMs: Number.parseInt(process.env.HERMES_REQUEST_TIMEOUT_MS ?? '120000', 10),
+    timeoutMs: Number.parseInt(process.env.HERMES_REQUEST_TIMEOUT_MS ?? '30000', 10),
   };
 }
 

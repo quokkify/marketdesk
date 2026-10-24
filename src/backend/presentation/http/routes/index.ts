@@ -1,6 +1,8 @@
 // Assembles the /api router from already-constructed controllers. Applies auth and
-// rate limiting policy (§18): /auth is public (100/min), every other resource is
-// authenticated (1000/min keyed by workspaceId) and workspace-scoped; listing
+// rate limiting policy (§18): the /auth prefix is public (100/min per IP, mounted in
+// front of the auth router so the token check on /auth/me is behind it too) and
+// /auth/me is additionally limited per user after authentication; every other resource
+// is authenticated (1000/min keyed by workspaceId) and workspace-scoped; listing
 // price operations additionally get the sensitive limiter (10/min).
 
 import { Router, type RequestHandler } from 'express';
@@ -16,6 +18,7 @@ import type { ProductImageUploadController } from '../controllers/ProductImageUp
 import { authMiddleware, requireWorkspace } from '../middleware/AuthMiddleware';
 import {
   publicRateLimiter,
+  meRateLimiter,
   authenticatedRateLimiter,
   sensitiveRateLimiter,
   uploadRateLimiter,
@@ -59,6 +62,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const rateLimit = options.enableRateLimit ?? false;
 
   const publicLimiter: RequestHandler | undefined = rateLimit ? publicRateLimiter() : undefined;
+  const meLimiter: RequestHandler | undefined = rateLimit ? meRateLimiter() : undefined;
   const authLimiter: RequestHandler | undefined = rateLimit
     ? authenticatedRateLimiter()
     : undefined;
@@ -71,7 +75,12 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   api.get('/application-info', ...(publicLimiter ? [publicLimiter] : []), (_req, res) =>
     ok(res, { version: options.applicationVersion ?? 'Development' })
   );
-  api.use('/auth', createAuthRoutes(c.auth, publicLimiter));
+  // Mounted on the prefix rather than handed to the auth router, so the limiter sits in front
+  // of every /auth route, including the JWT check on /auth/me. Keep it here: CodeQL
+  // (js/missing-rate-limiting) does not follow a limiter passed in as a parameter and would
+  // report the token check as unlimited again.
+  if (publicLimiter) api.use('/auth', publicLimiter);
+  api.use('/auth', createAuthRoutes(c.auth, meLimiter));
   api.get(
     '/marketplaces/:provider/oauth/callback',
     ...(publicLimiter ? [publicLimiter] : []),

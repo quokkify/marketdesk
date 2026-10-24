@@ -1,7 +1,34 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Pagination, Typography } from '@mui/material';
 import type { Product } from '@shared/types';
-import { ProductsCards, ProductsTable } from './ProductsTable';
+import {
+  CatalogueFooter,
+  ProductRowActions,
+  ProductsCards,
+  ProductsTable,
+  productRowMenuItems,
+} from './ProductsTable';
+
+type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
+
+function childrenOf(element: ElementLike): ElementLike[] {
+  return React.Children.toArray(element.props.children).filter(
+    React.isValidElement
+  ) as ElementLike[];
+}
+
+function findByType(element: ElementLike, type: unknown): ElementLike[] {
+  const direct = element.type === type ? [element] : [];
+  return [...direct, ...childrenOf(element).flatMap((child) => findByType(child, type))];
+}
+
+function textContent(node: React.ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join('');
+  if (React.isValidElement(node)) return textContent((node as ElementLike).props.children);
+  return '';
+}
 
 const product: Product = {
   id: 'p-1',
@@ -28,11 +55,39 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(html).toContain('Wireless Headphones');
     expect(html).toContain('SKU-100');
     expect(html).toContain('WH');
-    expect(html).toContain('150');
-    expect(html).toContain('60.0% margin');
+    expect(html).toContain('150 zł');
+    expect(html).toContain('60% margin');
     expect(html).toContain('featured');
     expect(html).toContain('Marketplace count unavailable');
     expect(html).toContain('Select all products on this page');
+  });
+
+  it('formats money in PLN style and shows when each product was last updated', () => {
+    const updatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const html = renderToStaticMarkup(
+      <ProductsTable
+        products={[{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }]}
+        currency="PLN"
+      />
+    );
+    expect(html).toContain('800 zł');
+    expect(html).toContain('1 050 zł');
+    expect(html).toContain('250 zł');
+    expect(html).toContain('24% margin');
+    expect(html).toContain('2h ago');
+  });
+
+  it('offers a row actions menu instead of navigating from the overflow control', () => {
+    const html = renderToStaticMarkup(
+      <ProductsTable
+        products={[product]}
+        currency="PLN"
+        onOpen={() => undefined}
+        onEdit={() => undefined}
+      />
+    );
+    expect(html).toContain('aria-label="Actions for Wireless Headphones"');
+    expect(html).toContain('aria-haspopup="menu"');
   });
 
   it('distinguishes an empty catalogue from an empty filtered result', () => {
@@ -50,16 +105,68 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(filtered).toContain('Clear filters');
   });
 
-  it('keeps cost, price, profit, tags, updated date and edit action in card view', () => {
+  it('keeps cost, price, profit, tags, updated date and the actions menu in card view', () => {
     const html = renderToStaticMarkup(
       <ProductsCards products={[product]} currency="PLN" onEdit={() => undefined} />
     );
     expect(html).toContain('Wireless Headphones');
     expect(html).toContain('Cost');
-    expect(html).toContain('100.00');
-    expect(html).toContain('60.0% margin');
+    expect(html).toContain('100 zł');
+    expect(html).toContain('60% margin');
     expect(html).toContain('Updated');
-    expect(html).toContain('Edit Wireless Headphones');
+    expect(html).toContain('aria-label="Actions for Wireless Headphones"');
     expect(html).toContain('Marketplace count unavailable');
+  });
+});
+
+describe('product row actions menu', () => {
+  it('lists Open, Edit and Delete and routes each to its handler before closing the menu', () => {
+    const onOpen = jest.fn();
+    const onEdit = jest.fn();
+    const onDelete = jest.fn();
+    const close = jest.fn();
+    const items = productRowMenuItems(product, { onOpen, onEdit, onDelete }, close) as ElementLike[];
+
+    expect(items.map((item) => textContent(item))).toEqual(['Open', 'Edit', 'Delete']);
+    (items[0]!.props.onClick as () => void)();
+    expect(onOpen).toHaveBeenCalledWith(product);
+    (items[1]!.props.onClick as () => void)();
+    expect(onEdit).toHaveBeenCalledWith(product);
+    (items[2]!.props.onClick as () => void)();
+    expect(onDelete).toHaveBeenCalledWith(product);
+    expect(close).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives every table row and card the delete handler', () => {
+    const onDelete = jest.fn();
+    const table = ProductsTable({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
+    const cards = ProductsCards({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
+    const rowActions = [...findByType(table, ProductRowActions), ...findByType(cards, ProductRowActions)];
+
+    expect(rowActions).toHaveLength(2);
+    expect(rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)).toEqual([
+      onDelete,
+      onDelete,
+    ]);
+  });
+
+  it('omits actions that have no handler', () => {
+    const items = productRowMenuItems(product, { onOpen: jest.fn() }, jest.fn()) as ElementLike[];
+    expect(items.map((item) => textContent(item))).toEqual(['Open']);
+  });
+});
+
+describe('CatalogueFooter', () => {
+  it('shows the visible range and maps numbered pages to the zero-based catalogue page', () => {
+    const onPageChange = jest.fn();
+    const tree = CatalogueFooter({ total: 60, page: 1, pageSize: 25, onPageChange }) as ElementLike;
+    const label = findByType(tree, Typography).map((element) => textContent(element));
+    const pagination = findByType(tree, Pagination)[0]!;
+
+    expect(label).toContain('Showing 26–50 of 60 products');
+    expect(pagination.props.count).toBe(3);
+    expect(pagination.props.page).toBe(2);
+    (pagination.props.onChange as (event: unknown, page: number) => void)({}, 3);
+    expect(onPageChange).toHaveBeenCalledWith(2);
   });
 });

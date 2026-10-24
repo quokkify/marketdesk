@@ -12,6 +12,20 @@ import type { Redis } from 'ioredis';
 import { buildBullAddOptions, buildContainer, type ManagedQueue } from '../container';
 import { buildApp } from '../../../presentation/http/app';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
+import { env } from '../../env';
+import { StubOlxTaxonomyResolver } from '../../../infrastructure/adapters/StubOlxTaxonomyResolver';
+import { MarketplaceAdapterFactory } from '../../../infrastructure/adapters/MarketplaceAdapterFactory';
+
+// Records the factory configuration and still builds the real factory.
+jest.mock('../../../infrastructure/adapters/MarketplaceAdapterFactory', () => {
+  const actual = jest.requireActual('../../../infrastructure/adapters/MarketplaceAdapterFactory');
+  return {
+    ...actual,
+    MarketplaceAdapterFactory: jest.fn(
+      (config: unknown) => new actual.MarketplaceAdapterFactory(config),
+    ),
+  };
+});
 
 // --- Doubles -----------------------------------------------------------------
 
@@ -98,6 +112,27 @@ describe('buildContainer (composition root)', () => {
     expect(deps.authUserStore).toBeDefined();
   });
 
+  it('passes the public base URL to the OLX adapter factory', () => {
+    build();
+
+    expect(MarketplaceAdapterFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        olx: expect.objectContaining({ publicBaseUrl: env.publicBaseUrl }),
+      }),
+    );
+  });
+
+  it('shares one image storage between uploads and product deletion', () => {
+    const { deps } = build();
+    // Private fields: sharing the instance shares its per-workspace lock.
+    const uploadStorage = (deps.productImageUploadService as unknown as { storage: unknown })
+      .storage;
+    const cleanupStorage = (deps.productService as unknown as { imageStorage: unknown })
+      .imageStorage;
+    expect(uploadStorage).toBeDefined();
+    expect(cleanupStorage).toBe(uploadStorage);
+  });
+
   it('wires the optional ports (price history + id generator)', () => {
     const { deps } = build();
     expect(deps.priceHistoryReader).toBeDefined();
@@ -107,6 +142,32 @@ describe('buildContainer (composition root)', () => {
     expect(typeof deps.idGenerator).toBe('function');
     expect(deps.idGenerator?.()).toBe('fixed-id');
   });
+
+  it('wires the AI provider status behind GET /api/hermes/status', () => {
+    const { deps } = build();
+    expect(typeof deps.hermesStatus).toBe('function');
+  });
+
+  it.each(['offline', 'hermes'] as const)(
+    'reports the env-configured provider mode %s through the status function',
+    async (mode) => {
+      const originalMode = env.hermes.providerMode;
+      const originalFetch = globalThis.fetch;
+      // A configured key in the developer environment must not reach a real Hermes.
+      globalThis.fetch = jest.fn(async () => {
+        throw new TypeError('fetch failed');
+      }) as typeof fetch;
+      env.hermes.providerMode = mode;
+      try {
+        const { deps } = build();
+
+        await expect(deps.hermesStatus?.()).resolves.toMatchObject({ mode, activeProvider: mode });
+      } finally {
+        env.hermes.providerMode = originalMode;
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 
   it('builds an Express app from the resolved deps without throwing', () => {
     const { deps } = build();
@@ -168,5 +229,37 @@ describe('buildContainer (composition root)', () => {
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();
     }
+  });
+});
+
+describe('OLX taxonomy resolver wiring', () => {
+  const configuredAdapterMode = env.marketplaces.olx.adapterMode;
+
+  afterEach(() => {
+    env.marketplaces.olx.adapterMode = configuredAdapterMode;
+  });
+
+  it('serves the stub taxonomy without an OLX access token while the adapter is not real', async () => {
+    env.marketplaces.olx.adapterMode = 'stub';
+    const { deps } = build();
+
+    // No marketplace account row exists, so any access-token lookup would reject.
+    const resolver = await deps.olxTaxonomyResolver!('marketplace-olx');
+
+    expect(resolver).toBeInstanceOf(StubOlxTaxonomyResolver);
+    await expect(resolver.verify('1001')).resolves.toMatchObject({
+      providerCategoryId: '1001',
+      name: 'Cameras',
+      path: ['Electronics', 'Cameras'],
+    });
+  });
+
+  it('still resolves the OLX access token for the taxonomy in real mode', async () => {
+    env.marketplaces.olx.adapterMode = 'real';
+    const { deps } = build();
+
+    await expect(deps.olxTaxonomyResolver!('marketplace-olx')).rejects.toThrow(
+      'OLX account is not connected'
+    );
   });
 });

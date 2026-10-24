@@ -45,7 +45,7 @@ export const Modal: React.FC<ModalProps> = ({
   >
     {(title || subtitle) && (
       <DialogTitle component="div" sx={{ pr: 6 }}>
-        <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+        <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             {title && (
               <Typography variant="h5" sx={{ fontWeight: 700 }}>

@@ -1,4 +1,9 @@
-import type { AutonomyLevel, HermesGuardrails, MarketplaceKey } from './index';
+import type {
+  AutonomyLevel,
+  HermesGuardrails,
+  MarketplaceAccountStatus,
+  MarketplaceKey,
+} from './index';
 
 export type WorkspaceLanguage = 'en' | 'pl';
 export type SettingsThemeMode = 'system' | 'light' | 'dark';
@@ -61,6 +66,11 @@ export interface ApiKeySettingsSummary {
   revoked: number;
 }
 
+export interface MarketplaceAccountSettingsSummary {
+  handle: string;
+  status: MarketplaceAccountStatus;
+}
+
 interface IntegrationSettingsStatusBase {
   id: string;
   name: string;
@@ -72,6 +82,10 @@ export type IntegrationSettingsStatus =
   | (IntegrationSettingsStatusBase & {
       category: 'marketplace';
       providerKey: MarketplaceKey;
+      connected: boolean;
+      account: MarketplaceAccountSettingsSummary | null;
+      // True for OLX while the adapter runs in sandbox mode; always false for other channels.
+      sandbox: boolean;
     })
   | (IntegrationSettingsStatusBase & {
       category: 'telegram';

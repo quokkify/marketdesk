@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS hermes_events (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   resolved_at TIMESTAMP,
   idempotency_key VARCHAR(500),
+  source VARCHAR(20) CONSTRAINT hermes_events_source_valid CHECK (source IN ('hermes', 'offline')),
   CONSTRAINT hermes_events_resolution_check CHECK (
     (status IN ('applied', 'dismissed', 'failed', 'reverted')) = (resolved_at IS NOT NULL)
   )
@@ -388,7 +389,8 @@ CREATE TABLE IF NOT EXISTS category_correction_operations (
   id UUID PRIMARY KEY,
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   recommendation_event_id UUID REFERENCES hermes_events(id) ON DELETE RESTRICT,
-  listing_id UUID NOT NULL REFERENCES listings(id) ON DELETE RESTRICT,
+  -- NULL once a product delete removed the listing; the result keeps both ids (043).
+  listing_id UUID REFERENCES listings(id) ON DELETE SET NULL,
   marketplace_id UUID NOT NULL REFERENCES marketplaces(id) ON DELETE RESTRICT,
   kind VARCHAR(20) NOT NULL,
   state VARCHAR(20) NOT NULL DEFAULT 'requested',

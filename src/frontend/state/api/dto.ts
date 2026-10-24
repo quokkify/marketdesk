@@ -84,7 +84,8 @@ export interface DelistListingToDraftInput {
 
 export interface ListingDelistOperation {
   id: string;
-  listingId: string;
+  // null once the product, and with it the listing, was deleted.
+  listingId: string | null;
   marketplaceId: string;
   state: 'requested' | 'approved' | 'executing' | 'executed' | 'failed';
   result:
@@ -111,6 +112,8 @@ export interface PublishListingPreview {
   listingId: string;
   status: ListingStatus;
   marketplaceKey?: Marketplace['key'];
+  // True when the publication would go to the OLX sandbox, not to real OLX.
+  sandbox: boolean;
   payload: {
     productName: string;
     description: string;
@@ -128,6 +131,20 @@ export interface PublishListingPreview {
     decision: string;
     reason: string;
     subcategoryId?: string;
+  };
+  // The OLX category guard's verdict; absent unless the listing targets OLX.
+  categoryDecision?: {
+    allowed: boolean;
+    requiresReview: boolean;
+    reason?:
+      | 'category_missing'
+      | 'category_not_leaf'
+      | 'taxonomy_unverified'
+      | 'taxonomy_stale'
+      | 'category_low_confidence'
+      | 'category_sandbox'
+      | 'semantic_mismatch';
+    message?: string;
   };
 }
 
@@ -154,6 +171,7 @@ export interface MarketplaceOAuthStart {
   authorizationUrl: string;
   state: string;
   expiresAt: string;
+  sandbox?: boolean;
 }
 
 export interface MarketplaceOAuthStatus {
@@ -168,6 +186,7 @@ export interface MarketplaceOAuthStatus {
   } | null;
   tokenExpiresAt?: string;
   refreshable: boolean;
+  sandbox: boolean;
 }
 
 export interface MarketplaceAppCredentialStatus {
@@ -270,6 +289,9 @@ export interface HermesEventListParams {
   limit?: number;
   offset?: number;
 }
+
+// Filters of the paged Hermes feed; the feed endpoint owns limit and offset.
+export type HermesEventFeedParams = Omit<HermesEventListParams, 'limit' | 'offset'>;
 
 // Product-scoped Hermes run body — workspace is derived from the authenticated session.
 export interface HermesRunInput {

@@ -11,10 +11,8 @@ export interface PageHeaderProps {
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => (
   <Stack
     direction={{ xs: 'column', sm: 'row' }}
-    alignItems={{ xs: 'flex-start', sm: 'center' }}
-    justifyContent="space-between"
     spacing={2}
-    sx={{ mb: 3 }}
+    sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', mb: 3 }}
   >
     <Box sx={{ minWidth: 0 }}>
       <Typography variant="h1" sx={{ fontSize: '1.75rem' }}>

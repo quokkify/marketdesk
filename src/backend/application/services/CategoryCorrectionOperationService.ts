@@ -165,6 +165,8 @@ export class CategoryCorrectionOperationService {
       requestedBy: input.actorId,
       approvedBy: null,
       result: {
+        listingId: listing.id,
+        productId: listing.productId,
         externalListingId: listing.marketplaceListingId,
         externalUrl: listing.externalUrl,
         requestedListingUpdatedAt: listing.updatedAt.toISOString(),
@@ -207,7 +209,9 @@ export class CategoryCorrectionOperationService {
     const recreate = durable.find((operation) => operation.kind === 'recreate');
     let recreateCanApprove = Boolean(recreate?.targetCategory);
     if (recreate?.state === 'requested') {
-      const listing = await this.listings.findByIdForWorkspace(recreate.listingId, workspaceId);
+      const listing = recreate.listingId
+        ? await this.listings.findByIdForWorkspace(recreate.listingId, workspaceId)
+        : null;
       const product = listing
         ? await this.products.findByIdForWorkspace(listing.productId, workspaceId)
         : null;
@@ -246,9 +250,10 @@ export class CategoryCorrectionOperationService {
       throw new InvalidStateError(`Cannot approve category correction operation from ${current.state}`);
     }
     let targetCategory = current.targetCategory ?? undefined;
+    const listingId = this.requireListingId(current);
     if (current.kind === 'recreate') {
-      const listing = await this.listings.findByIdForWorkspace(current.listingId, input.workspaceId);
-      if (!listing) throw new NotFoundError(`Listing not found: ${current.listingId}`);
+      const listing = await this.listings.findByIdForWorkspace(listingId, input.workspaceId);
+      if (!listing) throw new NotFoundError(`Listing not found: ${listingId}`);
       const product = await this.products.findByIdForWorkspace(listing.productId, input.workspaceId);
       if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);
       targetCategory = targetCategory ?? listing.marketplaceCategory ?? undefined;
@@ -284,6 +289,7 @@ export class CategoryCorrectionOperationService {
     if (!input.actorId.trim()) throw new ValidationError('Authenticated actor is required');
     const current = await this.requireOperation(input.operationId, input.workspaceId);
     if (current.state === 'executed' || current.state === 'failed') return current;
+    const listingId = this.requireListingId(current);
     let recoveryCheckpoint: Awaited<ReturnType<CategoryCorrectionPublishAttemptStore['find']>> = null;
     let recoveringPublishedCheckpoint = false;
     if (current.state === 'executing' && current.kind === 'recreate') {
@@ -326,13 +332,20 @@ export class CategoryCorrectionOperationService {
       operation = claimed;
     }
 
+    // A product delete clears listing_id (migration 043), so every stored result
+    // names the listing and the product this operation acted on.
+    const subject = {
+      listingId,
+      productId: typeof operation.result?.productId === 'string' ? operation.result.productId : null,
+    };
     let providerCheckpoint: Record<string, unknown> = {};
     let publicationReserved = false;
     let providerCallStarted = false;
     try {
       await this.audit(operation, input.actorId, 'olx.category_correction.executing', {});
-      const listing = await this.listings.findByIdForWorkspace(operation.listingId, input.workspaceId);
-      if (!listing) throw new NotFoundError(`Listing not found: ${operation.listingId}`);
+      const listing = await this.listings.findByIdForWorkspace(listingId, input.workspaceId);
+      if (!listing) throw new NotFoundError(`Listing not found: ${listingId}`);
+      subject.productId = listing.productId;
       const product = await this.products.findByIdForWorkspace(listing.productId, input.workspaceId);
       if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);
       const marketplace = await this.marketplaces.findByIdForWorkspace(operation.marketplaceId, input.workspaceId);
@@ -346,6 +359,7 @@ export class CategoryCorrectionOperationService {
         && listing.marketplaceListingId === recoveryCheckpoint.externalListingId) {
         await this.publishAttempts.markFinalized(operation.id);
         const recoveredResult = {
+          ...subject,
           providerEffect: 'published',
           externalListingId: recoveryCheckpoint.externalListingId,
           externalUrl: recoveryCheckpoint.externalUrl,
@@ -411,7 +425,7 @@ export class CategoryCorrectionOperationService {
           externalListingId,
           externalUrl,
         };
-        const currentListing = await this.listings.findByIdForWorkspace(operation.listingId, input.workspaceId);
+        const currentListing = await this.listings.findByIdForWorkspace(listingId, input.workspaceId);
         if (!currentListing
           || currentListing.marketplaceListingId !== capturedExternalListingId
           || currentListing.updatedAt.getTime() !== expectedListingUpdatedAt.getTime()) {
@@ -489,7 +503,7 @@ export class CategoryCorrectionOperationService {
             publishedAt: checkpoint.publishedAt.toISOString(),
           };
         } else {
-          const fencedListing = await this.listings.findByIdForWorkspace(operation.listingId, input.workspaceId);
+          const fencedListing = await this.listings.findByIdForWorkspace(listingId, input.workspaceId);
           if (!fencedListing
             || fencedListing.status !== 'expired'
             || fencedListing.marketplaceListingId !== delistedExternalId
@@ -570,9 +584,10 @@ export class CategoryCorrectionOperationService {
         };
       }
 
-      const executed = await this.operations.markExecuted(operation.id, input.workspaceId, result, this.now());
+      const stored = { ...subject, ...result };
+      const executed = await this.operations.markExecuted(operation.id, input.workspaceId, stored, this.now());
       if (!executed || executed.state !== 'executed') throw new InvalidStateError('Operation result could not be persisted');
-      await this.audit(executed, input.actorId, 'olx.category_correction.executed', result);
+      await this.audit(executed, input.actorId, 'olx.category_correction.executed', stored);
       return executed;
     } catch (error) {
       if (publicationReserved && !providerCallStarted) {
@@ -588,6 +603,7 @@ export class CategoryCorrectionOperationService {
         : undefined;
       if (quotaDecision && Object.keys(providerCheckpoint).length === 0) {
         const blocked = {
+          ...subject,
           quotaDecision,
           retrySafe: true,
           manualReconciliationRequired: false,
@@ -604,6 +620,7 @@ export class CategoryCorrectionOperationService {
         throw error;
       }
       const failure = {
+        ...subject,
         errorCode: error instanceof Error && 'code' in error ? String(error.code) : 'DEPENDENCY_FAILURE',
         message: error instanceof Error ? error.message : 'Unknown category correction failure',
         failureKind: this.classifyFailure(error, providerCallStarted, providerCheckpoint),
@@ -740,10 +757,19 @@ export class CategoryCorrectionOperationService {
   ): Promise<void> {
     await this.activity.record({
       id: id ?? this.idGenerator(), workspaceId: operation.workspaceId, entityType: 'listing',
-      entityId: operation.listingId, actorType: 'user', actorId, action,
+      entityId: this.requireListingId(operation), actorType: 'user', actorId, action,
       metadata: { operationId: operation.id, recommendationEventId: operation.recommendationEventId,
         kind: operation.kind, state: operation.state, ...metadata }, createdAt: createdAt ?? this.now(),
     });
+  }
+
+  // A product delete clears the listing id of its operations (migration 043). Such
+  // an operation stays as audit history and cannot be approved or executed.
+  private requireListingId(operation: CategoryCorrectionOperation): string {
+    if (!operation.listingId) {
+      throw new NotFoundError('The listing of this category correction operation was deleted');
+    }
+    return operation.listingId;
   }
 
   private makeStandaloneRequestedAuditId(operationId: string): string {

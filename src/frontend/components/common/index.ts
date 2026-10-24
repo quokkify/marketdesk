@@ -9,7 +9,6 @@ export {
   ListingStatusBadge,
   HermesSeverityBadge,
   HermesStatusBadge,
-  AutonomyDecisionBadge,
   ConnectionBadge,
 } from './Badge.js';
 export type { BadgeProps } from './Badge.js';
@@ -28,3 +27,5 @@ export type { PageHeaderProps } from './PageHeader.js';
 export { LoadingSkeleton, PageSkeleton } from './Skeleton.js';
 export { Toast } from './Toast.js';
 export { PageStub } from './PageStub.js';
+export { SandboxAdvertChip } from './SandboxAdvertChip.js';
+export { SandboxDataNotice, SANDBOX_DATA_NOTICE } from './SandboxDataNotice.js';

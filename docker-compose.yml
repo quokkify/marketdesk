@@ -121,14 +121,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
-      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+      # The app refuses to start without this key, so Compose stops first and says how to
+      # fix it. The one-shot migrate service never reads it and stays secret-free.
+      MARKETPLACE_CREDENTIALS_KEY: ${MARKETPLACE_CREDENTIALS_KEY:?MARKETPLACE_CREDENTIALS_KEY must be set (run npm run env:init)}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       # The app runs in Docker while Hermes Agent runs natively on the same VPS.
       # host.docker.internal is mapped to the Docker host via extra_hosts below.
       HERMES_API_URL: ${HERMES_API_URL:-http://host.docker.internal:8642/v1}
       HERMES_API_KEY: ${HERMES_API_KEY:?HERMES_API_KEY must match Hermes API_SERVER_KEY}
       HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
-      HERMES_REQUEST_TIMEOUT_MS: ${HERMES_REQUEST_TIMEOUT_MS:-120000}
+      HERMES_REQUEST_TIMEOUT_MS: ${HERMES_REQUEST_TIMEOUT_MS:-30000}
       TIMEZONE: ${TIMEZONE:-UTC}
       # Keep the container storage path aligned with the fixed init-service target.
       UPLOAD_DIR: /app/uploads

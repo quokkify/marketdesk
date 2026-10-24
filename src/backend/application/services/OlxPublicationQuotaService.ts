@@ -1,6 +1,6 @@
 import type { Listing } from '../../domain/entities/Listing';
 import type { Marketplace } from '../../domain/entities/Marketplace';
-import { OlxPublicationQuota } from '../../domain/entities/OlxPublicationQuota';
+import { OLX_SANDBOX_QUOTA_EVALUATION, OlxPublicationQuota } from '../../domain/entities/OlxPublicationQuota';
 import type { Product } from '../../domain/entities/Product';
 import type { IActivityLogRepository } from '../../domain/repositories/interfaces/IActivityLogRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
@@ -22,6 +22,12 @@ import type { MarketplaceCategoryMetadata } from '../../../shared/types';
 
 export interface OlxSubcategoryResolver {
   resolve(domainCategory: string): string | null;
+}
+
+export interface OlxPublicationQuotaServiceOptions {
+  // True while the OLX adapter is not real. A missing quota row then allows publication
+  // as sandbox_unlimited, and no quota row is written.
+  sandboxMode?: boolean;
 }
 
 export interface OlxQuotaOverride {
@@ -76,8 +82,16 @@ export interface SetOlxQuotaInput {
   staleAt: string;
 }
 
+// A category guard reason keeps its own name when it already names the
+// category, such as category_sandbox; any other reason gains the prefix.
+function categoryQuotaReason(reason: string | undefined): string {
+  const value = reason ?? 'invalid';
+  return value.startsWith('category_') ? value : `category_${value}`;
+}
+
 export class OlxPublicationQuotaService {
   private readonly now: () => Date;
+  private readonly sandboxMode: boolean;
 
   constructor(
     private readonly marketplaceRepo: IMarketplaceRepository,
@@ -87,8 +101,10 @@ export class OlxPublicationQuotaService {
     private readonly idGenerator: IdGenerator,
     private readonly subcategories: OlxSubcategoryResolver,
     now?: () => Date,
+    options: OlxPublicationQuotaServiceOptions = {},
   ) {
     this.now = now ?? (() => new Date());
+    this.sandboxMode = options.sandboxMode === true;
   }
 
   async list(input: { marketplaceId: string; workspaceId: string }): Promise<OlxQuotaView[]> {
@@ -165,10 +181,12 @@ export class OlxPublicationQuotaService {
   }): Promise<OlxQuotaDecisionView> {
     if (input.marketplace.key !== 'olx') return this.notApplicable();
     const category = parseMarketplaceCategoryMetadata(input.listing.marketplaceCategory);
-    const categoryDecision = evaluateOlxCategory(input.product, category, this.now());
+    const categoryDecision = evaluateOlxCategory(input.product, category, this.now(), {
+      realOlx: !this.sandboxMode,
+    });
     if (!categoryDecision.allowed || !category) {
       return this.unknown(
-        `category_${categoryDecision.reason ?? 'invalid'}`,
+        categoryQuotaReason(categoryDecision.reason),
         undefined,
         category?.providerCategoryId,
         false,
@@ -187,8 +205,9 @@ export class OlxPublicationQuotaService {
       subcategoryId,
       at,
     });
-    if (!quota) return this.unknown('quota_unknown', account.id, subcategoryId);
-    const evaluation = quota.evaluate(at);
+    const evaluation = quota?.evaluate(at)
+      ?? (this.sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined);
+    if (!evaluation) return this.unknown('quota_unknown', account.id, subcategoryId);
     return {
       applicable: true,
       marketplaceKey: 'olx',
@@ -198,7 +217,7 @@ export class OlxPublicationQuotaService {
       decision: evaluation.canPublishForFree ? 'allow' : 'block',
       reason: evaluation.reason,
       requiresOverride: !evaluation.canPublishForFree,
-      quota: this.presentQuota(quota),
+      ...(quota ? { quota: this.presentQuota(quota) } : {}),
     };
   }
 
@@ -214,10 +233,12 @@ export class OlxPublicationQuotaService {
   }): Promise<OlxQuotaDecisionView> {
     if (input.marketplace.key !== 'olx') return this.notApplicable();
     const category = parseMarketplaceCategoryMetadata(input.marketplaceCategory ?? input.listing.marketplaceCategory);
-    const categoryDecision = evaluateOlxCategory(input.product, category, this.now());
+    const categoryDecision = evaluateOlxCategory(input.product, category, this.now(), {
+      realOlx: !this.sandboxMode,
+    });
     if (!categoryDecision.allowed || !category) {
       const decision = this.unknown(
-        `category_${categoryDecision.reason ?? 'invalid'}`,
+        categoryQuotaReason(categoryDecision.reason),
         undefined,
         category?.providerCategoryId,
         false,
@@ -258,6 +279,7 @@ export class OlxPublicationQuotaService {
       overrideConfirmed: input.override?.confirmed === true,
       overrideReason: input.override?.reason,
       actorId: input.actorId,
+      sandboxMode: this.sandboxMode,
     });
     const decision = this.presentAuthorization(authorization, account.id, subcategoryId);
     await this.auditDecision(input, decision, input.override?.reason);
@@ -265,7 +287,7 @@ export class OlxPublicationQuotaService {
   }
 
   async consumeReservation(operationId: string): Promise<OlxQuotaDecisionView> {
-    const authorization = await this.quotaRepo.consume(operationId, this.now());
+    const authorization = await this.quotaRepo.consume(operationId, this.now(), this.sandboxMode);
     const quota = authorization.quota;
     return {
       applicable: true,
