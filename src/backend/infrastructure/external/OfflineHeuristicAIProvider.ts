@@ -3,11 +3,12 @@
 // offline. It never calls the network, reports low confidence, and every price
 // reasoning and SEO rationale ends by saying that Hermes was not consulted.
 
-import type {
-  IAIProvider,
-  ListingAnalysis,
-  PriceSuggestion,
-  PriceSuggestionContext,
+import {
+  OFFLINE_AI_NOTICE,
+  type IAIProvider,
+  type ListingAnalysis,
+  type PriceSuggestion,
+  type PriceSuggestionContext,
 } from '../../domain/ports/IAIProvider';
 import type { Product } from '../../domain/entities/Product';
 import type { ProductCondition } from '../../../shared/types';
@@ -19,7 +20,6 @@ import {
   type ListingSeoOutput,
 } from '../../domain/agents/MarketDeskAgentCatalog';
 
-const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
 const TITLE_MAX_LENGTH = 70;
 
 // Appended to titles that name no condition yet; "unknown" adds nothing.
@@ -145,16 +145,16 @@ export class OfflineHeuristicAIProvider implements IAIProvider {
       });
     }
 
-    return listingSeoOutputSchema.parse({ recommendations, disclaimer: OFFLINE_NOTICE });
+    return listingSeoOutputSchema.parse({ recommendations, disclaimer: OFFLINE_AI_NOTICE });
   }
 }
 
 function lowConfidence(suggestedPrice: number, reasoning: string): PriceSuggestion {
-  return { suggestedPrice, confidence: 'low', reasoning: `${reasoning} ${OFFLINE_NOTICE}` };
+  return { suggestedPrice, confidence: 'low', reasoning: `${reasoning} ${OFFLINE_AI_NOTICE}` };
 }
 
 function describeChanges(changes: string[]): string {
-  return `${capitalizeFirstLetter(changes.join(', '))}. ${OFFLINE_NOTICE}`;
+  return `${capitalizeFirstLetter(changes.join(', '))}. ${OFFLINE_AI_NOTICE}`;
 }
 
 function rewriteTitle(name: string, condition: string): Rewrite {

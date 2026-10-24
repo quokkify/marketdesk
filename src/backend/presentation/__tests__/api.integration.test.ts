@@ -851,6 +851,7 @@ describe('Presentation API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.mode).toBe('title');
+      expect(res.body.data).toMatchObject({ source: 'offline', confidence: null });
       expect(res.body.data.fields.name).toBe('Vintage Canon camera');
       expect(res.body.data.fields.status).toBe('draft');
       expect(res.body.data.uncertainFields).toContain('sellingPrice');

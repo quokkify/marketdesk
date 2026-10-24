@@ -337,8 +337,11 @@ export interface ProductAIDraftRequest {
 
 export interface ProductAIDraft {
   mode: ProductAIDraftMode;
+  /** `offline` when Hermes did not produce the draft: offline heuristics or fallback fields. */
+  source: AIProviderSource;
   fields: ProductAIDraftFields;
-  confidence: number;
+  /** From the Hermes listing assessment; null when Hermes did not assess the draft. */
+  confidence: number | null;
   uncertainFields: Array<keyof ProductAIDraftFields>;
   missingInfoQuestions: string[];
   notes: string[];
@@ -464,6 +467,9 @@ export interface ApiKey {
 /** HERMES_PROVIDER_MODE: `auto` uses Hermes only while it is configured and reachable. */
 export const HERMES_PROVIDER_MODES = ['auto', 'hermes', 'offline'] as const;
 export type HermesProviderMode = (typeof HERMES_PROVIDER_MODES)[number];
+
+/** Who produced an AI result: Hermes, or the built-in offline heuristics. */
+export type AIProviderSource = 'hermes' | 'offline';
 
 export interface HermesStatusView {
   mode: HermesProviderMode;

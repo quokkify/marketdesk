@@ -42,6 +42,7 @@ import type {
   ProductSubmissionValues,
 } from './productFormModel.js';
 import type { ProductWizardDraftState } from './productWizardDraft.js';
+import { aiDraftCaption } from './aiDraftCaption.js';
 import {
   DescriptionTagsFields,
   NameSkuFields,
@@ -459,10 +460,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
         {draftError && <Alert severity="error">{draftError}</Alert>}
         {draft && (
           <Stack spacing={1.5} sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper' }}>
-            <Typography variant="subtitle2">
-              Draft from {draft.mode === 'photos' ? 'photos' : 'title'} · confidence{' '}
-              {Math.round(draft.confidence * 100)}%
-            </Typography>
+            <Typography variant="subtitle2">{aiDraftCaption(draft)}</Typography>
             <Stack spacing={0.5}>
               {availableDraftFields.map((field) => (
                 <FormControlLabel
