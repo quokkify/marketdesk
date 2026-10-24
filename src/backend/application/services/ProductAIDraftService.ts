@@ -70,8 +70,28 @@ function originNote(ai: DraftEnrichment, notes: { hermes: string; fallback: stri
   return ai.source === 'hermes' ? notes.hermes : OFFLINE_AI_NOTICE;
 }
 
+// Structural, so the container can pass its logger.
+export interface ProductDraftLogger {
+  warn(context: Record<string, unknown>, message: string): void;
+}
+
+// Only the name and message of a provider failure and of its cause, which carries the transport
+// detail of a ServiceUnavailableError. Other error properties can hold request data or headers.
+function failureDetails(error: unknown): { name: string; message: string; cause?: string } {
+  if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown provider error' };
+  const cause: unknown = (error as { cause?: unknown }).cause;
+  return {
+    name: error.name,
+    message: error.message,
+    ...(cause instanceof Error ? { cause: `${cause.name}: ${cause.message}` } : {}),
+  };
+}
+
 export class ProductAIDraftService {
-  constructor(private readonly aiProvider?: IAIProvider) {}
+  constructor(
+    private readonly aiProvider?: IAIProvider,
+    private readonly logger?: ProductDraftLogger,
+  ) {}
 
   async generateDraft(
     input: ProductAIDraftRequest & { workspaceId: string },
@@ -184,7 +204,8 @@ export class ProductAIDraftService {
       sku: existing.sku?.trim() || slugSku(title),
       // Only the seller's own text: a draft never fills the description with a placeholder.
       ...(description ? { description } : {}),
-      costPrice: existing.costPrice ?? 0,
+      // An unknown cost stays unknown: 0 would show the whole price as profit.
+      costPrice: existing.costPrice ?? null,
       sellingPrice: existing.sellingPrice ?? 0,
       condition: safeCondition(existing.condition),
       category: normalizeText(existing.category) || defaults.category,
@@ -220,7 +241,11 @@ export class ProductAIDraftService {
         source,
         usedProvider: true,
       };
-    } catch {
+    } catch (error) {
+      this.logger?.warn(
+        { error: failureDetails(error) },
+        'AI draft enrichment failed; the draft keeps only its deterministic fields',
+      );
       return NO_ENRICHMENT;
     }
   }

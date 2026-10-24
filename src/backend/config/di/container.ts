@@ -113,7 +113,10 @@ import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
-import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
+import {
+  ProductAIDraftService,
+  type ProductDraftLogger,
+} from '../../application/services/ProductAIDraftService';
 import { ProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import {
   ProductRecheckService,
@@ -222,7 +225,7 @@ export interface ContainerOverrides {
   eventBroker?: EventBroker & EventSubscriber;
   aiProvider?: IAIProvider;
   idGenerator?: IdGenerator;
-  logger?: ErrorLogger;
+  logger?: ErrorLogger & ProductDraftLogger;
   marketplaceCredentialsKey?: string;
   // Factory for background job queues. Overridable so tests avoid a live Bull/Redis.
   createQueue?: <T>(name: string) => ManagedQueue<T>;
@@ -469,7 +472,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productImageStorage,
     overrides.logger
   );
-  const productAIDraftService = new ProductAIDraftService(aiProvider);
+  const productAIDraftService = new ProductAIDraftService(aiProvider, overrides.logger);
   const productRecheckService = new ProductRecheckService(
     productRepo,
     listingRepo,
