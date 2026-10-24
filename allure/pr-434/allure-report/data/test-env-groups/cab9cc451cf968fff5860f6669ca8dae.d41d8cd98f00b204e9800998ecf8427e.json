@@ -1,0 +1,1 @@
+{"id":"cab9cc451cf968fff5860f6669ca8dae.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/AuthBootstrap.test.ts#isSessionRejected keeps the session on a serialized error without a status","name":"keeps the session on a serialized error without a status","status":"passed","testResultsByEnv":{"default":"8158ffa2a227420623d3e7ed55ca8088"}}

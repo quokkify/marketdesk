@@ -1,0 +1,1 @@
+{"id":"cf2fb307df9b62bc935d81303d9b538d.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/utils/formatters.test.ts#formatRelative falls back to a calendar date for old or future timestamps","name":"falls back to a calendar date for old or future timestamps","status":"passed","testResultsByEnv":{"default":"5cc046ee6bb4586f90540ee40b4d072a"}}

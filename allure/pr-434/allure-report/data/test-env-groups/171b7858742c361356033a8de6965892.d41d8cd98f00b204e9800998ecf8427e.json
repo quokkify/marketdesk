@@ -1,0 +1,1 @@
+{"id":"171b7858742c361356033a8de6965892.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/api/baseApi.test.ts#session expiry keeps the session when a request fails with 403","name":"keeps the session when a request fails with 403","status":"passed","testResultsByEnv":{"default":"d63b1ffcf0db1cedacbacc9cd3a30154"}}

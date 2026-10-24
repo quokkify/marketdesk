@@ -1,0 +1,1 @@
+{"id":"065a6570ced890c82f288a636df36e68.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/common/Badge.test.tsx#status badges labels a missing value as Unknown instead of crashing","name":"labels a missing value as Unknown instead of crashing","status":"passed","testResultsByEnv":{"default":"957a7d763c5408f230f206003e20e261"}}
