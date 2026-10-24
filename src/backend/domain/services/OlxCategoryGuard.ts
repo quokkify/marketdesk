@@ -6,6 +6,7 @@ export type OlxCategoryGuardReason =
   | 'taxonomy_unverified'
   | 'taxonomy_stale'
   | 'category_low_confidence'
+  | 'category_sandbox'
   | 'semantic_mismatch';
 
 export interface OlxCategoryGuardResult {
@@ -13,6 +14,12 @@ export interface OlxCategoryGuardResult {
   requiresReview: boolean;
   reason?: OlxCategoryGuardReason;
   message?: string;
+}
+
+export interface OlxCategoryGuardOptions {
+  // Set when the decision gates the real OLX API: sandbox taxonomy metadata is then
+  // refused, so a category picked in sandbox mode never reaches real OLX.
+  realOlx?: boolean;
 }
 
 const PROJECTOR_TERMS = ['projector', 'projektor', 'beamer'];
@@ -68,6 +75,7 @@ export function parseMarketplaceCategoryMetadata(value: unknown): MarketplaceCat
     || typeof candidate.isLeaf !== 'boolean'
     || typeof candidate.taxonomyVerifiedAt !== 'string'
     || typeof candidate.taxonomyStaleAt !== 'string'
+    || (candidate.sandbox !== undefined && candidate.sandbox !== true)
   ) return null;
   return {
     providerCategoryId: candidate.providerCategoryId.trim(),
@@ -78,6 +86,7 @@ export function parseMarketplaceCategoryMetadata(value: unknown): MarketplaceCat
     isLeaf: candidate.isLeaf,
     taxonomyVerifiedAt: candidate.taxonomyVerifiedAt,
     taxonomyStaleAt: candidate.taxonomyStaleAt,
+    ...(candidate.sandbox ? { sandbox: true as const } : {}),
   };
 }
 
@@ -136,10 +145,14 @@ export function evaluateOlxCategory(
   product: { name: string; description: string; category: string },
   category: MarketplaceCategoryMetadata | null,
   now: Date = new Date(),
+  options: OlxCategoryGuardOptions = {},
 ): OlxCategoryGuardResult {
   category = parseMarketplaceCategoryMetadata(category);
   if (!category) {
     return { allowed: false, requiresReview: true, reason: 'category_missing', message: 'Select an exact OLX leaf category before publishing' };
+  }
+  if (category.sandbox && options.realOlx) {
+    return { allowed: false, requiresReview: true, reason: 'category_sandbox', message: 'This OLX category comes from the sandbox taxonomy; select a real OLX category before publishing' };
   }
   if (category.source !== 'provider_taxonomy') {
     return { allowed: false, requiresReview: true, reason: 'taxonomy_unverified', message: 'OLX category must be verified by the server against provider taxonomy' };

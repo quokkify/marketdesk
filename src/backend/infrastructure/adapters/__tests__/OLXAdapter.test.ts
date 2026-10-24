@@ -135,6 +135,19 @@ describe('OLXAdapter', () => {
     expect(synced.marketplaceCategory).toBe(expected);
   });
 
+  it('refuses to send a sandbox taxonomy category to real OLX', async () => {
+    const http = mockClient(() => ({ status: 201, data: { data: { id: 1, status: 'active' } } }));
+    const adapter = new OLXAdapter(http, fastOptions, realConfig);
+    const sandboxInput = {
+      ...publishInput,
+      marketplaceCategory: { ...publishInput.marketplaceCategory!, sandbox: true as const },
+    };
+
+    await expect(adapter.publish(sandboxInput)).rejects.toThrow('sandbox taxonomy');
+    await expect(adapter.preparePublish(sandboxInput)).rejects.toThrow('sandbox taxonomy');
+    expect(http.request).not.toHaveBeenCalled();
+  });
+
   it('refuses real publish when only the broad category map is available', async () => {
     const http = mockClient(() => ({ status: 201, data: { data: { id: 1, status: 'active' } } }));
     const adapter = new OLXAdapter(http, fastOptions, realConfig);

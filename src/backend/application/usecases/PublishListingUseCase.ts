@@ -69,7 +69,15 @@ export function evaluatePublishEligibility(
   return { canPublish: warnings.length === 0, warnings, error };
 }
 
+export interface PublishListingUseCaseOptions {
+  // True while the OLX adapter is not real. Otherwise a sandbox taxonomy category
+  // is refused, so the default fails closed.
+  sandboxMode?: boolean;
+}
+
 export class PublishListingUseCase {
+  private readonly sandboxMode: boolean;
+
   constructor(
     private readonly listingRepo: IListingRepository,
     private readonly productRepo: IProductRepository,
@@ -79,7 +87,10 @@ export class PublishListingUseCase {
     private readonly idGenerator: IdGenerator,
     private readonly marketplaceAccountRepo?: MarketplaceAccountRepository,
     private readonly olxQuota?: OlxPublicationQuotaService,
-  ) {}
+    options: PublishListingUseCaseOptions = {},
+  ) {
+    this.sandboxMode = options.sandboxMode === true;
+  }
 
   private preflightGraph() {
     return new StateGraph(PreflightState)
@@ -118,7 +129,12 @@ export class PublishListingUseCase {
       })
       .addNode('category', (state: PreflightGraphState) => {
         if (state.marketplace!.key === 'olx') {
-          const categoryDecision = evaluateOlxCategory(state.product!, state.listing!.marketplaceCategory);
+          const categoryDecision = evaluateOlxCategory(
+            state.product!,
+            state.listing!.marketplaceCategory,
+            undefined,
+            { realOlx: !this.sandboxMode },
+          );
           if (!categoryDecision.allowed) {
             throw new GuardrailViolationError(
               categoryDecision.message ?? 'OLX category validation blocks publication',

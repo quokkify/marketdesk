@@ -44,6 +44,7 @@ export class StubOlxTaxonomyResolver implements OlxTrustedTaxonomyResolver {
       isLeaf: true,
       taxonomyVerifiedAt: verifiedAt.toISOString(),
       taxonomyStaleAt: new Date(verifiedAt.getTime() + SANDBOX_TAXONOMY_TTL_MS).toISOString(),
+      sandbox: true,
     };
   }
 

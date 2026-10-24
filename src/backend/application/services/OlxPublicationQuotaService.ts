@@ -174,7 +174,9 @@ export class OlxPublicationQuotaService {
   }): Promise<OlxQuotaDecisionView> {
     if (input.marketplace.key !== 'olx') return this.notApplicable();
     const category = parseMarketplaceCategoryMetadata(input.listing.marketplaceCategory);
-    const categoryDecision = evaluateOlxCategory(input.product, category, this.now());
+    const categoryDecision = evaluateOlxCategory(input.product, category, this.now(), {
+      realOlx: !this.sandboxMode,
+    });
     if (!categoryDecision.allowed || !category) {
       return this.unknown(
         `category_${categoryDecision.reason ?? 'invalid'}`,
@@ -224,7 +226,9 @@ export class OlxPublicationQuotaService {
   }): Promise<OlxQuotaDecisionView> {
     if (input.marketplace.key !== 'olx') return this.notApplicable();
     const category = parseMarketplaceCategoryMetadata(input.marketplaceCategory ?? input.listing.marketplaceCategory);
-    const categoryDecision = evaluateOlxCategory(input.product, category, this.now());
+    const categoryDecision = evaluateOlxCategory(input.product, category, this.now(), {
+      realOlx: !this.sandboxMode,
+    });
     if (!categoryDecision.allowed || !category) {
       const decision = this.unknown(
         `category_${categoryDecision.reason ?? 'invalid'}`,

@@ -421,7 +421,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     activityLogRepo,
     idGenerator,
     marketplaceAccountRepo,
-    olxPublicationQuotaService
+    olxPublicationQuotaService,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
   const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);

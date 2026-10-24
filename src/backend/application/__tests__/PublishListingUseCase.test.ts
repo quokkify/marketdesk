@@ -34,6 +34,7 @@ function setup(
     category?: MarketplaceCategoryMetadata | null;
     listingStatus?: ListingStatus;
     marketplaceListingId?: string;
+    sandboxMode?: boolean;
   } = {},
 ) {
   const productRepo = new InMemoryProductRepository();
@@ -125,6 +126,7 @@ function setup(
     idFactory('rec'),
     accountRepo,
     withQuotaService ? quotaService : undefined,
+    options.sandboxMode === undefined ? undefined : { sandboxMode: options.sandboxMode },
   );
   return { useCase, publishQueue, activityLog, quotaService };
 }
@@ -316,6 +318,53 @@ describe('PublishListingUseCase', () => {
     expect(result.isErr()).toBe(true);
     expect(authorize).not.toHaveBeenCalled();
     expect(publishQueue.jobs).toHaveLength(0);
+  });
+
+  describe('sandbox taxonomy category', () => {
+    const sandboxCategory: MarketplaceCategoryMetadata = { ...exactCategory, sandbox: true };
+
+    it.each([
+      ['publish', undefined],
+      ['relist', 'expired'],
+    ] as const)(
+      'refuses to %s it against real OLX without an override path',
+      async (mode, listingStatus) => {
+        const { useCase, publishQueue, quotaService } = setup(true, 'legacy', true, {
+          category: sandboxCategory,
+          listingStatus,
+        });
+        const authorize = jest.spyOn(quotaService, 'authorize');
+
+        const result = await useCase.execute({
+          listingId: 'lst-1',
+          mode,
+          quotaOverride: { confirmed: true, reason: 'Accept possible OLX publication fee' },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error).toBeInstanceOf(GuardrailViolationError);
+          expect(result.error.details).toMatchObject({
+            categoryDecision: { allowed: false, reason: 'category_sandbox' },
+          });
+        }
+        expect(authorize).not.toHaveBeenCalled();
+        expect(publishQueue.jobs).toHaveLength(0);
+      },
+    );
+
+    it('publishes it while OLX runs in sandbox mode', async () => {
+      const { useCase, publishQueue } = setup(true, 'legacy', true, {
+        category: sandboxCategory,
+        sandboxMode: true,
+      });
+
+      const result = await useCase.execute({ listingId: 'lst-1' });
+
+      expect(result.isOk()).toBe(true);
+      expect(publishQueue.jobs).toHaveLength(1);
+      expect(publishQueue.jobs[0].data.input.marketplaceCategory).toEqual(sandboxCategory);
+    });
   });
 
   it('returns NOT_FOUND for an unknown listing', async () => {

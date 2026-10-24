@@ -49,6 +49,7 @@ describe('StubOlxTaxonomyResolver', () => {
       isLeaf: true,
       taxonomyVerifiedAt: '2026-10-24T09:00:00.000Z',
       taxonomyStaleAt: '2026-10-25T09:00:00.000Z',
+      sandbox: true,
     });
   });
 

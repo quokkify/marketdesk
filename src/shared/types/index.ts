@@ -31,6 +31,9 @@ export interface MarketplaceCategoryMetadata {
   isLeaf: boolean;
   taxonomyVerifiedAt: string;
   taxonomyStaleAt: string;
+  // Set only by the sandbox taxonomy used while the OLX adapter is not real. Real
+  // provider metadata never carries it, and real OLX refuses a category that does.
+  sandbox?: true;
 }
 
 export interface ProductCategorySource {

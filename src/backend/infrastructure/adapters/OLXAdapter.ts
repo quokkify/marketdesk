@@ -630,7 +630,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     if (this.config.requirePublishDetails) {
       const decision = evaluateOlxCategory({
         name: input.productName, description: input.description, category: input.category,
-      }, input.marketplaceCategory ?? null);
+      }, input.marketplaceCategory ?? null, undefined, { realOlx: true });
       if (!decision.allowed) throw new Error(decision.message ?? 'OLX category validation failed');
       const exact = input.marketplaceCategory!;
       const id = Number(exact.providerCategoryId);

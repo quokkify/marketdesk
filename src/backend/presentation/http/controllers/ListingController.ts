@@ -19,7 +19,7 @@ import { NotFoundError, ValidationError, ServiceUnavailableError } from '../../.
 import { presentListing } from '../../../application/dto/presenters';
 import { evaluatePublishEligibility } from '../../../application/usecases/PublishListingUseCase';
 import type { OlxPublicationQuotaService } from '../../../application/services/OlxPublicationQuotaService';
-import { evaluateOlxCategory } from '../../../domain/services/OlxCategoryGuard';
+import { evaluateOlxCategory, type OlxCategoryGuardResult } from '../../../domain/services/OlxCategoryGuard';
 import type { OlxTrustedTaxonomyResolver } from '../../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 import { ok, paginated } from '../formatters/ResponseFormatter';
@@ -46,6 +46,8 @@ export interface ListingControllerDeps {
   olxQuotaService?: OlxPublicationQuotaService;
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
+  // OLX adapter mode; anything but 'real' is sandbox. Omitted means 'stub', like buildApp.
+  olxAdapterMode?: string;
 }
 
 export class ListingController {
@@ -54,6 +56,10 @@ export class ListingController {
     private readonly listingRepo: IListingRepository,
     private readonly deps: ListingControllerDeps = {},
   ) {}
+
+  private get olxSandbox(): boolean {
+    return (this.deps.olxAdapterMode ?? 'stub') !== 'real';
+  }
 
 
   private async buildPublishPreview(listingId: string, workspaceId: string) {
@@ -67,12 +73,15 @@ export class ListingController {
       : null;
 
     const warnings: string[] = [];
+    let categoryDecision: OlxCategoryGuardResult | undefined;
     if (!product) warnings.push(`Product not found: ${listing.productId}`);
     if (!marketplace) warnings.push(`Marketplace not found: ${listing.marketplaceId}`);
     if (product && marketplace) {
       warnings.push(...evaluatePublishEligibility(listing, product, marketplace).warnings);
       if (marketplace.key === 'olx') {
-        const categoryDecision = evaluateOlxCategory(product, listing.marketplaceCategory);
+        categoryDecision = evaluateOlxCategory(product, listing.marketplaceCategory, undefined, {
+          realOlx: !this.olxSandbox,
+        });
         if (!categoryDecision.allowed && categoryDecision.message) warnings.push(categoryDecision.message);
       }
     }
@@ -110,6 +119,8 @@ export class ListingController {
       listingId: listing.id,
       status: listing.status,
       marketplaceKey: marketplace?.key,
+      // True when the publication would go to the OLX sandbox, not to real OLX.
+      sandbox: marketplace?.key === 'olx' && this.olxSandbox,
       payload: product
         ? {
             productName: product.name,
@@ -124,6 +135,7 @@ export class ListingController {
         : null,
       warnings,
       quotaDecision,
+      categoryDecision,
       marketplaceCategory: listing.marketplaceCategory,
     };
   }

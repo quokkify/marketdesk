@@ -1316,10 +1316,40 @@ describe('Presentation API', () => {
         path: ['Electronics', 'Cameras'],
         source: 'provider_taxonomy',
         isLeaf: true,
+        sandbox: true,
       });
       expect(preview.status).toBe(200);
       expect(preview.body.data.warnings).toEqual([]);
       expect(preview.body.data.canPublish).toBe(true);
+      expect(preview.body.data.sandbox).toBe(true);
+      expect(preview.body.data.categoryDecision).toEqual({ allowed: true, requiresReview: false });
+    });
+
+    it('blocks a stored sandbox category in the publish preview while OLX runs in real mode', async () => {
+      const { app, listingRepo } = await buildTestApp({ olxAdapterMode: 'real' });
+      await seedPreviewListing(listingRepo, {
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        confidence: 1,
+        isLeaf: true,
+        taxonomyVerifiedAt: new Date(Date.now() - 60_000).toISOString(),
+        taxonomyStaleAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        sandbox: true,
+      });
+
+      const preview = await auth(
+        request(app).post('/api/listings/listing-preview/publish-preview')
+      ).send({});
+
+      expect(preview.status).toBe(200);
+      expect(preview.body.data).toMatchObject({
+        canPublish: false,
+        sandbox: false,
+        categoryDecision: { allowed: false, requiresReview: true, reason: 'category_sandbox' },
+        quotaOverrideEligibility: { eligible: false },
+      });
     });
 
     it('returns publish preview without publishing or enqueueing', async () => {

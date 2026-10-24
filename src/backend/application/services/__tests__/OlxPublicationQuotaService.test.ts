@@ -527,5 +527,31 @@ describe('OlxPublicationQuotaService', () => {
         status: 'exhausted', decision: 'block', reason: 'quota_exhausted', requiresOverride: true,
       });
     });
+
+    it('refuses a sandbox category in real mode before consuming a quota unit', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: false });
+      await quotaRepo.save(quota(0));
+      listing.recordMarketplaceCategory({ ...listing.marketplaceCategory!, sandbox: true });
+
+      const preview = await service.preview({ marketplace, product, listing });
+      const decision = await service.authorize({
+        operationId: 'operation-real', mode: 'publish', marketplace, product, listing, actorId: 'user-1',
+        override: { confirmed: true, reason: 'Accept possible OLX publication fee' },
+      });
+
+      const refused = { decision: 'block', reason: 'category_category_sandbox', requiresOverride: false };
+      expect(preview).toMatchObject(refused);
+      expect(decision).toMatchObject(refused);
+      expect(quotaRepo.quotas[0].consumed).toBe(0);
+    });
+
+    it('accepts a sandbox category in sandbox mode', async () => {
+      const { service, marketplace, product, listing } = setup({ sandboxMode: true });
+      listing.recordMarketplaceCategory({ ...listing.marketplaceCategory!, sandbox: true });
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        decision: 'allow', reason: 'sandbox_unlimited',
+      });
+    });
   });
 });
