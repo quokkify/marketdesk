@@ -25,7 +25,7 @@ export interface AIProviderSelectorDeps {
   hermes: IAIProvider;
   offline: IAIProvider;
   mode: HermesProviderMode;
-  probe: Pick<HermesHealthProbe, 'isConfigured' | 'isReachable'>;
+  probe: Pick<HermesHealthProbe, 'isConfigured' | 'isReachable' | 'reachability'>;
 }
 
 export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
@@ -66,14 +66,14 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
     const { mode, probe } = this.deps;
     const activeProvider = await this.activeProvider();
     const hermesConfigured = probe.isConfigured();
-    const hermesReachable =
-      mode !== 'offline' && hermesConfigured ? await probe.isReachable() : null;
+    const check = mode !== 'offline' && hermesConfigured ? await probe.reachability() : null;
     return {
       mode,
       activeProvider,
       hermesConfigured,
-      hermesReachable,
-      checkedAt: new Date().toISOString(),
+      hermesReachable: check ? check.reachable : null,
+      // When the probe asked Hermes; without a probe check, when this status was made.
+      checkedAt: (check?.checkedAt ?? new Date()).toISOString(),
     };
   }
 

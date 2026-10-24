@@ -86,6 +86,7 @@ export interface HermesEventRow {
   autonomy_decision: string | null;
   created_at: Date | string;
   resolved_at: Date | string | null;
+  source: string | null;
 }
 
 export interface WorkspaceRow {

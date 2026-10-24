@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS hermes_events (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   resolved_at TIMESTAMP,
   idempotency_key VARCHAR(500),
+  source VARCHAR(20) CONSTRAINT hermes_events_source_valid CHECK (source IN ('hermes', 'offline')),
   CONSTRAINT hermes_events_resolution_check CHECK (
     (status IN ('applied', 'dismissed', 'failed', 'reverted')) = (resolved_at IS NOT NULL)
   )

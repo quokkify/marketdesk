@@ -30,6 +30,18 @@ const SORTS = new Set([
 ]);
 const TABS = new Set<ProductsTab>(['all', 'active', 'attention', 'draft']);
 
+// Sort orders offered by the toolbar menu; each one is accepted by the API.
+export const PRODUCT_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '-updatedAt', label: 'Recently updated' },
+  { value: 'updatedAt', label: 'Least recently updated' },
+  { value: 'name', label: 'Name A–Z' },
+  { value: '-name', label: 'Name Z–A' },
+  { value: 'sellingPrice', label: 'Price: low to high' },
+  { value: '-sellingPrice', label: 'Price: high to low' },
+  { value: 'costPrice', label: 'Cost: low to high' },
+  { value: '-costPrice', label: 'Cost: high to low' },
+];
+
 export function parseProductsCatalogueState(search: string): ProductsCatalogueState {
   const query = new URLSearchParams(search);
   const tabValue = query.get('tab') as ProductsTab | null;
@@ -147,4 +159,29 @@ export function productInitials(name: string): string {
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
   return initials || '?';
+}
+
+export type ProductTileTone = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info';
+
+const TILE_TONES: readonly ProductTileTone[] = [
+  'primary',
+  'secondary',
+  'success',
+  'warning',
+  'error',
+  'info',
+];
+
+// Stable hue for the initials tile: the same SKU always gets the same tone.
+export function productTileTone(sku: string): ProductTileTone {
+  let sum = 0;
+  for (const char of sku) sum += char.charCodeAt(0);
+  return TILE_TONES[sum % TILE_TONES.length]!;
+}
+
+export function catalogueFooterLabel(total: number, page: number, pageSize: number): string {
+  if (total <= pageSize) return `Showing ${total} ${total === 1 ? 'product' : 'products'}`;
+  const from = page * pageSize + 1;
+  const to = Math.min(total, (page + 1) * pageSize);
+  return `Showing ${from}–${to} of ${total} products`;
 }

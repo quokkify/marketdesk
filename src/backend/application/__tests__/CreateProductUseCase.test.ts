@@ -50,6 +50,18 @@ describe('CreateProductUseCase', () => {
     expect(publisher.published.map((e) => e.type)).toContain('product.created');
   });
 
+  it('create accepts costPrice null for a product whose cost is unknown', async () => {
+    const { useCase, productRepo } = setup();
+
+    const result = await useCase.execute({ ...validDto, sku: 'SKU-UNKNOWN-COST', costPrice: null });
+
+    expect(result.isOk()).toBe(true);
+    const product = unwrap(result);
+    expect(product.costPrice).toBeNull();
+    expect(product.sellingPrice.amount).toBe(120);
+    expect(productRepo.items.get(product.id)).toBe(product);
+  });
+
   it('requires and audits confirmation for an intentional below-cost price', async () => {
     const { useCase, productRepo, publisher } = setup();
 

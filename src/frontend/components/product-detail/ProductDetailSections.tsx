@@ -1,23 +1,37 @@
-import React from 'react';
+import React, { useId, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
+  ButtonBase,
   Chip,
+  Collapse,
   Divider,
   IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import type { Theme } from '@mui/material/styles';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { Listing, PriceHistory, Product } from '@shared/types';
+import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
-import { formatCurrency, formatDateTime } from '../../utils/formatters.js';
+import { profitSummary } from '../forms/productFormModel.js';
+import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { conditionLabel } from '../../utils/labels.js';
 
 export const mainPreviewImageSx = {
@@ -51,43 +65,94 @@ const EmptyState: React.FC<{ title: string; detail: string }> = ({ title, detail
   </Stack>
 );
 
+// Overflow entries for the product hero; plain elements so the wiring stays
+// checkable without a DOM.
+export function productHeroMenuItems(onDelete: () => void, close: () => void): React.ReactElement[] {
+  return [
+    <MenuItem
+      key="delete"
+      onClick={() => {
+        close();
+        onDelete();
+      }}
+      sx={{ color: 'error.main' }}
+    >
+      <ListItemIcon>
+        <DeleteOutlineIcon fontSize="small" color="error" />
+      </ListItemIcon>
+      <ListItemText>Delete product</ListItemText>
+    </MenuItem>,
+  ];
+}
+
 export const ProductIdentityHero: React.FC<{
   product: Product;
   onEdit: () => void;
-}> = ({ product, onEdit }) => (
-  <Box
-    component="section"
-    aria-labelledby="product-detail-title"
-    sx={{
-      mb: { xs: 2, md: 3 },
-      p: { xs: 2, md: 3 },
-      borderRadius: 3,
-      border: '1px solid',
-      borderColor: 'divider',
-      bgcolor: 'background.paper',
-      backgroundImage: (theme) => `linear-gradient(135deg, ${theme.palette.primary.main}12, transparent 48%)`,
-    }}
-  >
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
-      <Box sx={{ minWidth: 0 }}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
-          <ProductStatusBadge status={product.status} />
-          <Chip size="small" variant="outlined" label={conditionLabel(product.condition)} />
-          {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+  onDelete?: () => void;
+}> = ({ product, onEdit, onDelete }) => {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  return (
+    <Box
+      component="section"
+      aria-labelledby="product-detail-title"
+      sx={{
+        mb: { xs: 2, md: 3 },
+        p: { xs: 2, md: 3 },
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+        backgroundImage: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.07)}, transparent 48%)`,
+      }}
+    >
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, flexWrap: 'wrap' }}>
+            <ProductStatusBadge status={product.status} />
+            <Chip size="small" variant="outlined" label={conditionLabel(product.condition)} />
+            {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+          </Stack>
+          <Typography id="product-detail-title" component="h1" variant="h2" sx={{ overflowWrap: 'anywhere' }}>
+            {product.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            {`SKU ${product.sku || 'unavailable'} · Updated ${formatRelative(product.updatedAt)}`}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' }, alignItems: 'center' }}>
+          <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
+            Edit product
+          </Button>
+          {onDelete && (
+            <>
+              <IconButton
+                aria-label={`More actions for ${product.name}`}
+                aria-haspopup="menu"
+                aria-controls={menuAnchor ? menuId : undefined}
+                aria-expanded={menuAnchor ? 'true' : undefined}
+                onClick={(event) => setMenuAnchor(event.currentTarget)}
+                sx={{ width: 38, height: 38, borderRadius: 1, border: 1, borderColor: 'divider' }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+              <Menu
+                id={menuId}
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                {productHeroMenuItems(onDelete, () => setMenuAnchor(null))}
+              </Menu>
+            </>
+          )}
         </Stack>
-        <Typography id="product-detail-title" component="h1" variant="h2" sx={{ overflowWrap: 'anywhere' }}>
-          {product.name}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-          Product detail · {product.sku || 'SKU unavailable'}
-        </Typography>
-      </Box>
-      <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ alignSelf: { sm: 'flex-start' } }}>
-        Edit product
-      </Button>
-    </Stack>
-  </Box>
-);
+      </Stack>
+    </Box>
+  );
+};
 
 export const ProductGalleryCard: React.FC<{
   name: string;
@@ -177,26 +242,71 @@ export const ProductCategoryEvidence: React.FC<{ product: Product; conflictLines
   );
 };
 
-export const PricingSummaryCard: React.FC<{ product: Product; currency: string; onEdit: () => void }> = ({ product, currency, onEdit }) => {
-  const cost = product.costPrice;
-  const profit = cost == null ? null : product.sellingPrice - cost;
-  const margin = profit == null || product.sellingPrice === 0 ? null : (profit / product.sellingPrice) * 100;
+export type ProductPrimaryAction = 'publish' | 'relist' | 'connect' | 'edit';
+
+const PRIMARY_ACTION_LABEL: Record<Exclude<ProductPrimaryAction, 'edit'>, string> = {
+  publish: 'Publish to OLX',
+  relist: 'Relist on OLX',
+  connect: 'Connect OLX',
+};
+
+export const PricingSummaryCard: React.FC<{
+  product: Product;
+  currency: string;
+  primaryAction: ProductPrimaryAction;
+  externalUrl?: string;
+  busy?: boolean;
+  onEdit: () => void;
+  onPublish?: () => void;
+  onRelist?: () => void;
+  onConnect?: () => void;
+}> = ({ product, currency, primaryAction, externalUrl, busy = false, onEdit, onPublish, onRelist, onConnect }) => {
+  const pricing = profitSummary(product.costPrice, product.sellingPrice);
+  const primaryHandler = { publish: onPublish, relist: onRelist, connect: onConnect }[
+    primaryAction as Exclude<ProductPrimaryAction, 'edit'>
+  ];
   return (
-    <Card title="Pricing & status" sx={{ borderColor: 'primary.main' }}>
-      <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="caption" color="text.secondary">Selling price</Typography>
-          <Typography variant="h3" sx={{ mt: 0.25 }}>{formatCurrency(product.sellingPrice, currency)}</Typography>
-        </Box>
+    <Card sx={{ borderColor: 'primary.main' }}>
+      <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.5 }}>Selling price</Typography>
         <ProductStatusBadge status={product.status} />
       </Stack>
-      <Divider sx={{ my: 2 }} />
-      <Stack spacing={1}>
-        <Fact label="Cost">{cost == null ? 'Unknown' : formatCurrency(cost, currency)}</Fact>
-        <Fact label="Profit">{profit == null ? 'Unknown' : formatCurrency(profit, currency)}</Fact>
-        <Fact label="Margin">{margin == null ? 'Unknown' : `${Math.round(margin)}%`}</Fact>
+      <Typography variant="h3" sx={{ mt: 0.5, fontWeight: 800 }}>{formatMoney(product.sellingPrice, currency)}</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+        {pricing ? (
+          <>
+            {`Cost ${formatMoney(product.costPrice, currency)} · Profit `}
+            <Box component="span" sx={{ fontWeight: 700, color: pricing.profit < 0 ? 'error.main' : 'success.main' }}>
+              {formatMoney(pricing.profit, currency)}
+            </Box>
+            {pricing.marginPercent === null ? '' : ` · ${Math.round(pricing.marginPercent)}% margin`}
+          </>
+        ) : (
+          'Cost unknown, so profit and margin are not calculated.'
+        )}
+      </Typography>
+      <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+        {primaryAction === 'edit' ? (
+          <>
+            <Button fullWidth variant="contained" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ minHeight: 44 }}>Edit product</Button>
+            {externalUrl && (
+              <Button fullWidth variant="outlined" component="a" href={externalUrl} target="_blank" rel="noopener noreferrer" endIcon={<OpenInNewIcon />} sx={{ minHeight: 44 }}>Open on OLX</Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Button fullWidth variant="contained" disabled={busy || !primaryHandler} onClick={primaryHandler} sx={{ minHeight: 44 }}>
+              {PRIMARY_ACTION_LABEL[primaryAction]}
+            </Button>
+            <Button fullWidth variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ minHeight: 44 }}>Edit product</Button>
+          </>
+        )}
       </Stack>
-      <Button fullWidth variant="contained" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ mt: 2, minHeight: 44 }}>Edit product</Button>
+      {primaryAction === 'connect' && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          Publishing needs a connected OLX account.
+        </Typography>
+      )}
     </Card>
   );
 };
@@ -209,6 +319,7 @@ const metricValue = (listing: Listing, key: 'views' | 'watchers' | 'conversation
 export const OlxInsightsCard: React.FC<{
   listing?: Listing;
   isOlx: boolean;
+  sandbox?: boolean;
   loading?: boolean;
   error?: unknown;
   onRetry?: () => void;
@@ -216,8 +327,12 @@ export const OlxInsightsCard: React.FC<{
   statusLabel: string;
   statusExplanation: string;
   statusColor: 'default' | 'success' | 'warning' | 'error';
-}> = ({ listing, isOlx, loading = false, error, onRetry, statusTitle, statusLabel, statusExplanation, statusColor }) => (
-  <Card title="OLX insights" subtitle="Provider-reported status and metrics only">
+}> = ({ listing, isOlx, sandbox = false, loading = false, error, onRetry, statusTitle, statusLabel, statusExplanation, statusColor }) => (
+  <Card
+    title="Statistics"
+    subtitle="OLX-reported status and metrics only"
+    action={sandbox ? <Chip size="small" color="warning" variant="outlined" label="Sandbox" /> : undefined}
+  >
     {loading ? (
       <LoadingSkeleton lines={3} height={40} />
     ) : error ? (
@@ -278,7 +393,7 @@ export const PriceHistoryCard: React.FC<{
   onRetry?: () => void;
   currency: string;
 }> = ({ listing, history = [], loading, error, onRetry, currency }) => (
-  <Card title="Price history" subtitle={listing ? `Current listing price ${formatCurrency(listing.price, currency)}` : 'Real listing price changes'}>
+  <Card title="Price history" subtitle={listing ? `Current listing price ${formatMoney(listing.price, currency)}` : 'Real listing price changes'}>
     {loading ? <LoadingSkeleton lines={3} height={32} /> : error ? <ErrorRetry error={error} onRetry={onRetry} title="Price history unavailable" compact /> : !listing ? <Typography variant="body2" color="text.secondary">No marketplace listing exists yet.</Typography> : history.length === 0 ? <Typography variant="body2" color="text.secondary">No price changes recorded yet.</Typography> : (
       <Stack spacing={1.5}>
         <Box component="svg" role="img" aria-label="Recorded price history chart" viewBox="0 0 100 42" preserveAspectRatio="none" sx={{ width: '100%', height: 96, color: 'primary.main', overflow: 'visible' }}>
@@ -288,7 +403,7 @@ export const PriceHistoryCard: React.FC<{
           {history.map((entry) => (
             <Stack key={entry.id} direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ py: 1, justifyContent: 'space-between' }}>
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{entry.oldPrice != null ? `${formatCurrency(entry.oldPrice, currency)} → ${formatCurrency(entry.newPrice, currency)}` : formatCurrency(entry.newPrice, currency)}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>{entry.oldPrice != null ? `${formatMoney(entry.oldPrice, currency)} → ${formatMoney(entry.newPrice, currency)}` : formatMoney(entry.newPrice, currency)}</Typography>
                 <Typography variant="caption" color="text.secondary">{entry.changedBy}{entry.reason ? ` · ${entry.reason}` : ''}</Typography>
               </Box>
               <Typography variant="caption" color="text.secondary">{formatDateTime(entry.createdAt)}</Typography>
@@ -308,15 +423,170 @@ export const ProductTimelineCard: React.FC<{ product: Product; listing?: Listing
     { key: 'created', label: 'Product created', at: product.createdAt },
   ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return (
-    <Card title="Timeline & activity" subtitle="Recorded product and listing activity">
+    <Card title="Timeline" subtitle="Recorded product and listing events">
       <Stack spacing={0}>
         {events.map((event, index) => (
           <Stack key={event.key} direction="row" spacing={1.5}>
             <Stack sx={{ alignItems: 'center' }}><Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: index === 0 ? 'primary.main' : 'text.disabled', mt: 0.5 }} />{index < events.length - 1 && <Box sx={{ width: 2, minHeight: 42, flexGrow: 1, bgcolor: 'divider' }} />}</Stack>
-            <Box sx={{ pb: 2 }}><Typography variant="body2" sx={{ fontWeight: 600 }}>{event.label}</Typography><Typography variant="caption" color="text.secondary">{formatDateTime(event.at)}</Typography></Box>
+            <Box sx={{ pb: 2 }}><Typography variant="body2" sx={{ fontWeight: 600 }}>{event.label}</Typography><Typography variant="caption" color="text.secondary" title={formatDateTime(event.at)}>{formatRelative(event.at)}</Typography></Box>
           </Stack>
         ))}
       </Stack>
     </Card>
+  );
+};
+
+export interface ProductActivityItem {
+  id: string;
+  actor: 'hermes' | 'user';
+  title: string;
+  detail?: string;
+  at: string;
+}
+
+const ACTIVITY_LIMIT = 8;
+const ACTOR_LABEL: Record<ProductActivityItem['actor'], string> = { hermes: 'Hermes', user: 'A user' };
+
+// Activity with a known actor: recorded price changes and pending Hermes suggestions.
+export function productActivityItems(
+  history: PriceHistory[],
+  events: HermesEvent[],
+  currency: string,
+): ProductActivityItem[] {
+  const priceChanges: ProductActivityItem[] = history.map((entry) => ({
+    id: `price:${entry.id}`,
+    actor: entry.changedBy,
+    title:
+      entry.oldPrice != null
+        ? `Changed the price ${formatMoney(entry.oldPrice, currency)} → ${formatMoney(entry.newPrice, currency)}`
+        : `Set the price to ${formatMoney(entry.newPrice, currency)}`,
+    detail: entry.reason,
+    at: entry.createdAt,
+  }));
+  const suggestions: ProductActivityItem[] = events.map((event) => ({
+    id: `event:${event.id}`,
+    actor: 'hermes',
+    title: event.title,
+    detail: event.status === 'pending_review' ? 'Waiting for your review' : undefined,
+    at: event.createdAt,
+  }));
+  return [...priceChanges, ...suggestions]
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, ACTIVITY_LIMIT);
+}
+
+export const ProductActivityCard: React.FC<{
+  items: ProductActivityItem[];
+  loading?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
+}> = ({ items, loading = false, error, onRetry }) => (
+  <Card title="Activity" subtitle="Price changes and Hermes suggestions">
+    {loading ? (
+      <LoadingSkeleton lines={3} height={36} />
+    ) : error ? (
+      <ErrorRetry error={error} onRetry={onRetry} title="Activity unavailable" compact />
+    ) : items.length === 0 ? (
+      <Typography variant="body2" color="text.secondary">No recorded price changes or Hermes suggestions yet.</Typography>
+    ) : (
+      <Stack spacing={1.5}>
+        {items.map((item) => (
+          <Stack key={item.id} direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+            <Avatar
+              aria-hidden
+              sx={(theme) => ({
+                width: 28,
+                height: 28,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                bgcolor: alpha(item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary, 0.14),
+                color: item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary,
+              })}
+            >
+              {item.actor === 'hermes' ? 'H' : 'U'}
+            </Avatar>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>{ACTOR_LABEL[item.actor]}</Typography>
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{item.title}</Typography>
+              {item.detail && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{item.detail}</Typography>}
+            </Box>
+            <Typography variant="caption" color="text.secondary" title={formatDateTime(item.at)} sx={{ whiteSpace: 'nowrap' }}>{formatRelative(item.at)}</Typography>
+          </Stack>
+        ))}
+      </Stack>
+    )}
+  </Card>
+);
+
+// Hermes actions for one product. Everything Hermes produces stays review-only.
+export const ProductHermesCard: React.FC<{
+  analyzing: boolean;
+  analyzeDisabled: boolean;
+  suggesting: boolean;
+  note: string;
+  noteIsError?: boolean;
+  onAnalyze: () => void;
+  onSuggest: () => void;
+  children?: React.ReactNode;
+}> = ({ analyzing, analyzeDisabled, suggesting, note, noteIsError = false, onAnalyze, onSuggest, children }) => (
+  <Card
+    title="Hermes"
+    subtitle="Review-only suggestions for this product"
+    sx={{
+      borderColor: (theme: Theme) => alpha(theme.palette.primary.main, 0.32),
+      bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.03),
+    }}
+  >
+    <Stack spacing={2}>
+      <Stack spacing={1}>
+        <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
+          {analyzing ? 'Analyzing with Hermes…' : 'Analyze with Hermes'}
+        </Button>
+        <Button fullWidth variant="outlined" disabled={suggesting} onClick={onSuggest}>
+          {suggesting ? 'Preparing suggestions…' : 'Suggest improvements'}
+        </Button>
+        <Typography variant="caption" color={noteIsError ? 'error.main' : 'text.secondary'} role={noteIsError ? 'alert' : undefined}>
+          {note}
+        </Typography>
+      </Stack>
+      {children}
+    </Stack>
+  </Card>
+);
+
+export const PublicationReadinessSection: React.FC<{
+  action: React.ReactNode;
+  children?: React.ReactNode;
+}> = ({ action, children }) => {
+  const [expanded, setExpanded] = useState(false);
+  const regionId = useId();
+  return (
+    <Box>
+      <ButtonBase
+        onClick={() => setExpanded((open) => !open)}
+        aria-expanded={expanded}
+        aria-controls={expanded ? regionId : undefined}
+        sx={{
+          width: '100%',
+          py: 0.75,
+          borderRadius: 1,
+          justifyContent: 'space-between',
+          textAlign: 'left',
+          '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle2">Publication readiness check</Typography>
+          <Typography variant="caption" color="text.secondary">Checks the saved product without publishing</Typography>
+        </Box>
+        <ExpandMoreIcon sx={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }} />
+      </ButtonBase>
+      <Collapse in={expanded} unmountOnExit>
+        <Stack id={regionId} spacing={1.5} sx={{ pt: 1 }}>
+          <Box>{action}</Box>
+          {children}
+        </Stack>
+      </Collapse>
+    </Box>
   );
 };

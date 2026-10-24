@@ -1,17 +1,36 @@
 import type {
+  AIProviderSource,
   ProductAIDraft,
   ProductAIDraftRequest,
   ProductCondition,
   ProductStatus,
 } from '../../../shared/types';
 import { Product } from '../../domain/entities/Product';
-import type { IAIProvider } from '../../domain/ports/IAIProvider';
+import {
+  isAIProviderSourceAware,
+  OFFLINE_AI_NOTICE,
+  type IAIProvider,
+} from '../../domain/ports/IAIProvider';
 import { ValidationError } from '../../domain/shared/DomainError';
 import { Err, Ok, type Result } from '../../domain/shared/Result';
 import { Money } from '../../domain/valueObjects/Money';
 
-const DESCRIPTION_FALLBACK =
-  'AI draft placeholder. Review details, add exact dimensions, defects, accessories, and final marketplace-specific wording before publishing.';
+interface DraftEnrichment {
+  generatedTitle: string | null;
+  suggestions: string[];
+  confidence: number | null;
+  source: AIProviderSource;
+  // False when no provider is wired or it failed: only deterministic fields remain.
+  usedProvider: boolean;
+}
+
+const NO_ENRICHMENT: DraftEnrichment = {
+  generatedTitle: null,
+  suggestions: [],
+  confidence: null,
+  source: 'offline',
+  usedProvider: false,
+};
 
 function normalizeText(value: string | undefined): string {
   return (value ?? '').trim().replace(/\s+/g, ' ');
@@ -43,6 +62,12 @@ function safeStatus(value: ProductStatus | undefined): ProductStatus {
 
 function confidenceFromScore(score: number): number {
   return Math.max(0.35, Math.min(0.82, score / 100));
+}
+
+// The first draft note says who prepared the draft; heuristics never pass for Hermes.
+function originNote(ai: DraftEnrichment, notes: { hermes: string; fallback: string }): string {
+  if (!ai.usedProvider) return notes.fallback;
+  return ai.source === 'hermes' ? notes.hermes : OFFLINE_AI_NOTICE;
 }
 
 export class ProductAIDraftService {
@@ -81,18 +106,21 @@ export class ProductAIDraftService {
 
     return Ok({
       mode: 'title',
+      source: ai.source,
       fields,
-      confidence: ai.confidence ?? 0.54,
-      uncertainFields: ['category', 'condition', 'sellingPrice'],
+      confidence: ai.confidence,
+      uncertainFields: ['description', 'category', 'condition', 'sellingPrice'],
       missingInfoQuestions: [
         'What is the real condition and are there visible defects?',
         'What selling price and category should be used for the target marketplace?',
         'Are accessories, dimensions, warranty, or pickup/shipping details relevant?',
       ],
       notes: [
-        ai.usedProvider
-          ? 'Hermes provider generated the draft title and listing-quality notes for review.'
-          : 'Hermes provider was unavailable; deterministic fallback fields were prepared for review.',
+        originNote(ai, {
+          hermes: 'Hermes provider generated the draft title and listing-quality notes for review.',
+          fallback:
+            'Hermes provider was unavailable; deterministic fallback fields were prepared for review.',
+        }),
         ...ai.suggestions,
         'This is a review draft only; publishing still requires the normal confirmation flow.',
       ],
@@ -124,18 +152,20 @@ export class ProductAIDraftService {
 
     return Ok({
       mode: 'photos',
+      source: ai.source,
       fields,
-      confidence: ai.confidence ?? 0.46,
-      uncertainFields: ['name', 'category', 'condition', 'sellingPrice'],
+      confidence: ai.confidence,
+      uncertainFields: ['name', 'description', 'category', 'condition', 'sellingPrice'],
       missingInfoQuestions: [
         'What exact brand/model is shown in the photos?',
         'Are there defects, missing parts, dimensions, or accessories not visible in the photos?',
         'What target price should be used before creating marketplace listings?',
       ],
       notes: [
-        ai.usedProvider
-          ? 'Hermes provider reviewed the photo-backed product context and suggested review notes.'
-          : 'Photo-first draft keeps uploaded image URLs and marks inferred fields as uncertain.',
+        originNote(ai, {
+          hermes: 'Hermes provider reviewed the photo-backed product context and suggested review notes.',
+          fallback: 'Photo-first draft keeps uploaded image URLs and marks inferred fields as uncertain.',
+        }),
         ...ai.suggestions,
         'The draft is not saved or published until the user applies it and creates the product.',
       ],
@@ -148,10 +178,12 @@ export class ProductAIDraftService {
     existing: NonNullable<ProductAIDraftRequest['existingFields']>,
     defaults: { category: string; tags: string[]; images: string[] },
   ): NonNullable<ProductAIDraft['fields']> {
+    const description = normalizeText(existing.description);
     return {
       name: title,
       sku: existing.sku?.trim() || slugSku(title),
-      description: normalizeText(existing.description) || `${title}. ${DESCRIPTION_FALLBACK}`,
+      // Only the seller's own text: a draft never fills the description with a placeholder.
+      ...(description ? { description } : {}),
       costPrice: existing.costPrice ?? 0,
       sellingPrice: existing.sellingPrice ?? 0,
       condition: safeCondition(existing.condition),
@@ -165,25 +197,31 @@ export class ProductAIDraftService {
   private async enrichWithAI(
     workspaceId: string,
     fields: NonNullable<ProductAIDraft['fields']>,
-  ): Promise<{ generatedTitle: string | null; suggestions: string[]; confidence: number | null; usedProvider: boolean }> {
-    if (!this.aiProvider) {
-      return { generatedTitle: null, suggestions: [], confidence: null, usedProvider: false };
-    }
+  ): Promise<DraftEnrichment> {
+    const provider = this.aiProvider;
+    if (!provider) return NO_ENRICHMENT;
 
     try {
       const product = this.toSyntheticProduct(workspaceId, fields);
+      // Asked before and after the calls, like HermesDecisionEngine: a switch to the
+      // offline heuristics at any point labels the whole draft offline.
+      const offlineBefore = await answersOffline(provider);
       const [generatedTitle, analysis] = await Promise.all([
-        this.aiProvider.generateTitle(product, null),
-        this.aiProvider.analyzeListing(product),
+        provider.generateTitle(product, null),
+        provider.analyzeListing(product),
       ]);
+      const source: AIProviderSource =
+        offlineBefore || (await answersOffline(provider)) ? 'offline' : 'hermes';
       return {
         generatedTitle: normalizeText(generatedTitle) || null,
         suggestions: analysis.suggestions.map(normalizeText).filter(Boolean).slice(0, 4),
-        confidence: confidenceFromScore(analysis.score),
+        // A heuristic listing score is not a confidence; only Hermes assessments count.
+        confidence: source === 'hermes' ? confidenceFromScore(analysis.score) : null,
+        source,
         usedProvider: true,
       };
     } catch {
-      return { generatedTitle: null, suggestions: [], confidence: null, usedProvider: false };
+      return NO_ENRICHMENT;
     }
   }
 
@@ -199,7 +237,7 @@ export class ProductAIDraftService {
       workspaceId,
       sku: fields.sku || 'AI-DRAFT',
       name: fields.name || 'Product draft',
-      description: fields.description || DESCRIPTION_FALLBACK,
+      description: fields.description ?? '',
       costPrice: this.money(fields.costPrice ?? 0),
       sellingPrice: this.money(fields.sellingPrice ?? 0),
       condition: safeCondition(fields.condition),
@@ -211,4 +249,8 @@ export class ProductAIDraftService {
       updatedAt: new Date(),
     });
   }
+}
+
+async function answersOffline(provider: IAIProvider): Promise<boolean> {
+  return isAIProviderSourceAware(provider) && (await provider.activeProvider()) === 'offline';
 }

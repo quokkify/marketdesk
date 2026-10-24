@@ -50,6 +50,10 @@ export interface IAIProvider {
   analyzeListingSeo(input: ListingSeoInput, preset: CreativityPreset): Promise<ListingSeoOutput>;
 }
 
+// Marks every result of the built-in offline heuristics wherever it is shown, so a
+// heuristic is never presented as Hermes output.
+export const OFFLINE_AI_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
+
 // Optional capability of a provider that may answer from built-in offline heuristics
 // instead of Hermes. HermesDecisionEngine keeps changes made while offline review-only.
 export interface AIProviderSourceAware {

@@ -55,8 +55,14 @@ const timingOutHermes: IAIProvider = {
   analyzeListingSeo: hermesTimeout,
 };
 
+const PROBE_CHECKED_AT = new Date('2026-10-24T08:00:00.000Z');
+
 function probe(configured: boolean, reachable: boolean) {
-  return { isConfigured: () => configured, isReachable: async () => reachable };
+  return {
+    isConfigured: () => configured,
+    isReachable: async () => reachable,
+    reachability: async () => ({ reachable, checkedAt: PROBE_CHECKED_AT }),
+  };
 }
 
 const isoTimestamp = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
@@ -100,7 +106,11 @@ describe('AIProviderSelector', () => {
       hermes,
       offline,
       mode: 'auto',
-      probe: { isConfigured: () => true, isReachable: async () => reachable },
+      probe: {
+        isConfigured: () => true,
+        isReachable: async () => reachable,
+        reachability: async () => ({ reachable, checkedAt: new Date() }),
+      },
     });
 
     const whileDown = await selector.generateTitle(product, null);
@@ -186,4 +196,28 @@ describe('AIProviderSelector', () => {
       });
     },
   );
+
+  it('status reports the time of the probe check, not the time of the request', async () => {
+    const selector = new AIProviderSelector({ hermes, offline, mode: 'auto', probe: probe(true, false) });
+
+    await expect(selector.status()).resolves.toMatchObject({
+      hermesReachable: false,
+      checkedAt: '2026-10-24T08:00:00.000Z',
+    });
+  });
+
+  it('status reports the current time when no probe check applies', async () => {
+    const before = Date.now();
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'offline',
+      probe: probe(true, true),
+    });
+
+    const { checkedAt } = await selector.status();
+
+    expect(Date.parse(checkedAt)).toBeGreaterThanOrEqual(before);
+    expect(checkedAt).not.toBe(PROBE_CHECKED_AT.toISOString());
+  });
 });

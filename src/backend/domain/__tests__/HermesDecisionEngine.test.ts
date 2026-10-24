@@ -15,6 +15,9 @@ import {
   StubAIProvider,
   sequentialIdFactory,
 } from '../testkit/support';
+import type { ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
+
+const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
 
 function makeEngine(overrides?: {
   productRepo?: InMemoryProductRepository;
@@ -441,5 +444,162 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
     const photosEvent = events.find((e) => e.type === 'suggested_more_photos');
     expect(photosEvent?.autonomyDecision).toBe('auto_apply');
     expect(photosEvent?.status).toBe('applied');
+  });
+
+  it.each([
+    { before: 'offline', after: 'offline' },
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'event produced with the offline provider has source offline and the notice in its detail ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine } = seedSourceScenario(before, after);
+
+      const events = await engine.run(makeWorkspace(OPEN));
+
+      expect(events.find((e) => e.type === 'suggested_better_title')).toMatchObject({
+        source: 'offline',
+        detail: `Widget - New. ${OFFLINE_NOTICE}`,
+      });
+      expect(events.find((e) => e.type === 'suggested_lower_price')).toMatchObject({
+        source: 'offline',
+        detail: `test. ${OFFLINE_NOTICE}`,
+      });
+    },
+  );
+
+  it('labels events Hermes produced hermes and keeps their detail as Hermes wrote it', async () => {
+    const { engine } = seedSourceScenario('hermes', 'hermes');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    expect(events.find((e) => e.type === 'suggested_better_title')).toMatchObject({
+      source: 'hermes',
+      detail: 'Widget - New',
+    });
+    expect(events.find((e) => e.type === 'suggested_lower_price')).toMatchObject({
+      source: 'hermes',
+      detail: 'test',
+    });
+  });
+
+  it('labels events from a provider that does not report its source hermes', async () => {
+    const { engine } = seedPricingScenario();
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    expect(priceEvent(events)?.source).toBe('hermes');
+  });
+
+  it('gives suggestions that no AI produced no source and no offline notice', async () => {
+    const { engine } = seedSourceScenario('offline', 'offline', ['a.jpg']);
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const photosEvent = events.find((e) => e.type === 'suggested_more_photos');
+    expect(photosEvent?.source).toBeNull();
+    expect(photosEvent?.detail).not.toContain(OFFLINE_NOTICE);
+  });
+});
+
+describe('HermesDecisionEngine.runProductSeo provider source', () => {
+  // Can switch source while it answers analyzeListingSeo: an outage mid-call.
+  class SourceStub extends StubAIProvider implements AIProviderSourceAware {
+    constructor(
+      private source: 'hermes' | 'offline',
+      seoOutput?: ListingSeoOutput,
+      private readonly sourceAfterSeo: 'hermes' | 'offline' = source,
+    ) {
+      super(undefined, '', undefined, seoOutput);
+    }
+
+    async activeProvider(): Promise<'hermes' | 'offline'> {
+      return this.source;
+    }
+
+    async analyzeListingSeo(): Promise<ListingSeoOutput> {
+      const output = await super.analyzeListingSeo();
+      this.source = this.sourceAfterSeo;
+      return output;
+    }
+  }
+
+  function setup(ai: StubAIProvider) {
+    const productRepo = new InMemoryProductRepository();
+    const engine = new HermesDecisionEngine(
+      productRepo,
+      new InMemoryListingRepository(),
+      new InMemoryEventRepository(),
+      new RecordingEventPublisher(),
+      ai,
+      sequentialIdFactory('seo'),
+    );
+    const product = unwrap(
+      Product.create({
+        id: 'p1',
+        workspaceId: 'w1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        description: 'A perfectly reasonable description over twenty chars.',
+        costPrice: money(50),
+        sellingPrice: money(100),
+        condition: 'new',
+        category: 'electronics',
+      }),
+    );
+    productRepo.items.set(product.id, product);
+    return { engine, workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })) };
+  }
+
+  it('labels a listing SEO event from the offline heuristics offline and says so in its detail', async () => {
+    const { engine, workspace } = setup(new SourceStub('offline'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.source).toBe('offline');
+    expect(event?.detail).toContain(OFFLINE_NOTICE);
+  });
+
+  it.each([
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'labels listing SEO events offline when the source switches during the call ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine, workspace } = setup(new SourceStub(before, undefined, after));
+
+      const [event] = await engine.runProductSeo(workspace, 'p1');
+
+      expect(event?.source).toBe('offline');
+      expect(event?.detail).toContain(OFFLINE_NOTICE);
+    },
+  );
+
+  it('labels a listing SEO event from Hermes hermes, with no offline notice', async () => {
+    const { engine, workspace } = setup(new SourceStub('hermes'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.source).toBe('hermes');
+    expect(event?.detail).not.toContain(OFFLINE_NOTICE);
+  });
+
+  it('does not repeat the offline notice that the heuristics already wrote', async () => {
+    const { engine, workspace } = setup(
+      new SourceStub('offline', {
+        recommendations: [
+          {
+            field: 'title',
+            proposedValue: 'Widget - New',
+            rationale: `Added the condition "New". ${OFFLINE_NOTICE}`,
+          },
+        ],
+        disclaimer: OFFLINE_NOTICE,
+      }),
+    );
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.detail?.split(OFFLINE_NOTICE)).toHaveLength(2);
   });
 });

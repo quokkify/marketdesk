@@ -27,7 +27,7 @@ const createProductSchema = z
     sku: z.string().trim().min(1, 'sku is required'),
     name: z.string().trim().min(1, 'name is required'),
     description: z.string().min(PRODUCT_DESCRIPTION_MIN_LENGTH).max(PRODUCT_DESCRIPTION_MAX_LENGTH),
-    costPrice: z.number().finite().nonnegative(),
+    costPrice: z.number().finite().nonnegative().nullable(),
     sellingPrice: z.number().finite().nonnegative(),
     currency: currencySchema.optional(),
     condition: conditionSchema,

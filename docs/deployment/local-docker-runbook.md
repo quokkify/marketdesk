@@ -21,7 +21,7 @@ This creates `.env` from `.env.example` and generates `JWT_SECRET`, `JWT_REFRESH
 
 The app will not start without a valid `JWT_SECRET` (at least 32 characters, not a placeholder) and `MARKETPLACE_CREDENTIALS_KEY` (base64 of 32 bytes). Do not replace `MARKETPLACE_CREDENTIALS_KEY` after you connect a marketplace account: stored marketplace credentials can no longer be decrypted with a different key.
 
-Set `HERMES_API_KEY` to the key configured by your local Hermes API server. Hermes is optional for core app startup, but Hermes-assisted features need a reachable API server and matching key. Keep OLX in stub mode and live publishing disabled unless you intentionally configure approved credentials.
+Hermes is optional. Keep the placeholder `HERMES_API_KEY` from `.env.example` and the app answers AI requests with built-in offline heuristics (`HERMES_PROVIDER_MODE=auto`). To use Hermes instead, set `HERMES_API_KEY` to the key configured by your local Hermes API server. Keep OLX in stub mode, which is the labelled sandbox, and live publishing disabled unless you intentionally configure approved credentials.
 
 Start the services:
 
@@ -66,5 +66,5 @@ Uploaded files are in `./uploads/` and are not removed by `down -v`.
 - Check `docker compose ps` and `docker compose logs app migrate postgres redis`.
 - If the app cannot reach PostgreSQL or Redis, confirm the services are healthy and `DB_SSL_MODE=disable` is set in `.env`.
 - If `docker compose up` stops with `MARKETPLACE_CREDENTIALS_KEY must be set`, or `docker compose ps` shows the app restarting, run `npm run env:init` and start again. `docker compose logs app` names every secret that is missing or still a placeholder.
-- The UI/API can run without Hermes; Hermes-assisted calls require a working host service at `HERMES_API_URL` and a matching `HERMES_API_KEY`.
+- The UI/API runs without Hermes. With the default `HERMES_PROVIDER_MODE=auto` it answers AI requests with offline heuristics until a Hermes API server at `HERMES_API_URL` is reachable with a matching `HERMES_API_KEY`.
 - PostgreSQL data is stored in the Compose `postgres_data` volume. Do not remove it unless you intend to reset the local database.
