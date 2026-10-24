@@ -27,3 +27,19 @@ BEGIN
   END IF;
 END
 $$;
+
+-- schema.sql declares the foreign key validated. Validate it in this run instead of
+-- waiting for migration 026 to replay; a validated constraint takes no lock on reruns.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conrelid = 'category_correction_operations'::regclass
+       AND conname = 'category_correction_operations_listing_id_fkey'
+       AND NOT convalidated
+  ) THEN
+    ALTER TABLE category_correction_operations
+      VALIDATE CONSTRAINT category_correction_operations_listing_id_fkey;
+  END IF;
+END
+$$;

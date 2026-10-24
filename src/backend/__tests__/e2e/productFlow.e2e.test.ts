@@ -237,6 +237,7 @@ async function buildE2E(): Promise<E2EContext> {
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore: authStore,
     idGenerator,
+    olxAdapterMode: 'stub',
   };
 
   return {

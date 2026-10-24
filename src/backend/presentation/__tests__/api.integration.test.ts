@@ -218,9 +218,9 @@ function stubMarketplaceOAuthService(): MarketplaceOAuthService {
 // Real OAuth service in sandbox mode over in-memory collaborators. The OAuth client
 // factory throws so any attempt to reach OLX fails the test.
 function sandboxMarketplaceOAuthService(
-  marketplaceRepo: InMemoryMarketplaceRepository
+  marketplaceRepo: InMemoryMarketplaceRepository,
+  accounts = new Map<string, MarketplaceAccountRecord>()
 ): MarketplaceOAuthService {
-  const accounts = new Map<string, MarketplaceAccountRecord>();
   return new MarketplaceOAuthService({
     marketplaceRepo,
     accountRepo: {
@@ -1292,6 +1292,49 @@ describe('Presentation API', () => {
         sandbox: true,
         account: { handle: 'OLX sandbox account', status: 'connected' },
       });
+    });
+
+    // One rule on every page: an OLX row counts as connected only with an account in status
+    // connected whose credentials can be read.
+    it.each([
+      { state: 'no stored account', account: undefined },
+      { state: 'an account in status error', account: { status: 'error' as const } },
+      {
+        state: 'credentials that cannot be read',
+        account: { status: 'connected' as const, credentials: { payload: null } },
+      },
+    ])('reports a connected OLX row with $state as not connected on every page', async ({ account }) => {
+      const accounts = new Map<string, MarketplaceAccountRecord>();
+      if (account) {
+        accounts.set('marketplace-olx', {
+          id: 'account-1',
+          marketplaceId: 'marketplace-olx',
+          handle: 'OLX account',
+          credentials: {},
+          scopes: ['v2'],
+          revision: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...account,
+        });
+      }
+      const { app } = await buildTestApp({
+        seedWorkspace: true,
+        marketplaceOAuthService: (marketplaceRepo) =>
+          sandboxMarketplaceOAuthService(marketplaceRepo, accounts),
+      });
+
+      const list = await auth(request(app).get('/api/marketplaces'));
+      const detail = await auth(request(app).get('/api/marketplaces/marketplace-olx'));
+      const settings = await auth(request(app).get('/api/settings/integrations'));
+
+      expect(list.body.data).toEqual([
+        expect.objectContaining({ id: 'marketplace-olx', connected: false }),
+      ]);
+      expect(detail.body.data).toMatchObject({ id: 'marketplace-olx', connected: false });
+      expect(settings.body.data.items).toContainEqual(
+        expect.objectContaining({ id: 'marketplace-olx', connected: false })
+      );
     });
 
     it('GET /api/marketplaces reports sandbox:false when the OLX adapter runs in real mode', async () => {

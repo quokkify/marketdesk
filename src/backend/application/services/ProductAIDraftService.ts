@@ -12,6 +12,7 @@ import {
   type IAIProvider,
 } from '../../domain/ports/IAIProvider';
 import { ValidationError } from '../../domain/shared/DomainError';
+import { redactSensitiveText } from '../../domain/shared/redactSensitiveText';
 import { Err, Ok, type Result } from '../../domain/shared/Result';
 import { Money } from '../../domain/valueObjects/Money';
 
@@ -70,8 +71,50 @@ function originNote(ai: DraftEnrichment, notes: { hermes: string; fallback: stri
   return ai.source === 'hermes' ? notes.hermes : OFFLINE_AI_NOTICE;
 }
 
+// Structural, so the container can pass its logger.
+export interface ProductDraftLogger {
+  warn(context: Record<string, unknown>, message: string): void;
+}
+
+interface ErrorSummary {
+  name: string;
+  code?: string;
+  message: string;
+}
+
+// Deep enough for a fetch failure, whose reason (ECONNREFUSED, ENOTFOUND) sits two causes below
+// the provider error, and bounded so that a cause cycle ends.
+const MAX_CAUSE_DEPTH = 3;
+
+// Only the name, code and message of an error. Other properties can hold request data or
+// headers, and the message can be provider text, so it gets the startup log's redaction.
+function summarizeError(error: Error): ErrorSummary {
+  const code: unknown = (error as { code?: unknown }).code;
+  return {
+    name: error.name,
+    ...(typeof code === 'string' ? { code } : {}),
+    message: redactSensitiveText(error.message),
+  };
+}
+
+// A provider failure and its chain of causes, which carries the transport detail of a
+// ServiceUnavailableError.
+function failureDetails(error: unknown): ErrorSummary & { causes?: ErrorSummary[] } {
+  if (!(error instanceof Error)) return { name: 'Error', message: 'Unknown provider error' };
+  const causes: ErrorSummary[] = [];
+  let cause: unknown = (error as { cause?: unknown }).cause;
+  while (cause instanceof Error && causes.length < MAX_CAUSE_DEPTH) {
+    causes.push(summarizeError(cause));
+    cause = (cause as { cause?: unknown }).cause;
+  }
+  return { ...summarizeError(error), ...(causes.length > 0 ? { causes } : {}) };
+}
+
 export class ProductAIDraftService {
-  constructor(private readonly aiProvider?: IAIProvider) {}
+  constructor(
+    private readonly aiProvider?: IAIProvider,
+    private readonly logger?: ProductDraftLogger,
+  ) {}
 
   async generateDraft(
     input: ProductAIDraftRequest & { workspaceId: string },
@@ -184,7 +227,8 @@ export class ProductAIDraftService {
       sku: existing.sku?.trim() || slugSku(title),
       // Only the seller's own text: a draft never fills the description with a placeholder.
       ...(description ? { description } : {}),
-      costPrice: existing.costPrice ?? 0,
+      // An unknown cost stays unknown: 0 would show the whole price as profit.
+      costPrice: existing.costPrice ?? null,
       sellingPrice: existing.sellingPrice ?? 0,
       condition: safeCondition(existing.condition),
       category: normalizeText(existing.category) || defaults.category,
@@ -220,7 +264,11 @@ export class ProductAIDraftService {
         source,
         usedProvider: true,
       };
-    } catch {
+    } catch (error) {
+      this.logger?.warn(
+        { error: failureDetails(error) },
+        'AI draft enrichment failed; the draft keeps only its deterministic fields',
+      );
       return NO_ENRICHMENT;
     }
   }

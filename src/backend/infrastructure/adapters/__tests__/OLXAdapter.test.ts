@@ -938,6 +938,22 @@ describe('OLXAdapter', () => {
     expect(fetched?.status).toBe('live');
   });
 
+  // Simulated metrics are kept per advert id, so two adverts must never share one.
+  it('stub transport gives two publishes in the same millisecond different advert ids', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      const adapter = new OLXAdapter(undefined, fastOptions);
+
+      const first = await adapter.publish(publishInput);
+      const second = await adapter.publish(publishInput);
+
+      expect(second.externalListingId).not.toBe(first.externalListingId);
+      expect(first.externalListingId).toMatch(/^olx-\d+-/);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('stub transport never invents a public advert URL', async () => {
     const adapter = new OLXAdapter(undefined, fastOptions);
 

@@ -267,7 +267,8 @@ export class HermesDecisionEngine {
         recommendation.field === 'description'
           ? 'update_description'
           : 'suggested_better_title';
-      const detail = `${recommendation.rationale} Review-only suggestion from listing-seo@${listingSeoProfile.version} (${workspace.creativityPreset}); recommendation:${fingerprint}; source:${source}; provenance workspace=${workspace.id} product=${product.id}. This may improve discoverability but does not guarantee a sale.`;
+      // Fingerprints, source and ids stay in the agent recommendation record, not in seller copy.
+      const detail = `${recommendation.rationale} Review-only suggestion from listing-seo@${listingSeoProfile.version} (${workspace.creativityPreset}). This may improve discoverability but does not guarantee a sale.`;
       const created = HermesEvent.create({
         id: this.idFactory(),
         workspaceId: workspace.id,
@@ -478,8 +479,8 @@ export class HermesDecisionEngine {
       suggestions.push({
         type: 'suggested_more_photos',
         severity: 'info',
-        title: 'Add more photos for better conversion',
-        detail: 'Products with 3+ photos sell 40% faster',
+        title: 'Add more photos',
+        detail: 'Listings with three or more photos usually get more attention.',
         change: null,
       });
     }

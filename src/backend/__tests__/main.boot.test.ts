@@ -185,3 +185,111 @@ describe('boot configuration', () => {
     expect(() => assertStartupConfiguration(env)).not.toThrow();
   });
 });
+
+// Regression guard: an invalid PUBLIC_BASE_URL, HERMES_PROVIDER_MODE or OLX_ADAPTER_MODE threw
+// while the env module was imported, before the logger existed, so the operator got a stack
+// trace instead of the gate's list. Each one now falls back to its default at import and the
+// gate reports it with its fix.
+describe('boot configuration with a setting that cannot be parsed', () => {
+  // Valid secrets, so the gate objects only to the setting under test.
+  function setProcessEnvWithValidSecrets(variables: Record<string, string | undefined>): void {
+    setProcessEnv({
+      NODE_ENV: 'development',
+      ALLOW_INSECURE_DEV_JWT: 'false',
+      JWT_SECRET: generatedSecret(),
+      MARKETPLACE_CREDENTIALS_KEY: generatedSecret(),
+      OLX_REDIRECT_URI: undefined,
+      ...variables,
+    });
+  }
+
+  function gateMessage({ env, assertStartupConfiguration }: EnvModule): string {
+    try {
+      assertStartupConfiguration(env);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return '';
+  }
+
+  it.each(['sandbox', 'REAL', 'reall'])(
+    'refuses OLX_ADAPTER_MODE=%s at the gate and stays in the sandbox meanwhile',
+    async (value) => {
+      setProcessEnvWithValidSecrets({ OLX_ADAPTER_MODE: value });
+      const loaded = await loadEnvModule();
+
+      expect(loaded.env.marketplaces.olx.adapterMode).toBe('stub');
+      expect(gateMessage(loaded)).toMatch(
+        /^- OLX_ADAPTER_MODE must be stub or real\. Fix: set OLX_ADAPTER_MODE to stub /m,
+      );
+    },
+  );
+
+  it.each([
+    'shop.example.com',
+    'ftp://shop.example.com',
+    'https://shop.example.com/?x=1',
+    'https://shop.example.com/#top',
+  ])('refuses PUBLIC_BASE_URL %s at the gate and uses the local fallback meanwhile', async (value) => {
+    setProcessEnvWithValidSecrets({ PUBLIC_BASE_URL: value });
+    const loaded = await loadEnvModule();
+
+    expect(loaded.env.publicBaseUrl).toBe('http://localhost:3000');
+    expect(gateMessage(loaded)).toMatch(
+      /^- PUBLIC_BASE_URL must be an absolute http\(s\) URL without credentials, query or fragment\. Fix: set PUBLIC_BASE_URL /m,
+    );
+  });
+
+  it('refuses credentials in PUBLIC_BASE_URL without echoing them', async () => {
+    setProcessEnvWithValidSecrets({ PUBLIC_BASE_URL: 'https://seller:s3cret@shop.example.com' });
+
+    const message = gateMessage(await loadEnvModule());
+
+    expect(message).toMatch(/PUBLIC_BASE_URL must be an absolute http\(s\) URL/);
+    expect(message).not.toContain('s3cret');
+  });
+
+  it('reports an invalid PUBLIC_BASE_URL in real mode once, not as the address of its fallback', async () => {
+    setProcessEnvWithValidSecrets({ OLX_ADAPTER_MODE: 'real', PUBLIC_BASE_URL: 'shop.example.com' });
+
+    const lines = gateMessage(await loadEnvModule()).split('\n');
+
+    expect(lines.filter((line) => line.includes('PUBLIC_BASE_URL'))).toEqual([
+      expect.stringMatching(/^- PUBLIC_BASE_URL must be an absolute http\(s\) URL/),
+    ]);
+  });
+
+  it('refuses an unknown HERMES_PROVIDER_MODE at the gate without echoing it', async () => {
+    setProcessEnvWithValidSecrets({ HERMES_PROVIDER_MODE: 'Offline-typo' });
+    const loaded = await loadEnvModule();
+    const message = gateMessage(loaded);
+
+    expect(loaded.env.hermes.providerMode).toBe('auto');
+    expect(message).toMatch(
+      /^- HERMES_PROVIDER_MODE must be one of auto, hermes, offline\. Fix: set HERMES_PROVIDER_MODE to auto, hermes or offline/m,
+    );
+    expect(message).not.toContain('Offline-typo');
+  });
+
+  it('lists every invalid setting with the other startup problems, one bullet each', async () => {
+    setProcessEnvWithValidSecrets({
+      MARKETPLACE_CREDENTIALS_KEY: '',
+      PUBLIC_BASE_URL: 'shop.example.com',
+      HERMES_PROVIDER_MODE: 'online',
+      OLX_ADAPTER_MODE: 'sandbox',
+    });
+
+    const [heading, ...problems] = gateMessage(await loadEnvModule()).split('\n');
+
+    expect(heading).toBe('Invalid startup configuration:');
+    expect(problems).toHaveLength(4);
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^- PUBLIC_BASE_URL must be .*\. Fix: /),
+        expect.stringMatching(/^- HERMES_PROVIDER_MODE must be .*\. Fix: /),
+        expect.stringMatching(/^- OLX_ADAPTER_MODE must be .*\. Fix: /),
+        expect.stringMatching(/^- MARKETPLACE_CREDENTIALS_KEY is empty\. Fix: /),
+      ]),
+    );
+  });
+});

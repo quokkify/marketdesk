@@ -1,3 +1,5 @@
+import { redactSensitiveText as redact } from '../domain/shared/redactSensitiveText.js';
+
 export type SafeErrorDetails = {
   name: string;
   message: string;
@@ -6,21 +8,6 @@ export type SafeErrorDetails = {
   address?: string;
   port?: number | string;
 };
-
-function redact(text: string, sensitiveValues: readonly (string | undefined)[]): string {
-  let result = text;
-  const values = sensitiveValues
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .sort((left, right) => right.length - left.length);
-
-  for (const value of values) {
-    result = result.split(value).join('[redacted]');
-  }
-
-  return result
-    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`]+/gi, '[redacted-connection-string]')
-    .replace(/\b(password|pass|pwd)\s*[=:]\s*[^\s,;]+/gi, '$1=[redacted]');
-}
 
 export function safeErrorDetails(
   error: unknown,

@@ -17,7 +17,7 @@ From the repository root:
 npm run env:init
 ```
 
-This creates `.env` from `.env.example` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`. It keeps every value that is already set, so it is safe to run again. Without Node.js, run `cp .env.example .env` and set those four values yourself, for example to the output of `openssl rand -base64 32`.
+This creates `.env` from `.env.example` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`. It keeps every value that is already set, so it is safe to run again. If a key is repeated without a real value after a line that sets one, it leaves both lines as they are, prints a warning and exits 1. Without Node.js, run `cp .env.example .env` and set those four values yourself, for example to the output of `openssl rand -base64 32`.
 
 The app will not start without a valid `JWT_SECRET` (at least 32 characters, not a placeholder) and `MARKETPLACE_CREDENTIALS_KEY` (base64 of 32 bytes). Do not replace `MARKETPLACE_CREDENTIALS_KEY` after you connect a marketplace account: stored marketplace credentials can no longer be decrypted with a different key.
 

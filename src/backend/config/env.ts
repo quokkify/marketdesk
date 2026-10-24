@@ -141,6 +141,20 @@ export function resolveJwtSecret(
   return value && !isPlaceholder ? value : `${DEV_ONLY_SECRET_PREFIX}${name.toLowerCase()}`;
 }
 
+// Settings parsed while this module is imported. One that cannot be parsed falls back to its
+// default instead of throwing before the logger exists; assertStartupConfiguration reports it.
+type ParsedSetting = 'PUBLIC_BASE_URL' | 'HERMES_PROVIDER_MODE' | 'OLX_ADAPTER_MODE';
+const invalidSettings: Partial<Record<ParsedSetting, string>> = {};
+
+function parsedOrDefault<T>(setting: ParsedSetting, parse: () => T, fallback: T): T {
+  try {
+    return parse();
+  } catch (error) {
+    invalidSettings[setting] = error instanceof Error ? error.message : `${setting} is invalid`;
+    return fallback;
+  }
+}
+
 export const env = {
   // Application
   nodeEnv,
@@ -152,7 +166,11 @@ export const env = {
   // Local development only: tolerate a placeholder JWT_SECRET. Read once here, so the boot gate
   // and the boot warning decide from the same value (see insecureDevJwtAllowed).
   allowInsecureDevJwt: process.env.ALLOW_INSECURE_DEV_JWT === 'true',
-  publicBaseUrl: resolvePublicBaseUrl(process.env.PUBLIC_BASE_URL, process.env.OLX_REDIRECT_URI),
+  publicBaseUrl: parsedOrDefault(
+    'PUBLIC_BASE_URL',
+    () => resolvePublicBaseUrl(process.env.PUBLIC_BASE_URL, process.env.OLX_REDIRECT_URI),
+    resolvePublicBaseUrl(undefined, process.env.OLX_REDIRECT_URI),
+  ),
   // False while publicBaseUrl is only the fallback; real OLX mode refuses that.
   publicBaseUrlConfigured: Boolean(process.env.PUBLIC_BASE_URL?.trim()),
 
@@ -192,14 +210,22 @@ export const env = {
     apiUrl: process.env.HERMES_API_URL || '',
     apiKey: process.env.HERMES_API_KEY || '',
     webhookSecret: process.env.HERMES_WEBHOOK_SECRET || '',
-    providerMode: resolveHermesProviderMode(process.env.HERMES_PROVIDER_MODE),
+    providerMode: parsedOrDefault(
+      'HERMES_PROVIDER_MODE',
+      () => resolveHermesProviderMode(process.env.HERMES_PROVIDER_MODE),
+      'auto',
+    ),
   },
 
   // External marketplaces
   marketplaces: {
     olx: {
       market: process.env.OLX_MARKET || 'PL',
-      adapterMode: resolveOlxAdapterMode(process.env.OLX_ADAPTER_MODE),
+      adapterMode: parsedOrDefault(
+        'OLX_ADAPTER_MODE',
+        () => resolveOlxAdapterMode(process.env.OLX_ADAPTER_MODE),
+        'stub',
+      ),
       apiBaseUrl: process.env.OLX_API_BASE_URL || 'https://www.olx.pl/api/partner',
       authUrl: process.env.OLX_AUTH_URL || 'https://www.olx.pl/oauth/authorize',
       tokenUrl: process.env.OLX_TOKEN_URL || 'https://www.olx.pl/api/open/oauth/token',
@@ -266,6 +292,9 @@ export const env = {
     enablePriceOptimization: process.env.ENABLE_PRICE_OPTIMIZATION === 'true',
     enableInventorySync: process.env.ENABLE_INVENTORY_SYNC === 'true',
   },
+
+  // Settings above that could not be parsed, each with its error, for the boot gate.
+  invalidSettings,
 };
 
 export const isProduction = runningInProduction;
@@ -307,6 +336,14 @@ const PUBLIC_BASE_URL_FIX_HINT =
   'Fix: set PUBLIC_BASE_URL to the public URL of this backend, for example ' +
   'https://marketdesk.example.com, because OLX downloads advert photos from it.';
 
+const INVALID_SETTING_FIXES: Record<ParsedSetting, string> = {
+  PUBLIC_BASE_URL: PUBLIC_BASE_URL_FIX_HINT,
+  HERMES_PROVIDER_MODE:
+    'Fix: set HERMES_PROVIDER_MODE to auto, hermes or offline, or leave it empty for auto.',
+  OLX_ADAPTER_MODE:
+    'Fix: set OLX_ADAPTER_MODE to stub for the labelled sandbox or to real for the OLX Partner API.',
+};
+
 // OLX fetches advert photos from PUBLIC_BASE_URL, so real mode needs an explicit
 // public one. The sandbox never calls OLX and keeps the local fallback.
 function realOlxPublicBaseUrlProblem(e: typeof env): string | null {
@@ -324,6 +361,11 @@ function realOlxPublicBaseUrlProblem(e: typeof env): string | null {
 // /api route is missing. The message never contains the rejected values.
 export function assertStartupConfiguration(e: typeof env): void {
   const problems: string[] = [];
+
+  for (const [setting, fix] of Object.entries(INVALID_SETTING_FIXES) as [ParsedSetting, string][]) {
+    const error = e.invalidSettings[setting];
+    if (error) problems.push(`${error}. ${fix}`);
+  }
 
   if (!insecureDevJwtAllowed(e)) {
     if (isPlaceholderSecret(e.jwt.secret)) {
@@ -349,7 +391,10 @@ export function assertStartupConfiguration(e: typeof env): void {
     );
   }
 
-  const publicBaseUrlProblem = realOlxPublicBaseUrlProblem(e);
+  // An unparsable PUBLIC_BASE_URL is reported above; its fallback says nothing about it.
+  const publicBaseUrlProblem = e.invalidSettings.PUBLIC_BASE_URL
+    ? null
+    : realOlxPublicBaseUrlProblem(e);
   if (publicBaseUrlProblem) {
     problems.push(`${publicBaseUrlProblem}. ${PUBLIC_BASE_URL_FIX_HINT}`);
   }

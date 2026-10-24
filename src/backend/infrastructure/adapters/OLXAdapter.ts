@@ -2,6 +2,7 @@
 // `POST /api/partner/adverts` contract. The HTTP boundary stays injectable so
 // OAuth credentials are resolved per marketplace account by the publish worker.
 
+import { randomUUID } from 'node:crypto';
 import { BaseMarketplaceAdapter, type MarketplaceAdapterOptions } from './BaseMarketplaceAdapter';
 import {
   type MarketplaceHttpClient,
@@ -690,7 +691,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
 
   private static stubResponder: StubResponder = (config): HttpResponse => {
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
-    const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}`;
+    // The random part keeps two publishes in one millisecond apart, so they never share metrics.
+    const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}-${randomUUID().slice(0, 8)}`;
     // Sandbox adverts have no OLX page, so the stub never returns a public URL.
     if (config.method === 'POST') {
       return { status: 201, data: { id: externalId, status: 'active' } };

@@ -7,6 +7,7 @@ import type {
   MarketplaceOAuthStatus,
 } from '../../../application/services/MarketplaceOAuthService';
 import { Workspace } from '../../../domain/entities/Workspace';
+import { isMarketplaceConnected } from '../../../application/dto/presenters';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import type {
   AutonomyLevel,
@@ -14,11 +15,8 @@ import type {
   IntegrationSettingsStatus,
   WorkspaceLanguage,
 } from '../../../../shared/types';
+import type { OlxAdapterMode } from '../../../config/env';
 import { ok } from '../formatters/ResponseFormatter';
-
-// check() reports `sandbox` for a stored sandbox account once the OLX sandbox connection is
-// merged; it is optional here so this compiles on either side of that change.
-type MarketplaceOAuthStatusWithSandbox = MarketplaceOAuthStatus & { sandbox?: boolean };
 
 export class SettingsController {
   constructor(
@@ -26,7 +24,7 @@ export class SettingsController {
     private readonly settings: ISettingsRepository,
     private readonly marketplaces: IMarketplaceRepository,
     private readonly oauth: MarketplaceOAuthService,
-    private readonly olxAdapterMode: string
+    private readonly olxAdapterMode: OlxAdapterMode
   ) {}
 
   private async workspace(workspaceId: string) {
@@ -158,11 +156,13 @@ export class SettingsController {
     const marketplaces = await this.marketplaces.findByWorkspace(workspaceId);
     const marketplaceItems: IntegrationSettingsStatus[] = await Promise.all(
       marketplaces.map(async (marketplace) => {
-        const connected = marketplace.isConnected();
         const isOlx = marketplace.key === 'olx';
-        const status: MarketplaceOAuthStatusWithSandbox | null = isOlx
+        const status: MarketplaceOAuthStatus | null = isOlx
           ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
           : null;
+        // In real mode check() disconnects a leftover sandbox account, so the marketplace read
+        // above can be stale: a false from check() wins.
+        const connected = isMarketplaceConnected(marketplace, status?.connected);
         return {
           category: 'marketplace' as const,
           id: marketplace.id,
@@ -176,7 +176,7 @@ export class SettingsController {
             : null,
           // Same meaning as the Marketplaces list: the adapter runs in sandbox mode. A leftover
           // sandbox account still counts when the adapter is real.
-          sandbox: isOlx && (this.olxAdapterMode !== 'real' || status?.sandbox === true),
+          sandbox: isOlx && (this.olxAdapterMode === 'stub' || status?.sandbox === true),
         };
       })
     );

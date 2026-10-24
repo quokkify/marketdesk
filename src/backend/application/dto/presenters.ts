@@ -137,17 +137,25 @@ export function presentHermesEvent(event: HermesEvent): HermesEventView {
   };
 }
 
+// The connection the Marketplaces list and Settings both show: the marketplace row says
+// connected and, when MarketplaceOAuthService.check() was asked (OLX), it found an account in
+// status connected with readable credentials.
+export function isMarketplaceConnected(marketplace: Marketplace, oauthConnected?: boolean): boolean {
+  return marketplace.isConnected() && oauthConnected !== false;
+}
+
 // olxSandbox is true while the OLX adapter is not real; only OLX is flagged as sandbox.
+// oauthConnected is the connected flag of check() for OLX, undefined when it was not asked.
 export function presentMarketplace(
   marketplace: Marketplace,
-  options: { olxSandbox: boolean },
+  options: { olxSandbox: boolean; oauthConnected?: boolean },
 ): MarketplaceView {
   return {
     id: marketplace.id,
     workspaceId: marketplace.workspaceId,
     key: marketplace.key,
     name: marketplace.name,
-    connected: marketplace.isConnected(),
+    connected: isMarketplaceConnected(marketplace, options.oauthConnected),
     sandbox: marketplace.key === 'olx' && options.olxSandbox,
     syncMode: marketplace.syncMode,
     lastSyncAt: iso(marketplace.lastSyncAt),

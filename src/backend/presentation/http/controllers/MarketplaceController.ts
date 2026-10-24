@@ -15,6 +15,7 @@ import { DomainError, InvalidStateError, NotFoundError } from '../../../domain/s
 import { presentMarketplace } from '../../../application/dto/presenters';
 import { ok } from '../formatters/ResponseFormatter';
 import type { ErrorLogger } from '../middleware/ErrorHandlingMiddleware';
+import type { OlxAdapterMode } from '../../../config/env';
 
 
 function routeParam(value: string | string[] | undefined): string {
@@ -36,16 +37,25 @@ export class MarketplaceController {
     private readonly imports: MarketplaceImportService,
     private readonly olxQuotas: OlxPublicationQuotaService | undefined,
     private readonly oauthReturnUrl: string,
-    private readonly olxAdapterMode: string,
+    private readonly olxAdapterMode: OlxAdapterMode,
     private readonly logger?: ErrorLogger,
   ) {}
 
+  // Same rule as ListingController: only the stub mode is the sandbox.
   private get olxSandbox(): boolean {
-    return this.olxAdapterMode !== 'real';
+    return this.olxAdapterMode === 'stub';
   }
 
-  private present(marketplace: Marketplace) {
-    return presentMarketplace(marketplace, { olxSandbox: this.olxSandbox });
+  // OLX counts as connected only with an account in status connected and readable credentials,
+  // the answer of the same check() Settings asks.
+  private async present(marketplace: Marketplace) {
+    const { id: marketplaceId, workspaceId } = marketplace;
+    const status =
+      marketplace.key === 'olx' ? await this.oauth.check({ marketplaceId, workspaceId }) : null;
+    return presentMarketplace(marketplace, {
+      olxSandbox: this.olxSandbox,
+      oauthConnected: status?.connected,
+    });
   }
 
   listQuotas = async (req: Request, res: Response): Promise<void> => {
@@ -72,7 +82,7 @@ export class MarketplaceController {
     const marketplaces = await this.marketplaceRepo.findByWorkspace(
       req.user!.workspaceId!,
     );
-    ok(res, marketplaces.map((marketplace) => this.present(marketplace)));
+    ok(res, await Promise.all(marketplaces.map((marketplace) => this.present(marketplace))));
   };
 
   get = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -84,7 +94,7 @@ export class MarketplaceController {
     if (!marketplace) {
       return next(new NotFoundError(`Marketplace not found: ${marketplaceId}`));
     }
-    ok(res, this.present(marketplace));
+    ok(res, await this.present(marketplace));
   };
 
   sync = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -250,6 +260,6 @@ export class MarketplaceController {
       return next(error);
     }
     await this.marketplaceRepo.save(marketplace);
-    ok(res, this.present(marketplace));
+    ok(res, await this.present(marketplace));
   };
 }

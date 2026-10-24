@@ -9,6 +9,7 @@ import type {
   IAIProvider,
   ListingAnalysis,
 } from '../../../domain/ports/IAIProvider';
+import { ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { StubAIProvider, unwrap } from '../../../domain/testkit/support';
 
 const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
@@ -175,5 +176,139 @@ describe('ProductAIDraftService', () => {
 
     expect(draft).toMatchObject({ mode: 'photos', source: 'offline', confidence: null });
     expect(draft.fields.images).toEqual(['https://example.test/camera.jpg']);
+  });
+
+  // A cost of 0 would show the whole price as profit and a 100% margin on review.
+  it.each([
+    { draft: 'title', request: titleRequest },
+    { draft: 'photos', request: photosRequest },
+  ])('keeps an unknown cost null in a $draft draft', async ({ request }) => {
+    const draft = unwrap(await new ProductAIDraftService().generateDraft(request));
+
+    expect(draft.fields.costPrice).toBeNull();
+  });
+
+  it('keeps a cost the seller entered, zero included', async () => {
+    for (const costPrice of [0, 42.5]) {
+      const draft = unwrap(
+        await new ProductAIDraftService().generateDraft({ ...titleRequest, existingFields: { costPrice } }),
+      );
+
+      expect(draft.fields.costPrice).toBe(costPrice);
+    }
+  });
+});
+
+describe('ProductAIDraftService provider failure log', () => {
+  function failingWith(error: Error): IAIProvider {
+    const fail = async (): Promise<never> => {
+      throw error;
+    };
+    return {
+      suggestPrice: fail,
+      generateTitle: fail,
+      analyzeListing: fail,
+      analyzeListingSeo: fail,
+    };
+  }
+
+  it('logs one warning that names the failure and its cause', async () => {
+    const warn = jest.fn();
+    const outage = new ServiceUnavailableError(
+      'Hermes AI is not reachable in this environment',
+      new Error('Hermes API request timed out after 30000ms'),
+    );
+
+    const draft = unwrap(
+      await new ProductAIDraftService(failingWith(outage), { warn }).generateDraft(titleRequest),
+    );
+
+    expect(draft.notes[0]).toBe(FALLBACK_TITLE_NOTE);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      {
+        error: {
+          name: 'ServiceUnavailableError',
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Hermes AI is not reachable in this environment',
+          causes: [{ name: 'Error', message: 'Hermes API request timed out after 30000ms' }],
+        },
+      },
+      'AI draft enrichment failed; the draft keeps only its deterministic fields',
+    );
+  });
+
+  // fetch reports a refused or unresolvable Hermes host as TypeError "fetch failed"; the reason
+  // is one cause further down.
+  it('follows the cause chain down to the transport reason of a fetch failure', async () => {
+    const warn = jest.fn();
+    const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8642'), {
+      code: 'ECONNREFUSED',
+    });
+    const fetchFailed = Object.assign(new TypeError('fetch failed'), { cause: refused });
+    const outage = new ServiceUnavailableError(
+      'Hermes AI is not reachable in this environment',
+      fetchFailed,
+    );
+
+    await new ProductAIDraftService(failingWith(outage), { warn }).generateDraft(titleRequest);
+
+    expect(warn.mock.calls[0][0].error.causes).toEqual([
+      { name: 'TypeError', message: 'fetch failed' },
+      { name: 'Error', code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 127.0.0.1:8642' },
+    ]);
+  });
+
+  // The message of a non-2xx Hermes answer is provider text, so it gets the redaction of the
+  // startup error log.
+  it('redacts URLs and credentials in the logged messages', async () => {
+    const warn = jest.fn();
+    const outage = new ServiceUnavailableError(
+      'Hermes AI is not reachable in this environment',
+      new Error('Upstream https://hermes.example.test/v1?token=leaky failed; password=hunter2'),
+    );
+
+    await new ProductAIDraftService(failingWith(outage), { warn }).generateDraft(titleRequest);
+
+    expect(warn.mock.calls[0][0].error.causes).toEqual([
+      { name: 'Error', message: 'Upstream [redacted-connection-string] failed; password=[redacted]' },
+    ]);
+  });
+
+  it('follows at most three causes, even when a cause points back at itself', async () => {
+    const warn = jest.fn();
+    const looping = new Error('loops');
+    Object.assign(looping, { cause: looping });
+
+    await new ProductAIDraftService(failingWith(looping), { warn }).generateDraft(titleRequest);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0].error.causes).toHaveLength(3);
+  });
+
+  it('logs neither request data nor other properties of the error', async () => {
+    const warn = jest.fn();
+    const failure = Object.assign(new Error('Request failed with status 401'), {
+      config: { headers: { Authorization: 'Bearer leaky-token' } },
+    });
+
+    await new ProductAIDraftService(failingWith(failure), { warn }).generateDraft({
+      ...titleRequest,
+      existingFields: { description: 'Serial number SN-0042 is on the base.' },
+    });
+
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain('Request failed with status 401');
+    expect(logged).not.toContain('leaky-token');
+    expect(logged).not.toContain('SN-0042');
+  });
+
+  it('logs nothing when the provider answers', async () => {
+    const warn = jest.fn();
+
+    await new ProductAIDraftService(new StubAIProvider(undefined, 'Canon AE-1'), { warn })
+      .generateDraft(titleRequest);
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });
