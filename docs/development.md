@@ -13,7 +13,7 @@ npm ci
 npm run env:init
 ```
 
-`npm run env:init` copies `.env.example` to `.env` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`; values that are already set are kept, so it is safe to run again. The app refuses to start while `JWT_SECRET` or `MARKETPLACE_CREDENTIALS_KEY` is missing or a placeholder. For Compose development, also set `HERMES_API_KEY` to the key configured by the native Hermes API server (`DB_SSL_MODE=disable` is already the example value). For `npm run dev` without Docker, `ALLOW_INSECURE_DEV_JWT=true` in `.env` tolerates a placeholder `JWT_SECRET`; it is ignored in production. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
+`npm run env:init` copies `.env.example` to `.env` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`; values that are already set are kept, so it is safe to run again. The app refuses to start while `JWT_SECRET` or `MARKETPLACE_CREDENTIALS_KEY` is missing or a placeholder. Hermes is optional: with the placeholder `HERMES_API_KEY` from the example the app answers AI requests with built-in offline heuristics, and setting the key configured by the native Hermes API server switches to Hermes (`DB_SSL_MODE=disable` is already the example value). For `npm run dev` without Docker, `ALLOW_INSECURE_DEV_JWT=true` in `.env` tolerates a placeholder `JWT_SECRET`; it is ignored in production. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
 
 ```bash
 docker compose up -d
@@ -64,6 +64,8 @@ API requests live under `/api`; `GET /health` is liveness and `GET /ready` check
 ## Hermes integration boundary
 
 MarketDesk connects to the native Hermes Agent API Server; it does not call a model provider directly. For a local Compose app, the default endpoint is `http://host.docker.internal:8642/v1`. Configure `API_SERVER_ENABLED`, `API_SERVER_HOST`, `API_SERVER_PORT`, and `API_SERVER_KEY` on the Hermes host, and set the matching app-side `HERMES_API_KEY` in the project `.env`.
+
+`HERMES_PROVIDER_MODE` chooses where AI calls go. `auto` (the default) uses Hermes while `HERMES_API_KEY` is a real value (not the `your_` placeholder) and the API server answers, and the built-in offline heuristics otherwise. `hermes` never falls back, so its failures reach the caller. `offline` never calls Hermes. Offline results say that Hermes was not consulted, and every title, price, or description change they propose waits for human review whatever the autonomy level. `GET /api/hermes/status` reports the mode, the provider in use, and whether Hermes is configured and reachable.
 
 The Hermes host must be reachable from Docker but must not be exposed publicly. If binding the server to `0.0.0.0` for host-gateway access, restrict port 8642 with host firewall/security-group rules to Docker traffic and trusted administration addresses. Authentication does not replace network isolation. Keep recommendations reviewable; approval, publish, relist, category changes, and quota overrides remain guarded operations.
 
