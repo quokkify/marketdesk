@@ -104,19 +104,25 @@ describe('ProductAIDraftService', () => {
     expect(draft.notes[0]).toBe(HERMES_TITLE_NOTE);
   });
 
-  it('labels the draft offline when Hermes goes offline while the draft is prepared', async () => {
-    const switching = new SourceAwareStub(
-      'hermes',
-      'Canon AE-1 film camera',
-      { score: 70, suggestions: [] },
-      'offline',
-    );
+  it.each([
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'labels the draft offline when the source switches while the draft is prepared ($before, then $after)',
+    async ({ before, after }) => {
+      const switching = new SourceAwareStub(
+        before,
+        'Canon AE-1 film camera',
+        { score: 70, suggestions: [] },
+        after,
+      );
 
-    const draft = unwrap(await new ProductAIDraftService(switching).generateDraft(titleRequest));
+      const draft = unwrap(await new ProductAIDraftService(switching).generateDraft(titleRequest));
 
-    expect(draft).toMatchObject({ source: 'offline', confidence: null });
-    expect(draft.notes[0]).toBe(OFFLINE_NOTICE);
-  });
+      expect(draft).toMatchObject({ source: 'offline', confidence: null });
+      expect(draft.notes[0]).toBe(OFFLINE_NOTICE);
+    },
+  );
 
   it('treats a provider that does not report its source as Hermes', async () => {
     const hermes = new StubAIProvider(undefined, 'Canon AE-1 film camera', {

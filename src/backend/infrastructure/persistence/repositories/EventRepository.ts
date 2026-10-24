@@ -9,7 +9,7 @@ import type { AgentRecommendationRecord } from '../../../domain/agents/MarketDes
 
 const EVENT_SELECT = `
   SELECT id, workspace_id, product_id, type, severity, status, title, detail,
-         proposed_change, autonomy_decision, created_at, resolved_at
+         proposed_change, autonomy_decision, created_at, resolved_at, source
   FROM hermes_events
 `;
 
@@ -87,12 +87,12 @@ export class EventRepository implements IEventRepository {
     const { rowCount } = await query(
       `INSERT INTO hermes_events
          (id, workspace_id, product_id, type, severity, status, title, detail,
-          proposed_change, autonomy_decision, created_at, resolved_at, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          proposed_change, autonomy_decision, created_at, resolved_at, idempotency_key, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
       [event.id, event.workspaceId, event.productId, event.type, event.severity, event.status,
         event.title, event.detail, proposedChange, event.autonomyDecision, event.createdAt,
-        event.resolvedAt, idempotencyKey],
+        event.resolvedAt, idempotencyKey, event.source],
       this.queryClient,
     );
     return rowCount === 1;
@@ -108,12 +108,12 @@ export class EventRepository implements IEventRepository {
       const { rowCount } = await query(
         `INSERT INTO hermes_events
            (id, workspace_id, product_id, type, severity, status, title, detail,
-            proposed_change, autonomy_decision, created_at, resolved_at, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            proposed_change, autonomy_decision, created_at, resolved_at, idempotency_key, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
         [event.id, event.workspaceId, event.productId, event.type, event.severity, event.status,
           event.title, event.detail, proposedChange, event.autonomyDecision, event.createdAt,
-          event.resolvedAt, idempotencyKey],
+          event.resolvedAt, idempotencyKey, event.source],
         client,
       );
       if (rowCount !== 1) return false;
@@ -262,8 +262,8 @@ export class EventRepository implements IEventRepository {
     await query(
       `INSERT INTO hermes_events
          (id, workspace_id, product_id, type, severity, status, title, detail,
-          proposed_change, autonomy_decision, created_at, resolved_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          proposed_change, autonomy_decision, created_at, resolved_at, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (id) DO UPDATE SET
          severity = EXCLUDED.severity,
          status = EXCLUDED.status,
@@ -285,6 +285,7 @@ export class EventRepository implements IEventRepository {
         event.autonomyDecision,
         event.createdAt,
         event.resolvedAt,
+        event.source,
       ],
       client,
     );

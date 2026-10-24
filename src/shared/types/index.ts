@@ -415,6 +415,8 @@ export interface HermesEvent {
   autonomyDecision?: AutonomyDecision;
   createdAt: string;
   resolvedAt?: string;
+  /** Who produced an AI-made change; absent for suggestions no AI produced and older events. */
+  source?: AIProviderSource;
 }
 
 export interface PriceHistory {

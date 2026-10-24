@@ -42,6 +42,10 @@ function buildListing(price: number): Listing {
 describe('OfflineHeuristicAIProvider', () => {
   const provider = new OfflineHeuristicAIProvider();
 
+  it('reports itself as the offline source, so its results are never labelled Hermes', async () => {
+    await expect(provider.activeProvider()).resolves.toBe('offline');
+  });
+
   describe('suggestPrice', () => {
     it('prices an unpriced listing at cost plus 30 percent, rounded to whole zloty', async () => {
       const suggestion = await provider.suggestPrice({

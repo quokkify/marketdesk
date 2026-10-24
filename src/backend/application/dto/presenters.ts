@@ -133,6 +133,7 @@ export function presentHermesEvent(event: HermesEvent): HermesEventView {
     autonomyDecision: event.autonomyDecision ?? undefined,
     createdAt: event.createdAt.toISOString(),
     resolvedAt: iso(event.resolvedAt),
+    source: event.source ?? undefined,
   };
 }
 

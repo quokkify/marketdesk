@@ -1,5 +1,6 @@
 import { HermesEvent } from '../../../domain/entities/HermesEvent';
 import type {
+  AIProviderSource,
   AutonomyDecision,
   HermesEventStatus,
   HermesEventType,
@@ -24,6 +25,7 @@ export const EventMapper = {
         autonomyDecision: row.autonomy_decision as AutonomyDecision | null,
         createdAt: toDate(row.created_at),
         resolvedAt: toNullableDate(row.resolved_at),
+        source: row.source as AIProviderSource | null,
       }),
     );
   },

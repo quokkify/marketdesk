@@ -5,6 +5,7 @@
 
 import {
   OFFLINE_AI_NOTICE,
+  type AIProviderSourceAware,
   type IAIProvider,
   type ListingAnalysis,
   type PriceSuggestion,
@@ -46,7 +47,12 @@ interface Rewrite {
   changes: string[];
 }
 
-export class OfflineHeuristicAIProvider implements IAIProvider {
+export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSourceAware {
+  // Reports itself, so callers label its results offline however it is wired.
+  async activeProvider(): Promise<'offline'> {
+    return 'offline';
+  }
+
   // Prices are whole units of the listing currency (PLN), computed in minor units.
   async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
     const { listing, recentViews, conversionRate, costPrice } = context;
