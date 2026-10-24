@@ -1,17 +1,105 @@
 import React from 'react';
-import { Box, Button, FormHelperText, InputLabel, MenuItem, Select, Typography } from '@mui/material';
-import type { Marketplace, SyncMode } from '@shared/types';
-import { MarketplaceCard } from './MarketplacesPage';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import type { Marketplace } from '@shared/types';
+import type { ConfirmDialogProps } from '../components/common/ConfirmDialog';
+import type { MarketplaceCardProps } from '../components/marketplaces/MarketplaceCard';
+import type { MarketplaceConfigureDrawerProps } from '../components/marketplaces/MarketplaceConfigureDrawer';
+import type { MarketplaceSummaryBarProps } from '../components/marketplaces/MarketplaceSummaryBar';
+import { ROADMAP_CARD_COPY } from '../components/marketplaces/RoadmapMarketplaceCard';
+import MarketplacesPage, { SANDBOX_CONNECTED_TOAST } from './MarketplacesPage';
 
-type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
+// Props the page last passed to its children. Server rendering never runs
+// effects and ignores state updates after render, so tests drive the page's
+// handlers through these captured callbacks.
+const mockCapture: {
+  summary?: MarketplaceSummaryBarProps;
+  card?: MarketplaceCardProps;
+  drawer?: MarketplaceConfigureDrawerProps;
+  confirm?: ConfirmDialogProps;
+} = {};
+const mockMarketplaces = jest.fn();
+const mockConnection = jest.fn();
+const mockOverview = jest.fn();
+const mockCredentials = jest.fn();
+const mockSync = jest.fn();
+const mockConnect = jest.fn();
+const mockUpdate = jest.fn();
+const mockSaveCredentials = jest.fn();
+const mockDispatch = jest.fn();
 
-function marketplace(overrides: Partial<Marketplace> = {}): Marketplace {
+jest.mock('../services/hooks/index.js', () => ({
+  useMarketplaces: () => mockMarketplaces(),
+  useMarketplaceConnection: (id: string, options: unknown) => mockConnection(id, options),
+  useAnalyticsOverview: (params: unknown, options: unknown) => mockOverview(params, options),
+  useMarketplaceAppCredentials: (id: string, options: unknown) => mockCredentials(id, options),
+  useSaveMarketplaceAppCredentials: () => [mockSaveCredentials, { isLoading: false }],
+  useSyncMarketplace: () => [mockSync],
+  useConnectMarketplace: () => [mockConnect],
+  useCheckMarketplace: () => [jest.fn()],
+  useImportMarketplacePreview: () => [jest.fn()],
+  useImportMarketplaceAdverts: () => [jest.fn()],
+  useUpdateMarketplace: () => [mockUpdate],
+}));
+
+jest.mock('../state/hooks.js', () => ({
+  useAppDispatch: () => mockDispatch,
+}));
+
+jest.mock('../components/marketplaces/MarketplaceSummaryBar.js', () => {
+  const actual = jest.requireActual('../components/marketplaces/MarketplaceSummaryBar');
+  return {
+    ...actual,
+    MarketplaceSummaryBar: (props: MarketplaceSummaryBarProps) => {
+      mockCapture.summary = props;
+      return actual.MarketplaceSummaryBar(props);
+    },
+  };
+});
+
+jest.mock('../components/marketplaces/MarketplaceCard.js', () => {
+  const actual = jest.requireActual('../components/marketplaces/MarketplaceCard');
+  return {
+    ...actual,
+    MarketplaceCard: (props: MarketplaceCardProps) => {
+      mockCapture.card = props;
+      return actual.MarketplaceCard(props);
+    },
+  };
+});
+
+jest.mock('../components/marketplaces/MarketplaceConfigureDrawer.js', () => {
+  const actual = jest.requireActual('../components/marketplaces/MarketplaceConfigureDrawer');
+  return {
+    ...actual,
+    MarketplaceConfigureDrawer: (props: MarketplaceConfigureDrawerProps) => {
+      mockCapture.drawer = props;
+      return actual.MarketplaceConfigureDrawer(props);
+    },
+  };
+});
+
+jest.mock('../components/common/ConfirmDialog.js', () => {
+  const actual = jest.requireActual('../components/common/ConfirmDialog');
+  return {
+    ...actual,
+    ConfirmDialog: (props: ConfirmDialogProps) => {
+      mockCapture.confirm = props;
+      return actual.ConfirmDialog(props);
+    },
+  };
+});
+
+const ROADMAP_NAMES = ['Allegro', 'Vinted', 'Facebook Marketplace', 'eBay', 'Etsy', 'Amazon'];
+
+function olx(overrides: Partial<Marketplace> = {}): Marketplace {
   return {
     id: 'marketplace-olx',
     workspaceId: 'ws-1',
     key: 'olx',
     name: 'OLX',
     connected: true,
+    sandbox: false,
     syncMode: 'manual',
     lastSyncAt: undefined,
     errorCount: 0,
@@ -21,82 +109,271 @@ function marketplace(overrides: Partial<Marketplace> = {}): Marketplace {
   };
 }
 
-function renderCard(overrides: Partial<Marketplace> = {}) {
-  const props = {
-    marketplace: marketplace(overrides),
-    busy: false,
-    onSync: jest.fn(),
-    onConnect: jest.fn(),
-    onSyncMode: jest.fn(),
-  };
-  return { props, tree: MarketplaceCard(props) as ElementLike };
+interface Setup {
+  marketplaces?: Marketplace[];
+  check?: { connected: boolean; sandbox: boolean } | null;
+  credentialsConfigured?: boolean;
 }
 
-function childrenOf(element: ElementLike): ElementLike[] {
-  return React.Children.toArray(element.props.children).filter(React.isValidElement) as ElementLike[];
+function setup({
+  marketplaces = [olx()],
+  check = { connected: true, sandbox: false },
+  credentialsConfigured = true,
+}: Setup = {}): void {
+  mockMarketplaces.mockReturnValue({
+    data: marketplaces,
+    isLoading: false,
+    isError: false,
+    error: undefined,
+    refetch: jest.fn(),
+  });
+  mockConnection.mockReturnValue({
+    data: check
+      ? { ...check, marketplaceId: 'marketplace-olx', providerKey: 'olx', account: null, refreshable: false }
+      : undefined,
+  });
+  mockOverview.mockImplementation((params?: { marketplaceId?: string }) => ({
+    data: { liveListingCount: params?.marketplaceId ? 9 : 12 },
+  }));
+  mockCredentials.mockReturnValue({
+    data: { configured: credentialsConfigured, marketplaceId: 'marketplace-olx', providerKey: 'olx' },
+  });
 }
 
-function findByType(element: ElementLike, type: unknown): ElementLike[] {
-  const direct = element.type === type ? [element] : [];
-  return [...direct, ...childrenOf(element).flatMap((child) => findByType(child, type))];
+function renderPage(): string {
+  return renderToStaticMarkup(
+    <MemoryRouter initialEntries={['/marketplaces']}>
+      <MarketplacesPage />
+    </MemoryRouter>,
+  );
 }
 
-function textContent(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textContent).join('');
-  if (React.isValidElement(node)) return textContent((node as ElementLike).props.children);
-  return '';
+function count(html: string, text: string): number {
+  return html.split(text).length - 1;
 }
 
-describe('MarketplaceCard', () => {
-  it('uses recognizable OLX branding and readable status labels', () => {
-    const { tree } = renderCard();
-    const logo = findByType(tree, Box).find((el) => el.props['aria-label'] === 'OLX marketplace logo');
-    const copy = findByType(tree, Typography).map((el) => textContent(el));
+function toast(message: string, severity: string) {
+  return expect.objectContaining({ payload: expect.objectContaining({ message, severity }) });
+}
 
-    expect(logo?.props.children).toBe('OLX');
-    expect(copy).toContain('Last sync');
-    expect(copy).toContain('Never synced');
-    expect(copy).toContain('Synchronization');
-    expect(copy).toContain('Manual');
-    expect(copy).toContain('Sync errors');
-    expect(copy).toContain('No errors');
-    expect(copy).not.toContain('Capacity');
+describe('MarketplacesPage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete mockCapture.summary;
+    delete mockCapture.card;
+    delete mockCapture.drawer;
+    delete mockCapture.confirm;
+    setup();
   });
 
-  it('labels sync mode, explains modes, and hides unsupported realtime selection', () => {
-    const { tree } = renderCard({ syncMode: 'hourly' });
-    const labels = findByType(tree, InputLabel);
-    const selects = findByType(tree, Select);
-    const options = findByType(tree, MenuItem);
-    const helpers = findByType(tree, FormHelperText);
+  it('renders one OLX card and six roadmap cards', () => {
+    const html = renderPage();
 
-    expect(labels.map((label) => textContent(label))).toContain('Sync mode');
-    expect(selects[0]?.props.value).toBe('hourly');
-    expect(options.map((option) => option.props.value)).toEqual(['manual', 'hourly']);
-    expect(helpers.map((helper) => textContent(helper))).toContain(
-      'Run automatic synchronization once per hour.',
+    expect(count(html, '<section')).toBe(7);
+    expect(count(html, 'aria-label="OLX logo"')).toBe(1);
+    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
+    expect(count(html, '>Not available yet</span>')).toBe(6);
+    for (const name of ROADMAP_NAMES) {
+      expect(html).toContain(`>${name}</h2>`);
+    }
+  });
+
+  it('roadmap cards expose no connect action', () => {
+    setup({
+      marketplaces: [
+        olx(),
+        { ...olx(), id: 'marketplace-allegro', key: 'allegro', name: 'Allegro', connected: true },
+      ],
+    });
+    const html = renderPage();
+
+    expect(count(html, '>Allegro</h2>')).toBe(1);
+    expect(count(html, '(not available yet)"')).toBe(6);
+    expect(html).not.toMatch(/Connect (with|sandbox) (?!OLX)/);
+    expect(html).toContain('>1 of 7 marketplaces connected</');
+  });
+
+  it('sandbox badge shown when marketplace.sandbox', () => {
+    setup({ marketplaces: [olx({ sandbox: true, connected: false })], check: { connected: false, sandbox: false } });
+    const sandboxHtml = renderPage();
+    const sandboxSummary = mockCapture.summary;
+    setup({ marketplaces: [olx({ connected: false })], check: { connected: false, sandbox: false } });
+    const realHtml = renderPage();
+
+    expect(sandboxSummary?.sandbox).toBe(true);
+    expect(count(sandboxHtml, '>Sandbox</span>')).toBe(2);
+    expect(sandboxHtml).toContain('Connect sandbox OLX');
+    expect(mockCapture.summary?.sandbox).toBe(false);
+    expect(realHtml).not.toContain('>Sandbox</span>');
+    expect(realHtml).toContain('Connect with OLX');
+  });
+
+  it('drives the OLX connection state from the OAuth check, not the list flag', () => {
+    setup({ marketplaces: [olx({ connected: true })], check: { connected: false, sandbox: false } });
+    const html = renderPage();
+
+    expect(mockConnection).toHaveBeenCalledWith('marketplace-olx', { skip: false });
+    expect(html).toContain('>Disconnected</');
+    expect(html).toContain('>0 of 7 marketplaces connected</');
+    expect(html).toContain('Connect with OLX');
+  });
+
+  it('falls back to the list flag until the OAuth check answers', () => {
+    setup({ marketplaces: [olx({ connected: true })], check: null });
+
+    expect(renderPage()).toContain('>1 of 7 marketplaces connected</');
+  });
+
+  it('shows workspace and OLX live listing counts from analytics', () => {
+    const html = renderPage();
+
+    expect(mockOverview).toHaveBeenCalledWith({ marketplaceId: 'marketplace-olx' }, { skip: false });
+    expect(html).toContain('>9 live</dd>');
+    expect(html).toContain('12 active listings');
+  });
+
+  it('asks for OLX app credentials before a real connect', () => {
+    setup({
+      marketplaces: [olx({ connected: false })],
+      check: { connected: false, sandbox: false },
+      credentialsConfigured: false,
+    });
+
+    expect(renderPage()).toContain('Add your OLX app credentials in Configure before connecting.');
+    expect(mockCredentials).toHaveBeenCalledWith('marketplace-olx', { skip: false });
+  });
+
+  it('does not ask for app credentials in sandbox mode', () => {
+    setup({
+      marketplaces: [olx({ sandbox: true, connected: false })],
+      check: { connected: false, sandbox: false },
+      credentialsConfigured: false,
+    });
+
+    expect(renderPage()).not.toContain('Add your OLX app credentials');
+  });
+
+  it('shows a retry card when marketplaces fail to load and keeps the roadmap visible', () => {
+    mockMarketplaces.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: { status: 500 },
+      refetch: jest.fn(),
+    });
+    const html = renderPage();
+
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('marketplaces connected');
+    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
+  });
+
+  it('Sync all queues a sync for the connected OLX marketplace only', async () => {
+    setup({
+      marketplaces: [
+        olx(),
+        { ...olx(), id: 'marketplace-allegro', key: 'allegro', name: 'Allegro', connected: true },
+      ],
+    });
+    mockSync.mockReturnValue({ unwrap: () => Promise.resolve({ marketplaceId: 'marketplace-olx', enqueued: true }) });
+    renderPage();
+
+    await mockCapture.summary?.onSyncAll();
+
+    expect(mockSync).toHaveBeenCalledTimes(1);
+    expect(mockSync).toHaveBeenCalledWith('marketplace-olx');
+    expect(mockDispatch).toHaveBeenCalledWith(toast('Sync queued for OLX.', 'success'));
+  });
+
+  it('labels a sandbox sync and reports a failed one', async () => {
+    setup({ marketplaces: [olx({ sandbox: true })], check: { connected: true, sandbox: true } });
+    mockSync.mockReturnValue({
+      unwrap: () => Promise.reject({ data: { error: { message: 'Sync queue unavailable' } } }),
+    });
+    renderPage();
+
+    await mockCapture.summary?.onSyncAll();
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      toast('OLX (sandbox) sync failed: Sync queue unavailable', 'error'),
     );
   });
 
-  it('keeps unsupported realtime visible but disabled if returned by the API', () => {
-    const { tree } = renderCard({ syncMode: 'realtime' as SyncMode });
-    const options = findByType(tree, MenuItem);
-    const realtime = options.find((option) => option.props.value === 'realtime');
-    const helpers = findByType(tree, FormHelperText);
+  it('disconnects only after the confirmation dialog', async () => {
+    mockUpdate.mockReturnValue({ unwrap: () => Promise.resolve(olx({ connected: false })) });
+    renderPage();
 
-    expect(realtime?.props.disabled).toBe(true);
-    expect(helpers.map((helper) => textContent(helper))).toContain(
-      'Real-time sync is not available for the current OLX integration yet.',
+    mockCapture.card?.onRequestDisconnect(olx());
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockCapture.confirm?.title).toBe('Disconnect OLX?');
+    expect(mockCapture.confirm?.confirmColor).toBe('error');
+
+    await mockCapture.confirm?.onConfirm();
+
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'marketplace-olx', patch: { connected: false } });
+    expect(mockDispatch).toHaveBeenCalledWith(
+      toast('OLX disconnected. Listings stay in MarketDesk.', 'success'),
     );
   });
 
-  it('makes non-zero sync errors prominent and actionable', () => {
-    const { tree } = renderCard({ errorCount: 3 });
-    const copy = findByType(tree, Typography).map((el) => textContent(el));
-    const buttons = findByType(tree, Button).map((el) => textContent(el));
+  it('saves a new sync mode from the Configure drawer', async () => {
+    mockUpdate.mockReturnValue({ unwrap: () => Promise.resolve(olx({ syncMode: 'hourly' })) });
+    renderPage();
 
-    expect(copy).toContain('3 needs review');
-    expect(buttons).toContain('Review sync issues');
+    await mockCapture.drawer?.onSyncModeChange(olx(), 'hourly');
+
+    expect(mockUpdate).toHaveBeenCalledWith({ id: 'marketplace-olx', patch: { syncMode: 'hourly' } });
+    expect(mockDispatch).toHaveBeenCalledWith(toast('OLX sync mode updated.', 'success'));
+  });
+
+  it('saves OLX app credentials from the Configure drawer', async () => {
+    mockSaveCredentials.mockReturnValue({
+      unwrap: () => Promise.resolve({ configured: true, marketplaceId: 'marketplace-olx', providerKey: 'olx' }),
+    });
+    renderPage();
+
+    const saved = await mockCapture.drawer?.onSaveCredentials({ clientId: 'client-1', clientSecret: 'secret-1' });
+
+    expect(saved).toBe(true);
+    expect(mockSaveCredentials).toHaveBeenCalledWith({
+      id: 'marketplace-olx',
+      input: { clientId: 'client-1', clientSecret: 'secret-1' },
+    });
+    expect(mockDispatch).toHaveBeenCalledWith(toast('OLX application credentials saved.', 'success'));
+  });
+
+  it('keeps the credentials form filled when saving fails', async () => {
+    mockSaveCredentials.mockReturnValue({
+      unwrap: () => Promise.reject({ data: { error: { message: 'OLX application client ID is required' } } }),
+    });
+    renderPage();
+
+    const saved = await mockCapture.drawer?.onSaveCredentials({ clientId: '', clientSecret: 'secret-1' });
+
+    expect(saved).toBe(false);
+    expect(mockDispatch).toHaveBeenCalledWith(toast('OLX application client ID is required', 'error'));
+  });
+
+  it('starts the OLX connect flow and follows the authorization URL', async () => {
+    setup({ marketplaces: [olx({ connected: false })], check: { connected: false, sandbox: false } });
+    mockConnect.mockReturnValue({
+      unwrap: () => Promise.resolve({ authorizationUrl: 'https://auth.example.test/authorize' }),
+    });
+    const assign = jest.fn();
+    renderPage();
+
+    Object.defineProperty(globalThis, 'window', { value: { location: { assign } }, configurable: true });
+    try {
+      await mockCapture.card?.onConnect(olx({ connected: false }));
+    } finally {
+      delete (globalThis as { window?: unknown }).window;
+    }
+
+    expect(mockConnect).toHaveBeenCalledWith({ id: 'marketplace-olx' });
+    expect(assign).toHaveBeenCalledWith('https://auth.example.test/authorize');
+  });
+
+  it('announces a sandbox connection without implying real OLX calls', () => {
+    expect(SANDBOX_CONNECTED_TOAST).toBe('Sandbox OLX connected — no real marketplace calls are made');
   });
 });

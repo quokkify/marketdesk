@@ -14,6 +14,7 @@ function summaryProps(overrides: Partial<MarketplaceSummaryBarProps> = {}): Mark
     totalCount: 7,
     liveListingCount: 12,
     lastFullSyncAt: new Date(NOW.getTime() - 2 * 60 * 1000).toISOString(),
+    sandbox: false,
     syncing: false,
     onSyncAll: jest.fn(),
     ...overrides,
@@ -56,6 +57,14 @@ describe('MarketplaceSummaryBar', () => {
     );
 
     expect(html).toContain('>12 active listings · no full sync yet</');
+  });
+
+  it('labels sandbox mode next to the connection count', () => {
+    const sandboxHtml = renderToStaticMarkup(<MarketplaceSummaryBar {...summaryProps({ sandbox: true })} />);
+    const realHtml = renderToStaticMarkup(<MarketplaceSummaryBar {...summaryProps()} />);
+
+    expect(sandboxHtml).toContain('>Sandbox</span>');
+    expect(realHtml).not.toContain('>Sandbox</span>');
   });
 
   it('leaves out the listing count while it is unknown', () => {

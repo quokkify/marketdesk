@@ -7,6 +7,7 @@ import type { Theme } from '@mui/material/styles';
 import LinkIcon from '@mui/icons-material/Link';
 import SyncIcon from '@mui/icons-material/Sync';
 import { Card } from '../common/Card.js';
+import { Badge } from '../common/Badge.js';
 import { formatNumber, formatRelativeTime } from '../../utils/formatters.js';
 
 export interface MarketplaceSummaryBarProps {
@@ -16,6 +17,8 @@ export interface MarketplaceSummaryBarProps {
   liveListingCount: number | null;
   // Oldest last sync among connected marketplaces; absent when any never synced.
   lastFullSyncAt?: string;
+  // OLX runs against the sandbox adapter: no real marketplace calls.
+  sandbox: boolean;
   syncing: boolean;
   onSyncAll: () => void;
 }
@@ -25,6 +28,7 @@ export const MarketplaceSummaryBar: React.FC<MarketplaceSummaryBarProps> = ({
   totalCount,
   liveListingCount,
   lastFullSyncAt,
+  sandbox,
   syncing,
   onSyncAll,
 }) => {
@@ -58,9 +62,12 @@ export const MarketplaceSummaryBar: React.FC<MarketplaceSummaryBarProps> = ({
           <LinkIcon fontSize="small" />
         </Box>
         <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
-          <Typography component="p" variant="subtitle1" sx={{ fontWeight: 800 }}>
-            {`${connectedCount} of ${totalCount} marketplaces connected`}
-          </Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography component="p" variant="subtitle1" sx={{ fontWeight: 800 }}>
+              {`${connectedCount} of ${totalCount} marketplaces connected`}
+            </Typography>
+            {sandbox && <Badge label="Sandbox" color="warning" />}
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             {details}
           </Typography>
