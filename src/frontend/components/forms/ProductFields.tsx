@@ -174,31 +174,6 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
   );
 };
 
-export const ImagesField: React.FC<ProductFieldsProps> = ({ values, errors, onChange }) => (
-  <Autocomplete
-    multiple
-    freeSolo
-    options={[]}
-    value={values.images}
-    onChange={(_e, next) => onChange('images', next as string[])}
-    renderValue={(value, getItemProps) =>
-      value.map((option, index) => {
-        const { key, ...itemProps } = getItemProps({ index });
-        return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
-      })
-    }
-    renderInput={(params) => (
-      <TextField
-        {...params}
-        label="Image URLs"
-        placeholder="Paste an image URL and press Enter"
-        error={Boolean(errors.images)}
-        helperText={errors.images}
-      />
-    )}
-  />
-);
-
 export const StatusField: React.FC<ProductFieldsProps> = ({ values, onChange }) => (
   <FormControl fullWidth>
     <InputLabel id="status-label">Status</InputLabel>

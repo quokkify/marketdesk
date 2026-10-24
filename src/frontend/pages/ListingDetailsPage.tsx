@@ -37,6 +37,8 @@ import {
   useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
+  useUploadProductImage,
+  useDeleteProductImage,
   useUpdateListing,
   useRelistListing,
   useDelistListingToDraft,
@@ -490,6 +492,8 @@ const ListingDetailsPage: React.FC = () => {
   const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey } = useMarketplaceLookup();
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
+  const [uploadProductImage] = useUploadProductImage();
+  const [deleteProductImage] = useDeleteProductImage();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
   const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
@@ -1223,6 +1227,10 @@ const ListingDetailsPage: React.FC = () => {
           initial={p}
           submitting={updating}
           onSubmit={handleEdit}
+          onUploadImage={(file) => uploadProductImage(file).unwrap()}
+          onDeleteImage={async (imageId) => {
+            await deleteProductImage(imageId).unwrap();
+          }}
           onCancel={() => setEditOpen(false)}
         />
       </Modal>
