@@ -41,6 +41,8 @@ CORS_ORIGIN=https://marketdesk.example.com
 TRUST_PROXY=true
 # The bundled Compose PostgreSQL service is plaintext on the private Docker network.
 DB_SSL_MODE=disable
+# Always set explicitly: stub is the labelled sandbox, real calls the OLX Partner API.
+OLX_ADAPTER_MODE=stub
 ```
 
 `TRUST_PROXY=true` makes the app trust one proxy hop, here Caddy, and take the client address
@@ -65,6 +67,13 @@ this intentionally overrides the copied `.env` value `DB_HOST=localhost`, which 
 the correct default only for running the backend natively outside Docker.
 Database TLS is independent of the public Caddy/Cloudflare HTTPS configuration described
 below.
+
+Set `OLX_ADAPTER_MODE` explicitly before a real deploy instead of relying on the default.
+`stub` is the default: every OLX surface is labelled **Sandbox**, category search uses the
+built-in stub taxonomy instead of the OLX one, and connecting OLX again in stub mode, for
+example after a disconnect, overwrites stored real OLX tokens with sandbox ones. Use `real` only
+with approved OLX credentials and a public `PUBLIC_BASE_URL`; see
+[OLX real API readiness](../olx-real-api-readiness.md). Any other value stops the app at startup.
 
 - Before production changes, create and verify a backup of live state:
   - PostgreSQL dump or volume backup;
