@@ -26,12 +26,13 @@ export type ProductSubmissionValues = ProductFormValues & {
 
 export type ProductFieldErrors = Partial<Record<keyof ProductFormValues, string>>;
 
+// The cost starts unknown (null), so no profit or margin is shown until the seller enters it.
 export function emptyProductValues(): ProductFormValues {
   return {
     name: '',
     sku: '',
     description: '',
-    costPrice: 0,
+    costPrice: null,
     sellingPrice: 0,
     condition: 'good',
     category: '',

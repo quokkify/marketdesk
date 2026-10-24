@@ -222,6 +222,20 @@ describe('ProductWizardForm review step', () => {
     expect(html).not.toContain('% margin');
   });
 
+  it('shows an unknown cost, not profit and margin, while the cost field was left untouched', () => {
+    const html = render(
+      <WizardReviewSummary
+        values={{ ...emptyProductValues(), name: 'Camera', sellingPrice: 100 }}
+        currency="PLN"
+        marketplace={null}
+      />
+    );
+
+    expect(html).toContain('Cost unknown, so profit is not calculated.');
+    expect(html).not.toContain('Profit');
+    expect(html).not.toContain('% margin');
+  });
+
   it('labels a sandbox OLX target', () => {
     const [olx] = buildWizardMarketplaceOptions([{ ...marketplace(), sandbox: true } as Marketplace]);
     const html = render(<WizardReviewSummary values={reviewValues()} currency="PLN" marketplace={olx!} />);
