@@ -70,6 +70,8 @@ export interface AppDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   marketplaceOAuthReturnUrl: string;
+  // OLX adapter mode; anything but 'real' is sandbox. Omitted means 'stub', like the env default.
+  olxAdapterMode?: string;
   workspaceRepo: IWorkspaceRepository;
   settingsRepo: ISettingsRepository;
   authUserStore: IAuthUserStore;
@@ -220,7 +222,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.workspaceRepo,
       deps.settingsRepo,
       deps.marketplaceRepo,
-      deps.marketplaceOAuthService
+      deps.marketplaceOAuthService,
+      deps.olxAdapterMode ?? 'stub'
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
   };

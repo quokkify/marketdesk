@@ -1603,6 +1603,7 @@ describe('Presentation API', () => {
             configured: true,
             connected: true,
             account: { handle: 'OLX account', status: 'connected' },
+            sandbox: true,
           },
           {
             category: 'telegram',

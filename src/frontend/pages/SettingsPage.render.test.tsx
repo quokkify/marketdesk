@@ -222,6 +222,36 @@ describe('SettingsPage sections', () => {
     expect(text).not.toMatch(/Generate key|Connect|Revoke|Copy/);
   });
 
+  it('says notification preferences are stored while delivery is not active', async () => {
+    const html = await renderSettings('/settings?section=notifications');
+    const text = visibleText(html);
+
+    expect(currentSection(html)).toBe('Notifications');
+    expect(text).toContain('Preferences are saved now; delivery is not active in this release');
+    expect(text).not.toMatch(/delivery channels/i);
+  });
+
+  it('keeps email and in-app switches editable and disables the Telegram column', async () => {
+    const html = await renderSettings('/settings?section=notifications');
+    const switches = [...html.matchAll(/<input[^>]*aria-label="([^"]*)"[^>]*>/g)].map(
+      ([markup, label]) => ({ label: label!, disabled: /\sdisabled(=|\s|>)/.test(markup) })
+    );
+    const telegram = switches.filter(({ label }) => label.endsWith(' telegram'));
+    const editable = switches.filter(({ label }) => !label.endsWith(' telegram'));
+
+    expect(telegram).toHaveLength(5);
+    expect(telegram.every(({ disabled }) => disabled)).toBe(true);
+    expect(editable).toHaveLength(10);
+    expect(editable.some(({ disabled }) => disabled)).toBe(false);
+  });
+
+  it('captions the Telegram column as not available in this release', async () => {
+    const text = visibleText(await renderSettings('/settings?section=notifications'));
+
+    expect(text.split('Not available in this release')).toHaveLength(2);
+    expect(text).toMatch(/Telegram Not available in this release/);
+  });
+
   it('renders Appearance with labelled Theme and Density controls', async () => {
     const html = await renderSettings('/settings?section=appearance');
     const text = visibleText(html);

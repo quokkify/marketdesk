@@ -84,7 +84,8 @@ export type IntegrationSettingsStatus =
       providerKey: MarketplaceKey;
       connected: boolean;
       account: MarketplaceAccountSettingsSummary | null;
-      sandbox?: boolean;
+      // True for OLX while the adapter runs in sandbox mode; always false for other channels.
+      sandbox: boolean;
     })
   | (IntegrationSettingsStatusBase & {
       category: 'telegram';

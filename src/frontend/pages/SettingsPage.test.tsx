@@ -71,6 +71,7 @@ function marketplaceItem(overrides: Partial<MarketplaceItem> = {}): MarketplaceI
     configured: true,
     connected: true,
     account: { handle: 'seller@example.test', status: 'connected' },
+    sandbox: false,
     ...overrides,
   };
 }
@@ -257,7 +258,7 @@ describe('Marketplace Accounts panel', () => {
     expect(html).toMatch(/<a[^>]*href="\/marketplaces"[^>]*>Manage</);
   });
 
-  it('labels sandbox accounts and stays silent when the flag is absent or false', () => {
+  it('labels sandbox accounts and stays silent when the flag is false', () => {
     const sandboxed = render(
       <MarketplaceAccountsList items={[marketplaceItem({ sandbox: true })]} />
     );
@@ -307,6 +308,7 @@ describe('Marketplace Accounts panel', () => {
             configured: false,
             connected: false,
             account: null,
+            sandbox: false,
           }),
         ]}
       />
@@ -357,6 +359,16 @@ describe('Roadmap panel', () => {
 
     expect(text).toBe('Roadmap API key management is on the roadmap.');
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('Notifications section copy', () => {
+  it('does not claim delivery in its subtitle', () => {
+    const notifications = settingsSections.find((section) => section.id === 'notifications');
+
+    expect(notifications?.description).toBe(
+      'Preferences are saved now; delivery is not active in this release.'
+    );
   });
 });
 

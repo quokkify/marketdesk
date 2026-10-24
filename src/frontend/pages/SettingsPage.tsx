@@ -102,7 +102,7 @@ export const settingsSections: Array<{
   {
     id: 'notifications',
     label: 'Notifications',
-    description: 'Delivery channels for each event.',
+    description: 'Preferences are saved now; delivery is not active in this release.',
     icon: <NotificationsIcon fontSize="small" />,
   },
   {
@@ -188,6 +188,16 @@ const notificationRows: Array<[NotificationEventKey, string]> = [
   ['listing_needs_attention', 'Listing needs attention'],
   ['sync_error', 'Sync errors'],
   ['weekly_performance_report', 'Weekly performance report'],
+];
+
+const notificationChannels: Array<{
+  key: keyof NotificationChannels;
+  label: string;
+  unavailable?: boolean;
+}> = [
+  { key: 'email', label: 'Email' },
+  { key: 'inApp', label: 'In-app' },
+  { key: 'telegram', label: 'Telegram', unavailable: true },
 ];
 
 function errorMessage(err: unknown): string {
@@ -887,8 +897,7 @@ const SettingsPage: React.FC = () => {
           >
             <Stack spacing={1.5}>
               <Typography variant="body2" color="text.secondary">
-                Choose delivery channels independently for each event. Changes are saved
-                immediately.
+                Choose channels independently for each event. Changes are saved immediately.
               </Typography>
               <Box
                 sx={{
@@ -899,22 +908,35 @@ const SettingsPage: React.FC = () => {
                 }}
               >
                 <Typography variant="caption">Event</Typography>
-                <Typography variant="caption">Email</Typography>
-                <Typography variant="caption">In-app</Typography>
-                <Typography variant="caption">Telegram</Typography>
+                {notificationChannels.map((channel) => (
+                  <Box key={channel.key}>
+                    <Typography variant="caption">{channel.label}</Typography>
+                    {channel.unavailable && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', maxWidth: 120 }}
+                      >
+                        {NOT_AVAILABLE_LABEL}
+                      </Typography>
+                    )}
+                  </Box>
+                ))}
                 {notificationRows.map(([event, label]) => (
                   <React.Fragment key={event}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
                       {label}
                     </Typography>
-                    {(['email', 'inApp', 'telegram'] as const).map((channel) => (
+                    {notificationChannels.map((channel) => (
                       <Switch
-                        key={channel}
+                        key={channel.key}
                         size="small"
-                        disabled={!notifications.currentData || savingNotifications}
-                        checked={notifications.currentData?.events[event][channel] ?? false}
-                        onChange={(e) => handleNotification(event, channel, e.target.checked)}
-                        slotProps={{ input: { 'aria-label': `${label} ${channel}` } }}
+                        disabled={
+                          !notifications.currentData || savingNotifications || channel.unavailable
+                        }
+                        checked={notifications.currentData?.events[event][channel.key] ?? false}
+                        onChange={(e) => handleNotification(event, channel.key, e.target.checked)}
+                        slotProps={{ input: { 'aria-label': `${label} ${channel.key}` } }}
                       />
                     ))}
                   </React.Fragment>

@@ -16,7 +16,8 @@ import type {
 } from '../../../../shared/types';
 import { ok } from '../formatters/ResponseFormatter';
 
-// The OLX sandbox flag is optional on the OAuth status until every provider payload carries it.
+// check() reports `sandbox` for a stored sandbox account once the OLX sandbox connection is
+// merged; it is optional here so this compiles on either side of that change.
 type MarketplaceOAuthStatusWithSandbox = MarketplaceOAuthStatus & { sandbox?: boolean };
 
 export class SettingsController {
@@ -24,7 +25,8 @@ export class SettingsController {
     private readonly workspaces: IWorkspaceRepository,
     private readonly settings: ISettingsRepository,
     private readonly marketplaces: IMarketplaceRepository,
-    private readonly oauth: MarketplaceOAuthService
+    private readonly oauth: MarketplaceOAuthService,
+    private readonly olxAdapterMode: string
   ) {}
 
   private async workspace(workspaceId: string) {
@@ -157,22 +159,24 @@ export class SettingsController {
     const marketplaceItems: IntegrationSettingsStatus[] = await Promise.all(
       marketplaces.map(async (marketplace) => {
         const connected = marketplace.isConnected();
-        const status: MarketplaceOAuthStatusWithSandbox | null =
-          marketplace.key === 'olx'
-            ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
-            : null;
+        const isOlx = marketplace.key === 'olx';
+        const status: MarketplaceOAuthStatusWithSandbox | null = isOlx
+          ? await this.oauth.check({ marketplaceId: marketplace.id, workspaceId })
+          : null;
         return {
           category: 'marketplace' as const,
           id: marketplace.id,
           providerKey: marketplace.key,
           name: marketplace.name,
-          available: marketplace.key === 'olx',
+          available: isOlx,
           configured: connected,
           connected,
           account: status?.account
             ? { handle: status.account.handle, status: status.account.status }
             : null,
-          ...(status?.sandbox === undefined ? {} : { sandbox: status.sandbox }),
+          // Same meaning as the Marketplaces list: the adapter runs in sandbox mode. A leftover
+          // sandbox account still counts when the adapter is real.
+          sandbox: isOlx && (this.olxAdapterMode !== 'real' || status?.sandbox === true),
         };
       })
     );

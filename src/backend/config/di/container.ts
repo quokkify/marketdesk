@@ -711,6 +711,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     olxPublicationQuotaService,
     categoryCorrectionOperationService,
     marketplaceOAuthReturnUrl: env.marketplaces.olx.oauthSuccessUrl,
+    olxAdapterMode: env.marketplaces.olx.adapterMode,
     workspaceRepo,
     settingsRepo,
     authUserStore,
