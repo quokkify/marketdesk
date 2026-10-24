@@ -110,6 +110,7 @@ export class ProductAssistanceGraph {
         }, 'balanced'));
         const price = listing ? priceSuggestionSchema.parse(await this.ai.suggestPrice({
           listing, recentViews: listing.views ?? 0, conversionRate: 0,
+          costPrice: product.costPrice?.amount,
         })) : undefined;
         return { result: {
           graphVersion: PRODUCT_ASSISTANCE_GRAPH_VERSION,

@@ -108,6 +108,11 @@ describe('buildContainer (composition root)', () => {
     expect(deps.idGenerator?.()).toBe('fixed-id');
   });
 
+  it('wires the AI provider status behind GET /api/hermes/status', () => {
+    const { deps } = build();
+    expect(typeof deps.hermesStatus).toBe('function');
+  });
+
   it('builds an Express app from the resolved deps without throwing', () => {
     const { deps } = build();
     const app = buildApp(deps, { enableRateLimit: false, corsOrigin: '*' });

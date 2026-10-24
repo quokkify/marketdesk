@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { readEmbeddedApplicationVersion } from './applicationVersion';
 import { resolveDatabaseSslMode } from './databaseConfig';
+import { resolveHermesProviderMode } from './hermesProviderMode';
 export { resolveDatabaseSslMode, type DatabaseSslMode } from './databaseConfig';
 
 dotenv.config();
@@ -109,6 +110,7 @@ export const env = {
     apiUrl: process.env.HERMES_API_URL || '',
     apiKey: process.env.HERMES_API_KEY || '',
     webhookSecret: process.env.HERMES_WEBHOOK_SECRET || '',
+    providerMode: resolveHermesProviderMode(process.env.HERMES_PROVIDER_MODE),
   },
 
   // External marketplaces

@@ -460,6 +460,23 @@ export interface ApiKey {
 }
 
 // ============================================================================
+// AI provider status (GET /api/hermes/status)
+// ============================================================================
+
+/** HERMES_PROVIDER_MODE: `auto` uses Hermes only while it is configured and reachable. */
+export const HERMES_PROVIDER_MODES = ['auto', 'hermes', 'offline'] as const;
+export type HermesProviderMode = (typeof HERMES_PROVIDER_MODES)[number];
+
+export interface HermesStatusView {
+  mode: HermesProviderMode;
+  activeProvider: 'hermes' | 'offline';
+  hermesConfigured: boolean;
+  /** null when no reachability check ran: offline mode or Hermes not configured. */
+  hermesReachable: boolean | null;
+  checkedAt: string;
+}
+
+// ============================================================================
 // Generic API envelopes
 // ============================================================================
 

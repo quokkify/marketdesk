@@ -3,7 +3,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { HermesApplicationService } from '../../../application/services/HermesApplicationService';
-import type { HermesEventStatus, HermesSeverity } from '../../../../shared/types';
+import type { HermesEventStatus, HermesSeverity, HermesStatusView } from '../../../../shared/types';
 import type { ListEventsQueryDTO } from '../../../application/dto/HermesDTO';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { ok, paginated } from '../formatters/ResponseFormatter';
@@ -27,8 +27,14 @@ function routeParam(value: string | string[] | undefined): string {
 export class HermesController {
   constructor(
     private readonly hermes: HermesApplicationService,
-    private readonly categoryCorrections?: CategoryCorrectionOperationService
+    private readonly categoryCorrections?: CategoryCorrectionOperationService,
+    private readonly hermesStatus?: () => Promise<HermesStatusView>
   ) {}
+
+  status = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.hermesStatus) return next(new NotFoundError('Hermes status is unavailable'));
+    ok(res, await this.hermesStatus());
+  };
 
   private requireCategoryCorrections(next: NextFunction): CategoryCorrectionOperationService | null {
     if (this.categoryCorrections) return this.categoryCorrections;

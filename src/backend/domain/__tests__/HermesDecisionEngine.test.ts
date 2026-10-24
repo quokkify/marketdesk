@@ -4,6 +4,7 @@ import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
 import type { HermesGuardrails } from '../../../shared/types';
+import type { AIProviderSourceAware } from '../ports/IAIProvider';
 import {
   unwrap,
   money,
@@ -168,6 +169,22 @@ describe('HermesDecisionEngine.run', () => {
     expect(relist?.status).toBe('pending_review');
     expect(relist?.autonomyDecision).toBe('pending_review');
   });
+
+  it('gives the AI provider the product cost when it asks for a price suggestion', async () => {
+    const ai = new StubAIProvider();
+    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
+    const { engine, productRepo, listingRepo } = makeEngine({ ai });
+    seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
+    const listing = unwrap(
+      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(80) }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS' }));
+
+    await engine.run(workspace);
+
+    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 50 }));
+  });
 });
 
 describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
@@ -309,5 +326,120 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       }),
     );
     expect(engine.passesGuardrails(product, titleEvent, ws)).toBe(false);
+  });
+
+  // Reports its source like AIProviderSelector does, and switches source when it
+  // answers generateTitle: an outage that starts or ends in the middle of a check.
+  class SwitchingSourceStub extends StubAIProvider implements AIProviderSourceAware {
+    constructor(
+      private source: 'hermes' | 'offline',
+      private readonly sourceAfterTitle: 'hermes' | 'offline',
+    ) {
+      super({ suggestedPrice: 90, reasoning: 'test', confidence: 'high' }, 'Widget - New');
+    }
+
+    async activeProvider(): Promise<'hermes' | 'offline'> {
+      return this.source;
+    }
+
+    async generateTitle(): Promise<string> {
+      const title = await super.generateTitle();
+      this.source = this.sourceAfterTitle;
+      return title;
+    }
+  }
+
+  function seedSourceScenario(
+    before: 'hermes' | 'offline',
+    after: 'hermes' | 'offline',
+    images = ['a.jpg', 'b.jpg', 'c.jpg'],
+  ) {
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const ai = new SwitchingSourceStub(before, after);
+    const engine = new HermesDecisionEngine(
+      productRepo,
+      listingRepo,
+      new InMemoryEventRepository(),
+      new RecordingEventPublisher(),
+      ai,
+      sequentialIdFactory('s'),
+    );
+    const product = unwrap(
+      Product.create({
+        id: 'p1',
+        workspaceId: 'w1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        description: 'A perfectly reasonable description over twenty chars.',
+        costPrice: money(50),
+        sellingPrice: money(100),
+        condition: 'new',
+        category: 'electronics',
+        images,
+      }),
+    );
+    productRepo.items.set(product.id, product);
+    const listing = unwrap(
+      Listing.create({
+        id: 'l1',
+        productId: 'p1',
+        marketplaceId: 'm1',
+        price: money(100),
+        status: 'live',
+      }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    return { engine, product };
+  }
+
+  it.each([
+    { before: 'offline', after: 'offline' },
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'full_auto workspace with smartTitleAndSEO on does not auto-apply an offline title ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine, product } = seedSourceScenario(before, after);
+
+      const events = await engine.run(makeWorkspace(OPEN));
+
+      const titleEvent = events.find((e) => e.type === 'suggested_better_title');
+      expect(titleEvent?.autonomyDecision).toBe('pending_review');
+      expect(titleEvent?.status).toBe('pending_review');
+      expect(product.name).toBe('Widget');
+    },
+  );
+
+  it('full_auto workspace does not auto-apply an offline price change', async () => {
+    const { engine, product } = seedSourceScenario('offline', 'offline');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const evt = priceEvent(events);
+    expect(evt?.autonomyDecision).toBe('pending_review');
+    expect(evt?.status).toBe('pending_review');
+    expect(product.sellingPrice.amount).toBe(100);
+  });
+
+  it('still auto-applies a Hermes title under full_auto with smartTitleAndSEO on', async () => {
+    const { engine, product } = seedSourceScenario('hermes', 'hermes');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const titleEvent = events.find((e) => e.type === 'suggested_better_title');
+    expect(titleEvent?.autonomyDecision).toBe('auto_apply');
+    expect(titleEvent?.status).toBe('applied');
+    expect(product.name).toBe('Widget - New');
+  });
+
+  it('leaves suggestions that no AI produced on the workspace autonomy level while offline', async () => {
+    const { engine } = seedSourceScenario('offline', 'offline', ['a.jpg']);
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const photosEvent = events.find((e) => e.type === 'suggested_more_photos');
+    expect(photosEvent?.autonomyDecision).toBe('auto_apply');
+    expect(photosEvent?.status).toBe('applied');
   });
 });
