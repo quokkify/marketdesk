@@ -238,6 +238,7 @@ async function build(): Promise<Ctx> {
     priceHistoryReader: priceHistory as never,
     priceHistoryRecorder: priceHistory,
     idGenerator,
+    olxAdapterMode: 'stub',
   };
 
   return {

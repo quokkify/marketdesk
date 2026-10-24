@@ -13,6 +13,7 @@ import {
   resolveJwtSecret,
   resolveOlxAdapterMode,
   resolvePublicBaseUrl,
+  type OlxAdapterMode,
 } from '../env';
 
 describe('resolveDatabaseSslMode', () => {
@@ -176,7 +177,7 @@ describe('assertStartupConfiguration (fail-fast boot)', () => {
       jwtSecret?: string;
       credentialsKey?: string;
       allowInsecureDevJwt?: boolean;
-      olxAdapterMode?: string;
+      olxAdapterMode?: OlxAdapterMode;
       publicBaseUrl?: string;
       publicBaseUrlConfigured?: boolean;
     } = {},
