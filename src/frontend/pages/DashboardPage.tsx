@@ -42,6 +42,7 @@ import {
   DASHBOARD_EVENT_LIMIT,
   DASHBOARD_LISTING_SCAN_LIMIT,
   DASHBOARD_QUICK_ACTIONS,
+  HERMES_ACTIVITY_SUBTITLE,
   attentionBadgeLabel,
   attentionCount,
   attentionItems,
@@ -705,7 +706,7 @@ const DashboardPage: React.FC = () => {
                 {hermesActive && <RunningBadge />}
               </Stack>
             }
-            subtitle="Latest autonomous work and reviewable suggestions"
+            subtitle={HERMES_ACTIVITY_SUBTITLE}
             action={
               <Button size="small" onClick={() => navigate('/hermes')}>
                 View all

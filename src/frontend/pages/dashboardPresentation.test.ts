@@ -7,6 +7,7 @@ import {
   DASHBOARD_EVENT_LIMIT,
   DASHBOARD_QUICK_ACTIONS,
   DASHBOARD_SECTION_LIMIT,
+  HERMES_ACTIVITY_SUBTITLE,
   attentionBadgeLabel,
   attentionCount,
   attentionItems,
@@ -543,6 +544,23 @@ describe('dashboard marketplace and Hermes states', () => {
     expect(idle.title).toBe('No Hermes activity yet');
     expect(idle.action).toEqual({ label: 'Analyze a product', path: '/products' });
     expect(`${idle.title} ${idle.description}`).not.toContain('Connect a marketplace');
+  });
+
+  it('never claims background or automatic Hermes work, which this build does not run', () => {
+    const copy = [
+      HERMES_ACTIVITY_SUBTITLE,
+      ...[hermesActivityEmptyState(false), hermesActivityEmptyState(true)].flatMap((state) => [
+        state.title,
+        state.description,
+      ]),
+    ].join(' ');
+
+    expect(copy).not.toMatch(/automatic|autonomous|monitor|reviews your listings/i);
+  });
+
+  it('points an empty Hermes card at the manual way to get a suggestion', () => {
+    expect(hermesActivityEmptyState(true).description).toContain('analyze a product');
+    expect(hermesActivityEmptyState(false).description).toContain('analyze it with Hermes');
   });
 
   it('summarises the sales chart for assistive technology from the same 30-day totals', () => {

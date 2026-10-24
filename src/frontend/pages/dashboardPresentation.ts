@@ -104,6 +104,9 @@ export function hermesSeverityTone(severity: HermesSeverity): Exclude<DashboardT
   return SEVERITY_TONES[severity];
 }
 
+// Hermes runs are started by the seller (per product); nothing here may suggest background work.
+export const HERMES_ACTIVITY_SUBTITLE = 'Latest suggestions and alerts from Hermes';
+
 export interface DashboardEmptyState {
   title: string;
   description: string;
@@ -114,13 +117,14 @@ export function hermesActivityEmptyState(hasConnectedMarketplace: boolean): Dash
   if (!hasConnectedMarketplace) {
     return {
       title: 'Connect a marketplace to start',
-      description: 'Hermes reviews your listings once a marketplace is connected.',
+      description:
+        'Connect OLX and publish a product, then analyze it with Hermes to see suggestions here.',
       action: { label: 'Connect marketplace', path: '/marketplaces' },
     };
   }
   return {
     title: 'No Hermes activity yet',
-    description: 'Suggestions and automatic actions appear here as Hermes reviews your listings.',
+    description: 'Suggestions appear here after you analyze a product with Hermes.',
     action: { label: 'Analyze a product', path: '/products' },
   };
 }
