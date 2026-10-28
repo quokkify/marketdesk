@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/assets-v0.21.1...assets-v0.22.0) (2026-10-28)
+
+<!-- project-toolkit:rich-block:start -->
+### 🔄 Migration
+<!-- project-toolkit:rich-release-notes pr=434 -->
+- Migrations 042 (`hermes_events.source`) and 043 (`category_correction_operations.listing_id` nullable, `ON DELETE SET NULL`) run through the Compose `migrate` service or `npm run db:migrate`; both are idempotent.
+- Run `npm run env:init` (or set `JWT_SECRET` ≥ 32 chars and a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`) before the first boot.
+- For a real OLX deployment set `OLX_ADAPTER_MODE=real` and a publicly reachable `PUBLIC_BASE_URL`; the default `stub` mode labels everything Sandbox.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01G7RDWHiEDE7j584o2tQQSL
+<!-- project-toolkit:rich-block:end -->
+
+### ✨ Features
+
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/assets-v0.21.0...assets-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
