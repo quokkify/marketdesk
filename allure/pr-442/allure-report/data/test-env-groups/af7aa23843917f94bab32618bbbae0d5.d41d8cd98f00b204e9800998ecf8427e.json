@@ -1,0 +1,1 @@
+{"id":"af7aa23843917f94bab32618bbbae0d5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API hermes returns 401 for the Hermes status without a token","name":"returns 401 for the Hermes status without a token","status":"passed","testResultsByEnv":{"default":"a5a7407528a70b637199d81d2c95b0fe"}}

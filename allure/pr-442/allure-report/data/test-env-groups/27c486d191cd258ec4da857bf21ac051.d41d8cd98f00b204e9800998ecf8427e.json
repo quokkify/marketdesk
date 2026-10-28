@@ -1,0 +1,1 @@
+{"id":"27c486d191cd258ec4da857bf21ac051.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/api/baseApi.test.ts#logout also clears cached data and the workspace when the session expires","name":"also clears cached data and the workspace when the session expires","status":"passed","testResultsByEnv":{"default":"bbdf80449989659d6b1211af750aefe1"}}

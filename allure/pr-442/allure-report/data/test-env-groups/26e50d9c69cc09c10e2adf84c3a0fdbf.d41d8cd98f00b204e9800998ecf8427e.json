@@ -1,0 +1,1 @@
+{"id":"26e50d9c69cc09c10e2adf84c3a0fdbf.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/hermesProviderMode.test.ts#resolveHermesProviderMode rejects \"true\" with a clear error","name":"rejects \"true\" with a clear error","status":"passed","testResultsByEnv":{"default":"d0a01a19d404f1ab423402ad79fa13eb"}}

@@ -1,0 +1,1 @@
+{"id":"34fae29704aea1f9a2e9efafbf2163e0.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/tables/ProductsTable.test.tsx#product row actions menu omits actions that have no handler","name":"omits actions that have no handler","status":"passed","testResultsByEnv":{"default":"eb31309b058298d6b97469209509cfb4"}}

@@ -1,0 +1,1 @@
+{"id":"608b4d57bb0d8fbb91063d2d21365dee.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/forms/aiDraftCaption.test.ts#aiDraftCaption leaves the confidence out when a Hermes draft has none","name":"leaves the confidence out when a Hermes draft has none","status":"passed","testResultsByEnv":{"default":"d5127a832506456a3e96519f7b1f4c87"}}
