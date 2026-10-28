@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-10-28)
+
+
+### ✨ Features
+
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
