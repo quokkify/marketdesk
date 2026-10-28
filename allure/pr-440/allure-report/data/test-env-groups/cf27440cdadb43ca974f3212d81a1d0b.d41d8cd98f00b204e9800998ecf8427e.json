@@ -1,0 +1,1 @@
+{"id":"cf27440cdadb43ca974f3212d81a1d0b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/testkit/staticMarkup.test.ts#withoutStyleTags refuses an unterminated style element instead of guessing","name":"refuses an unterminated style element instead of guessing","status":"passed","testResultsByEnv":{"default":"3d2e4f1f8e33d83d6331bd2adc91bf31"}}

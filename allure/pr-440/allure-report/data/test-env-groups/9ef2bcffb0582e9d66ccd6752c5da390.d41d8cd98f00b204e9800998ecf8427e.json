@@ -1,0 +1,1 @@
+{"id":"9ef2bcffb0582e9d66ccd6752c5da390.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/dto/presenters.test.ts#presentHermesEvent leaves the source out when no provider is recorded","name":"leaves the source out when no provider is recorded","status":"passed","testResultsByEnv":{"default":"99cc61f33fa10229f15384e4ebf1887b"}}

@@ -1,0 +1,1 @@
+{"id":"614723fd40ed5e509c1db2c5a430ed44.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/HermesHealthProbe.test.ts#HermesHealthProbe reports Hermes unreachable on a 401 answer","name":"reports Hermes unreachable on a 401 answer","status":"passed","testResultsByEnv":{"default":"28e0f4a61efa0f77007102fba7a992f8"}}

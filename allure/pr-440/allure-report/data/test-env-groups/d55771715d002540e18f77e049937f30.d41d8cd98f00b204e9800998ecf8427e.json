@@ -1,0 +1,1 @@
+{"id":"d55771715d002540e18f77e049937f30.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/AuthBootstrap.test.ts#isSessionRejected keeps the session when /auth/me answers 503","name":"keeps the session when /auth/me answers 503","status":"passed","testResultsByEnv":{"default":"ddcd9dd2959b1122ad7d604777161fb0"}}

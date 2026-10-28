@@ -1,0 +1,1 @@
+{"id":"fd13ed714062959b9230f5c116d04e32.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/AuthBootstrap.test.ts#isSessionRejected keeps the session when there is no error","name":"keeps the session when there is no error","status":"passed","testResultsByEnv":{"default":"413ecc7e97ae1bcad07c53ea8fe1050a"}}
