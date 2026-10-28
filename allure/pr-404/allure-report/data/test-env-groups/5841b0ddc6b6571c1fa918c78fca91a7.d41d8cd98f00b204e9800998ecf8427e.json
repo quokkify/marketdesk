@@ -1,0 +1,1 @@
+{"id":"5841b0ddc6b6571c1fa918c78fca91a7.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/HermesEvent.test.ts#HermesEvent creation invariants rejects an unknown provider source","name":"rejects an unknown provider source","status":"passed","testResultsByEnv":{"default":"52b21ac4d3b7d54440eb99ef741e92db"}}

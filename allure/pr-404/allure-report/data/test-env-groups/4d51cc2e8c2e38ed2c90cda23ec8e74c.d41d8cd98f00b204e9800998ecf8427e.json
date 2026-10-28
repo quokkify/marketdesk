@@ -1,0 +1,1 @@
+{"id":"4d51cc2e8c2e38ed2c90cda23ec8e74c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/hermes/HermesEventCard.test.tsx#applied event copy regression guard: never prints a raw backend token","name":"regression guard: never prints a raw backend token","status":"passed","testResultsByEnv":{"default":"b6068457f3bf29e6a833c0801a88b4b7"}}

@@ -1,0 +1,1 @@
+{"id":"c1506ea0fb4589a01b9cbfe79296442f.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/common/StatCard.test.tsx#StatCard omits the delta chip when there is no comparable period","name":"omits the delta chip when there is no comparable period","status":"passed","testResultsByEnv":{"default":"9db3644e51ed672bbba549bb364ac68e"}}

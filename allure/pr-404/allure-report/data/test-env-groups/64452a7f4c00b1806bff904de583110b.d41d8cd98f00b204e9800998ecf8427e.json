@@ -1,0 +1,1 @@
+{"id":"64452a7f4c00b1806bff904de583110b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/ErrorHandlingMiddleware.test.ts#createErrorHandler does not log an expected domain error","name":"does not log an expected domain error","status":"passed","testResultsByEnv":{"default":"84d433ab45b1136d33dcfdfe531ed2a8"}}

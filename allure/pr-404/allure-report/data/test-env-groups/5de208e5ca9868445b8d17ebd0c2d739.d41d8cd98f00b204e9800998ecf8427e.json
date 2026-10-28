@@ -1,0 +1,1 @@
+{"id":"5de208e5ca9868445b8d17ebd0c2d739.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#resolveOlxAdapterMode defaults to the stub sandbox and accepts stub or real","name":"defaults to the stub sandbox and accepts stub or real","status":"passed","testResultsByEnv":{"default":"7934d552f43efedfc47f3c8e737ae878"}}

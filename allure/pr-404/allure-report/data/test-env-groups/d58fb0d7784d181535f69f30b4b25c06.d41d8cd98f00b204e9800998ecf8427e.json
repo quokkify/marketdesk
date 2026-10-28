@@ -1,0 +1,1 @@
+{"id":"d58fb0d7784d181535f69f30b4b25c06.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/utils/formatters.test.ts#formatMoney keeps two decimals with a comma when the amount has cents","name":"keeps two decimals with a comma when the amount has cents","status":"passed","testResultsByEnv":{"default":"21ac406db1af0635d2e8af2790885c9d"}}

@@ -1,0 +1,1 @@
+{"id":"64386a13c1ae7eaa0b1f9080e6d08975.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/product-detail/DeleteProductDialog.test.tsx#DeleteProductDialog locks the dialog while the delete is in flight","name":"locks the dialog while the delete is in flight","status":"passed","testResultsByEnv":{"default":"4bafb901368ff04db8f9e797f2e1eb5a"}}
