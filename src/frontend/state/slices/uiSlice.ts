@@ -9,13 +9,6 @@ export function resolveThemeMode(mode: ThemeMode, prefersDark: boolean): Resolve
   return mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
 }
 
-export function shouldResetThemeForPrincipal(
-  previousPrincipal: string | null,
-  nextPrincipal: string | null
-): boolean {
-  return previousPrincipal !== nextPrincipal;
-}
-
 export type ToastSeverity = 'info' | 'success' | 'warning' | 'error';
 
 export interface Toast {
@@ -64,10 +57,6 @@ const uiSlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {
-    toggleTheme(state) {
-      state.themeMode = state.themeMode === 'dark' ? 'light' : 'dark';
-      persistTheme(state.themeMode);
-    },
     setThemeMode(state, action: PayloadAction<ThemeMode>) {
       state.themeMode = action.payload;
       persistTheme(state.themeMode);
@@ -109,7 +98,6 @@ const uiSlice = createSlice({
 });
 
 export const {
-  toggleTheme,
   setThemeMode,
   toggleSidebar,
   setSidebarCollapsed,

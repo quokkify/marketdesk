@@ -10,6 +10,10 @@ import type {
   HermesAIConfig,
 } from './HermesAI';
 import { loadHermesConfig } from './HermesAI';
+import { ServiceUnavailableError } from '../../domain/shared/DomainError';
+
+// Stable client-facing message: the cause keeps the detail for the server log.
+const HERMES_UNREACHABLE = 'Hermes AI is not reachable in this environment';
 
 interface ChatCompletionResponse {
   choices?: Array<{
@@ -37,9 +41,13 @@ export class HermesCompletionClient implements AITextCompletionClient {
     this.timeoutMs = config.timeoutMs;
   }
 
+  // Transport failures, timeouts and non-2xx answers mean Hermes is unavailable (503).
+  // A 2xx answer that is not usable stays a plain error: Hermes did answer.
   async complete(request: AICompletionRequest): Promise<string> {
+    let response: Response;
+    let body: ChatCompletionResponse | null;
     try {
-      const response = await fetch(`${this.apiUrl}/chat/completions`, {
+      response = await fetch(`${this.apiUrl}/chat/completions`, {
         method: 'POST',
         signal: AbortSignal.timeout(this.timeoutMs),
         headers: {
@@ -57,34 +65,39 @@ export class HermesCompletionClient implements AITextCompletionClient {
           ],
         }),
       });
-
-      const body = await this.parseResponseBody(response);
-      if (!response.ok) {
-        const message = body.error?.message || `Hermes API request failed with ${response.status}`;
-        throw new Error(message);
-      }
-
-      const content = body.choices?.[0]?.message?.content?.trim();
-      if (!content) {
-        throw new Error('Hermes API response did not include assistant content');
-      }
-      return content;
+      body = await this.parseResponseBody(response);
     } catch (error) {
-      if (this.isTimeoutError(error)) {
-        throw new Error(`Hermes API request timed out after ${this.timeoutMs}ms`);
-      }
-      throw error;
+      throw new ServiceUnavailableError(
+        HERMES_UNREACHABLE,
+        this.isTimeoutError(error)
+          ? new Error(`Hermes API request timed out after ${this.timeoutMs}ms`)
+          : error,
+      );
     }
+
+    if (!response.ok) {
+      const message = body?.error?.message || `Hermes API request failed with ${response.status}`;
+      throw new ServiceUnavailableError(HERMES_UNREACHABLE, new Error(message));
+    }
+    if (body === null) {
+      throw new Error('Hermes API returned a non-JSON success response');
+    }
+    const content = body.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      throw new Error('Hermes API response did not include assistant content');
+    }
+    return content;
   }
 
-  private async parseResponseBody(response: Response): Promise<ChatCompletionResponse> {
+  // null when the body is not JSON. A failure to read the body (dropped connection,
+  // timeout) is rethrown, because Hermes did not deliver an answer.
+  private async parseResponseBody(response: Response): Promise<ChatCompletionResponse | null> {
     try {
       return (await response.json()) as ChatCompletionResponse;
-    } catch {
-      if (response.ok) {
-        throw new Error('Hermes API returned a non-JSON success response');
-      }
-      return {};
+    } catch (error) {
+      // By name: the parser's SyntaxError can come from another realm than ours.
+      if ((error as { name?: unknown } | null)?.name === 'SyntaxError') return null;
+      throw error;
     }
   }
 

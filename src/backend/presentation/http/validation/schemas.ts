@@ -14,6 +14,7 @@ import {
   AUTONOMY_LEVEL_LIST,
   SYNC_MODE_LIST,
   MARKETPLACE_KEY_LIST,
+  REGISTRATION_WORKSPACE_NAME_MAX_LENGTH,
 } from '../../../../shared/constants';
 
 const conditionEnum = z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'refurbished', 'unknown']);
@@ -38,7 +39,7 @@ export const createProductSchema = z
     sku: z.string().min(1),
     name: z.string().min(1),
     description: z.string().min(1),
-    costPrice: z.number().nonnegative(),
+    costPrice: z.number().nonnegative().nullable(),
     sellingPrice: z.number().nonnegative(),
     currency: z
       .string()
@@ -257,7 +258,14 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  workspaceName: z.string().min(1).optional(),
+  // A blank or null name means "no name": the controller derives the default, so the
+  // account still lands in a working workspace.
+  workspaceName: z
+    .string()
+    .trim()
+    .max(REGISTRATION_WORKSPACE_NAME_MAX_LENGTH)
+    .nullish()
+    .transform((name) => name || undefined),
 });
 
 export const runHermesSchema = z.object({

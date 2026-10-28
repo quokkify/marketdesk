@@ -10,10 +10,10 @@ Prerequisites: Node.js 22+, npm 10+, and Docker Compose v2 for the bundled servi
 git clone https://github.com/quokkify/marketdesk.git
 cd marketdesk
 npm ci
-cp .env.example .env
+npm run env:init
 ```
 
-For Compose development, set the required values in `.env` before starting: `DB_SSL_MODE=disable`, a strong `JWT_SECRET`, and `HERMES_API_KEY` matching the key configured by the native Hermes API server. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
+`npm run env:init` copies `.env.example` to `.env` and generates `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY`; values that are already set are kept, so it is safe to run again. If a key is repeated without a real value after a line that sets one, the command leaves both lines as they are, prints a warning and exits 1. The app refuses to start while `JWT_SECRET` or `MARKETPLACE_CREDENTIALS_KEY` is missing or a placeholder. Hermes is optional: with the placeholder `HERMES_API_KEY` from the example the app answers AI requests with built-in offline heuristics, and setting the key configured by the native Hermes API server switches to Hermes (`DB_SSL_MODE=disable` is already the example value). For `npm run dev` without Docker, `ALLOW_INSECURE_DEV_JWT=true` in `.env` tolerates a placeholder `JWT_SECRET`; it is ignored in production. Review all other `.env.example` values; do not commit `.env`. Compose provides PostgreSQL 18 and Redis 8 and builds one combined application image that serves the API and SPA. The app binds to `127.0.0.1:3000` by default.
 
 ```bash
 docker compose up -d
@@ -65,6 +65,8 @@ API requests live under `/api`; `GET /health` is liveness and `GET /ready` check
 
 MarketDesk connects to the native Hermes Agent API Server; it does not call a model provider directly. For a local Compose app, the default endpoint is `http://host.docker.internal:8642/v1`. Configure `API_SERVER_ENABLED`, `API_SERVER_HOST`, `API_SERVER_PORT`, and `API_SERVER_KEY` on the Hermes host, and set the matching app-side `HERMES_API_KEY` in the project `.env`.
 
+`HERMES_PROVIDER_MODE` chooses where AI calls go. `auto` (the default) uses Hermes while `HERMES_API_KEY` is a real value (not the `your_` placeholder) and the API server answers, and the built-in offline heuristics otherwise. `hermes` never falls back, so its failures reach the caller. `offline` never calls Hermes. Offline results say that Hermes was not consulted, and every title, price, or description change they propose waits for human review whatever the autonomy level. `GET /api/hermes/status` reports the mode, the provider in use, and whether Hermes is configured and reachable.
+
 The Hermes host must be reachable from Docker but must not be exposed publicly. If binding the server to `0.0.0.0` for host-gateway access, restrict port 8642 with host firewall/security-group rules to Docker traffic and trusted administration addresses. Authentication does not replace network isolation. Keep recommendations reviewable; approval, publish, relist, category changes, and quota overrides remain guarded operations.
 
 ## Data and deployment safety
@@ -73,7 +75,7 @@ The Hermes host must be reachable from Docker but must not be exposed publicly. 
 - The Compose file mounts PostgreSQL 18 data at `/var/lib/postgresql`. Before reusing a pre-18 `postgres_data` volume, make a verified dump and restore into a fresh PG18 volume; otherwise the new mount may initialize an empty cluster.
 - Release deployment is an in-place maintenance-window operation. Create and verify a fresh PostgreSQL, Redis, and uploads backup before migrations; a failed migration may leave the app unavailable until recovery.
 - Compose's `upload-storage-init` one-shot service preserves files and assigns the fixed upload tree to UID/GID 1001:1001. Never bypass it with world-writable permissions. See [upload storage initialization and recovery](deployment/upload-storage.md).
-- Keep required `DB_SSL_MODE`, `JWT_SECRET`, and `HERMES_API_KEY` values explicit. `DB_SSL_MODE=disable` is for internal Compose connections; use the documented verified TLS mode for external PostgreSQL.
+- Keep required `DB_SSL_MODE`, `JWT_SECRET`, `MARKETPLACE_CREDENTIALS_KEY`, and `HERMES_API_KEY` values explicit. `DB_SSL_MODE=disable` is for internal Compose connections; use the documented verified TLS mode for external PostgreSQL.
 
 ## Deployment references
 

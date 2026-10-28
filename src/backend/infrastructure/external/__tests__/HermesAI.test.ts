@@ -1,4 +1,4 @@
-import { HermesAI, AITextCompletionClient, AICompletionRequest } from '../HermesAI';
+import { HermesAI, AITextCompletionClient, AICompletionRequest, loadHermesConfig } from '../HermesAI';
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
@@ -199,5 +199,26 @@ describe('HermesAI (IAIProvider)', () => {
         'balanced'
       )
     ).rejects.toThrow('Hermes listing-seo output failed strict schema validation');
+  });
+});
+
+describe('loadHermesConfig', () => {
+  const original = process.env.HERMES_REQUEST_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.HERMES_REQUEST_TIMEOUT_MS;
+    else process.env.HERMES_REQUEST_TIMEOUT_MS = original;
+  });
+
+  it('gives up on a Hermes request after 30 seconds by default', () => {
+    delete process.env.HERMES_REQUEST_TIMEOUT_MS;
+
+    expect(loadHermesConfig().timeoutMs).toBe(30000);
+  });
+
+  it('uses HERMES_REQUEST_TIMEOUT_MS when it is set', () => {
+    process.env.HERMES_REQUEST_TIMEOUT_MS = '45000';
+
+    expect(loadHermesConfig().timeoutMs).toBe(45000);
   });
 });

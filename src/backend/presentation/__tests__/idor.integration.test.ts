@@ -10,11 +10,7 @@ import bcrypt from 'bcryptjs';
 
 import { buildApp, type AppDeps } from '../http/app';
 import { signToken } from '../http/middleware/AuthMiddleware';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../http/ports/IAuthUserStore';
+import { InMemoryAuthStore } from '../testkit/support';
 
 import {
   InMemoryProductRepository,
@@ -58,27 +54,6 @@ import { AnalyticsApplicationService } from '../../application/services/Analytic
 
 const WS_A = 'ws-a';
 const WS_B = 'ws-b';
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 interface Ctx {
   app: ReturnType<typeof buildApp>;
@@ -225,7 +200,8 @@ async function build(): Promise<Ctx> {
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo
   );
   const listingService = new ListingApplicationService(
     listingRepo,
@@ -262,6 +238,7 @@ async function build(): Promise<Ctx> {
     priceHistoryReader: priceHistory as never,
     priceHistoryRecorder: priceHistory,
     idGenerator,
+    olxAdapterMode: 'stub',
   };
 
   return {

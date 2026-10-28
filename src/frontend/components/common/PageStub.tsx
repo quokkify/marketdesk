@@ -11,7 +11,7 @@ export interface PageStubProps {
 
 export const PageStub: React.FC<PageStubProps> = ({ title, description }) => (
   <Stack spacing={3}>
-    <Stack direction="row" alignItems="center" spacing={1.5}>
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
       <Typography variant="h1" sx={{ fontSize: '1.75rem' }}>
         {title}
       </Typography>

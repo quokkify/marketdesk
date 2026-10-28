@@ -8,11 +8,22 @@ import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
 import type { HermesEvent } from '../entities/HermesEvent';
 import type { Workspace } from '../entities/Workspace';
+import {
+  decideOlxPublication,
+  OLX_SANDBOX_QUOTA_EVALUATION,
+  OlxPublicationQuota,
+} from '../entities/OlxPublicationQuota';
 import type { HermesEventStatus, MarketplaceKey } from '../../../shared/types';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../repositories/interfaces/IMarketplaceRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
+import type {
+  AuthorizeOlxPublicationInput,
+  IOlxPublicationQuotaRepository,
+  OlxPublicationAuthorization,
+  OlxQuotaLookup,
+} from '../repositories/interfaces/IOlxPublicationQuotaRepository';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import type {
   IAIProvider,
@@ -294,6 +305,132 @@ export class StubAIProvider implements IAIProvider {
   }
   async analyzeListingSeo(): Promise<ListingSeoOutput> {
     return this.seoOutput;
+  }
+}
+
+// In-memory OLX quota repository with the Postgres repository's serialized
+// authorize/consume semantics, including the sandbox allowance.
+export class AtomicInMemoryQuotaRepository implements IOlxPublicationQuotaRepository {
+  readonly quotas: OlxPublicationQuota[] = [];
+  readonly operations = new Map<string, OlxPublicationAuthorization>();
+  private tail: Promise<void> = Promise.resolve();
+
+  async findCurrent(input: OlxQuotaLookup): Promise<OlxPublicationQuota | null> {
+    return this.quotas.find((quota) =>
+      quota.workspaceId === input.workspaceId &&
+      quota.marketplaceId === input.marketplaceId &&
+      quota.marketplaceAccountId === input.marketplaceAccountId &&
+      quota.subcategoryId === input.subcategoryId &&
+      quota.cycleStartedAt.getTime() <= input.at.getTime() &&
+      quota.cycleEndsAt.getTime() > input.at.getTime()
+    ) ?? null;
+  }
+
+  async findByAccount(input: {
+    workspaceId: string;
+    marketplaceId: string;
+    marketplaceAccountId: string;
+    limit: number;
+  }): Promise<OlxPublicationQuota[]> {
+    return this.quotas.filter((quota) =>
+      quota.workspaceId === input.workspaceId &&
+      quota.marketplaceId === input.marketplaceId &&
+      quota.marketplaceAccountId === input.marketplaceAccountId
+    );
+  }
+
+  async save(quota: OlxPublicationQuota): Promise<void> {
+    const index = this.quotas.findIndex((candidate) =>
+      candidate.workspaceId === quota.workspaceId &&
+      candidate.marketplaceAccountId === quota.marketplaceAccountId &&
+      candidate.subcategoryId === quota.subcategoryId &&
+      candidate.cycleStartedAt.getTime() === quota.cycleStartedAt.getTime()
+    );
+    if (index < 0) {
+      this.quotas.push(quota);
+      return;
+    }
+    const current = this.quotas[index];
+    this.quotas[index] = this.copy(quota, Math.max(current.consumed, quota.consumed));
+  }
+
+  async authorize(input: AuthorizeOlxPublicationInput): Promise<OlxPublicationAuthorization> {
+    let release!: () => void;
+    const previous = this.tail;
+    this.tail = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      const replay = this.operations.get(input.operationId);
+      if (replay) return { ...replay, replayed: true };
+      let quota = await this.findCurrent(input);
+      const evaluation = quota?.evaluate(input.at)
+        ?? (input.sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined);
+      const { decision, consumedUnit } = decideOlxPublication(
+        evaluation,
+        input.overrideConfirmed,
+        quota !== null,
+      );
+      if (consumedUnit && quota) {
+        quota = this.copy(quota, quota.consumed + 1);
+        const index = this.quotas.findIndex((candidate) => candidate.id === quota!.id);
+        this.quotas[index] = quota;
+      }
+      const result: OlxPublicationAuthorization = {
+        operationId: input.operationId,
+        decision,
+        status: evaluation?.status ?? 'unknown',
+        reason: evaluation?.reason ?? 'quota_unknown',
+        quota,
+        consumedUnit,
+        replayed: false,
+      };
+      this.operations.set(input.operationId, result);
+      return result;
+    } finally {
+      release();
+    }
+  }
+
+  // Units are consumed at authorize time here, so consume only re-checks a reservation
+  // that holds no quota row, the way the Postgres repository does.
+  async consume(operationId: string, _at: Date, sandboxMode = false): Promise<OlxPublicationAuthorization> {
+    const operation = this.operations.get(operationId);
+    if (!operation) throw new Error(`OLX quota reservation not found: ${operationId}`);
+    if (operation.consumedUnit || operation.decision === 'block' || operation.quota) {
+      return { ...operation, replayed: true };
+    }
+    const evaluation = sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined;
+    const result: OlxPublicationAuthorization = {
+      ...operation,
+      decision: operation.decision === 'allow' && !evaluation?.canPublishForFree
+        ? 'block'
+        : operation.decision,
+      status: evaluation?.status ?? 'unknown',
+      reason: evaluation?.reason ?? 'quota_unknown',
+      replayed: false,
+    };
+    this.operations.set(operationId, result);
+    return result;
+  }
+
+  private copy(quota: OlxPublicationQuota, consumed: number): OlxPublicationQuota {
+    return unwrap(OlxPublicationQuota.create({
+      id: quota.id,
+      workspaceId: quota.workspaceId,
+      marketplaceId: quota.marketplaceId,
+      marketplaceAccountId: quota.marketplaceAccountId,
+      subcategoryId: quota.subcategoryId,
+      cycleStartedAt: quota.cycleStartedAt,
+      cycleEndsAt: quota.cycleEndsAt,
+      publicationLimit: quota.publicationLimit,
+      consumed,
+      source: quota.source,
+      confidence: quota.confidence,
+      verifiedAt: quota.verifiedAt,
+      staleAt: quota.staleAt,
+      createdAt: quota.createdAt,
+      updatedAt: new Date(),
+    }));
   }
 }
 

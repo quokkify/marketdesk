@@ -3,17 +3,19 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import express from 'express';
+import type { OlxAdapterMode } from '../../config/env';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
 import { signToken } from '../http/middleware/AuthMiddleware';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../http/ports/IAuthUserStore';
+import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
+import { createAuthRoutes } from '../http/routes/auth';
+import type { AuthController } from '../http/controllers/AuthController';
+import { InMemoryAuthStore } from '../testkit/support';
 import { Ok, Err } from '../../domain/shared/Result';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { Product } from '../../domain/entities/Product';
@@ -26,7 +28,12 @@ import type { ProductRecheckService } from '../../application/services/ProductRe
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import type { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
-import type { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
+import {
+  MarketplaceOAuthService,
+  type MarketplaceAccountRecord,
+  type OlxOAuthAppCredentials,
+  type OlxOAuthTokens,
+} from '../../application/services/MarketplaceOAuthService';
 import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import type { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
@@ -44,6 +51,14 @@ import {
 } from '../../domain/testkit/support';
 import { InMemoryWorkspaceRepository } from '../../application/testkit/support';
 import { InMemorySettingsRepository } from '../../infrastructure/persistence/repositories/InMemorySettingsRepository';
+import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
+import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
+import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
+import { HermesAI } from '../../infrastructure/external/HermesAI';
+import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
+import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
+import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
+import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 
 const iso = new Date().toISOString();
 
@@ -74,27 +89,6 @@ const appliedEvent: HermesEventView = {
   proposedChange: null,
   createdAt: iso,
 };
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 function stubProductService(): ProductApplicationService {
   return {
@@ -219,6 +213,64 @@ function stubMarketplaceOAuthService(): MarketplaceOAuthService {
     },
     async disconnect() {},
   } as unknown as MarketplaceOAuthService;
+}
+
+// Real OAuth service in sandbox mode over in-memory collaborators. The OAuth client
+// factory throws so any attempt to reach OLX fails the test.
+function sandboxMarketplaceOAuthService(
+  marketplaceRepo: InMemoryMarketplaceRepository,
+  accounts = new Map<string, MarketplaceAccountRecord>()
+): MarketplaceOAuthService {
+  return new MarketplaceOAuthService({
+    marketplaceRepo,
+    accountRepo: {
+      async findByMarketplaceId(marketplaceId) {
+        return accounts.get(marketplaceId) ?? null;
+      },
+      async upsert(account) {
+        const current = accounts.get(account.marketplaceId);
+        const saved: MarketplaceAccountRecord = {
+          ...account,
+          revision: (current?.revision ?? 0) + 1,
+          createdAt: current?.createdAt ?? new Date(),
+          updatedAt: new Date(),
+        };
+        accounts.set(account.marketplaceId, saved);
+        return saved;
+      },
+      async updateConnectedIfUnchanged() {
+        return null;
+      },
+    },
+    appCredentialRepo: {
+      async findByMarketplaceId() {
+        return null;
+      },
+      async upsert() {
+        throw new Error('OLX application credentials are not used in sandbox mode');
+      },
+      async deleteByMarketplaceId() {},
+    },
+    stateStore: {
+      async save() {},
+      async consume() {
+        return null;
+      },
+    },
+    oauthClientFactory: () => {
+      throw new Error('OLX OAuth client must not be built in sandbox mode');
+    },
+    credentialVault: {
+      encrypt: (tokens: OlxOAuthTokens) => ({ payload: tokens }),
+      decrypt: (envelope: Record<string, unknown>) => envelope.payload as OlxOAuthTokens,
+      encryptAppCredentials: (credentials: OlxOAuthAppCredentials) => ({ appPayload: credentials }),
+      decryptAppCredentials: (envelope: Record<string, unknown>) =>
+        envelope.appPayload as OlxOAuthAppCredentials,
+    },
+    idGenerator: () => 'account-sandbox',
+    stateGenerator: () => 'unused-oauth-state',
+    sandbox: { enabled: true, successUrl: 'http://localhost:5173/marketplaces' },
+  });
 }
 
 function stubMarketplaceImportService(): MarketplaceImportService {
@@ -418,6 +470,71 @@ function stubCategoryCorrectionOperationService(): CategoryCorrectionOperationSe
   } as unknown as CategoryCorrectionOperationService;
 }
 
+// The production provider graph, configured the way CI runs it: no Hermes API key.
+function unconfiguredHermesStatus(): NonNullable<AppDeps['hermesStatus']> {
+  const config = {
+    apiUrl: 'http://127.0.0.1:8642/v1',
+    apiKey: '',
+    model: 'hermes-agent',
+    maxTokens: 256,
+    timeoutMs: 1_000,
+  };
+  const selector = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient(config), config),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: 'auto',
+    probe: new HermesHealthProbe(config),
+  });
+  return () => selector.status();
+}
+
+// The production assistance graph with HERMES_PROVIDER_MODE=hermes: no offline fallback,
+// so a Hermes outage reaches the HTTP layer.
+async function hermesModeAssistanceGraph(): Promise<ProductAssistanceGraph> {
+  const config = {
+    apiUrl: 'http://127.0.0.1:8642/v1',
+    apiKey: 'local-hermes-key',
+    model: 'hermes-agent',
+    maxTokens: 256,
+    timeoutMs: 1_000,
+  };
+  const ai = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient(config), config),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: 'hermes',
+    probe: new HermesHealthProbe(config),
+  });
+  const products = new InMemoryProductRepository();
+  const cost = Money.of(10, 'PLN');
+  const price = Money.of(20, 'PLN');
+  if (cost.isErr() || price.isErr()) throw new Error('money fixture failed');
+  const product = Product.create({
+    id: 'p-real',
+    workspaceId: 'ws-1',
+    sku: 'S-REAL',
+    name: 'Real widget',
+    description: 'A real widget for listing and publish preview tests',
+    costPrice: cost.value,
+    sellingPrice: price.value,
+    condition: 'good',
+    category: 'misc',
+  });
+  if (product.isErr()) throw product.error;
+  await products.save(product.value);
+  return new ProductAssistanceGraph(
+    new ProductAIDraftService(ai),
+    {
+      recheck: async () => {
+        throw new Error('Publication recheck is not part of this test');
+      },
+    },
+    products,
+    new InMemoryListingRepository(),
+    new InMemoryMarketplaceRepository(),
+    ai
+  );
+}
+
 async function buildTestApp(
   options: {
     olxPublicationQuotaService?: OlxPublicationQuotaService;
@@ -428,6 +545,14 @@ async function buildTestApp(
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
+    marketplaceOAuthService?: (
+      marketplaceRepo: InMemoryMarketplaceRepository
+    ) => MarketplaceOAuthService;
+    olxAdapterMode?: OlxAdapterMode;
+    hermesStatus?: AppDeps['hermesStatus'];
+    marketplaceImportService?: MarketplaceImportService;
+    productAssistanceGraph?: AppDeps['productAssistanceGraph'];
+    enableRateLimit?: boolean;
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -449,13 +574,16 @@ async function buildTestApp(
     productRecheckService: options.productRecheckService,
     listingService: stubListingService(),
     hermesService: options.hermesService ?? stubHermesService(),
+    hermesStatus: options.hermesStatus,
+    productAssistanceGraph: options.productAssistanceGraph,
     analyticsService: stubAnalyticsService(),
     productRepo: productRepo as IProductRepository,
     listingRepo: listingRepo as IListingRepository,
     marketplaceRepo: marketplaceRepo as IMarketplaceRepository,
-    marketplaceOAuthService: stubMarketplaceOAuthService(),
+    marketplaceOAuthService:
+      options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
-    marketplaceImportService: stubMarketplaceImportService(),
+    marketplaceImportService: options.marketplaceImportService ?? stubMarketplaceImportService(),
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
       ? undefined
       : (options.olxPublicationQuotaService ?? stubOlxPublicationQuotaService()),
@@ -463,6 +591,7 @@ async function buildTestApp(
       options.categoryCorrectionOperationService ?? stubCategoryCorrectionOperationService(),
     olxTaxonomyResolver: options.olxTaxonomyResolver,
     marketplaceOAuthReturnUrl: 'http://localhost:5173/marketplaces',
+    olxAdapterMode: options.olxAdapterMode ?? 'stub',
     workspaceRepo: workspaceRepo as IWorkspaceRepository,
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore,
@@ -502,7 +631,7 @@ async function buildTestApp(
   }
   return {
     app: buildApp(deps, {
-      enableRateLimit: false,
+      enableRateLimit: options.enableRateLimit ?? false,
       applicationVersion: options.applicationVersion,
     }),
     authUserStore,
@@ -625,6 +754,102 @@ describe('Presentation API', () => {
       expect(olx?.syncMode).toBe('manual');
     });
 
+    it('register without workspaceName provisions a default workspace and OLX row', async () => {
+      const { app, workspaceRepo } = await buildTestApp();
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'kamil@x.pl', password: 'secret123' });
+
+      expect(res.status).toBe(201);
+      const { token, user } = res.body.data;
+      expect(user.workspaceId).toEqual(expect.any(String));
+      expect(jwt.decode(token)).toMatchObject({ userId: user.id, workspaceId: user.workspaceId });
+      const workspace = await workspaceRepo.findById(user.workspaceId);
+      expect(workspace?.name).toBe("kamil's workspace");
+
+      const marketplaces = await request(app)
+        .get('/api/marketplaces')
+        .set('Authorization', `Bearer ${token}`);
+      expect(marketplaces.status).toBe(200);
+      expect(marketplaces.body.data).toHaveLength(1);
+      expect(marketplaces.body.data[0]).toMatchObject({
+        workspaceId: user.workspaceId,
+        key: 'olx',
+        name: 'OLX',
+        connected: false,
+        syncMode: 'manual',
+      });
+    });
+
+    it.each(['', '   ', null])(
+      'register falls back to the default workspace name when workspaceName is %p',
+      async (workspaceName) => {
+        const { app, workspaceRepo } = await buildTestApp();
+
+        const res = await request(app)
+          .post('/api/auth/register')
+          .send({ email: 'blank@example.com', password: 'secret123', workspaceName });
+
+        expect(res.status).toBe(201);
+        const { token, user } = res.body.data;
+        const workspace = await workspaceRepo.findById(user.workspaceId);
+        expect(workspace?.name).toBe("blank's workspace");
+
+        const marketplaces = await request(app)
+          .get('/api/marketplaces')
+          .set('Authorization', `Bearer ${token}`);
+        expect(marketplaces.status).toBe(200);
+        expect(marketplaces.body.data).toEqual([
+          expect.objectContaining({ workspaceId: user.workspaceId, key: 'olx' }),
+        ]);
+      }
+    );
+
+    it('register accepts a 120-character workspaceName and rejects 121 characters', async () => {
+      const { app } = await buildTestApp();
+
+      const atLimit = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'limit@example.com', password: 'secret123', workspaceName: 'w'.repeat(120) });
+      const overLimit = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'over@example.com', password: 'secret123', workspaceName: 'w'.repeat(121) });
+
+      expect(atLimit.status).toBe(201);
+      expect(overLimit.status).toBe(400);
+      expect(overLimit.body.error.code).toBe('VALIDATION_ERROR');
+      expect(overLimit.body.error.details).toEqual([
+        expect.objectContaining({ field: 'workspaceName' }),
+      ]);
+    });
+
+    it('register maps a concurrent duplicate email (pg 23505) to 409 and removes the provisioned workspace', async () => {
+      const { app, authUserStore, marketplaceRepo, workspaceRepo } = await buildTestApp();
+      // The findByEmail pre-check passed; the INSERT then loses the race to users.email UNIQUE.
+      authUserStore.create = jest.fn(async () => {
+        throw Object.assign(
+          new Error('duplicate key value violates unique constraint "users_email_key"'),
+          {
+            code: '23505',
+            constraint: 'users_email_key',
+            detail: 'Key (email)=(race@example.com) already exists.',
+          }
+        );
+      });
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'race@example.com', password: 'secret123' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('CONFLICT');
+      expect(JSON.stringify(res.body)).not.toMatch(/duplicate key|users_email_key|Key \(email\)/);
+      expect(await workspaceRepo.findAll()).toHaveLength(0);
+      expect(marketplaceRepo.items.size).toBe(1);
+    });
+
     it('cleans up provisioned workspace and marketplace if user creation fails', async () => {
       const { app, authUserStore, marketplaceRepo, workspaceRepo } = await buildTestApp();
       authUserStore.create = jest.fn(async () => {
@@ -640,6 +865,99 @@ describe('Presentation API', () => {
       expect(res.status).toBe(500);
       expect(await workspaceRepo.findAll()).toHaveLength(0);
       expect(marketplaceRepo.items.size).toBe(1);
+    });
+
+    // Regression guard: the /me limiter used to run before authentication and key by IP, so
+    // everyone behind one proxy shared one 15-minute allowance, and the 429 that followed logged
+    // users out. The public per-IP flood guard (100/min) still fronts the whole /auth prefix
+    // (routes/index.ts), but the per-user allowance is spent only after authentication.
+    describe('GET /me', () => {
+      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1' })}`;
+      const me = (app: express.Express, authorization?: string) => {
+        const req = request(app).get('/api/auth/me');
+        return authorization ? req.set('Authorization', authorization) : req;
+      };
+
+      it('returns the current user for a valid token', async () => {
+        const { app } = await buildTestApp();
+
+        const res = await me(app, bearer('u-1'));
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          success: true,
+          data: { id: 'u-1', email: 'demo@example.com', workspaceId: 'ws-1' },
+        });
+      });
+
+      it('gives each user their own rate limit allowance, even from one IP', async () => {
+        const { app, authUserStore } = await buildTestApp({ enableRateLimit: true });
+        authUserStore.users.push({
+          id: 'u-2',
+          email: 'second@example.com',
+          passwordHash: 'unused',
+          workspaceId: 'ws-1',
+          createdAt: new Date(),
+        });
+
+        const firstOfA = await me(app, bearer('u-1'));
+        const secondOfA = await me(app, bearer('u-1'));
+        const firstOfB = await me(app, bearer('u-2'));
+
+        // The per-user limiter answers last, so its headers are the ones on the response.
+        expect(firstOfB.headers['ratelimit-policy']).toBe('100;w=900');
+        expect(firstOfA.headers['ratelimit-remaining']).toBe('99');
+        expect(secondOfA.headers['ratelimit-remaining']).toBe('98');
+        expect(firstOfB.headers['ratelimit-remaining']).toBe('99');
+      });
+
+      it('guards the /auth prefix per IP first and spends the per-user allowance only after authentication', async () => {
+        const { app } = await buildTestApp({ enableRateLimit: true });
+
+        const missing = await me(app);
+        const forged = await me(app, 'Bearer not-a-jwt');
+        const login = await request(app)
+          .post('/api/auth/login')
+          .send({ email: 'demo@example.com', password: 'wrong' });
+        const valid = await me(app, bearer('u-1'));
+
+        expect(missing.status).toBe(401);
+        expect(forged.status).toBe(401);
+        expect(login.status).toBe(401);
+        // One public bucket (100/min per IP) sits in front of every /auth route, token check
+        // included...
+        expect(missing.headers['ratelimit-policy']).toBe('100;w=60');
+        expect(missing.headers['ratelimit-remaining']).toBe('99');
+        expect(forged.headers['ratelimit-remaining']).toBe('98');
+        expect(login.headers['ratelimit-policy']).toBe('100;w=60');
+        expect(login.headers['ratelimit-remaining']).toBe('97');
+        // ...and the per-user allowance (100/15 min) is spent only by authenticated requests.
+        expect(valid.headers['ratelimit-policy']).toBe('100;w=900');
+        expect(valid.headers['ratelimit-remaining']).toBe('99');
+      });
+
+      it('answers a user over the allowance with a 429 envelope and leaves other users alone', async () => {
+        const controller = {
+          me: async (req: express.Request, res: express.Response) => {
+            res.json({ userId: req.user?.userId });
+          },
+        } as unknown as AuthController;
+        const app = express();
+        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2)));
+
+        const first = await me(app, bearer('u-1'));
+        const second = await me(app, bearer('u-1'));
+        const rejected = await me(app, bearer('u-1'));
+        const other = await me(app, bearer('u-2'));
+
+        expect([first.status, second.status]).toEqual([200, 200]);
+        expect(rejected.status).toBe(429);
+        expect(rejected.body).toEqual({
+          success: false,
+          error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' },
+        });
+        expect(other.status).toBe(200);
+      });
     });
   });
 
@@ -733,6 +1051,23 @@ describe('Presentation API', () => {
       expect(res.body.data.id).toBeDefined();
     });
 
+    it('create accepts costPrice null for a product whose cost is unknown', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).post('/api/products')).send({
+        sku: 'UNKNOWN-COST-1',
+        name: 'Widget with unknown cost',
+        description: 'A widget whose purchase cost is not known yet',
+        costPrice: null,
+        sellingPrice: 20,
+        condition: 'good',
+        category: 'misc',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.costPrice).toBeNull();
+    });
+
     it('requires explicit API confirmation before creating below-cost pricing', async () => {
       const { app } = await buildTestApp();
       const body = {
@@ -775,6 +1110,7 @@ describe('Presentation API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.mode).toBe('title');
+      expect(res.body.data).toMatchObject({ source: 'offline', confidence: null });
       expect(res.body.data.fields.name).toBe('Vintage Canon camera');
       expect(res.body.data.fields.status).toBe('draft');
       expect(res.body.data.uncertainFields).toContain('sellingPrice');
@@ -807,6 +1143,34 @@ describe('Presentation API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.fields.images).toEqual(['https://example.test/camera.jpg']);
+    });
+
+    describe('while Hermes is unreachable', () => {
+      const originalFetch = globalThis.fetch;
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+      });
+
+      it('improvements returns 503 with stable message', async () => {
+        globalThis.fetch = jest.fn(async () => {
+          throw new TypeError('fetch failed');
+        }) as typeof fetch;
+        const { app } = await buildTestApp({
+          productAssistanceGraph: await hermesModeAssistanceGraph(),
+        });
+
+        const res = await auth(request(app).post('/api/products/p-real/improvements')).send({});
+
+        expect(res.status).toBe(503);
+        expect(res.body).toEqual({
+          success: false,
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Hermes AI is not reachable in this environment',
+          },
+        });
+      });
     });
 
     it('creates a draft OLX listing for a product', async () => {
@@ -906,8 +1270,101 @@ describe('Presentation API', () => {
       expect(JSON.stringify(res.body)).not.toContain('refresh-token');
     });
 
+    it('POST /api/marketplaces/:id/connect in stub mode marks OLX connected and GET /api/marketplaces reports sandbox:true', async () => {
+      const { app, marketplaceRepo } = await buildTestApp({
+        marketplaceOAuthService: sandboxMarketplaceOAuthService,
+      });
+      (await marketplaceRepo.findByKey('ws-1', 'olx'))?.disconnect();
+
+      const connect = await auth(
+        request(app).post('/api/marketplaces/marketplace-olx/connect')
+      ).send({});
+
+      expect(connect.status).toBe(200);
+      expect(connect.body.data).toMatchObject({
+        authorizationUrl:
+          'http://localhost:5173/marketplaces?oauth=success&marketplaceId=marketplace-olx&sandbox=1',
+        state: 'sandbox',
+        sandbox: true,
+      });
+      const list = await auth(request(app).get('/api/marketplaces'));
+      expect(list.status).toBe(200);
+      expect(list.body.data).toEqual([
+        expect.objectContaining({
+          id: 'marketplace-olx',
+          key: 'olx',
+          connected: true,
+          sandbox: true,
+        }),
+      ]);
+      const detail = await auth(request(app).get('/api/marketplaces/marketplace-olx'));
+      expect(detail.status).toBe(200);
+      expect(detail.body.data).toMatchObject({ connected: true, sandbox: true });
+      const check = await auth(request(app).get('/api/marketplaces/marketplace-olx/check'));
+      expect(check.status).toBe(200);
+      expect(check.body.data).toMatchObject({
+        connected: true,
+        sandbox: true,
+        account: { handle: 'OLX sandbox account', status: 'connected' },
+      });
+    });
+
+    // One rule on every page: an OLX row counts as connected only with an account in status
+    // connected whose credentials can be read.
+    it.each([
+      { state: 'no stored account', account: undefined },
+      { state: 'an account in status error', account: { status: 'error' as const } },
+      {
+        state: 'credentials that cannot be read',
+        account: { status: 'connected' as const, credentials: { payload: null } },
+      },
+    ])('reports a connected OLX row with $state as not connected on every page', async ({ account }) => {
+      const accounts = new Map<string, MarketplaceAccountRecord>();
+      if (account) {
+        accounts.set('marketplace-olx', {
+          id: 'account-1',
+          marketplaceId: 'marketplace-olx',
+          handle: 'OLX account',
+          credentials: {},
+          scopes: ['v2'],
+          revision: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...account,
+        });
+      }
+      const { app } = await buildTestApp({
+        seedWorkspace: true,
+        marketplaceOAuthService: (marketplaceRepo) =>
+          sandboxMarketplaceOAuthService(marketplaceRepo, accounts),
+      });
+
+      const list = await auth(request(app).get('/api/marketplaces'));
+      const detail = await auth(request(app).get('/api/marketplaces/marketplace-olx'));
+      const settings = await auth(request(app).get('/api/settings/integrations'));
+
+      expect(list.body.data).toEqual([
+        expect.objectContaining({ id: 'marketplace-olx', connected: false }),
+      ]);
+      expect(detail.body.data).toMatchObject({ id: 'marketplace-olx', connected: false });
+      expect(settings.body.data.items).toContainEqual(
+        expect.objectContaining({ id: 'marketplace-olx', connected: false })
+      );
+    });
+
+    it('GET /api/marketplaces reports sandbox:false when the OLX adapter runs in real mode', async () => {
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
+
+      const list = await auth(request(app).get('/api/marketplaces'));
+
+      expect(list.status).toBe(200);
+      expect(list.body.data).toEqual([
+        expect.objectContaining({ key: 'olx', connected: true, sandbox: false }),
+      ]);
+    });
+
     it('previews existing OLX adverts through a read-only import endpoint', async () => {
-      const { app } = await buildTestApp();
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
       const res = await auth(
         request(app).post('/api/marketplaces/marketplace-olx/import-preview')
       ).send({
@@ -933,7 +1390,7 @@ describe('Presentation API', () => {
     });
 
     it('imports selected OLX adverts only after an explicit import request', async () => {
-      const { app } = await buildTestApp();
+      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
       const res = await auth(request(app).post('/api/marketplaces/marketplace-olx/import')).send({
         externalListingIds: ['olx-1'],
       });
@@ -948,6 +1405,37 @@ describe('Presentation API', () => {
         listingId: 'listing-imported',
       });
     });
+
+    it.each([
+      ['import-preview', {}],
+      ['import', { externalListingIds: ['olx-1'] }],
+    ])(
+      'POST /api/marketplaces/:id/%s returns 422 in sandbox mode without reaching the import service',
+      async (route, body) => {
+        const preview = jest.fn();
+        const importListings = jest.fn();
+        const { app } = await buildTestApp({
+          olxAdapterMode: 'stub',
+          marketplaceImportService: {
+            preview,
+            import: importListings,
+          } as unknown as MarketplaceImportService,
+        });
+
+        const res = await auth(
+          request(app).post(`/api/marketplaces/marketplace-olx/${route}`)
+        ).send(body);
+
+        expect(res.status).toBe(422);
+        expect(res.body.error).toMatchObject({
+          code: 'INVALID_STATE',
+          message: 'Marketplace import is not available in sandbox mode',
+        });
+        expect(preview).not.toHaveBeenCalled();
+        expect(importListings).not.toHaveBeenCalled();
+      }
+    );
+
     it('reads and validates authenticated OLX quota operator contracts', async () => {
       const { app } = await buildTestApp();
       const read = await auth(request(app).get('/api/marketplaces/marketplace-olx/quotas'));
@@ -1013,6 +1501,69 @@ describe('Presentation API', () => {
       const res = await auth(request(app).get('/api/listings/listing-preview/marketplace-categories?query=widgets'));
       expect(res.status).toBe(503);
       expect(res.body.error.message).toBe('OLX category search is temporarily unavailable');
+    });
+
+    it('searches and records a sandbox OLX category through the listing endpoints in stub mode', async () => {
+      const { app, listingRepo } = await buildTestApp({
+        olxTaxonomyResolver: async () => new StubOlxTaxonomyResolver(),
+      });
+      await seedPreviewListing(listingRepo, null);
+
+      const search = await auth(
+        request(app).get('/api/listings/listing-preview/marketplace-categories?query=cam')
+      );
+      const recorded = await auth(
+        request(app).put('/api/listings/listing-preview/marketplace-category')
+      ).send({ providerCategoryId: '1001' });
+      const preview = await auth(
+        request(app).post('/api/listings/listing-preview/publish-preview')
+      ).send({});
+
+      expect(search.status).toBe(200);
+      expect(search.body.data).toEqual([
+        { providerCategoryId: '1001', name: 'Cameras', path: ['Electronics', 'Cameras'] },
+      ]);
+      expect(recorded.status).toBe(200);
+      expect(recorded.body.data.marketplaceCategory).toMatchObject({
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        isLeaf: true,
+        sandbox: true,
+      });
+      expect(preview.status).toBe(200);
+      expect(preview.body.data.warnings).toEqual([]);
+      expect(preview.body.data.canPublish).toBe(true);
+      expect(preview.body.data.sandbox).toBe(true);
+      expect(preview.body.data.categoryDecision).toEqual({ allowed: true, requiresReview: false });
+    });
+
+    it('blocks a stored sandbox category in the publish preview while OLX runs in real mode', async () => {
+      const { app, listingRepo } = await buildTestApp({ olxAdapterMode: 'real' });
+      await seedPreviewListing(listingRepo, {
+        providerCategoryId: '1001',
+        name: 'Cameras',
+        path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy',
+        confidence: 1,
+        isLeaf: true,
+        taxonomyVerifiedAt: new Date(Date.now() - 60_000).toISOString(),
+        taxonomyStaleAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        sandbox: true,
+      });
+
+      const preview = await auth(
+        request(app).post('/api/listings/listing-preview/publish-preview')
+      ).send({});
+
+      expect(preview.status).toBe(200);
+      expect(preview.body.data).toMatchObject({
+        canPublish: false,
+        sandbox: false,
+        categoryDecision: { allowed: false, requiresReview: true, reason: 'category_sandbox' },
+        quotaOverrideEligibility: { eligible: false },
+      });
     });
 
     it('returns publish preview without publishing or enqueueing', async () => {
@@ -1218,6 +1769,44 @@ describe('Presentation API', () => {
   });
 
   describe('hermes', () => {
+    it('GET /api/hermes/status returns activeProvider offline in tests', async () => {
+      const { app } = await buildTestApp({ hermesStatus: unconfiguredHermesStatus() });
+
+      const res = await auth(request(app).get('/api/hermes/status'));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        data: {
+          mode: 'auto',
+          activeProvider: 'offline',
+          hermesConfigured: false,
+          hermesReachable: null,
+          checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+        },
+      });
+    });
+
+    it('returns 401 for the Hermes status without a token', async () => {
+      const { app } = await buildTestApp({ hermesStatus: unconfiguredHermesStatus() });
+
+      const res = await request(app).get('/api/hermes/status');
+
+      expect(res.status).toBe(401);
+    });
+
+    it('returns a 404 envelope when no Hermes status source is wired', async () => {
+      const { app } = await buildTestApp();
+
+      const res = await auth(request(app).get('/api/hermes/status'));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Hermes status is unavailable',
+      });
+    });
+
     it('serializes every canonical lifecycle status without label translation', async () => {
       const { app } = await buildTestApp();
       const res = await auth(request(app).get('/api/hermes/events'));
@@ -1588,7 +2177,7 @@ describe('Presentation API', () => {
       expect(legacy.body.data).toMatchObject({ name: 'Legacy rename', currency: 'EUR' });
     });
 
-    it('returns redacted integration configuration without connection or credential fields', async () => {
+    it('returns marketplace connection state and unavailable surfaces without credential fields', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
       const response = await auth(request(app).get('/api/settings/integrations'));
       expect(response.status).toBe(200);
@@ -1601,6 +2190,9 @@ describe('Presentation API', () => {
             name: 'OLX',
             available: true,
             configured: true,
+            connected: true,
+            account: { handle: 'OLX account', status: 'connected' },
+            sandbox: true,
           },
           {
             category: 'telegram',
@@ -1613,7 +2205,7 @@ describe('Presentation API', () => {
             category: 'api_keys',
             id: 'api_keys',
             name: 'API keys',
-            available: true,
+            available: false,
             configured: false,
             apiKeySummary: { total: 0, active: 0, revoked: 0 },
           },
@@ -1623,7 +2215,7 @@ describe('Presentation API', () => {
         response.body.data.items.map((item: { category: string }) => item.category).sort()
       ).toEqual(['api_keys', 'marketplace', 'telegram']);
       expect(JSON.stringify(response.body)).not.toMatch(
-        /token|secret|hash|credentials|connected|access[_-]?key|private[_-]?key/i
+        /token|secret|hash|credentials|scopes|access[_-]?key|private[_-]?key/i
       );
     });
   });

@@ -18,24 +18,43 @@ import {
 import type { ProductFormValues, ProductFieldErrors, ProductSubmissionValues } from './productFormModel.js';
 import {
   DescriptionTagsFields,
-  ImagesField,
   NameSkuFields,
   PriceFields,
   StatusField,
 } from './ProductFields.js';
+import { ProductImageUploader, uploadedImageId } from './ProductImageUploader.js';
+import type { UploadedProductImage } from './ProductImageUploader.js';
 
 export interface ProductFormProps {
   initial?: Product;
   submitting?: boolean;
   onSubmit: (values: ProductSubmissionValues) => void;
+  onUploadImage: (file: File) => Promise<UploadedProductImage>;
+  onDeleteImage?: (imageId: string) => Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+}
+
+// Photos saved on the product stay in storage until the edit is saved, because
+// a cancelled edit still shows them. Only a photo uploaded during this edit and
+// removed again is deleted right away.
+export function unsavedImageDeleter(
+  savedImages: readonly string[],
+  onDeleteImage?: (imageId: string) => Promise<void>
+): ((imageId: string) => Promise<void>) | undefined {
+  if (!onDeleteImage) return undefined;
+  const saved = new Set(savedImages.map(uploadedImageId));
+  return async (imageId) => {
+    if (!saved.has(imageId)) await onDeleteImage(imageId);
+  };
 }
 
 export const ProductForm: React.FC<ProductFormProps> = ({
   initial,
   submitting = false,
   onSubmit,
+  onUploadImage,
+  onDeleteImage,
   onCancel,
   submitLabel,
 }) => {
@@ -82,9 +101,16 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           />
         )}
         <StatusField {...fieldProps} />
-        <ImagesField {...fieldProps} />
+        <ProductImageUploader
+          images={values.images}
+          error={errors.images}
+          disabled={submitting}
+          onChange={(images) => change('images', images)}
+          onUpload={onUploadImage}
+          onDelete={unsavedImageDeleter(initial?.images ?? [], onDeleteImage)}
+        />
 
-        <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+        <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
           {onCancel && (
             <Button type="button" color="inherit" onClick={onCancel} disabled={submitting}>
               Cancel

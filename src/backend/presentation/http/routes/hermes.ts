@@ -15,6 +15,7 @@ import {
 
 export function createHermesRoutes(controller: HermesController): Router {
   const router = Router();
+  router.get('/status', asyncHandler(controller.status));
   router.get('/events', asyncHandler(controller.list));
   router.get('/events/:id', asyncHandler(controller.get));
   router.get(

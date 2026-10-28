@@ -4,6 +4,7 @@ import React, { useReducer, useState } from 'react';
 import {
   Alert,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,10 +28,12 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import type { Listing, Marketplace } from '@shared/types';
 import type { ListingDelistOperation } from '../../state/api/dto.js';
-import { formatCurrency } from '../../utils/formatters.js';
+import { formatMoney } from '../../utils/formatters.js';
+import { newOperationId } from '../../utils/operationId.js';
 import { ListingStatusBadge } from '../common/Badge.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
+import { SandboxAdvertChip } from '../common/SandboxAdvertChip.js';
 
 export interface ListingsTableProps {
   listings?: Listing[];
@@ -44,36 +47,66 @@ export interface ListingsTableProps {
   productHref?: (listing: Listing) => string;
   resolveMarketplaceName?: (marketplaceId: string) => string;
   resolveMarketplaceKey?: (marketplaceId: string) => Marketplace['key'] | undefined;
+  resolveMarketplaceSandbox?: (marketplaceId: string) => boolean;
   currency?: string;
   emptyAction?: React.ReactNode;
   actionsDisabled?: boolean;
+}
+
+// What the delist action is called. A sandbox advert has no OLX counterpart, so there the
+// action only returns the listing to draft.
+export function delistActionLabels(sandbox: boolean): {
+  action: string;
+  title: string;
+  confirm: string;
+} {
+  return sandbox
+    ? { action: 'Return to draft', title: 'Return to draft?', confirm: 'Return to draft' }
+    : {
+        action: 'Remove from marketplace and return to draft',
+        title: 'Remove from marketplace and return to draft?',
+        confirm: 'Remove from marketplace',
+      };
 }
 
 export function DelistConfirmationContent({
   listing,
   marketplaceName,
   isOlx,
+  sandbox = false,
 }: {
   listing: Listing;
   marketplaceName: string;
   isOlx: boolean;
+  sandbox?: boolean;
 }) {
   return (
     <Stack spacing={2}>
-      <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      {sandbox ? (
+        <Alert severity="warning">
+          Sandbox: this returns the listing to draft. No OLX advert or quota is involved.
+        </Alert>
+      ) : (
+        <Alert severity="error">This destructive action removes the remote advert.</Alert>
+      )}
       <Typography><strong>Marketplace:</strong> {marketplaceName}</Typography>
       <Typography><strong>Product:</strong> {listing.productName || 'Untitled product'}</Typography>
       <Typography><strong>Listing:</strong> {listing.id}</Typography>
       <Typography><strong>External ID:</strong> {listing.marketplaceListingId}</Typography>
-      {listing.externalUrl && (
-        <Link href={listing.externalUrl} target="_blank" rel="noopener noreferrer">
-          Open the current remote advert for reconciliation
-        </Link>
+      {sandbox ? (
+        <SandboxAdvertChip sx={{ alignSelf: 'flex-start' }} />
+      ) : (
+        listing.externalUrl && (
+          <Link href={listing.externalUrl} target="_blank" rel="noopener noreferrer">
+            Open the current remote advert for reconciliation
+          </Link>
+        )
       )}
       <Typography>
-        Only this listing will return to draft. Product data and photos remain. The advert will not be republished automatically.
+        Only this listing will return to draft. Product data and photos remain.
+        {!sandbox && ' The advert will not be republished automatically.'}
       </Typography>
-      {isOlx && (
+      {isOlx && !sandbox && (
         <Alert severity="warning">
           OLX does not restore a consumed quota unit after removal. Publishing again may be unavailable or paid and must pass category and quota preview.
         </Alert>
@@ -150,6 +183,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
   productHref,
   resolveMarketplaceName,
   resolveMarketplaceKey,
+  resolveMarketplaceSandbox,
   currency,
   emptyAction,
   actionsDisabled = false,
@@ -159,8 +193,12 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
     initialDelistDialogState,
   );
   const [delistBusy, setDelistBusy] = useState(false);
+  // Set when the dialog opens: closing clears the listing at once, and the dialog must keep
+  // its wording while it fades out.
+  const [delistSandbox, setDelistSandbox] = useState(false);
   const delistListing = delistDialog.listing;
   const delistOperationId = delistDialog.operationId;
+  const delistLabels = delistActionLabels(delistSandbox);
   if (error) return <ErrorRetry error={error} onRetry={onRetry} />;
 
   if (!loading && (!listings || listings.length === 0)) {
@@ -232,13 +270,25 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                       {resolveMarketplaceName
                         ? resolveMarketplaceName(listing.marketplaceId)
                         : listing.marketplaceId}
+                      {resolveMarketplaceSandbox?.(listing.marketplaceId) && (
+                        <Chip
+                          component="span"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          label="Sandbox"
+                          sx={{ ml: 0.75, height: 18 }}
+                        />
+                      )}
                     </Typography>
                     {listing.syncError && (
                       <Typography variant="caption" color="error.main" noWrap>
                         {listing.syncError}
                       </Typography>
                     )}
-                    {listing.externalUrl && listing.status === 'live' && (
+                    {listing.status === 'live' && resolveMarketplaceSandbox?.(listing.marketplaceId) ? (
+                      <SandboxAdvertChip sx={{ display: 'flex', width: 'fit-content', mt: 0.5, height: 18 }} />
+                    ) : listing.externalUrl && listing.status === 'live' && (
                       <Link
                         href={listing.externalUrl}
                         target="_blank"
@@ -258,7 +308,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                   </TableCell>
                   <TableCell align="right">
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {formatCurrency(listing.price, currency)}
+                      {formatMoney(listing.price, currency)}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
@@ -310,17 +360,20 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                       && Boolean(listing.marketplaceListingId)
                       && resolveMarketplaceKey?.(listing.marketplaceId) === 'olx'
                       && (
-                      <Tooltip title="Снять с площадки и вернуть в черновики">
+                      <Tooltip
+                        title={delistActionLabels(resolveMarketplaceSandbox?.(listing.marketplaceId) ?? false).action}
+                      >
                         <IconButton
                           size="small"
                           color="error"
                           disabled={actionsDisabled || delistBusy}
                           onClick={(e) => {
                             e.stopPropagation();
+                            setDelistSandbox(resolveMarketplaceSandbox?.(listing.marketplaceId) ?? false);
                             dispatchDelistDialog({
                               type: 'open',
                               listing,
-                              operationId: crypto.randomUUID(),
+                              operationId: newOperationId(),
                             });
                           }}
                         >
@@ -339,7 +392,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Снять с площадки и вернуть в черновики?</DialogTitle>
+        <DialogTitle>{delistLabels.title}</DialogTitle>
         <DialogContent>
           {delistListing && (
             <DelistConfirmationContent
@@ -348,6 +401,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                 ? resolveMarketplaceName(delistListing.marketplaceId)
                 : delistListing.marketplaceId}
               isOlx={resolveMarketplaceKey?.(delistListing.marketplaceId) === 'olx'}
+              sandbox={delistSandbox}
             />
           )}
           {delistDialog.failure && (
@@ -367,7 +421,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               disabled={delistBusy}
               onClick={() => dispatchDelistDialog({
                 type: 'reconciled_live',
-                operationId: crypto.randomUUID(),
+                operationId: newOperationId(),
               })}
             >
               I confirmed the advert is still live — start a new operation
@@ -410,7 +464,7 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
               }
             }}
           >
-            Снять с площадки
+            {delistLabels.confirm}
           </Button>
         </DialogActions>
       </Dialog>

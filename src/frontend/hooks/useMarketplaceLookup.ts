@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useMarketplaces } from '../services/hooks/index.js';
 import { MARKETPLACE_NAMES } from '@shared/constants';
 import type { Marketplace } from '@shared/types';
+import { isSandboxMarketplace } from '../utils/sandbox.js';
 
 export function useMarketplaceLookup() {
   const { data: marketplaces } = useMarketplaces();
@@ -32,5 +33,11 @@ export function useMarketplaceLookup() {
     [keyById],
   );
 
-  return { marketplaces, resolveMarketplaceName, resolveMarketplaceKey };
+  const resolveMarketplaceSandbox = useCallback(
+    (marketplaceId: string) =>
+      isSandboxMarketplace(marketplaces?.find((marketplace) => marketplace.id === marketplaceId)),
+    [marketplaces],
+  );
+
+  return { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox };
 }

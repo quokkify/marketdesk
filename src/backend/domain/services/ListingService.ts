@@ -62,13 +62,31 @@ export class ListingService {
       listingRepo: IListingRepository;
       productRepo: IProductRepository;
     }) => {
-      if (remoteImageUrls.length > 0) {
-        product.clearImages();
-        for (const imageUrl of remoteImageUrls) {
-          const added = product.addImage(imageUrl);
-          if (added.isErr()) return added;
+      if (remoteImageUrls.length > 0 || product.status === 'draft') {
+        // Product changes apply to a copy read inside the unit of work, so the
+        // snapshot read above never overwrites a concurrent product edit.
+        const current = await repos.productRepo.findByIdForWorkspaceForUpdate(
+          product.id,
+          product.workspaceId
+        );
+        if (!current) return Err(new NotFoundError(`Product not found: ${product.id}`));
+        let changed = false;
+        if (remoteImageUrls.length > 0) {
+          current.clearImages();
+          for (const imageUrl of remoteImageUrls) {
+            const added = current.addImage(imageUrl);
+            if (added.isErr()) return added;
+          }
+          changed = true;
         }
-        await repos.productRepo.save(product);
+        // A live listing puts the product on sale. Status moves forward only, so
+        // only a draft changes; active or later statuses stay as they are.
+        if (current.status === 'draft') {
+          const activated = current.transitionTo('active');
+          if (activated.isErr()) return activated;
+          changed = true;
+        }
+        if (changed) await repos.productRepo.save(current);
       }
       await repos.listingRepo.save(listing);
       return Ok(undefined);

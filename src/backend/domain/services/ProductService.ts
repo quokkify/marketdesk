@@ -16,7 +16,7 @@ export interface CreateProductCommand {
   sku: string;
   name: string;
   description: string;
-  costPrice: Money;
+  costPrice: Money | null;
   sellingPrice: Money;
   condition: ProductCondition;
   category: string;

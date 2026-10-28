@@ -15,6 +15,7 @@ import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import type {
+  AutonomyDecision,
   CategoryRecreationChangePayload,
   CategoryRecreationOperationAction,
   HermesEvent,
@@ -31,12 +32,19 @@ import {
   isSeoRecommendation,
   recommendationFieldLabel,
 } from '../../utils/labels.js';
-import { HermesSeverityBadge, HermesStatusBadge, AutonomyDecisionBadge } from '../common/Badge.js';
+import { HermesSeverityBadge, HermesStatusBadge } from '../common/Badge.js';
 import { ApprovalButtons } from './ApprovalButtons.js';
 import { ConfirmDialog } from '../common/ConfirmDialog.js';
 
+// Event-view field that the API may not send yet. It is optional so the card renders
+// the same truthful copy for events that do not carry it.
+export interface HermesEventExtras {
+  /** Marketplace-side state of an applied change as the API records it: queued, retry_required or not_required. */
+  marketplaceSync?: string | null;
+}
+
 export interface HermesEventCardProps {
-  event: HermesEvent;
+  event: HermesEvent & HermesEventExtras;
   showActions?: boolean;
   onResolved?: () => void;
   approveLabel?: string;
@@ -83,18 +91,74 @@ export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'
   );
 };
 
-export function hermesLifecycleCopy(status: HermesEvent['status']): string {
+// Plain-language note for the sync states the API records. Every other value, including
+// not_required, yields no note, so the card never prints a state word it does not know.
+function marketplaceSyncNote(
+  marketplaceSync: HermesEventExtras['marketplaceSync'],
+): { text: string; needsAttention: boolean } | null {
+  switch (marketplaceSync) {
+    case 'queued': return { text: 'marketplace update queued', needsAttention: false };
+    case 'retry_required': return { text: 'marketplace update needs a retry', needsAttention: true };
+    default: return null;
+  }
+}
+
+export function hermesLifecycleCopy(
+  status: HermesEvent['status'],
+  marketplaceSync?: HermesEventExtras['marketplaceSync'],
+): string {
   switch (status) {
     case 'pending_decision': return 'Hermes is evaluating whether this change requires review.';
     case 'pending_review': return 'A recorded decision is required before MarketDesk can continue.';
     case 'applying': return 'The approved change is queued or applying; provider completion is not yet confirmed.';
-    case 'applied': return 'MarketDesk recorded this action as completed.';
+    case 'applied': {
+      const note = marketplaceSyncNote(marketplaceSync);
+      return note ? `Applied in MarketDesk · ${note.text}` : 'Applied in MarketDesk';
+    }
     case 'dismissed': return 'This suggestion was dismissed without applying the proposed change.';
     case 'failed': return 'The action failed. Review the details before deciding what to do next.';
     case 'reverting': return 'The reversal is in progress; completion is not yet confirmed.';
     case 'reverted': return 'MarketDesk recorded the action as reverted.';
   }
 }
+
+export const HermesLifecycleCaption: React.FC<{
+  status: HermesEvent['status'];
+  marketplaceSync?: HermesEventExtras['marketplaceSync'];
+}> = ({ status, marketplaceSync }) => {
+  const needsAttention =
+    status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention === true;
+  return (
+    <Typography
+      variant="caption"
+      // warning.dark falls below 4.5:1 on the dark theme's surfaces; warning.main passes there.
+      sx={(theme) => ({
+        display: 'block',
+        mt: 0.75,
+        color: needsAttention
+          ? theme.palette.mode === 'dark'
+            ? theme.palette.warning.main
+            : theme.palette.warning.dark
+          : theme.palette.text.secondary,
+      })}
+    >
+      {hermesLifecycleCopy(status, marketplaceSync)}
+    </Typography>
+  );
+};
+
+// What the autonomy settings decided when the event was recorded. It is a decision, not
+// the event's current state, which the status chip shows.
+const AUTONOMY_DECISION_COPY: Record<AutonomyDecision, string> = {
+  auto_apply: 'Autonomy decision: apply without review',
+  pending_review: 'Autonomy decision: review required',
+};
+
+const HeuristicChip: React.FC = () => (
+  <Tooltip title="Produced by MarketDesk's built-in rules, not by Hermes" arrow describeChild>
+    <Chip size="small" variant="outlined" color="warning" label="Heuristic" />
+  </Tooltip>
+);
 
 export function hermesEventDismissOnly(event: HermesEvent): boolean {
   return !event.proposedChange || event.type === 'create_listing' || event.type === 'product_category_conflict';
@@ -248,7 +312,7 @@ export const ProposedChangeDiff: React.FC<{
   switch (change.kind) {
     case 'price':
       return wrap(
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <Typography variant="caption" color="text.secondary">Price</Typography>
           <Typography variant="body2" sx={{ textDecoration: 'line-through', color: 'text.secondary' }}>
             {formatCurrency(change.from, currency)}
@@ -367,7 +431,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
     return (
       <Card data-variant="compact-review" sx={{ p: 1.5, borderColor: 'primary.main' }}>
         <Stack spacing={1.25}>
-          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+          >
             {isSeoRecommendation(event) ? (
               <Tooltip title="SEO · listing search optimization" arrow>
                 <Chip
@@ -382,6 +451,7 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             ) : (
               <Chip size="small" label={hermesTypeLabel(event.type)} variant="outlined" />
             )}
+            {event.source === 'offline' && <HeuristicChip />}
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 800 }}>
               {fieldLabel}
             </Typography>
@@ -399,7 +469,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           {!event.proposedChange && (
             <Alert severity="info">No directly applicable product change. Review and dismiss this item.</Alert>
           )}
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap">
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+          >
             <Typography variant="caption" color="text.secondary">{formatRelativeTime(event.createdAt)}</Typography>
             {showActions && canReview && !isCategoryRecreation && (
               <ApprovalButtons
@@ -418,32 +493,44 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
 
   return (
     <Card sx={{ p: 2.25 }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
         <HermesEventTypeIcon type={event.type} severity={event.severity} />
 
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mb: 0.5 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}
+          >
             <HermesSeverityBadge severity={event.severity} />
             <HermesStatusBadge status={event.status} />
-            {event.autonomyDecision && <AutonomyDecisionBadge decision={event.autonomyDecision} />}
             <Chip size="small" variant="outlined" label={hermesTypeLabel(event.type)} sx={{ fontWeight: 500 }} />
+            {event.source === 'offline' && <HeuristicChip />}
           </Stack>
 
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{event.title}</Typography>
           {event.detail && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{event.detail}</Typography>
           )}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-            {hermesLifecycleCopy(event.status)}
-          </Typography>
+          <HermesLifecycleCaption status={event.status} marketplaceSync={event.marketplaceSync} />
+          {event.autonomyDecision && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              {AUTONOMY_DECISION_COPY[event.autonomyDecision]}
+            </Typography>
+          )}
 
           {event.productId && (
             <Stack
               direction="row"
               spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mt: 1.25, p: 1.25, borderRadius: 2, bgcolor: 'action.hover' }}
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mt: 1.25,
+                p: 1.25,
+                borderRadius: 2,
+                bgcolor: 'action.hover',
+              }}
             >
               <Box>
                 <Typography variant="caption" color="text.secondary">Product context</Typography>
@@ -472,10 +559,12 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           <Stack
             direction="row"
             spacing={1}
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mt: 1.5 }}
-            flexWrap="wrap"
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              mt: 1.5,
+            }}
           >
             <Typography variant="caption" color="text.secondary">{formatRelativeTime(event.createdAt)}</Typography>
             {showActions && canReview && !isCategoryRecreation && (

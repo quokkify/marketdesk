@@ -26,12 +26,13 @@ export type ProductSubmissionValues = ProductFormValues & {
 
 export type ProductFieldErrors = Partial<Record<keyof ProductFormValues, string>>;
 
+// The cost starts unknown (null), so no profit or margin is shown until the seller enters it.
 export function emptyProductValues(): ProductFormValues {
   return {
     name: '',
     sku: '',
     description: '',
-    costPrice: 0,
+    costPrice: null,
     sellingPrice: 0,
     condition: 'good',
     category: '',
@@ -118,6 +119,73 @@ export function belowCostConfirmationRequired(
 export function toProductSubmissionValues(values: ProductFormValues): ProductSubmissionValues {
   const belowCost = belowCostLoss(values) !== null;
   return belowCost ? { ...values, allowBelowCost: true } : { ...values };
+}
+
+export interface ProfitSummary {
+  profit: number;
+  marginPercent: number | null;
+}
+
+// Profit and margin for display; null when the cost is unknown.
+export function profitSummary(costPrice: number | null, sellingPrice: number): ProfitSummary | null {
+  if (costPrice === null || !Number.isFinite(costPrice) || !Number.isFinite(sellingPrice)) {
+    return null;
+  }
+  const profit = sellingPrice - costPrice;
+  return { profit, marginPercent: sellingPrice === 0 ? null : (profit / sellingPrice) * 100 };
+}
+
+export interface ApiFieldErrors {
+  fieldErrors: ProductFieldErrors;
+  message: string;
+}
+
+const FORM_FIELDS = new Set<string>([
+  'name',
+  'sku',
+  'description',
+  'costPrice',
+  'sellingPrice',
+  'condition',
+  'category',
+  'status',
+  'tags',
+  'images',
+]);
+
+const BELOW_COST_FIELD_MESSAGE =
+  'Selling price is below cost. Confirm the below-cost price to continue.';
+
+interface ApiErrorBody {
+  code?: string;
+  message?: string;
+  details?: Array<{ field?: string; message?: string }>;
+}
+
+// Maps an API error envelope to per-field messages: request validation
+// details, an application validation "field: message" text, or a duplicate SKU.
+export function productFieldErrorsFromApi(error: unknown): ApiFieldErrors {
+  const failure = (error ?? {}) as { data?: { error?: ApiErrorBody }; message?: string };
+  const body = failure.data?.error;
+  const message = body?.message ?? failure.message ?? 'Request failed';
+  const fieldErrors: ProductFieldErrors = {};
+  const assign = (field: string, text: string) => {
+    if (field === 'allowBelowCost') {
+      fieldErrors.sellingPrice ??= BELOW_COST_FIELD_MESSAGE;
+      return;
+    }
+    const key = field.split('.')[0] ?? '';
+    if (FORM_FIELDS.has(key)) fieldErrors[key as keyof ProductFormValues] ??= text;
+  };
+  for (const detail of body?.details ?? []) {
+    if (detail.field && detail.message) assign(detail.field, detail.message);
+  }
+  if (!body?.details?.length && body?.code === 'VALIDATION_ERROR' && body.message) {
+    const prefixed = /^([A-Za-z]+)(?:\.\d+)?: (.+)$/.exec(body.message);
+    if (prefixed) assign(prefixed[1]!, prefixed[2]!);
+  }
+  if (body?.code === 'CONFLICT' && /\bSKU\b/i.test(message)) fieldErrors.sku = message;
+  return { fieldErrors, message };
 }
 
 function formatLossAmount(amount: number): string {

@@ -10,17 +10,19 @@ import {
   Collapse,
   Divider,
   InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
-  Select,
   Stack,
-  TablePagination,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -29,6 +31,7 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import ListIcon from '@mui/icons-material/ViewList';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import type { BlockerFunction } from 'react-router-dom';
 import type { Marketplace, Product } from '@shared/types';
@@ -47,12 +50,14 @@ import { enqueueToast } from '../state/slices/uiSlice.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
-import { ProductsCards, ProductsTable } from '../components/tables/index.js';
+import { useProductDeletion } from '../hooks/useProductDeletion.js';
+import { CatalogueFooter, ProductsCards, ProductsTable } from '../components/tables/index.js';
 import {
   hasCatalogueFilters,
   parseProductsCatalogueState,
   PRODUCTS_PAGE_SIZE,
   PRODUCT_SEARCH_DEBOUNCE_MS,
+  PRODUCT_SORT_OPTIONS,
   productsToCsv,
   tabStatus,
   updateProductsCatalogueSearch,
@@ -65,6 +70,7 @@ import type {
 import {
   ProductWizardForm,
   hasMeaningfulProductWizardDraft,
+  productFieldErrorsFromApi,
   productWizardDraftStorageKey,
   readProductWizardDraft,
   removeProductWizardDraft,
@@ -72,6 +78,7 @@ import {
   writeProductWizardDraft,
 } from '../components/forms/index.js';
 import type {
+  ApiFieldErrors,
   ProductSubmissionValues,
   ProductWizardDraftState,
 } from '../components/forms/index.js';
@@ -124,7 +131,16 @@ const ProductsPage: React.FC = () => {
   const [searchInput, setSearchInput] = useState(catalogue.search);
   const lastUrlSearchRef = useRef(catalogue.search);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const { requestDelete, dialog: deleteDialog } = useProductDeletion((deleted) =>
+    setSelectedIds((current) => {
+      if (!current.has(deleted.id)) return current;
+      const next = new Set(current);
+      next.delete(deleted.id);
+      return next;
+    })
+  );
   const wizardOpen = query.get('newProduct') === '1';
 
   const navigateCatalogue = useCallback(
@@ -240,6 +256,10 @@ const ProductsPage: React.FC = () => {
   const attentionCount = useProducts({ status: ['attention'], limit: 1, offset: 0 });
   const draftCount = useProducts({ status: ['draft'], limit: 1, offset: 0 });
   const totalPages = currentData ? Math.ceil(currentData.total / PRODUCTS_PAGE_SIZE) : 0;
+  const activeFilterCount =
+    catalogue.tags.length + (catalogue.priceMin.trim() ? 1 : 0) + (catalogue.priceMax.trim() ? 1 : 0);
+  const activeSortLabel =
+    PRODUCT_SORT_OPTIONS.find((option) => option.value === catalogue.sort)?.label ?? 'Custom order';
   const pageOutOfRange = Boolean(currentData && catalogue.page > Math.max(0, totalPages - 1));
   const paginationPage = totalPages > 0 ? Math.min(catalogue.page, totalPages - 1) : 0;
   useEffect(() => {
@@ -429,23 +449,35 @@ const ProductsPage: React.FC = () => {
     );
   };
 
-  const handleCreate = async (values: ProductSubmissionValues) => {
+  const openProduct = (product: Product) => navigate(`/products/${product.id}`);
+  const editProduct = (product: Product) =>
+    navigate(`/products/${product.id}`, { state: { editProduct: true } });
+
+  const handleCreate = async (values: ProductSubmissionValues): Promise<ApiFieldErrors | void> => {
     if (!workspaceId) {
       dispatch(enqueueToast({ message: 'No active workspace selected.', severity: 'error' }));
       return;
     }
     try {
       const { targetMarketplace, ...productValues } = values;
-      const selectedMarketplace = verifiedMarketplaces?.find(
-        (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
-      );
-      if (!selectedMarketplace) throw new Error('Select a connected marketplace before creating the product.');
+      // No target means no connected marketplace: the product is created as a draft.
+      const selectedMarketplace = targetMarketplace
+        ? verifiedMarketplaces?.find(
+            (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
+          )
+        : undefined;
+      if (targetMarketplace && !selectedMarketplace) {
+        throw new Error('The selected marketplace is no longer connected. Choose it again.');
+      }
       const product = await createProduct({ ...productValues, workspaceId }).unwrap();
-      const { advancePublicationJourney } = await import('../workflows/publicationJourneyGraph.js');
-      const journey = await advancePublicationJourney(
-        { phase: 'review' },
-        { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
-      );
+      const journey = selectedMarketplace
+        ? await import('../workflows/publicationJourneyGraph.js').then(({ advancePublicationJourney }) =>
+            advancePublicationJourney(
+              { phase: 'review' },
+              { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
+            ),
+          )
+        : null;
       if (draftKey && !clearStoredDraft()) {
         dispatch(
           enqueueToast({
@@ -456,183 +488,251 @@ const ProductsPage: React.FC = () => {
       }
       setDraftDirty(false);
       setInitialDraft(null);
-      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
       allowWizardNavigationRef.current = true;
+      if (!journey) {
+        dispatch(
+          enqueueToast({
+            message: 'Product created as a draft. Connect OLX to publish it.',
+            severity: 'success',
+          })
+        );
+        navigate(`/products/${product.id}`);
+        return;
+      }
+      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
       navigate(`/products/${product.id}`, {
         state: { publicationJourney: { ...journey, version: PUBLICATION_JOURNEY_VERSION } },
       });
     } catch (err) {
+      const rejected = productFieldErrorsFromApi(err);
+      if (Object.keys(rejected.fieldErrors).length > 0) return rejected;
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
 
   return (
     <Box sx={{ maxWidth: 1440, mx: 'auto' }}>
-      <Card sx={{ mb: 2 }} contentSx={{ p: 2 }}>
-        <Stack spacing={1.5}>
-          <Stack
-            direction={{ xs: 'column', lg: 'row' }}
-            spacing={1.25}
-            alignItems={{ xs: 'stretch', lg: 'center' }}
-            useFlexGap
-          >
-            <ToggleButtonGroup
-              exclusive
-              size="small"
-              value={catalogue.tab}
-              onChange={(_event, value: ProductsTab | null) =>
-                value && navigateCatalogue({ tab: value, page: 0 })
-              }
-              aria-label="Product status"
-              sx={{
-                overflowX: 'auto',
-                '& .MuiToggleButton-root': {
-                  whiteSpace: 'nowrap',
-                  textTransform: 'none',
+      <Stack
+        direction={{ xs: 'column', lg: 'row' }}
+        spacing={1.25}
+        useFlexGap
+        sx={{ mb: 2, alignItems: { xs: 'stretch', lg: 'center' } }}
+      >
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={catalogue.tab}
+          onChange={(_event, value: ProductsTab | null) =>
+            value && navigateCatalogue({ tab: value, page: 0 })
+          }
+          aria-label="Product status"
+          sx={{
+            alignSelf: { xs: 'flex-start', lg: 'center' },
+            maxWidth: '100%',
+            overflowX: 'auto',
+            p: 0.5,
+            gap: 0.5,
+            borderRadius: 3,
+            border: 1,
+            borderColor: 'divider',
+            bgcolor: 'action.hover',
+            '& .MuiToggleButtonGroup-grouped': {
+              border: 0,
+              borderRadius: '10px !important',
+              px: 1.5,
+              whiteSpace: 'nowrap',
+              textTransform: 'none',
+              fontWeight: 600,
+              color: 'text.secondary',
+            },
+            '& .MuiToggleButtonGroup-grouped.Mui-selected': {
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+              boxShadow: 1,
+            },
+          }}
+        >
+          {(
+            [
+              ['all', 'All', allCount],
+              ['active', 'Active', activeCount],
+              ['attention', 'Attention', attentionCount],
+              ['draft', 'Drafts', draftCount],
+            ] as const
+          ).map(([value, label, countQuery]) => (
+            <ToggleButton key={value} value={value} aria-label={`${label} products`}>
+              {label}
+              <Chip
+                component="span"
+                size="small"
+                label={
+                  countQuery.isLoading || countQuery.isError
+                    ? '—'
+                    : (countQuery.data?.total ?? 0)
+                }
+                sx={(theme) => ({
+                  ml: 0.75,
+                  height: 20,
+                  pointerEvents: 'none',
                   fontWeight: 700,
-                },
-              }}
-            >
-              {(
-                [
-                  ['all', 'All', allCount],
-                  ['active', 'Active', activeCount],
-                  ['attention', 'Attention', attentionCount],
-                  ['draft', 'Drafts', draftCount],
-                ] as const
-              ).map(([value, label, countQuery]) => (
-                <ToggleButton key={value} value={value} aria-label={`${label} products`}>
-                  {label}
-                  <Chip
-                    component="span"
-                    size="small"
-                    label={
-                      countQuery.isLoading || countQuery.isError
-                        ? '—'
-                        : (countQuery.data?.total ?? 0)
-                    }
-                    sx={{ ml: 0.75, height: 20, pointerEvents: 'none' }}
-                  />
-                </ToggleButton>
-              ))}
-            </ToggleButtonGroup>
-            <Box sx={{ flex: 1 }} />
+                  bgcolor:
+                    catalogue.tab === value
+                      ? alpha(theme.palette.primary.main, 0.14)
+                      : theme.palette.action.selected,
+                  color: catalogue.tab === value ? 'primary.main' : 'text.secondary',
+                })}
+              />
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <Box sx={{ flex: 1 }} />
+        <TextField
+          size="small"
+          placeholder="Search name, SKU or tag"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          slotProps={{
+            htmlInput: { 'aria-label': 'Search products' },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+          sx={{ minWidth: { xs: 0, sm: 260 }, bgcolor: 'background.paper' }}
+        />
+        <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<FilterListIcon />}
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            aria-controls="products-filters"
+            sx={{ bgcolor: 'background.paper' }}
+          >
+            Filters
+            {activeFilterCount > 0 && (
+              <Chip
+                component="span"
+                size="small"
+                color="primary"
+                label={activeFilterCount}
+                sx={{ ml: 0.75, height: 20, pointerEvents: 'none' }}
+              />
+            )}
+          </Button>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<SortIcon />}
+            onClick={(event) => setSortAnchor(event.currentTarget)}
+            aria-haspopup="menu"
+            aria-controls={sortAnchor ? 'products-sort-menu' : undefined}
+            aria-expanded={sortAnchor ? 'true' : undefined}
+            aria-label={`Sort products, current order ${activeSortLabel}`}
+            sx={{ bgcolor: 'background.paper' }}
+          >
+            Sort
+          </Button>
+          <Menu
+            id="products-sort-menu"
+            anchorEl={sortAnchor}
+            open={Boolean(sortAnchor)}
+            onClose={() => setSortAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            {PRODUCT_SORT_OPTIONS.map((option) => (
+              <MenuItem
+                key={option.value}
+                selected={option.value === catalogue.sort}
+                onClick={() => {
+                  setSortAnchor(null);
+                  navigateCatalogue({ sort: option.value, page: 0 });
+                }}
+              >
+                <ListItemIcon>
+                  {option.value === catalogue.sort && <CheckIcon fontSize="small" />}
+                </ListItemIcon>
+                <ListItemText>{option.label}</ListItemText>
+              </MenuItem>
+            ))}
+          </Menu>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={catalogue.view}
+            onChange={(_event, value: ProductsView | null) =>
+              value && navigateCatalogue({ view: value })
+            }
+            aria-label="Catalogue view"
+            sx={{ bgcolor: 'background.paper' }}
+          >
+            <ToggleButton value="list" aria-label="List view">
+              <ListIcon />
+            </ToggleButton>
+            <ToggleButton value="card" aria-label="Card view">
+              <GridViewIcon />
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+      </Stack>
+      <Collapse in={filtersOpen} id="products-filters">
+        <Card sx={{ mb: 2 }} contentSx={{ p: 2 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.25}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+          >
             <TextField
               size="small"
-              placeholder="Search name, SKU, description or tag"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              inputProps={{ 'aria-label': 'Search products' }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ minWidth: { xs: 0, sm: 260 } }}
+              type="number"
+              label="Minimum price"
+              value={catalogue.priceMin}
+              onChange={(event) => navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)}
+              slotProps={{ htmlInput: { min: 0 } }}
             />
-            <Button
-              variant={
-                filtersOpen || catalogue.tags.length > 0 || catalogue.priceMin || catalogue.priceMax
-                  ? 'contained'
-                  : 'outlined'
+            <TextField
+              size="small"
+              type="number"
+              label="Maximum price"
+              value={catalogue.priceMax}
+              onChange={(event) => navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)}
+              slotProps={{ htmlInput: { min: 0 } }}
+            />
+            <Autocomplete
+              multiple
+              freeSolo
+              size="small"
+              options={[]}
+              value={catalogue.tags}
+              onChange={(_event, next) => navigateCatalogue({ tags: next as string[], page: 0 })}
+              renderValue={(value, getItemProps) =>
+                value.map((tag, index) => {
+                  const { key, ...itemProps } = getItemProps({ index });
+                  return (
+                    <Chip key={key} variant="outlined" size="small" label={tag} {...itemProps} />
+                  );
+                })
               }
-              color="inherit"
-              startIcon={<FilterListIcon />}
-              onClick={() => setFiltersOpen((open) => !open)}
-              aria-expanded={filtersOpen}
-            >
-              Filters
+              renderInput={(params) => (
+                <TextField {...params} label="Tags" placeholder="Type and press Enter" />
+              )}
+              sx={{ minWidth: 240, flex: 1 }}
+            />
+            <Button onClick={clearFilters} disabled={!hasCatalogueFilters(catalogue)}>
+              Clear filters
             </Button>
-            <Select
-              size="small"
-              value={catalogue.sort}
-              onChange={(event) => navigateCatalogue({ sort: event.target.value, page: 0 })}
-              inputProps={{ 'aria-label': 'Sort products' }}
-              sx={{ minWidth: 165 }}
-            >
-              <MenuItem value="-updatedAt">Updated: newest</MenuItem>
-              <MenuItem value="updatedAt">Updated: oldest</MenuItem>
-              <MenuItem value="name">Name: A–Z</MenuItem>
-              <MenuItem value="-name">Name: Z–A</MenuItem>
-              <MenuItem value="sellingPrice">Price: low to high</MenuItem>
-              <MenuItem value="-sellingPrice">Price: high to low</MenuItem>
-              <MenuItem value="costPrice">Cost: low to high</MenuItem>
-              <MenuItem value="-costPrice">Cost: high to low</MenuItem>
-            </Select>
-            <ToggleButtonGroup
-              exclusive
-              size="small"
-              value={catalogue.view}
-              onChange={(_event, value: ProductsView | null) =>
-                value && navigateCatalogue({ view: value })
-              }
-              aria-label="Catalogue view"
-            >
-              <ToggleButton value="list" aria-label="List view">
-                <ListIcon />
-              </ToggleButton>
-              <ToggleButton value="card" aria-label="Card view">
-                <GridViewIcon />
-              </ToggleButton>
-            </ToggleButtonGroup>
           </Stack>
-          <Collapse in={filtersOpen}>
-            <Divider sx={{ mb: 2 }} />
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.25}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
-            >
-              <TextField
-                size="small"
-                type="number"
-                label="Minimum price"
-                value={catalogue.priceMin}
-                onChange={(event) =>
-                  navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)
-                }
-                inputProps={{ min: 0 }}
-              />
-              <TextField
-                size="small"
-                type="number"
-                label="Maximum price"
-                value={catalogue.priceMax}
-                onChange={(event) =>
-                  navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)
-                }
-                inputProps={{ min: 0 }}
-              />
-              <Autocomplete
-                multiple
-                freeSolo
-                size="small"
-                options={[]}
-                value={catalogue.tags}
-                onChange={(_event, next) => navigateCatalogue({ tags: next as string[], page: 0 })}
-                renderTags={(value, getTagProps) =>
-                  value.map((tag, index) => (
-                    <Chip variant="outlined" size="small" label={tag} {...getTagProps({ index })} />
-                  ))
-                }
-                renderInput={(params) => (
-                  <TextField {...params} label="Tags" placeholder="Type and press Enter" />
-                )}
-                sx={{ minWidth: 240, flex: 1 }}
-              />
-              <Button onClick={clearFilters} disabled={!hasCatalogueFilters(catalogue)}>
-                Clear filters
-              </Button>
-            </Stack>
-            <Alert severity="info" sx={{ mt: 1.5 }}>
-              Marketplace, margin and updated-date filters are not shown because the catalogue API
-              does not expose those filters yet.
-            </Alert>
-          </Collapse>
-        </Stack>
-      </Card>
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            Marketplace, margin and updated-date filters are not shown because the catalogue API
+            does not expose those filters yet.
+          </Alert>
+        </Card>
+      </Collapse>
 
       {selectedIds.size > 0 && (
         <Box
@@ -653,11 +753,9 @@ const ProductsPage: React.FC = () => {
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={1}
-            alignItems={{ xs: 'stretch', md: 'center' }}
+            sx={{ alignItems: { xs: 'stretch', md: 'center' } }}
           >
-            <Typography sx={{ px: 1, fontWeight: 800 }}>
-              {selectedIds.size} selected on this page
-            </Typography>
+            <Typography sx={{ px: 1, fontWeight: 800 }}>{selectedIds.size} selected</Typography>
             <Divider
               orientation="vertical"
               flexItem
@@ -668,16 +766,15 @@ const ProductsPage: React.FC = () => {
               [<EditOutlinedIcon key="price" />, 'Edit price'],
               [<DeleteOutlineIcon key="delete" />, 'Delete'],
             ].map(([icon, label]) => (
-              <Tooltip
+              <Button
                 key={String(label)}
-                title="Unavailable safely: the API has no atomic bulk mutation contract or rollback semantics."
+                disabled
+                startIcon={icon}
+                aria-describedby="bulk-actions-note"
+                sx={{ '&.Mui-disabled': { color: 'inherit', opacity: 0.6 } }}
               >
-                <span>
-                  <Button disabled startIcon={icon} sx={{ color: 'inherit' }}>
-                    {label}
-                  </Button>
-                </span>
-              </Tooltip>
+                {label}
+              </Button>
             ))}
             <Button color="inherit" startIcon={<DownloadIcon />} onClick={exportSelected}>
               Export CSV
@@ -687,9 +784,13 @@ const ProductsPage: React.FC = () => {
               Clear selection
             </Button>
           </Stack>
-          <Typography variant="caption" sx={{ display: 'block', px: 1, opacity: 0.9 }}>
-            Bulk writes are disabled rather than issuing unsafe sequential requests. Single-product
-            editing keeps the existing below-cost confirmation guard.
+          <Typography
+            id="bulk-actions-note"
+            variant="caption"
+            sx={{ display: 'block', px: 1, opacity: 0.9 }}
+          >
+            Bulk tag, price and delete changes are not available yet. Export works on the selected
+            rows.
           </Typography>
         </Box>
       )}
@@ -704,8 +805,9 @@ const ProductsPage: React.FC = () => {
             currency={currency}
             sort={catalogue.sort}
             onSortChange={(sort) => navigateCatalogue({ sort, page: 0 })}
-            onOpen={(product) => navigate(`/products/${product.id}`)}
-            onEdit={(product) => navigate(`/products/${product.id}`)}
+            onOpen={openProduct}
+            onEdit={editProduct}
+            onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
@@ -723,8 +825,9 @@ const ProductsPage: React.FC = () => {
             error={isError ? error : undefined}
             onRetry={refetch}
             currency={currency}
-            onOpen={(product) => navigate(`/products/${product.id}`)}
-            onEdit={(product) => navigate(`/products/${product.id}`)}
+            onOpen={openProduct}
+            onEdit={editProduct}
+            onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
@@ -737,16 +840,11 @@ const ProductsPage: React.FC = () => {
           />
         )}
         {(currentData?.total ?? 0) > 0 && (
-          <TablePagination
-            component="div"
-            count={currentData?.total ?? 0}
+          <CatalogueFooter
+            total={currentData?.total ?? 0}
             page={paginationPage}
-            onPageChange={(_event, page) => navigateCatalogue({ page })}
-            rowsPerPage={PRODUCTS_PAGE_SIZE}
-            rowsPerPageOptions={[PRODUCTS_PAGE_SIZE]}
-            labelDisplayedRows={({ from, to, count }) =>
-              `${from}–${to} of ${count} products · 25 per page`
-            }
+            pageSize={PRODUCTS_PAGE_SIZE}
+            onPageChange={(page) => navigateCatalogue({ page })}
           />
         )}
       </Card>
@@ -771,6 +869,7 @@ const ProductsPage: React.FC = () => {
             marketplaces={verifiedMarketplaces}
             marketplacesLoading={readinessLoading}
             marketplacesError={readinessError}
+            currency={currency}
             onSubmit={handleCreate}
             onGenerateAIDraft={(request) => generateProductAIDraft(request).unwrap()}
             onUploadImage={(file) => uploadProductImage(file).unwrap()}
@@ -799,6 +898,7 @@ const ProductsPage: React.FC = () => {
         onAlternate={keepDraftAndClose}
         onConfirm={discardDraftAndClose}
       />
+      {deleteDialog}
     </Box>
   );
 };

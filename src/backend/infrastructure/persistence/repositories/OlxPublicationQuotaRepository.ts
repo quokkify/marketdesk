@@ -1,5 +1,9 @@
 import type { Pool, PoolClient } from 'pg';
-import { decideOlxPublication, OlxPublicationQuota } from '../../../domain/entities/OlxPublicationQuota';
+import {
+  decideOlxPublication,
+  OLX_SANDBOX_QUOTA_EVALUATION,
+  OlxPublicationQuota,
+} from '../../../domain/entities/OlxPublicationQuota';
 import type {
   AuthorizeOlxPublicationInput,
   IOlxPublicationQuotaRepository,
@@ -192,7 +196,8 @@ export class OlxPublicationQuotaRepository implements IOlxPublicationQuotaReposi
       );
 
       let quota = quotaResult.rows[0] ? toQuota(quotaResult.rows[0]) : null;
-      const evaluation = quota?.evaluate(input.at);
+      const evaluation = quota?.evaluate(input.at)
+        ?? (input.sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined);
       const status = evaluation?.status ?? 'unknown';
       const reason = evaluation?.reason ?? 'quota_unknown';
       const { decision } = decideOlxPublication(
@@ -255,7 +260,11 @@ export class OlxPublicationQuotaRepository implements IOlxPublicationQuotaReposi
     }
   }
 
-  async consume(operationId: string, at: Date): Promise<OlxPublicationAuthorization> {
+  async consume(
+    operationId: string,
+    at: Date,
+    sandboxMode = false,
+  ): Promise<OlxPublicationAuthorization> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -293,7 +302,8 @@ export class OlxPublicationQuotaRepository implements IOlxPublicationQuotaReposi
         };
       }
 
-      const evaluation = quota?.evaluate(at);
+      const evaluation = quota?.evaluate(at)
+        ?? (sandboxMode ? OLX_SANDBOX_QUOTA_EVALUATION : undefined);
       let decision: OlxQuotaOperationRow['decision'] = row.decision;
       const status: OlxQuotaOperationRow['quota_status'] = evaluation?.status ?? 'unknown';
       const reason = evaluation?.reason ?? 'quota_unknown';

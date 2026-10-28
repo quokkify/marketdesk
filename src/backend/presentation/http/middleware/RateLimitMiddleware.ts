@@ -1,5 +1,7 @@
 // Rate limiting per ARCHITECTURE.md §18:
-//   - public routes (auth):        100 req/min per IP
+//   - public routes (the /auth prefix incl. the /auth/me token check, OAuth callback,
+//     application-info):          100 req/min per IP
+//   - GET /auth/me, after auth:    100 req/15 min keyed by userId (fallback IP)
 //   - authenticated routes:      1000 req/min keyed by workspaceId (fallback IP)
 //   - sensitive price operations:  10 req/min keyed by workspaceId (fallback IP)
 // All limiters emit the §18 error envelope (429, RATE_LIMITED) on rejection.
@@ -8,9 +10,14 @@ import type { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from 'express-rate-limit';
 
 const WINDOW_MS = 60 * 1000;
+const ME_WINDOW_MS = 15 * 60 * 1000;
 
 function keyByWorkspace(req: Request): string {
   return req.user?.workspaceId ?? ipKeyGenerator(req.ip ?? 'unknown');
+}
+
+function keyByUser(req: Request): string {
+  return req.user?.userId ?? ipKeyGenerator(req.ip ?? 'unknown');
 }
 
 function rejection(_req: Request, res: Response): void {
@@ -20,9 +27,13 @@ function rejection(_req: Request, res: Response): void {
   });
 }
 
-function build(limit: number, keyGenerator?: (req: Request) => string): RateLimitRequestHandler {
+function build(
+  limit: number,
+  keyGenerator?: (req: Request) => string,
+  windowMs = WINDOW_MS
+): RateLimitRequestHandler {
   return rateLimit({
-    windowMs: WINDOW_MS,
+    windowMs,
     limit,
     standardHeaders: true,
     legacyHeaders: false,
@@ -38,6 +49,14 @@ export function publicRateLimiter(): RateLimitRequestHandler {
 
 export function authenticatedRateLimiter(): RateLimitRequestHandler {
   return build(1000, keyByWorkspace);
+}
+
+// Mount it after authMiddleware so req.user is set and the allowance belongs to the user. An IP
+// key would make everyone behind one NAT or reverse proxy share, and exhaust, a single 15-minute
+// allowance. The per-IP public limiter on the /auth prefix in front of it is only a flood guard
+// (100/min, see routes/index.ts).
+export function meRateLimiter(limit = 100): RateLimitRequestHandler {
+  return build(limit, keyByUser, ME_WINDOW_MS);
 }
 
 export function sensitiveRateLimiter(): RateLimitRequestHandler {

@@ -4,6 +4,7 @@ import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
 import type { HermesGuardrails } from '../../../shared/types';
+import type { AIProviderSourceAware } from '../ports/IAIProvider';
 import {
   unwrap,
   money,
@@ -14,6 +15,9 @@ import {
   StubAIProvider,
   sequentialIdFactory,
 } from '../testkit/support';
+import type { ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
+
+const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
 
 function makeEngine(overrides?: {
   productRepo?: InMemoryProductRepository;
@@ -145,6 +149,18 @@ describe('HermesDecisionEngine.run', () => {
     }
   });
 
+  it('suggests more photos without an invented statistic or a promise of sales', async () => {
+    const { engine, productRepo } = makeEngine();
+    seedProduct(productRepo, ['a.jpg']);
+
+    const events = await engine.run(unwrap(Workspace.create({ id: 'w1', name: 'WS' })));
+
+    expect(events.find((e) => e.type === 'suggested_more_photos')).toMatchObject({
+      title: 'Add more photos',
+      detail: 'Listings with three or more photos usually get more attention.',
+    });
+  });
+
   it('routes unsupported automatic relists to review before execution', async () => {
     const { engine, productRepo, listingRepo } = makeEngine();
     seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
@@ -167,6 +183,22 @@ describe('HermesDecisionEngine.run', () => {
     expect(relist).toBeDefined();
     expect(relist?.status).toBe('pending_review');
     expect(relist?.autonomyDecision).toBe('pending_review');
+  });
+
+  it('gives the AI provider the product cost when it asks for a price suggestion', async () => {
+    const ai = new StubAIProvider();
+    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
+    const { engine, productRepo, listingRepo } = makeEngine({ ai });
+    seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
+    const listing = unwrap(
+      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(80) }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS' }));
+
+    await engine.run(workspace);
+
+    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 50 }));
   });
 });
 
@@ -309,5 +341,301 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       }),
     );
     expect(engine.passesGuardrails(product, titleEvent, ws)).toBe(false);
+  });
+
+  // Reports its source like AIProviderSelector does, and switches source when it
+  // answers generateTitle: an outage that starts or ends in the middle of a check.
+  class SwitchingSourceStub extends StubAIProvider implements AIProviderSourceAware {
+    constructor(
+      private source: 'hermes' | 'offline',
+      private readonly sourceAfterTitle: 'hermes' | 'offline',
+    ) {
+      super({ suggestedPrice: 90, reasoning: 'test', confidence: 'high' }, 'Widget - New');
+    }
+
+    async activeProvider(): Promise<'hermes' | 'offline'> {
+      return this.source;
+    }
+
+    async generateTitle(): Promise<string> {
+      const title = await super.generateTitle();
+      this.source = this.sourceAfterTitle;
+      return title;
+    }
+  }
+
+  function seedSourceScenario(
+    before: 'hermes' | 'offline',
+    after: 'hermes' | 'offline',
+    images = ['a.jpg', 'b.jpg', 'c.jpg'],
+  ) {
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const ai = new SwitchingSourceStub(before, after);
+    const engine = new HermesDecisionEngine(
+      productRepo,
+      listingRepo,
+      new InMemoryEventRepository(),
+      new RecordingEventPublisher(),
+      ai,
+      sequentialIdFactory('s'),
+    );
+    const product = unwrap(
+      Product.create({
+        id: 'p1',
+        workspaceId: 'w1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        description: 'A perfectly reasonable description over twenty chars.',
+        costPrice: money(50),
+        sellingPrice: money(100),
+        condition: 'new',
+        category: 'electronics',
+        images,
+      }),
+    );
+    productRepo.items.set(product.id, product);
+    const listing = unwrap(
+      Listing.create({
+        id: 'l1',
+        productId: 'p1',
+        marketplaceId: 'm1',
+        price: money(100),
+        status: 'live',
+      }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    return { engine, product };
+  }
+
+  it.each([
+    { before: 'offline', after: 'offline' },
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'full_auto workspace with smartTitleAndSEO on does not auto-apply an offline title ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine, product } = seedSourceScenario(before, after);
+
+      const events = await engine.run(makeWorkspace(OPEN));
+
+      const titleEvent = events.find((e) => e.type === 'suggested_better_title');
+      expect(titleEvent?.autonomyDecision).toBe('pending_review');
+      expect(titleEvent?.status).toBe('pending_review');
+      expect(product.name).toBe('Widget');
+    },
+  );
+
+  it('full_auto workspace does not auto-apply an offline price change', async () => {
+    const { engine, product } = seedSourceScenario('offline', 'offline');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const evt = priceEvent(events);
+    expect(evt?.autonomyDecision).toBe('pending_review');
+    expect(evt?.status).toBe('pending_review');
+    expect(product.sellingPrice.amount).toBe(100);
+  });
+
+  it('still auto-applies a Hermes title under full_auto with smartTitleAndSEO on', async () => {
+    const { engine, product } = seedSourceScenario('hermes', 'hermes');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const titleEvent = events.find((e) => e.type === 'suggested_better_title');
+    expect(titleEvent?.autonomyDecision).toBe('auto_apply');
+    expect(titleEvent?.status).toBe('applied');
+    expect(product.name).toBe('Widget - New');
+  });
+
+  it('leaves suggestions that no AI produced on the workspace autonomy level while offline', async () => {
+    const { engine } = seedSourceScenario('offline', 'offline', ['a.jpg']);
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const photosEvent = events.find((e) => e.type === 'suggested_more_photos');
+    expect(photosEvent?.autonomyDecision).toBe('auto_apply');
+    expect(photosEvent?.status).toBe('applied');
+  });
+
+  it.each([
+    { before: 'offline', after: 'offline' },
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'event produced with the offline provider has source offline and the notice in its detail ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine } = seedSourceScenario(before, after);
+
+      const events = await engine.run(makeWorkspace(OPEN));
+
+      expect(events.find((e) => e.type === 'suggested_better_title')).toMatchObject({
+        source: 'offline',
+        detail: `Widget - New. ${OFFLINE_NOTICE}`,
+      });
+      expect(events.find((e) => e.type === 'suggested_lower_price')).toMatchObject({
+        source: 'offline',
+        detail: `test. ${OFFLINE_NOTICE}`,
+      });
+    },
+  );
+
+  it('labels events Hermes produced hermes and keeps their detail as Hermes wrote it', async () => {
+    const { engine } = seedSourceScenario('hermes', 'hermes');
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    expect(events.find((e) => e.type === 'suggested_better_title')).toMatchObject({
+      source: 'hermes',
+      detail: 'Widget - New',
+    });
+    expect(events.find((e) => e.type === 'suggested_lower_price')).toMatchObject({
+      source: 'hermes',
+      detail: 'test',
+    });
+  });
+
+  it('labels events from a provider that does not report its source hermes', async () => {
+    const { engine } = seedPricingScenario();
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    expect(priceEvent(events)?.source).toBe('hermes');
+  });
+
+  it('gives suggestions that no AI produced no source and no offline notice', async () => {
+    const { engine } = seedSourceScenario('offline', 'offline', ['a.jpg']);
+
+    const events = await engine.run(makeWorkspace(OPEN));
+
+    const photosEvent = events.find((e) => e.type === 'suggested_more_photos');
+    expect(photosEvent?.source).toBeNull();
+    expect(photosEvent?.detail).not.toContain(OFFLINE_NOTICE);
+  });
+});
+
+describe('HermesDecisionEngine.runProductSeo provider source', () => {
+  // Can switch source while it answers analyzeListingSeo: an outage mid-call.
+  class SourceStub extends StubAIProvider implements AIProviderSourceAware {
+    constructor(
+      private source: 'hermes' | 'offline',
+      seoOutput?: ListingSeoOutput,
+      private readonly sourceAfterSeo: 'hermes' | 'offline' = source,
+    ) {
+      super(undefined, '', undefined, seoOutput);
+    }
+
+    async activeProvider(): Promise<'hermes' | 'offline'> {
+      return this.source;
+    }
+
+    async analyzeListingSeo(): Promise<ListingSeoOutput> {
+      const output = await super.analyzeListingSeo();
+      this.source = this.sourceAfterSeo;
+      return output;
+    }
+  }
+
+  function setup(ai: StubAIProvider) {
+    const productRepo = new InMemoryProductRepository();
+    const eventRepo = new InMemoryEventRepository();
+    const engine = new HermesDecisionEngine(
+      productRepo,
+      new InMemoryListingRepository(),
+      eventRepo,
+      new RecordingEventPublisher(),
+      ai,
+      sequentialIdFactory('seo'),
+    );
+    const product = unwrap(
+      Product.create({
+        id: 'p1',
+        workspaceId: 'w1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        description: 'A perfectly reasonable description over twenty chars.',
+        costPrice: money(50),
+        sellingPrice: money(100),
+        condition: 'new',
+        category: 'electronics',
+      }),
+    );
+    productRepo.items.set(product.id, product);
+    return { engine, eventRepo, workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })) };
+  }
+
+  // Fingerprints, the source and the workspace and product ids are audit data. They stay in
+  // the agent recommendation record and never reach the detail a seller reads.
+  it('writes a listing SEO detail without fingerprints or ids and keeps them in the record', async () => {
+    const { engine, eventRepo, workspace } = setup(new SourceStub('hermes'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.detail).toBe(
+      'More searchable wording for review. Review-only suggestion from listing-seo@1.0.0 ' +
+        '(balanced). This may improve discoverability but does not guarantee a sale.',
+    );
+    expect([...eventRepo.agentRecommendations.values()]).toEqual([
+      expect.objectContaining({
+        eventId: event?.id,
+        workspaceId: 'w1',
+        productId: 'p1',
+        sourceFingerprint: expect.stringMatching(/\S/),
+        recommendationFingerprint: expect.stringMatching(/\S/),
+        outcome: 'suggested',
+      }),
+    ]);
+  });
+
+  it('labels a listing SEO event from the offline heuristics offline and says so in its detail', async () => {
+    const { engine, workspace } = setup(new SourceStub('offline'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.source).toBe('offline');
+    expect(event?.detail).toContain(OFFLINE_NOTICE);
+  });
+
+  it.each([
+    { before: 'hermes', after: 'offline' },
+    { before: 'offline', after: 'hermes' },
+  ] as const)(
+    'labels listing SEO events offline when the source switches during the call ($before, then $after)',
+    async ({ before, after }) => {
+      const { engine, workspace } = setup(new SourceStub(before, undefined, after));
+
+      const [event] = await engine.runProductSeo(workspace, 'p1');
+
+      expect(event?.source).toBe('offline');
+      expect(event?.detail).toContain(OFFLINE_NOTICE);
+    },
+  );
+
+  it('labels a listing SEO event from Hermes hermes, with no offline notice', async () => {
+    const { engine, workspace } = setup(new SourceStub('hermes'));
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.source).toBe('hermes');
+    expect(event?.detail).not.toContain(OFFLINE_NOTICE);
+  });
+
+  it('does not repeat the offline notice that the heuristics already wrote', async () => {
+    const { engine, workspace } = setup(
+      new SourceStub('offline', {
+        recommendations: [
+          {
+            field: 'title',
+            proposedValue: 'Widget - New',
+            rationale: `Added the condition "New". ${OFFLINE_NOTICE}`,
+          },
+        ],
+        disclaimer: OFFLINE_NOTICE,
+      }),
+    );
+
+    const [event] = await engine.runProductSeo(workspace, 'p1');
+
+    expect(event?.detail?.split(OFFLINE_NOTICE)).toHaveLength(2);
   });
 });

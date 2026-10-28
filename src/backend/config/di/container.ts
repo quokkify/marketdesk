@@ -12,6 +12,7 @@
 // container unit test). Absent overrides, the real config-backed clients are used.
 
 import { randomBytes, randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { Pool, PoolClient } from 'pg';
 import type { Redis } from 'ioredis';
 
@@ -75,13 +76,18 @@ import { BullJobQueue } from '../../infrastructure/jobQueue/BullJobQueue';
 import { MarketplaceAdapterFactory } from '../../infrastructure/adapters/MarketplaceAdapterFactory';
 import { FetchMarketplaceHttpClient } from '../../infrastructure/adapters/FetchMarketplaceHttpClient';
 import { OlxTaxonomyResolver } from '../../infrastructure/adapters/OlxTaxonomyResolver';
+import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
 import { RedisMarketplaceOAuthStateStore } from '../../infrastructure/cache/RedisMarketplaceOAuthStateStore';
 import { RedisMarketplaceOAuthRefreshLock } from '../../infrastructure/cache/RedisMarketplaceOAuthRefreshLock';
 import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCredentialVault';
+import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
-import { HermesAI } from '../../infrastructure/external/HermesAI';
+import { HermesAI, loadHermesConfig } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
+import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
+import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
+import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { createEmailProvider } from '../../infrastructure/external/EmailProvider';
 import { createTelegramBot } from '../../infrastructure/external/TelegramBot';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
@@ -107,8 +113,15 @@ import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
-import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
-import { ProductRecheckService } from '../../application/services/ProductRecheckService';
+import {
+  ProductAIDraftService,
+  type ProductDraftLogger,
+} from '../../application/services/ProductAIDraftService';
+import { ProductImageUploadService } from '../../application/services/ProductImageUploadService';
+import {
+  ProductRecheckService,
+  type OlxTaxonomyResolverFactory,
+} from '../../application/services/ProductRecheckService';
 import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 import { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
@@ -212,7 +225,7 @@ export interface ContainerOverrides {
   eventBroker?: EventBroker & EventSubscriber;
   aiProvider?: IAIProvider;
   idGenerator?: IdGenerator;
-  logger?: ErrorLogger;
+  logger?: ErrorLogger & ProductDraftLogger;
   marketplaceCredentialsKey?: string;
   // Factory for background job queues. Overridable so tests avoid a live Bull/Redis.
   createQueue?: <T>(name: string) => ManagedQueue<T>;
@@ -244,8 +257,15 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
 
   // 3. Cross-cutting ports.
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
-  const aiProvider: IAIProvider =
-    overrides.aiProvider ?? new HermesAI(new HermesCompletionClient());
+  // GET /api/hermes/status always reports this env-configured selector, even when a
+  // test swaps the provider that services call through overrides.aiProvider.
+  const aiProviderSelector = new AIProviderSelector({
+    hermes: new HermesAI(new HermesCompletionClient()),
+    offline: new OfflineHeuristicAIProvider(),
+    mode: env.hermes.providerMode,
+    probe: new HermesHealthProbe(loadHermesConfig()),
+  });
+  const aiProvider: IAIProvider = overrides.aiProvider ?? aiProviderSelector;
   const buildOlxHeaders = (accessToken?: string): Record<string, string> => ({
     Accept: 'application/json',
     Version: '2.0',
@@ -263,6 +283,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     httpClients: olxHttpClient ? { olx: olxHttpClient } : undefined,
     olx: {
       baseUrl: env.marketplaces.olx.apiBaseUrl,
+      publicBaseUrl: env.publicBaseUrl,
       requirePublishDetails: env.marketplaces.olx.adapterMode === 'real',
       categoryIds: env.marketplaces.olx.categoryIds,
       cityId: env.marketplaces.olx.cityId,
@@ -323,7 +344,25 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     refreshLock: new RedisMarketplaceOAuthRefreshLock(redis, overrides.logger),
     idGenerator,
     stateGenerator: () => randomBytes(32).toString('base64url'),
+    sandbox: {
+      enabled: env.marketplaces.olx.adapterMode !== 'real',
+      successUrl: env.marketplaces.olx.oauthSuccessUrl,
+    },
   });
+  // While the OLX adapter is not real, category search and verification use the fixed
+  // sandbox taxonomy, which needs no OLX access token and never calls OLX.
+  const olxTaxonomyResolver: OlxTaxonomyResolverFactory =
+    env.marketplaces.olx.adapterMode === 'real'
+      ? async (marketplaceId) => {
+          const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
+          const http = new FetchMarketplaceHttpClient({
+            defaultHeaders: buildOlxHeaders(accessToken),
+            timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+            livePublishEnabled: false,
+          });
+          return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
+        }
+      : async () => new StubOlxTaxonomyResolver();
   const olxPublicationQuotaService = new OlxPublicationQuotaService(
     marketplaceRepo,
     marketplaceAccountRepo,
@@ -336,7 +375,9 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         const categoryId = env.marketplaces.olx.categoryIds[normalized];
         return categoryId === undefined ? null : String(categoryId);
       },
-    }
+    },
+    undefined,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
 
   // 5. Job queues (application IJobQueue ports). Handlers are registered below,
@@ -387,7 +428,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     activityLogRepo,
     idGenerator,
     marketplaceAccountRepo,
-    olxPublicationQuotaService
+    olxPublicationQuotaService,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
   const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
@@ -411,28 +453,33 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     idGenerator
   );
 
-  // 8. Application services (the facades buildApp consumes).
+  // 8. Application services (the facades buildApp consumes). One image storage
+  //    serves uploads and the cleanup after a product delete, so both share its
+  //    per-workspace lock.
+  const productImageStorage = new FilesystemProductImageStorage(
+    path.resolve(process.cwd(), env.upload.uploadDir),
+    randomUUID,
+    {
+      maxWorkspaceBytes: env.upload.maxWorkspaceBytes,
+      maxWorkspaceFiles: env.upload.maxWorkspaceFiles,
+    }
+  );
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo,
+    productImageStorage,
+    overrides.logger
   );
-  const productAIDraftService = new ProductAIDraftService(aiProvider);
+  const productAIDraftService = new ProductAIDraftService(aiProvider, overrides.logger);
   const productRecheckService = new ProductRecheckService(
     productRepo,
     listingRepo,
     marketplaceRepo,
     marketplaceAccountRepo,
     activityLogRepo,
-    async (marketplaceId) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
-      const http = new FetchMarketplaceHttpClient({
-        defaultHeaders: buildOlxHeaders(accessToken),
-        timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-        livePublishEnabled: false,
-      });
-      return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
-    },
+    olxTaxonomyResolver,
     idGenerator
   );
   const productAssistanceGraph = new ProductAssistanceGraph(
@@ -442,6 +489,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     listingRepo,
     marketplaceRepo,
     aiProvider,
+    undefined,
+    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const listingService = new ListingApplicationService(
     listingRepo,
@@ -690,8 +739,13 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productAIDraftService,
     productRecheckService,
     productAssistanceGraph,
+    productImageUploadService: new ProductImageUploadService(
+      productImageStorage,
+      env.upload.maxFileSize
+    ),
     listingService,
     hermesService,
+    hermesStatus: () => aiProviderSelector.status(),
     analyticsService,
     productRepo,
     listingRepo,
@@ -699,18 +753,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaceOAuthService,
     marketplaceSyncScheduler,
     marketplaceImportService,
-    olxTaxonomyResolver: async (marketplaceId) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
-      const http = new FetchMarketplaceHttpClient({
-        defaultHeaders: buildOlxHeaders(accessToken),
-        timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-        livePublishEnabled: false,
-      });
-      return new OlxTaxonomyResolver(http, env.marketplaces.olx.apiBaseUrl);
-    },
+    olxTaxonomyResolver,
     olxPublicationQuotaService,
     categoryCorrectionOperationService,
     marketplaceOAuthReturnUrl: env.marketplaces.olx.oauthSuccessUrl,
+    olxAdapterMode: env.marketplaces.olx.adapterMode,
     workspaceRepo,
     settingsRepo,
     authUserStore,

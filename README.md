@@ -19,40 +19,54 @@ Project status: [prototype, not production-certified](.github/project-status.yml
 
 [View the editable desktop source](docs/design/readme-showcase/marketdesk-readme-source.html)
 
-MarketDesk is a workspace-scoped product and listing management platform. **OLX is the only validated real marketplace integration**; other channels are roadmap surfaces. Hermes recommendations require human review and guarded execution—not unattended automation. This project is a prototype, not production-certified.
+MarketDesk is a workspace-scoped product and listing management platform. **OLX is the only validated real marketplace integration**; other channels are roadmap surfaces. In the default local setup OLX runs as a labelled [sandbox](#sandbox-mode) that never contacts OLX. Hermes recommendations require human review and guarded execution—not unattended automation. This project is a prototype, not production-certified.
 
 ## What you can do
 
 - **Manage a product catalog** and prepare marketplace listings from one workspace.
 - **Review listing and provider state** without confusing local drafts with marketplace truth.
 - **Track operations and analytics** across current product/listing workflows.
-- **Use Hermes-assisted recommendations** as proposals to inspect, approve, or dismiss.
+- **Use Hermes-assisted recommendations** as proposals to inspect, approve, or dismiss. Without a Hermes Agent API server, simple built-in heuristics answer instead and are labelled as such.
 
 ## Get started
 
-Requires Node.js 22+ and npm 10+. For local Compose, configure `.env` first:
+Requires Docker with Compose v2, plus Node.js 22+ and npm 10+ to run `npm run env:init`. Create `.env` before the first start: `npm run env:init` copies `.env.example` and generates the secrets the app needs.
 
 ```bash
 git clone https://github.com/quokkify/marketdesk.git
 cd marketdesk
-npm ci
-cp .env.example .env
-# Set DB_SSL_MODE=disable, JWT_SECRET, and HERMES_API_KEY in .env
-docker compose up -d
+npm run env:init
+docker compose up -d --build
 curl -fsS http://127.0.0.1:3000/health
 curl -fsS http://127.0.0.1:3000/ready
+curl -fsS http://127.0.0.1:3000/api/application-info
 ```
 
-The app requires a native Hermes Agent API Server; its key must match `HERMES_API_KEY`. Restrict the Hermes host port with firewall/security-group rules to Docker traffic and trusted administrators. Compose runs upload initialization and database migrations before the app starts. For development without Docker, start local PostgreSQL and Redis, configure `.env`, then use `npm run dev`.
+Open <http://localhost:3000> and create an account. The [tester guide](docs/TESTING_GUIDE.md) walks through the whole seller journey and lists what works and what does not yet.
+
+`env:init` fills `JWT_SECRET`, `JWT_REFRESH_SECRET`, `HERMES_WEBHOOK_SECRET`, and `MARKETPLACE_CREDENTIALS_KEY` and keeps any value that is already set. If a key is repeated without a real value after a line that sets one, `env:init` leaves both lines as they are, prints a warning and exits 1. The app refuses to start while `JWT_SECRET` or `MARKETPLACE_CREDENTIALS_KEY` is missing or a placeholder, and its log names the variable. Hermes is optional: keep the placeholder `HERMES_API_KEY` from `.env.example` and the app uses its offline heuristics, or set the key of a native Hermes Agent API Server to use Hermes instead. If you run a Hermes Agent API Server, restrict its host port with firewall/security-group rules to Docker traffic and trusted administrators. Compose runs upload initialization and database migrations before the app starts. For development without Docker, run `npm ci`, start local PostgreSQL and Redis, configure `.env`, then use `npm run dev`.
 
 See [Development and operations](docs/development.md) for environment setup, checks, the network boundary, data safety, and troubleshooting. Never delete Compose volumes that contain data you need.
 
+## Sandbox mode
+
+With the default `.env`, OLX runs as a labelled sandbox (`OLX_ADAPTER_MODE=stub`) and MarketDesk never contacts OLX:
+
+- Connecting OLX from the Marketplaces page creates a stand-in account that needs no OLX credentials. OLX state is labelled **Sandbox** wherever it is shown.
+- Publishing still goes through the category review and confirmation, against built-in stand-ins for the OLX category tree and the publication quota. Sandbox adverts have no page on olx.pl, so MarketDesk shows a **Sandbox advert** label where a real advert would link to OLX.
+- Importing existing OLX adverts is unavailable, and there are no real sales. Views and watchers are simulated by the OLX sandbox and grow on every sync, and the Listings and Analytics pages label them as sandbox data.
+- `OLX_ADAPTER_MODE=real` switches to the real OLX Partner API and needs approved credentials; see [OLX real API readiness](docs/olx-real-api-readiness.md). A stored sandbox connection is refused in real mode and has to be reconnected. Do not publish, relist, or mutate real marketplace data without explicit authorization.
+- Real mode also needs `PUBLIC_BASE_URL`, the public address of this backend from which OLX downloads advert photos; the app refuses to start in real mode while it is empty, loopback or private.
+
+AI assistance follows `HERMES_PROVIDER_MODE` (default `auto`): Hermes while its Agent API server is configured and reachable, built-in offline heuristics otherwise. Offline suggestions say that Hermes was not consulted and always wait for human review. `hermes` never falls back, and `offline` never calls Hermes.
+
 ## Architecture
 
-React + TypeScript frontend · Node.js + Express API · PostgreSQL · Redis · Docker Compose. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA; separately published component images are an optional topology.
+React 19 + TypeScript 6 frontend (MUI 9, Vite 8) · Node.js + Express 5 API · PostgreSQL 18 · Redis 8 · Docker Compose. Node.js 22+ is supported and the Docker image runs Node.js 24. Schema changes are ordered SQL migrations in `src/backend/persistence/migrations` that a one-shot Compose service applies before the app starts. Backend responsibilities follow domain, application, infrastructure, and presentation layers. The standard Compose deployment builds a **single combined application image** serving the API and SPA; separately published component images are an optional topology.
 
 ## Documentation
 
+- [Tester guide](docs/TESTING_GUIDE.md): run MarketDesk locally and test the seller journey in sandbox mode
 - [Product/spec source hierarchy](docs/spec/README.md) · [Product maturity](docs/spec/PRODUCT.md) · [Traceability](docs/spec/TRACEABILITY.md)
 - [Canonical architecture](ARCHITECTURE.md) · [Original product requirements](docs/design/MarketDesk%20PRD.dc.html) · [Visual prototype](docs/design/MarketDesk.dc.html)
 - [Existing product, analytics and dark-theme screenshots](https://github.com/quokkify/.github/tree/main/assets/projects/marketdesk) (visual references; not production-readiness claims)

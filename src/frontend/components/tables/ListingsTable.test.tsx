@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   DelistConfirmationContent,
   ListingsTable,
+  delistActionLabels,
   delistDialogReducer,
   initialDelistDialogState,
 } from './ListingsTable';
@@ -78,6 +79,24 @@ describe('ListingsTable product identity', () => {
   });
 });
 
+describe('ListingsTable sandbox marketplace', () => {
+  it('labels listings on a sandbox marketplace', () => {
+    const sandbox = renderToStaticMarkup(
+      <ListingsTable
+        listings={[listing()]}
+        resolveMarketplaceName={() => 'OLX'}
+        resolveMarketplaceSandbox={() => true}
+      />,
+    );
+    const real = renderToStaticMarkup(
+      <ListingsTable listings={[listing()]} resolveMarketplaceName={() => 'OLX'} />,
+    );
+
+    expect(sandbox).toContain('Sandbox');
+    expect(real).not.toContain('Sandbox');
+  });
+});
+
 describe('ListingsTable external marketplace link', () => {
   it('renders a safe external OLX link for live listings', () => {
     const html = renderToStaticMarkup(
@@ -107,6 +126,25 @@ describe('ListingsTable external marketplace link', () => {
 
     expect(html).not.toContain('View on OLX');
   });
+
+  it('labels a live sandbox advert instead of linking to OLX', () => {
+    const sandboxRow = (row: Listing) => renderToStaticMarkup(
+      <ListingsTable
+        listings={[row]}
+        resolveMarketplaceName={() => 'OLX'}
+        resolveMarketplaceSandbox={() => true}
+      />,
+    );
+    const withUrl = sandboxRow(listing({ externalUrl: 'https://www.olx.pl/d/oferta/olx-1' }));
+    const withoutUrl = sandboxRow(listing());
+    const draft = sandboxRow(listing({ status: 'draft' }));
+
+    expect(withUrl).toContain('Sandbox advert');
+    expect(withUrl).not.toContain('View on OLX');
+    expect(withUrl).not.toContain('href="https://www.olx.pl');
+    expect(withoutUrl).toContain('Sandbox advert');
+    expect(draft).not.toContain('Sandbox advert');
+  });
 });
 
 describe('ListingsTable publication actions', () => {
@@ -135,9 +173,70 @@ describe('ListingsTable destructive delist action', () => {
 
     expect(html).toContain('Apple AirPods 4');
     expect(html).toContain('olx-1');
+    expect(html).toContain('This destructive action removes the remote advert.');
     expect(html).toContain('will not be republished automatically');
     expect(html).toContain('does not restore a consumed quota unit');
     expect(html).toContain('category and quota preview');
+    expect(html).not.toContain('Sandbox: this returns the listing to draft.');
+  });
+
+  it('replaces the remote advert and quota warnings with one sandbox sentence', () => {
+    const html = renderToStaticMarkup(
+      <DelistConfirmationContent listing={listing()} marketplaceName="OLX" isOlx sandbox />,
+    );
+
+    expect(html).toContain(
+      'Sandbox: this returns the listing to draft. No OLX advert or quota is involved.',
+    );
+    expect(html).not.toContain('removes the remote advert');
+    expect(html).not.toContain('does not restore a consumed quota unit');
+    expect(html).not.toContain('unavailable or paid');
+    expect(html).toContain('Only this listing will return to draft. Product data and photos remain.');
+    expect(html).not.toContain('republished');
+    expect(html).toContain('olx-1');
+  });
+
+  it('calls the sandbox action Return to draft on the row, the dialog title and its button', () => {
+    expect(delistActionLabels(true)).toEqual({
+      action: 'Return to draft',
+      title: 'Return to draft?',
+      confirm: 'Return to draft',
+    });
+    expect(delistActionLabels(false)).toEqual({
+      action: 'Remove from marketplace and return to draft',
+      title: 'Remove from marketplace and return to draft?',
+      confirm: 'Remove from marketplace',
+    });
+
+    const sandboxRow = renderToStaticMarkup(
+      <ListingsTable
+        listings={[listing()]}
+        resolveMarketplaceKey={() => 'olx'}
+        resolveMarketplaceSandbox={() => true}
+        onDelistToDraft={async () => ({
+          id: 'operation-5', listingId: 'listing-1', marketplaceId: 'marketplace-1',
+          state: 'executed', result: null,
+        })}
+      />,
+    );
+
+    expect(sandboxRow).toContain('aria-label="Return to draft"');
+    expect(sandboxRow).not.toContain('Remove from marketplace');
+  });
+
+  it('labels a sandbox advert in the confirmation instead of linking to it', () => {
+    const html = renderToStaticMarkup(
+      <DelistConfirmationContent
+        listing={listing({ externalUrl: 'https://www.olx.pl/d/oferta/olx-1' })}
+        marketplaceName="OLX"
+        isOlx
+        sandbox
+      />,
+    );
+
+    expect(html).toContain('Sandbox advert');
+    expect(html).not.toContain('Open the current remote advert');
+    expect(html).not.toContain('href="https://www.olx.pl');
   });
 
   it('does not infer OLX quota risk from a marketplace display name', () => {
@@ -188,10 +287,10 @@ describe('ListingsTable destructive delist action', () => {
       />,
     );
 
-    expect(live).toContain('Снять с площадки и вернуть в черновики');
-    expect(draft).not.toContain('Снять с площадки и вернуть в черновики');
-    expect(unresolved).not.toContain('Снять с площадки и вернуть в черновики');
-    expect(nonOlx).not.toContain('Снять с площадки и вернуть в черновики');
+    expect(live).toContain('Remove from marketplace and return to draft');
+    expect(draft).not.toContain('Remove from marketplace and return to draft');
+    expect(unresolved).not.toContain('Remove from marketplace and return to draft');
+    expect(nonOlx).not.toContain('Remove from marketplace and return to draft');
   });
 
   it('retains an ambiguous operation until reconciliation, then starts with a fresh UUID', () => {

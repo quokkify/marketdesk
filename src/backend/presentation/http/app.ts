@@ -14,6 +14,7 @@ import type { ProductApplicationService } from '../../application/services/Produ
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
+import type { HermesStatusView } from '../../../shared/types';
 import type { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
@@ -29,7 +30,7 @@ import type { ProductRecheckService } from '../../application/services/ProductRe
 import type { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 
 import { NotFoundError } from '../../domain/shared/DomainError';
-import { env, isProduction } from '../../config/env';
+import { env, isProduction, type OlxAdapterMode } from '../../config/env';
 import { ProductImageUploadService as DefaultProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { ProductController } from './controllers/ProductController';
@@ -59,6 +60,8 @@ export interface AppDeps {
   productAssistanceGraph?: ProductAssistanceGraph;
   listingService: ListingApplicationService;
   hermesService: HermesApplicationService;
+  // Which AI provider serves calls right now (GET /api/hermes/status).
+  hermesStatus?: () => Promise<HermesStatusView>;
   analyticsService: AnalyticsApplicationService;
   productRepo: IProductRepository;
   listingRepo: IListingRepository;
@@ -70,6 +73,8 @@ export interface AppDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   marketplaceOAuthReturnUrl: string;
+  // OLX adapter mode from OLX_ADAPTER_MODE; 'stub' is the sandbox.
+  olxAdapterMode: OlxAdapterMode;
   workspaceRepo: IWorkspaceRepository;
   settingsRepo: ISettingsRepository;
   authUserStore: IAuthUserStore;
@@ -202,6 +207,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       olxTaxonomyResolver: deps.olxTaxonomyResolver,
       olxQuotaService: deps.olxPublicationQuotaService,
       categoryCorrectionOperationService: deps.categoryCorrectionOperationService,
+      olxAdapterMode: deps.olxAdapterMode,
     }),
     marketplaces: new MarketplaceController(
       deps.marketplaceRepo,
@@ -211,16 +217,22 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.marketplaceImportService,
       deps.olxPublicationQuotaService,
       deps.marketplaceOAuthReturnUrl,
+      deps.olxAdapterMode,
       deps.logger
     ),
-    hermes: new HermesController(deps.hermesService, deps.categoryCorrectionOperationService),
+    hermes: new HermesController(
+      deps.hermesService,
+      deps.categoryCorrectionOperationService,
+      deps.hermesStatus
+    ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),
     settings: new SettingsController(
       deps.workspaceRepo,
       deps.settingsRepo,
       deps.marketplaceRepo,
-      deps.marketplaceOAuthService
+      deps.marketplaceOAuthService,
+      deps.olxAdapterMode
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
   };

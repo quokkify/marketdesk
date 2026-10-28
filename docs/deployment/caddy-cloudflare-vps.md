@@ -37,9 +37,24 @@ Keep that shape for production. Caddy should be the only public HTTP/HTTPS entry
 NODE_ENV=production
 APP_PORT=3000
 CORS_ORIGIN=https://marketdesk.example.com
+# Trust Caddy, the one reverse proxy in front of the app.
+TRUST_PROXY=true
 # The bundled Compose PostgreSQL service is plaintext on the private Docker network.
 DB_SSL_MODE=disable
+# Always set explicitly: stub is the labelled sandbox, real calls the OLX Partner API.
+OLX_ADAPTER_MODE=stub
 ```
+
+`TRUST_PROXY=true` makes the app trust one proxy hop, here Caddy, and take the client address
+from the `X-Forwarded-For` header that Caddy sets. The per-IP rate limits on the public routes,
+such as sign-in, registration and the `/auth/me` session check, need it. With the default
+`TRUST_PROXY=false` the app sees every request as coming from the proxy, so all visitors share one
+allowance and one noisy client can use it up for everyone, including session restore after a
+reload. Leave it `false` whenever the app can be reached without Caddy, because a direct client
+could then forge the header; the Compose stack binds the app to loopback, so only Caddy reaches
+it. In Cloudflare's **Proxied** mode the peer Caddy sees is a Cloudflare address, so the limits
+count per Cloudflare address, not per visitor, until Caddy is configured to trust Cloudflare's
+forwarded client address.
 
 `DB_SSL_MODE` is mandatory in production. Keep `disable` for the internal Compose
 PostgreSQL service shown in this runbook. For an external managed PostgreSQL endpoint,
@@ -53,6 +68,13 @@ this intentionally overrides the copied `.env` value `DB_HOST=localhost`, which 
 the correct default only for running the backend natively outside Docker.
 Database TLS is independent of the public Caddy/Cloudflare HTTPS configuration described
 below.
+
+Set `OLX_ADAPTER_MODE` explicitly before a real deploy instead of relying on the default.
+`stub` is the default: every OLX surface is labelled **Sandbox**, category search uses the
+built-in stub taxonomy instead of the OLX one, and connecting OLX again in stub mode, for
+example after a disconnect, overwrites stored real OLX tokens with sandbox ones. Use `real` only
+with approved OLX credentials and a public `PUBLIC_BASE_URL`; see
+[OLX real API readiness](../olx-real-api-readiness.md). Any other value stops the app at startup.
 
 - Before production changes, create and verify a backup of live state:
   - PostgreSQL dump or volume backup;

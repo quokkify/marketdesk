@@ -1,13 +1,8 @@
 import { OlxPublicationQuotaService } from '../OlxPublicationQuotaService';
-import { decideOlxPublication, OlxPublicationQuota } from '../../../domain/entities/OlxPublicationQuota';
-import type {
-  AuthorizeOlxPublicationInput,
-  IOlxPublicationQuotaRepository,
-  OlxPublicationAuthorization,
-  OlxQuotaLookup,
-} from '../../../domain/repositories/interfaces/IOlxPublicationQuotaRepository';
+import { OlxPublicationQuota } from '../../../domain/entities/OlxPublicationQuota';
 import type { MarketplaceAccountRepository } from '../MarketplaceOAuthService';
 import {
+  AtomicInMemoryQuotaRepository,
   InMemoryMarketplaceRepository,
   money,
   unwrap,
@@ -17,110 +12,9 @@ import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 
-class AtomicInMemoryQuotaRepository implements IOlxPublicationQuotaRepository {
-  readonly quotas: OlxPublicationQuota[] = [];
-  readonly operations = new Map<string, OlxPublicationAuthorization>();
-  private tail: Promise<void> = Promise.resolve();
-
-  async findCurrent(input: OlxQuotaLookup): Promise<OlxPublicationQuota | null> {
-    return this.quotas.find((quota) =>
-      quota.workspaceId === input.workspaceId &&
-      quota.marketplaceId === input.marketplaceId &&
-      quota.marketplaceAccountId === input.marketplaceAccountId &&
-      quota.subcategoryId === input.subcategoryId &&
-      quota.cycleStartedAt.getTime() <= input.at.getTime() &&
-      quota.cycleEndsAt.getTime() > input.at.getTime()
-    ) ?? null;
-  }
-
-  async findByAccount(input: {
-    workspaceId: string;
-    marketplaceId: string;
-    marketplaceAccountId: string;
-    limit: number;
-  }): Promise<OlxPublicationQuota[]> {
-    return this.quotas.filter((quota) =>
-      quota.workspaceId === input.workspaceId &&
-      quota.marketplaceId === input.marketplaceId &&
-      quota.marketplaceAccountId === input.marketplaceAccountId
-    );
-  }
-
-  async save(quota: OlxPublicationQuota): Promise<void> {
-    const index = this.quotas.findIndex((candidate) =>
-      candidate.workspaceId === quota.workspaceId &&
-      candidate.marketplaceAccountId === quota.marketplaceAccountId &&
-      candidate.subcategoryId === quota.subcategoryId &&
-      candidate.cycleStartedAt.getTime() === quota.cycleStartedAt.getTime()
-    );
-    if (index < 0) {
-      this.quotas.push(quota);
-      return;
-    }
-    const current = this.quotas[index];
-    this.quotas[index] = this.copy(quota, Math.max(current.consumed, quota.consumed));
-  }
-
-  async authorize(input: AuthorizeOlxPublicationInput): Promise<OlxPublicationAuthorization> {
-    let release!: () => void;
-    const previous = this.tail;
-    this.tail = new Promise<void>((resolve) => { release = resolve; });
-    await previous;
-    try {
-      const replay = this.operations.get(input.operationId);
-      if (replay) return { ...replay, replayed: true };
-      let quota = await this.findCurrent(input);
-      const evaluation = quota?.evaluate(input.at);
-      const { decision, consumedUnit } = decideOlxPublication(
-        evaluation,
-        input.overrideConfirmed,
-        quota !== null,
-      );
-      if (consumedUnit && quota) {
-        quota = this.copy(quota, quota.consumed + 1);
-        const index = this.quotas.findIndex((candidate) => candidate.id === quota!.id);
-        this.quotas[index] = quota;
-      }
-      const result: OlxPublicationAuthorization = {
-        operationId: input.operationId,
-        decision,
-        status: evaluation?.status ?? 'unknown',
-        reason: evaluation?.reason ?? 'quota_unknown',
-        quota,
-        consumedUnit,
-        replayed: false,
-      };
-      this.operations.set(input.operationId, result);
-      return result;
-    } finally {
-      release();
-    }
-  }
-
-  private copy(quota: OlxPublicationQuota, consumed: number): OlxPublicationQuota {
-    return unwrap(OlxPublicationQuota.create({
-      id: quota.id,
-      workspaceId: quota.workspaceId,
-      marketplaceId: quota.marketplaceId,
-      marketplaceAccountId: quota.marketplaceAccountId,
-      subcategoryId: quota.subcategoryId,
-      cycleStartedAt: quota.cycleStartedAt,
-      cycleEndsAt: quota.cycleEndsAt,
-      publicationLimit: quota.publicationLimit,
-      consumed,
-      source: quota.source,
-      confidence: quota.confidence,
-      verifiedAt: quota.verifiedAt,
-      staleAt: quota.staleAt,
-      createdAt: quota.createdAt,
-      updatedAt: new Date(),
-    }));
-  }
-}
-
 const NOW = new Date('2026-07-15T12:00:00.000Z');
 
-function setup() {
+function setup(options: { sandboxMode?: boolean } = {}) {
   const marketplaceRepo = new InMemoryMarketplaceRepository();
   const quotaRepo = new AtomicInMemoryQuotaRepository();
   const activityLog = new InMemoryActivityLogRepository();
@@ -187,6 +81,7 @@ function setup() {
     idFactory('id'),
     { resolve: (category) => category === 'electronics' ? '2000' : null },
     () => NOW,
+    options,
   );
   return { service, quotaRepo, activityLog, marketplace, product, listing };
 }
@@ -242,7 +137,7 @@ describe('OlxPublicationQuotaService', () => {
     })).resolves.toMatchObject({ reason: 'marketplace_account_unknown', requiresOverride: false });
     await expect(service.preview({
       marketplace, product, listing: unknownCategoryListing,
-    })).resolves.toMatchObject({ reason: 'category_category_missing', requiresOverride: false });
+    })).resolves.toMatchObject({ reason: 'category_missing', requiresOverride: false });
   });
 
   it('fails quota preview closed before reading quota for stale category metadata', async () => {
@@ -425,5 +320,105 @@ describe('OlxPublicationQuotaService', () => {
     expect(updated.consumed).toBe(3);
     expect(updated.remaining).toBe(2);
     expect(await service.list({ marketplaceId: 'mp-1', workspaceId: 'ws-1' })).toHaveLength(1);
+  });
+
+  describe('sandbox mode', () => {
+    it('preview() in sandbox mode allows publication when no quota row exists', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: true });
+
+      const preview = await service.preview({ marketplace, product, listing });
+
+      expect(preview).toEqual({
+        applicable: true,
+        marketplaceKey: 'olx',
+        marketplaceAccountId: 'account-1',
+        subcategoryId: '2000',
+        status: 'available',
+        decision: 'allow',
+        reason: 'sandbox_unlimited',
+        requiresOverride: false,
+      });
+      expect(quotaRepo.quotas).toHaveLength(0);
+    });
+
+    it('preview() in real mode still blocks with quota_unknown', async () => {
+      const { service, marketplace, product, listing } = setup({ sandboxMode: false });
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        status: 'unknown', decision: 'block', reason: 'quota_unknown', requiresOverride: true,
+      });
+    });
+
+    it('authorizes and consumes a sandbox publication without writing a quota row', async () => {
+      const { service, quotaRepo, activityLog, marketplace, product, listing } = setup({
+        sandboxMode: true,
+      });
+
+      const authorized = await service.authorize({
+        operationId: 'operation-sandbox', mode: 'publish', marketplace, product, listing, actorId: 'user-1',
+      });
+      const consumed = await service.consumeReservation('operation-sandbox');
+
+      const sandboxDecision = {
+        applicable: true,
+        marketplaceKey: 'olx',
+        status: 'available',
+        decision: 'allow',
+        reason: 'sandbox_unlimited',
+        requiresOverride: false,
+        consumedUnit: false,
+      };
+      expect(authorized).toEqual({
+        ...sandboxDecision,
+        marketplaceAccountId: 'account-1',
+        subcategoryId: '2000',
+      });
+      expect(consumed).toEqual(sandboxDecision);
+      expect(quotaRepo.quotas).toHaveLength(0);
+      expect(quotaRepo.operations.get('operation-sandbox')).toMatchObject({
+        decision: 'allow', status: 'available', reason: 'sandbox_unlimited', consumedUnit: false, quota: null,
+      });
+      expect(activityLog.entries.at(-1)).toMatchObject({
+        action: 'olx.quota_publish_allowed',
+        metadata: expect.objectContaining({
+          operationId: 'operation-sandbox', reason: 'sandbox_unlimited', consumedUnit: false,
+        }),
+      });
+    });
+
+    it('still evaluates an existing quota row in sandbox mode', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: true });
+      await quotaRepo.save(quota(1));
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        status: 'exhausted', decision: 'block', reason: 'quota_exhausted', requiresOverride: true,
+      });
+    });
+
+    it('refuses a sandbox category in real mode before consuming a quota unit', async () => {
+      const { service, quotaRepo, marketplace, product, listing } = setup({ sandboxMode: false });
+      await quotaRepo.save(quota(0));
+      listing.recordMarketplaceCategory({ ...listing.marketplaceCategory!, sandbox: true });
+
+      const preview = await service.preview({ marketplace, product, listing });
+      const decision = await service.authorize({
+        operationId: 'operation-real', mode: 'publish', marketplace, product, listing, actorId: 'user-1',
+        override: { confirmed: true, reason: 'Accept possible OLX publication fee' },
+      });
+
+      const refused = { decision: 'block', reason: 'category_sandbox', requiresOverride: false };
+      expect(preview).toMatchObject(refused);
+      expect(decision).toMatchObject(refused);
+      expect(quotaRepo.quotas[0].consumed).toBe(0);
+    });
+
+    it('accepts a sandbox category in sandbox mode', async () => {
+      const { service, marketplace, product, listing } = setup({ sandboxMode: true });
+      listing.recordMarketplaceCategory({ ...listing.marketplaceCategory!, sandbox: true });
+
+      await expect(service.preview({ marketplace, product, listing })).resolves.toMatchObject({
+        decision: 'allow', reason: 'sandbox_unlimited',
+      });
+    });
   });
 });

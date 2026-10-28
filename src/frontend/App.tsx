@@ -12,6 +12,7 @@ import { store } from './state/store.js';
 import { AppThemeProvider } from './theme/ThemeProvider.js';
 import { AppShell } from './components/layout/AppShell.js';
 import { AuthBootstrap } from './components/AuthBootstrap.js';
+import { RouteError } from './components/common/RouteError.js';
 import { Toast } from './components/common/Toast.js';
 import { PageSkeleton } from './components/common/Skeleton.js';
 import { useAppSelector } from './state/hooks.js';
@@ -45,7 +46,7 @@ const RouterRoot: React.FC = () => (
 
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <Route element={<RouterRoot />}>
+    <Route element={<RouterRoot />} errorElement={<RouteError />}>
       <Route
         path={APP_ROUTE_PATHS.login}
         element={
@@ -55,7 +56,7 @@ const router = createBrowserRouter(
         }
       />
       <Route element={<RequireAuth />}>
-        <Route element={<AppShell />}>
+        <Route element={<AppShell />} errorElement={<RouteError />}>
           <Route index element={<DashboardPage />} />
           <Route path={APP_ROUTE_PATHS.products} element={<ProductsPage />} />
           <Route path={APP_ROUTE_PATHS.productDetail} element={<ListingDetailsPage />} />

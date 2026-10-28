@@ -9,7 +9,7 @@ import { useMe, useWorkspace } from '../services/hooks/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { setUser, logout } from '../state/slices/authSlice.js';
 import { setWorkspace } from '../state/slices/workspaceSlice.js';
-import { setThemeMode, shouldResetThemeForPrincipal } from '../state/slices/uiSlice.js';
+import { setThemeMode } from '../state/slices/uiSlice.js';
 import { useGetUserPreferencesQuery } from '../state/api/settingsApi.js';
 import type { WorkspaceState } from '../state/slices/workspaceSlice.js';
 
@@ -21,6 +21,17 @@ function toWorkspaceState(ws: Workspace): WorkspaceState {
     timezone: ws.timezone,
     autonomyLevel: ws.autonomyLevel,
   };
+}
+
+// Only a token the server rejects ends a restored session. A failed request (offline, 429, 5xx)
+// says nothing about the token, and logging out on it throws away a valid session.
+export function isSessionRejected(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'status' in error &&
+    (error.status === 401 || error.status === 403)
+  );
 }
 
 export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,19 +48,26 @@ export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ childre
   const principalKey = settingsPrincipal
     ? `${settingsPrincipal.workspaceId}:${settingsPrincipal.userId}`
     : null;
-  const previousPrincipal = useRef<string | null>(null);
+  const themeAppliedFor = useRef<string | null>(null);
   const preferences = useGetUserPreferencesQuery(settingsPrincipal ?? skipToken);
+  const savedThemeMode = preferences.currentData?.themeMode;
 
+  // The theme public/theme-boot.js painted stays until the principal's saved theme is known. It is
+  // applied once per principal, so a later refetch never overrides what the user has chosen since,
+  // and signing out forgets it so the next sign-in applies its own.
   useLayoutEffect(() => {
-    if (shouldResetThemeForPrincipal(previousPrincipal.current, principalKey)) {
-      dispatch(setThemeMode('system'));
+    if (!principalKey) {
+      themeAppliedFor.current = null;
+      return;
     }
-    previousPrincipal.current = principalKey;
-  }, [principalKey, dispatch]);
+    if (!savedThemeMode || themeAppliedFor.current === principalKey) return;
+    themeAppliedFor.current = principalKey;
+    dispatch(setThemeMode(savedThemeMode));
+  }, [principalKey, savedThemeMode, dispatch]);
 
   useEffect(() => {
-    if (me.isError) dispatch(logout());
-  }, [me.isError, dispatch]);
+    if (isSessionRejected(me.error)) dispatch(logout());
+  }, [me.error, dispatch]);
 
   useEffect(() => {
     if (!me.data) return;
@@ -76,12 +94,6 @@ export const AuthBootstrap: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (workspace.data) dispatch(setWorkspace(toWorkspaceState(workspace.data)));
   }, [workspace.data, dispatch]);
-
-  const currentThemeMode = preferences.currentData?.themeMode;
-
-  useEffect(() => {
-    if (currentThemeMode) dispatch(setThemeMode(currentThemeMode));
-  }, [currentThemeMode, principalKey, dispatch]);
 
   return <>{children}</>;
 };

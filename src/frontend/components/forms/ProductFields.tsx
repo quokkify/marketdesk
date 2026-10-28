@@ -4,6 +4,8 @@ import {
   Autocomplete,
   Chip,
   FormControl,
+  FormHelperText,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -13,6 +15,7 @@ import {
 import type { ProductCondition, ProductStatus } from '@shared/types';
 import { PRODUCT_STATUS_LIST, PRODUCT_DESCRIPTION_MAX_LENGTH } from '@shared/constants';
 import { CONDITION_LABELS, CONDITION_LIST } from '../../utils/labels.js';
+import { currencySymbol } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import type { ProductFormValues, ProductFieldErrors } from './productFormModel.js';
 
@@ -22,6 +25,7 @@ export interface ProductFieldsProps {
   onChange: <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => void;
   showStatus?: boolean;
   showCategory?: boolean;
+  currency?: string;
 }
 
 function parseNumber(raw: string): number {
@@ -71,7 +75,7 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
         />
       )}
     </Stack>
-    <FormControl fullWidth>
+    <FormControl fullWidth error={Boolean(errors.condition)}>
       <InputLabel id="condition-label">Condition</InputLabel>
       <Select
         labelId="condition-label"
@@ -85,6 +89,7 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
           </MenuItem>
         ))}
       </Select>
+      {errors.condition && <FormHelperText>{errors.condition}</FormHelperText>}
     </FormControl>
   </Stack>
 );
@@ -115,66 +120,59 @@ export const DescriptionTagsFields: React.FC<ProductFieldsProps> = ({
       options={[]}
       value={values.tags}
       onChange={(_e, next) => onChange('tags', next as string[])}
-      renderTags={(value, getTagProps) =>
-        value.map((option, index) => (
-          <Chip variant="outlined" size="small" label={option} {...getTagProps({ index })} />
-        ))
+      renderValue={(value, getItemProps) =>
+        value.map((option, index) => {
+          const { key, ...itemProps } = getItemProps({ index });
+          return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
+        })
       }
       renderInput={(params) => (
-        <TextField {...params} label="Tags" placeholder="Add a tag and press Enter" />
+        <TextField
+          {...params}
+          label="Tags"
+          placeholder="Add a tag and press Enter"
+          error={Boolean(errors.tags)}
+          helperText={errors.tags}
+        />
       )}
     />
   </Stack>
 );
 
-export const PriceFields: React.FC<ProductFieldsProps> = ({ values, errors, onChange }) => (
-  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-    <TextField
-      label="Cost price"
-      type="number"
-      fullWidth
-      value={values.costPrice === null || Number.isNaN(values.costPrice) ? '' : values.costPrice}
-      onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
-      error={Boolean(errors.costPrice)}
-      helperText={errors.costPrice}
-      inputProps={{ min: 0, step: '0.01' }}
-    />
-    <TextField
-      label="Selling price"
-      type="number"
-      fullWidth
-      value={Number.isNaN(values.sellingPrice) ? '' : values.sellingPrice}
-      onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
-      error={Boolean(errors.sellingPrice)}
-      helperText={errors.sellingPrice}
-      inputProps={{ min: 0, step: '0.01' }}
-    />
-  </Stack>
-);
-
-export const ImagesField: React.FC<ProductFieldsProps> = ({ values, errors, onChange }) => (
-  <Autocomplete
-    multiple
-    freeSolo
-    options={[]}
-    value={values.images}
-    onChange={(_e, next) => onChange('images', next as string[])}
-    renderTags={(value, getTagProps) =>
-      value.map((option, index) => (
-        <Chip variant="outlined" size="small" label={option} {...getTagProps({ index })} />
-      ))
-    }
-    renderInput={(params) => (
+export const PriceFields: React.FC<ProductFieldsProps> = ({
+  values,
+  errors,
+  onChange,
+  currency,
+}) => {
+  const adornment = (
+    <InputAdornment position="end">{currencySymbol(currency)}</InputAdornment>
+  );
+  return (
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
       <TextField
-        {...params}
-        label="Image URLs"
-        placeholder="Paste an image URL and press Enter"
-        error={Boolean(errors.images)}
-        helperText={errors.images}
+        label="Cost price"
+        type="number"
+        fullWidth
+        value={values.costPrice === null || Number.isNaN(values.costPrice) ? '' : values.costPrice}
+        onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
+        error={Boolean(errors.costPrice)}
+        helperText={errors.costPrice ?? 'Optional. Leave empty if the cost is unknown.'}
+        slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
       />
-    )}
-  />
-);
+      <TextField
+        label="Selling price"
+        type="number"
+        fullWidth
+        value={Number.isNaN(values.sellingPrice) ? '' : values.sellingPrice}
+        onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
+        error={Boolean(errors.sellingPrice)}
+        helperText={errors.sellingPrice}
+        slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+      />
+    </Stack>
+  );
+};
 
 export const StatusField: React.FC<ProductFieldsProps> = ({ values, onChange }) => (
   <FormControl fullWidth>

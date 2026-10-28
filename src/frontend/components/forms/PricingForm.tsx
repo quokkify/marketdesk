@@ -44,10 +44,12 @@ export const PricingForm: React.FC<PricingFormProps> = ({
           onChange={(e) => setPrice(e.target.value)}
           error={invalid}
           helperText={invalid ? 'Enter a non-negative price.' : `Currency: ${currency}`}
-          InputProps={{
-            startAdornment: <InputAdornment position="start">{currency}</InputAdornment>,
+          slotProps={{
+            input: {
+              startAdornment: <InputAdornment position="start">{currency}</InputAdornment>,
+            },
+            htmlInput: { min: 0, step: '0.01' },
           }}
-          inputProps={{ min: 0, step: '0.01' }}
           fullWidth
         />
         {belowCost && (
@@ -55,7 +57,11 @@ export const PricingForm: React.FC<PricingFormProps> = ({
             This price is below the product&apos;s cost — the listing would sell at a loss.
           </Alert>
         )}
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <Typography variant="caption" color="text.secondary">
             Current: {currency} {currentPrice}
           </Typography>

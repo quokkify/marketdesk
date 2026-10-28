@@ -5,6 +5,7 @@ import {
   HttpRequestConfig,
   HttpResponse,
   HttpError,
+  type StubResponder,
 } from '../MarketplaceHttpClient';
 import {
   MarketplaceAuthenticationError,
@@ -94,6 +95,37 @@ describe('OLXAdapter', () => {
     ]);
   });
 
+  it('sends relative upload image URLs as absolute URLs on the public base URL', async () => {
+    const bodies: unknown[] = [];
+    const http = mockClient((config) => {
+      bodies.push(config.body);
+      return config.method === 'POST'
+        ? { status: 201, data: { id: 123, status: 'active' } }
+        : { status: 204, data: {} };
+    });
+    const adapter = new OLXAdapter(http, fastOptions, {
+      ...realConfig,
+      publicBaseUrl: 'https://marketdesk.example.com/',
+    });
+    const input: ListingPublishInput = {
+      ...publishInput,
+      imageUrls: ['/uploads/workspaces/abc/products/photo.jpg', 'https://img/2.jpg'],
+    };
+
+    await adapter.publish(input);
+    await adapter.updateListing('123', { price: 299 }, input);
+
+    const images = [
+      { url: 'https://marketdesk.example.com/uploads/workspaces/abc/products/photo.jpg' },
+      { url: 'https://img/2.jpg' },
+    ];
+    expect(bodies).toEqual([
+      expect.objectContaining({ images }),
+      expect.objectContaining({ images }),
+    ]);
+    expect(input.imageUrls).toEqual(['/uploads/workspaces/abc/products/photo.jpg', 'https://img/2.jpg']);
+  });
+
   it('maps a real empty OLX thread list to zero conversations and messages', async () => {
     const http = mockClient((config) => config.url.endsWith('/threads')
       ? { status: 200, data: [] }
@@ -115,8 +147,37 @@ describe('OLXAdapter', () => {
       conversations: 0,
       messages: 0,
       messageMetricStatus: 'available',
-      marketplaceCategory: null,
+      marketplaceCategory: undefined,
     });
+  });
+
+  it.each<[string, null | undefined, Record<string, unknown>]>([
+    ['no category key', undefined, {}],
+    ['an explicit null category', null, { category: null }],
+    ['a free-text category', null, { category: 'Electronics' }],
+    ['a category without an id', null, { category: { name: 'Electronics' } }],
+  ])('reports %s in a synced advert as marketplaceCategory %p', async (_label, expected, categoryField) => {
+    const http = mockClient((config) => config.url.endsWith('/threads')
+      ? { status: 200, data: [] }
+      : { status: 200, data: { data: { id: 9, status: 'active', ...categoryField } } });
+    const adapter = new OLXAdapter(http, fastOptions);
+
+    const [synced] = await adapter.sync(['olx-9']);
+
+    expect(synced.marketplaceCategory).toBe(expected);
+  });
+
+  it('refuses to send a sandbox taxonomy category to real OLX', async () => {
+    const http = mockClient(() => ({ status: 201, data: { data: { id: 1, status: 'active' } } }));
+    const adapter = new OLXAdapter(http, fastOptions, realConfig);
+    const sandboxInput = {
+      ...publishInput,
+      marketplaceCategory: { ...publishInput.marketplaceCategory!, sandbox: true as const },
+    };
+
+    await expect(adapter.publish(sandboxInput)).rejects.toThrow('sandbox taxonomy');
+    await expect(adapter.preparePublish(sandboxInput)).rejects.toThrow('sandbox taxonomy');
+    expect(http.request).not.toHaveBeenCalled();
   });
 
   it('refuses real publish when only the broad category map is available', async () => {
@@ -875,5 +936,52 @@ describe('OLXAdapter', () => {
     expect(published.externalListingId).toMatch(/^olx-/);
     const fetched = await adapter.fetchListing('olx-abc');
     expect(fetched?.status).toBe('live');
+  });
+
+  // Simulated metrics are kept per advert id, so two adverts must never share one.
+  it('stub transport gives two publishes in the same millisecond different advert ids', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      const adapter = new OLXAdapter(undefined, fastOptions);
+
+      const first = await adapter.publish(publishInput);
+      const second = await adapter.publish(publishInput);
+
+      expect(second.externalListingId).not.toBe(first.externalListingId);
+      expect(first.externalListingId).toMatch(/^olx-\d+-/);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('stub transport never invents a public advert URL', async () => {
+    const adapter = new OLXAdapter(undefined, fastOptions);
+
+    const published = await adapter.publish(publishInput);
+    const fetched = await adapter.fetchListing(published.externalListingId);
+
+    expect(published.externalUrl).toBeNull();
+    expect(fetched?.externalUrl).toBeNull();
+  });
+
+  it('stub transport counts reads only for a matched advert id', async () => {
+    // The responder is private; a request that names no advert must not add a counter.
+    const responder = (OLXAdapter as unknown as { stubResponder: StubResponder }).stubResponder;
+
+    const other = await responder({ method: 'GET', url: 'https://www.olx.pl/api/partner/categories/1001' });
+    const again = await responder({ method: 'GET', url: 'https://www.olx.pl/api/partner/categories/1001' });
+
+    expect(other.data).toMatchObject({ metrics: { views: 0, favorites: 0, messages: 0 } });
+    expect(again.data).toMatchObject({ metrics: { views: 0, favorites: 0, messages: 0 } });
+  });
+
+  it('stub transport grows advert metrics by 7 views and 1 favourite on every read', async () => {
+    // The sync worker builds a fresh adapter for every job, so growth must
+    // survive across adapter instances.
+    const [first] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
+    const [second] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
+
+    expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 0, messages: 0 });
+    expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 0, messages: 0 });
   });
 });

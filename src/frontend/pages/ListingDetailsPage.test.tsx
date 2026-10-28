@@ -4,16 +4,24 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   buildPublishListingInput,
   categoryConflictEvidenceLines,
+  categoryLookupUnavailable,
+  CategoryLookupUnavailableNotice,
+  delistSuccessMessage,
+  editRequestedByNavigation,
   mainPreviewImageSx,
   isProductRecheckStale,
   PUBLICATION_READINESS_CHECKING_LABEL,
   PUBLICATION_READINESS_RECHECK_LABEL,
   PublicationReadinessAction,
+  productAnalysisProvider,
+  productHermesAnalyzingNote,
   productHermesDisabledReason,
   productHermesSuccessMessage,
+  productPrimaryAction,
   ProductRecheckReview,
   PublishPreviewReview,
   productScopedHermesRunInput,
+  publicationReviewSubtitle,
   remoteMarketplaceChipColor,
   remoteMarketplacePresentation,
   selectPrimaryListing,
@@ -93,13 +101,60 @@ describe('ListingDetailsPage presentation', () => {
     ).toBeNull();
   });
 
-  it('uses review-only product-scoped success copy for analysis results', () => {
-    expect(productHermesSuccessMessage(1)).toBe(
-      'Hermes SEO suggestion is ready for human review.'
+  it('names the provider that is analyzing the product and stays neutral while it is unknown', () => {
+    expect(productHermesAnalyzingNote('hermes')).toBe(
+      'Hermes is analyzing this product only. Any recommendation will remain review-only.'
     );
-    expect(productHermesSuccessMessage(0)).toBe(
+    expect(productHermesAnalyzingNote('offline')).toBe(
+      'Offline heuristics are analyzing this product only. Any recommendation will remain review-only.'
+    );
+    expect(productHermesAnalyzingNote(undefined)).toBe(
+      'Analyzing this product only. Any recommendation will remain review-only.'
+    );
+  });
+
+  it('credits the provider that answered the analysis and stays neutral when it is unknown', () => {
+    expect(productHermesSuccessMessage(1, 'hermes')).toBe(
+      'Hermes suggested an SEO change for human review.'
+    );
+    expect(productHermesSuccessMessage(2, 'offline')).toBe(
+      'Offline heuristics suggested 2 SEO changes for human review.'
+    );
+    expect(productHermesSuccessMessage(1, undefined)).toBe(
+      'An SEO suggestion is ready for human review.'
+    );
+    expect(productHermesSuccessMessage(3, undefined)).toBe(
+      '3 SEO suggestions are ready for human review.'
+    );
+    expect(productHermesSuccessMessage(0, 'hermes')).toBe(
       'Hermes found no new SEO suggestion for this product.'
     );
+    expect(productHermesSuccessMessage(0, 'offline')).toBe(
+      'Offline heuristics found no new SEO suggestion for this product.'
+    );
+    expect(productHermesSuccessMessage(0, undefined)).toBe(
+      'No new SEO suggestion was found for this product.'
+    );
+  });
+
+  it('never credits Hermes when the offline heuristics answered or the provider is unknown', () => {
+    for (const count of [0, 1, 2]) {
+      expect(productHermesSuccessMessage(count, 'offline')).not.toContain('Hermes');
+      expect(productHermesSuccessMessage(count, undefined)).not.toContain('Hermes');
+    }
+  });
+
+  it('takes the provider from the returned suggestions before the provider status', () => {
+    const offline = { source: 'offline' as const };
+    const hermes = { source: 'hermes' as const };
+
+    expect(productAnalysisProvider([offline], 'hermes')).toBe('offline');
+    expect(productAnalysisProvider([hermes, hermes], 'offline')).toBe('hermes');
+    expect(productAnalysisProvider([], 'offline')).toBe('offline');
+    expect(productAnalysisProvider([], 'hermes')).toBe('hermes');
+    expect(productAnalysisProvider([], undefined)).toBeUndefined();
+    expect(productAnalysisProvider([{}], 'hermes')).toBeUndefined();
+    expect(productAnalysisProvider([offline, hermes], 'hermes')).toBeUndefined();
   });
 
   it('marks a recheck stale immediately when the saved product version changes', () => {
@@ -218,6 +273,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-projector',
       status: 'draft',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: {
         productName: 'AOPEN QH11 projector',
         description: 'HD projector',
@@ -257,6 +313,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-frezarka',
       status: 'expired',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX quota blocks publication: quota_unknown'],
@@ -279,6 +336,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-projector',
       status: 'draft',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX taxonomy verification is stale', 'OLX quota blocks publication: quota_unknown'],
@@ -301,6 +359,7 @@ describe('ListingDetailsPage presentation', () => {
       listingId: 'listing-frezarka',
       status: 'expired',
       marketplaceKey: 'olx',
+      sandbox: false,
       payload: null,
       marketplaceCategory: null,
       warnings: ['OLX quota blocks publication: quota_unknown'],
@@ -309,6 +368,28 @@ describe('ListingDetailsPage presentation', () => {
     const html = renderToStaticMarkup(<PublishPreviewReview preview={preview} />);
     expect(html).toContain('operation-scoped fee-risk confirmation');
     expect(html).toContain('Quota confirmation required');
+  });
+
+  it('labels a publication that would go to the OLX sandbox with a Sandbox chip', () => {
+    const preview: PublishListingPreview = {
+      dryRun: true,
+      canPublish: true,
+      quotaOverrideEligibility: { eligible: false, reason: null },
+      listingId: 'listing-1',
+      status: 'draft',
+      marketplaceKey: 'olx',
+      sandbox: true,
+      payload: null,
+      marketplaceCategory: null,
+      warnings: [],
+      categoryDecision: { allowed: true, requiresReview: false },
+    };
+
+    const sandbox = renderToStaticMarkup(<PublishPreviewReview preview={preview} />);
+    const real = renderToStaticMarkup(<PublishPreviewReview preview={{ ...preview, sandbox: false }} />);
+
+    expect(sandbox).toContain('>Sandbox<');
+    expect(real).not.toContain('Sandbox');
   });
 
   it('centers the full-size preview without stretching it across both axes', () => {
@@ -349,6 +430,22 @@ describe('ListingDetailsPage presentation', () => {
           'Current listing status reported by OLX. This is separate from the product status in MarketDesk.',
         externalUrl: listing.externalUrl,
       })
+    );
+  });
+
+  it('attributes the provider status of a sandbox listing to the OLX sandbox', () => {
+    expect(remoteMarketplacePresentation(listing, 'OLX', true).explanation).toBe(
+      'Current listing status reported by the OLX sandbox. This is separate from the product status in MarketDesk.'
+    );
+    expect(remoteMarketplacePresentation(listing, 'OLX', false).explanation).toBe(
+      'Current listing status reported by OLX. This is separate from the product status in MarketDesk.'
+    );
+  });
+
+  it('confirms a sandbox delist as a return to draft without claiming a remote advert', () => {
+    expect(delistSuccessMessage(true)).toBe('Listing returned to draft (sandbox).');
+    expect(delistSuccessMessage(false)).toBe(
+      'Remote advert removed; listing returned to draft. Nothing was republished.'
     );
   });
 
@@ -413,5 +510,104 @@ describe('ListingDetailsPage presentation', () => {
     expect(idle).not.toMatch(/<button[^>]*\sdisabled(?:=|\s|>)/);
     expect(checking).toContain('>Checking…<');
     expect(checking).toMatch(/<button[^>]*\sdisabled(?:=|\s|>)/);
+  });
+
+  it('opens the edit form only for an explicit catalogue Edit navigation', () => {
+    expect(editRequestedByNavigation({ editProduct: true })).toBe(true);
+    expect(editRequestedByNavigation({ editProduct: 'yes' })).toBe(false);
+    expect(editRequestedByNavigation({ publicationReview: { listingId: 'l-1', mode: 'relist' } })).toBe(false);
+    expect(editRequestedByNavigation(null)).toBe(false);
+    expect(editRequestedByNavigation(undefined)).toBe(false);
+  });
+});
+
+describe('product detail primary action', () => {
+  const draftListing: Listing = { ...listing, status: 'draft' };
+
+  it('publishes a draft to a connected OLX account', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: undefined, olxConnected: true })
+    ).toBe('publish');
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: draftListing, olxConnected: true })
+    ).toBe('publish');
+  });
+
+  it('asks to connect OLX before a product can be published', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'draft', olxListing: undefined, olxConnected: false })
+    ).toBe('connect');
+    expect(
+      productPrimaryAction({
+        productStatus: 'active',
+        olxListing: { ...listing, status: 'expired' },
+        olxConnected: false,
+      })
+    ).toBe('connect');
+  });
+
+  it('edits live and sold products and relists expired or failed listings', () => {
+    expect(
+      productPrimaryAction({ productStatus: 'active', olxListing: listing, olxConnected: true })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({ productStatus: 'active', olxListing: listing, olxConnected: false })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({ productStatus: 'sold', olxListing: draftListing, olxConnected: true })
+    ).toBe('edit');
+    expect(
+      productPrimaryAction({
+        productStatus: 'active',
+        olxListing: { ...listing, status: 'expired' },
+        olxConnected: true,
+      })
+    ).toBe('relist');
+    expect(
+      productPrimaryAction({
+        productStatus: 'attention',
+        olxListing: { ...listing, status: 'error', marketplaceListingId: undefined },
+        olxConnected: true,
+      })
+    ).toBe('relist');
+  });
+
+  it('does not offer a relist the server refuses for a failed listing that still references an OLX advert', () => {
+    expect(
+      productPrimaryAction({
+        productStatus: 'attention',
+        olxListing: { ...listing, status: 'error', marketplaceListingId: 'olx-123' },
+        olxConnected: true,
+      })
+    ).toBe('edit');
+  });
+});
+
+describe('OLX category lookup availability', () => {
+  it('treats a missing or unavailable taxonomy endpoint as unavailable', () => {
+    expect(categoryLookupUnavailable({ status: 404, data: {} })).toBe(true);
+    expect(categoryLookupUnavailable({ status: 503, data: {} })).toBe(true);
+    expect(categoryLookupUnavailable({ status: 400, data: {} })).toBe(false);
+    expect(categoryLookupUnavailable(new Error('Network down'))).toBe(false);
+    expect(categoryLookupUnavailable(undefined)).toBe(false);
+  });
+
+  it('explains an unavailable OLX category lookup in one alert with the server message', () => {
+    const html = renderToStaticMarkup(
+      <CategoryLookupUnavailableNotice message="OLX category search is temporarily unavailable" />
+    );
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('OLX category lookup is unavailable');
+    expect(html).toContain('OLX category search is temporarily unavailable');
+    expect(html).toContain('Categories cannot be searched or verified here right now.');
+  });
+});
+
+describe('publication review subtitle', () => {
+  it('labels a sandbox OLX publication review', () => {
+    expect(publicationReviewSubtitle('olx', true)).toBe('OLX · Sandbox');
+    expect(publicationReviewSubtitle('olx', false)).toBe('OLX');
+    expect(publicationReviewSubtitle(undefined, false)).toBe('Marketplace');
   });
 });

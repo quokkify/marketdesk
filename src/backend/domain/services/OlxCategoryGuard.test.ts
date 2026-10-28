@@ -87,4 +87,34 @@ describe('evaluateOlxCategory', () => {
       reason,
     });
   });
+
+  describe('sandbox taxonomy metadata', () => {
+    it('is refused with category_sandbox when the decision gates real OLX', () => {
+      expect(evaluateOlxCategory(projector, category({ sandbox: true }), now, { realOlx: true }))
+        .toMatchObject({ allowed: false, requiresReview: true, reason: 'category_sandbox' });
+    });
+
+    it('is accepted while OLX runs in sandbox mode', () => {
+      expect(evaluateOlxCategory(projector, category({ sandbox: true }), now)).toEqual({
+        allowed: true,
+        requiresReview: false,
+      });
+    });
+
+    it('leaves real taxonomy metadata publishable for real OLX', () => {
+      expect(evaluateOlxCategory(projector, category(), now, { realOlx: true })).toEqual({
+        allowed: true,
+        requiresReview: false,
+      });
+    });
+
+    it('treats a malformed sandbox marker as invalid category metadata', () => {
+      const malformed = { ...category(), sandbox: 'true' } as unknown as MarketplaceCategoryMetadata;
+
+      expect(evaluateOlxCategory(projector, malformed, now)).toMatchObject({
+        allowed: false,
+        reason: 'category_missing',
+      });
+    });
+  });
 });

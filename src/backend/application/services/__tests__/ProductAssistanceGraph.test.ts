@@ -1,5 +1,8 @@
 import { Ok } from '../../../domain/shared/Result';
+import { Listing } from '../../../domain/entities/Listing';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
+import { money, unwrap } from '../../../domain/testkit/support';
+import { OfflineHeuristicAIProvider } from '../../../infrastructure/external/OfflineHeuristicAIProvider';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
@@ -10,15 +13,20 @@ import type { ProductRecheckService } from '../ProductRecheckService';
 const draft = { mode: 'title' as const, fields: { name: 'Camera' }, confidence: 0.7,
   uncertainFields: [], missingInfoQuestions: [], notes: [] };
 
-function setup() {
+function setup(options: {
+  sandboxMode?: boolean;
+  listing?: object;
+  ai?: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>;
+} = {}) {
   const generateDraft = jest.fn(async () => Ok(draft));
   const recheck = jest.fn(async () => ({ productId: 'p1', canPublish: false }));
   const product = {
     id: 'p1', name: 'Camera', description: 'Camera with lens and accessories.',
     category: 'Cameras', condition: 'good', tags: [], imageCount: 1,
+    costPrice: { amount: 60, currency: 'PLN' },
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
   };
-  const listing = {
+  const listing = options.listing ?? {
     id: 'l1', productId: 'p1', marketplaceId: 'm1', views: 10,
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
     price: { amount: 100, currency: 'PLN' },
@@ -37,9 +45,11 @@ function setup() {
     { findByIdForWorkspace: findProduct } as unknown as IProductRepository,
     { findByIdForWorkspace: findListing } as unknown as IListingRepository,
     { findByIdForWorkspace: findMarketplace } as unknown as IMarketplaceRepository,
-    { analyzeListingSeo, suggestPrice } as unknown as IAIProvider,
+    (options.ai ?? { analyzeListingSeo, suggestPrice }) as unknown as IAIProvider,
+    undefined,
+    { sandboxMode: options.sandboxMode },
   );
-  return { graph, generateDraft, recheck, findProduct, findListing,
+  return { graph, generateDraft, recheck, findProduct, findListing, findMarketplace,
     analyzeListingSeo, suggestPrice };
 }
 
@@ -65,6 +75,67 @@ describe('ProductAssistanceGraph', () => {
     expect(s.suggestPrice).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ graphVersion: 'product-assistance@1', productId: 'p1', reviewOnly: true,
       copy: [{ field: 'description' }], price: { suggestedPrice: 95 } });
+  });
+
+  it('gives the price suggestion the product cost', async () => {
+    const s = setup();
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 60 }));
+  });
+
+  // The OLX sandbox adds simulated views on every sync. They are no demand signal, so the
+  // price suggestion never gets them and its reasoning never cites them.
+  it('gives the price suggestion no views for a listing on the OLX sandbox', async () => {
+    const s = setup({ sandboxMode: true });
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
+  });
+
+  it.each([
+    { when: 'OLX runs for real', sandboxMode: false, key: 'olx' },
+    { when: 'the listing is not on OLX', sandboxMode: true, key: 'allegro' },
+  ])('gives the price suggestion the listing views when $when', async ({ sandboxMode, key }) => {
+    const s = setup({ sandboxMode });
+    s.findMarketplace.mockResolvedValueOnce({ id: 'm1', key });
+    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 10 }));
+  });
+
+  it('never cites simulated sandbox views in the offline price reasoning', async () => {
+    const listing = unwrap(Listing.create({
+      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
+    }));
+    const s = setup({ sandboxMode: true, listing, ai: new OfflineHeuristicAIProvider() });
+
+    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+
+    expect(result.price?.reasoning).not.toMatch(/views/);
+    expect(result.price).toMatchObject({
+      suggestedPrice: 100,
+      reasoning: expect.stringMatching(/^There is not enough sales signal to change the price/),
+    });
+  });
+
+  // After a switch from stub to real on the same database, a listing published in the sandbox
+  // keeps its simulated views. Its category still carries the sandbox taxonomy marker.
+  it('gives no views for a listing published in the sandbox once OLX runs for real', async () => {
+    const ai = new OfflineHeuristicAIProvider();
+    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
+    const listing = unwrap(Listing.create({
+      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
+      marketplaceCategory: {
+        providerCategoryId: '1001', name: 'Cameras', path: ['Electronics', 'Cameras'],
+        source: 'provider_taxonomy', confidence: 1, isLeaf: true,
+        taxonomyVerifiedAt: '2026-10-24T10:00:00.000Z', taxonomyStaleAt: '2026-10-25T10:00:00.000Z',
+        sandbox: true,
+      },
+    }));
+    const s = setup({ sandboxMode: false, listing, ai });
+
+    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
+
+    expect(result.price?.reasoning).not.toMatch(/views/);
+    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
   });
 
   it('rejects a listing that does not belong to the scoped product before calling Hermes', async () => {

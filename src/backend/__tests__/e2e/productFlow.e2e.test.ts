@@ -13,11 +13,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 
 import { buildApp, type AppDeps } from '../../presentation/http/app';
-import type {
-  IAuthUserStore,
-  AuthUserRecord,
-  CreateAuthUserInput,
-} from '../../presentation/http/ports/IAuthUserStore';
+import { InMemoryAuthStore } from '../../presentation/testkit/support';
 
 import {
   InMemoryProductRepository,
@@ -59,40 +55,14 @@ import { ListingApplicationService } from '../../application/services/ListingApp
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 
-import {
-  PublishListingHandler,
-  type PublishAttemptCheckpoint,
-  type PublishAttemptStore,
-} from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
+import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
+import { SyncPublishQueue, inMemoryPublishAttempts } from '../../infrastructure/testkit/support';
 import type { MarketplaceAdapterResolver } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import type { IMarketplaceAdapter, PublishResult } from '../../domain/services/MarketplaceAdapter';
-
-import type { IJobQueue, PublishListingJob } from '../../application/ports/IJobQueue';
 
 const WORKSPACE_ID = 'ws-1';
 const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'secret123';
-
-class InMemoryAuthStore implements IAuthUserStore {
-  readonly users: AuthUserRecord[] = [];
-  async findByEmail(email: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string): Promise<AuthUserRecord | null> {
-    return this.users.find((u) => u.id === id) ?? null;
-  }
-  async create(input: CreateAuthUserInput): Promise<AuthUserRecord> {
-    const user: AuthUserRecord = {
-      id: `u-${this.users.length + 1}`,
-      email: input.email,
-      passwordHash: input.passwordHash,
-      workspaceId: input.workspaceId,
-      createdAt: new Date(),
-    };
-    this.users.push(user);
-    return user;
-  }
-}
 
 // A fake marketplace adapter that "publishes" successfully and returns an external id.
 function fakeAdapter(externalId: string): IMarketplaceAdapter {
@@ -108,26 +78,6 @@ function fakeAdapter(externalId: string): IMarketplaceAdapter {
     sync: async () => [],
     fetchListing: async () => null,
   };
-}
-
-// A synchronous publish queue: enqueue immediately runs the real PublishListingHandler,
-// finalizing the listing via the domain ListingService (Group 10 fix under test).
-class SyncPublishQueue implements IJobQueue<PublishListingJob> {
-  constructor(private readonly handler: PublishListingHandler) {}
-  async enqueue(data: PublishListingJob): Promise<void> {
-    await this.handler.handle(data);
-  }
-  async enqueueAll(
-    items: Array<{ data: PublishListingJob; options?: { jobId?: string } }>
-  ): Promise<void> {
-    const jobIds = items
-      .map((item) => item.options?.jobId)
-      .filter((jobId): jobId is string => !!jobId);
-    if (jobIds.length !== items.length || new Set(jobIds).size !== jobIds.length) {
-      throw new Error('SyncPublishQueue bulk enqueue requires unique jobIds');
-    }
-    for (const item of items) await this.enqueue(item.data);
-  }
 }
 
 interface E2EContext {
@@ -194,46 +144,7 @@ async function buildE2E(): Promise<E2EContext> {
   const adapterResolver: MarketplaceAdapterResolver = {
     create: () => fakeAdapter('olx-external-1'),
   };
-  const checkpoints = new Map<string, PublishAttemptCheckpoint>();
-  const publishAttempts: PublishAttemptStore = {
-    find: async (operationId) => checkpoints.get(operationId) ?? null,
-    begin: async (operationId, listingId, marketplaceKey, listingUpdatedAt) => {
-      const checkpoint: PublishAttemptCheckpoint = {
-        operationId,
-        listingId,
-        marketplaceKey,
-        listingUpdatedAt,
-        status: 'publishing',
-        externalListingId: null,
-        externalUrl: null,
-        publishedAt: null,
-        remoteStatus: null,
-        remoteImageUrls: [],
-      };
-      checkpoints.set(operationId, checkpoint);
-      return { created: true, checkpoint };
-    },
-    markPublished: async (operationId, result) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, {
-        ...checkpoint,
-        status: 'published',
-        externalListingId: result.externalListingId,
-        externalUrl: result.externalUrl ?? null,
-        publishedAt: result.publishedAt,
-        remoteStatus: result.remoteStatus ?? null,
-        remoteImageUrls: result.remoteImageUrls ?? [],
-      });
-    },
-    markFinalized: async (operationId) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, { ...checkpoint, status: 'finalized' });
-    },
-    markAbandoned: async (operationId) => {
-      const checkpoint = checkpoints.get(operationId)!;
-      checkpoints.set(operationId, { ...checkpoint, status: 'abandoned' });
-    },
-  };
+  const publishAttempts = inMemoryPublishAttempts();
   const publishHandler = new PublishListingHandler(
     adapterResolver,
     events,
@@ -294,7 +205,8 @@ async function buildE2E(): Promise<E2EContext> {
   const productService = new ProductApplicationService(
     productRepo,
     createProductUC,
-    updateProductUC
+    updateProductUC,
+    listingRepo
   );
   const listingService = new ListingApplicationService(
     listingRepo,
@@ -325,6 +237,7 @@ async function buildE2E(): Promise<E2EContext> {
     settingsRepo: new InMemorySettingsRepository(),
     authUserStore: authStore,
     idGenerator,
+    olxAdapterMode: 'stub',
   };
 
   return {
@@ -448,6 +361,108 @@ describe('E2E product/listing/Hermes flow (in-memory, no DB)', () => {
     expect(read.body.data.status).toBe('live');
     expect(read.body.data.marketplaceListingId).toBe('olx-external-1');
     expect(read.body.data.publishedAt).toBeTruthy();
+  });
+
+  it('refuses to delete a product while its listing is live and keeps the product', async () => {
+    const { app, listingRepo } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-LIVE-DELETE',
+        name: 'Live Widget',
+        description: 'A widget whose live listing must block deleting the product.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+    const listingId = seedListing(listingRepo, productId);
+    const publish = await request(app)
+      .post(`/api/listings/${listingId}/publish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(publish.status).toBe(200);
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(409);
+    expect(remove.body.error).toEqual({
+      code: 'CONFLICT',
+      message: 'This product is still live on OLX. Unpublish it first.',
+    });
+    const read = await request(app)
+      .get(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(read.status).toBe(200);
+  });
+
+  it('deletes a product that has no marketplace listing', async () => {
+    const { app } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-DELETE',
+        name: 'Disposable Widget',
+        description: 'A widget without any listing that can be deleted right away.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(200);
+    expect(remove.body.data).toEqual({
+      id: productId,
+      deleted: true,
+      imageCleanup: { removed: [], failed: [] },
+    });
+    const read = await request(app)
+      .get(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(read.status).toBe(404);
+  });
+
+  it('maps a product delete blocked by a database reference (pg 23503) to 409', async () => {
+    const { app, deps } = await buildE2E();
+    const token = await login(app);
+    const create = await request(app)
+      .post('/api/products')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sku: 'SKU-RESTRICTED',
+        name: 'Referenced Widget',
+        description: 'A widget whose delete is restricted by a database reference.',
+        costPrice: 10,
+        sellingPrice: 25,
+        condition: 'good',
+        category: 'electronics',
+      });
+    const productId = create.body.data.id as string;
+    jest.spyOn(deps.productRepo, 'delete').mockRejectedValueOnce(
+      Object.assign(new Error('violates foreign key constraint "fk_secret"'), { code: '23503' })
+    );
+
+    const remove = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(remove.status).toBe(409);
+    expect(remove.body.error).toEqual({
+      code: 'CONFLICT',
+      message: 'Request conflicts with related records',
+    });
   });
 
   it('relist performs an actual republish (not a no-op) and finalizes live (C6)', async () => {

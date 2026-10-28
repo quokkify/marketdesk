@@ -181,12 +181,12 @@ export class ProductController {
   };
 
   remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const productId = routeParam(req.params.id);
-    const workspaceId = req.user!.workspaceId!;
-    const existing = await this.products.getProduct(productId, workspaceId);
-    if (!existing) return next(new NotFoundError(`Product not found: ${productId}`));
-    await this.productRepo.delete(productId, workspaceId);
-    ok(res, { id: productId, deleted: true });
+    const result = await this.products.deleteProduct(
+      routeParam(req.params.id),
+      req.user!.workspaceId!
+    );
+    if (result.isErr()) return next(result.error);
+    ok(res, result.value);
   };
 
   createListing = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

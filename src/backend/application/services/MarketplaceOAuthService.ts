@@ -1,4 +1,5 @@
 import type { MarketplaceAccountStatus, MarketplaceKey } from '../../../shared/types';
+import type { Marketplace } from '../../domain/entities/Marketplace';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import {
   ConfigurationError,
@@ -117,6 +118,10 @@ export interface MarketplaceOAuthServiceDeps {
   stateGenerator: () => string;
   now?: () => Date;
   stateTtlSeconds?: number;
+  // Enabled while the OLX adapter is not real: start() connects a labelled sandbox
+  // account and returns the app's success URL instead of an OLX authorization URL.
+  // While disabled, a stored sandbox account is refused instead of served as a token.
+  sandbox?: { enabled: boolean; successUrl: string };
 }
 
 export interface MarketplaceOAuthStatus {
@@ -131,6 +136,8 @@ export interface MarketplaceOAuthStatus {
   } | null;
   tokenExpiresAt?: string;
   refreshable: boolean;
+  // True when the stored account is the sandbox stand-in rather than a real OLX account.
+  sandbox: boolean;
 }
 
 export interface MarketplaceResolvedAccessToken {
@@ -142,6 +149,7 @@ export interface MarketplaceOAuthStartResult {
   authorizationUrl: string;
   state: string;
   expiresAt: string;
+  sandbox?: boolean;
 }
 
 export interface MarketplaceAppCredentialStatus {
@@ -181,6 +189,12 @@ function normalizeTokens(tokens: OlxOAuthTokens): OlxOAuthTokens {
 
 const REFRESH_SKEW_MS = 60_000;
 
+const OLX_SANDBOX_ACCOUNT_HANDLE = 'OLX sandbox account';
+const OLX_SANDBOX_ACCESS_TOKEN = 'sandbox';
+const OLX_SANDBOX_TOKEN_TYPE = 'sandbox';
+const OLX_SANDBOX_SCOPES = ['read', 'write', 'v2'];
+const OLX_SANDBOX_TOKEN_LIFETIME_YEARS = 10;
+
 export class MarketplaceOAuthService {
   private readonly now: () => Date;
   private readonly stateTtlSeconds: number;
@@ -198,6 +212,9 @@ export class MarketplaceOAuthService {
       input.marketplaceId,
       input.workspaceId
     );
+    if (this.deps.sandbox?.enabled) {
+      return this.startSandbox(marketplace, this.deps.sandbox.successUrl);
+    }
     const appCredentials = await this.requireAppCredentials(marketplace.id);
     const state = requireValue(this.deps.stateGenerator(), 'OAuth state');
     const expiresAt = new Date(this.now().getTime() + this.stateTtlSeconds * 1000);
@@ -267,7 +284,9 @@ export class MarketplaceOAuthService {
     const account = await this.deps.accountRepo.upsert({
       id: existing?.id ?? this.deps.idGenerator(),
       marketplaceId: marketplace.id,
-      handle: tokens.accountHandle?.trim() || existing?.handle || 'OLX account',
+      handle:
+        tokens.accountHandle?.trim() ||
+        (existing && existing.handle !== OLX_SANDBOX_ACCOUNT_HANDLE ? existing.handle : 'OLX account'),
       credentials: this.deps.credentialVault.encrypt(tokens),
       status: 'connected',
       scopes: [...tokens.scopes],
@@ -309,15 +328,9 @@ export class MarketplaceOAuthService {
       );
     }
 
+    let tokens: OlxOAuthTokens;
     try {
-      const tokens = normalizeTokens(this.deps.credentialVault.decrypt(account.credentials));
-      return this.toStatus(
-        marketplace.id,
-        marketplace.key,
-        marketplace.isConnected(),
-        account,
-        tokens
-      );
+      tokens = normalizeTokens(this.deps.credentialVault.decrypt(account.credentials));
     } catch {
       return this.toStatus(
         marketplace.id,
@@ -327,6 +340,31 @@ export class MarketplaceOAuthService {
         null
       );
     }
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      // A leftover sandbox connection cannot reach real OLX. Disconnect the marketplace so
+      // list and detail views stop claiming a connection, and report the account as
+      // needing a reconnect, like unreadable credentials. The sandbox flag comes from the
+      // credentials read above, because the reported status drops them.
+      if (marketplace.isConnected()) {
+        marketplace.disconnect();
+        await this.deps.marketplaceRepo.save(marketplace);
+      }
+      return this.toStatus(
+        marketplace.id,
+        marketplace.key,
+        marketplace.isConnected(),
+        { ...account, status: 'error' },
+        null,
+        true
+      );
+    }
+    return this.toStatus(
+      marketplace.id,
+      marketplace.key,
+      marketplace.isConnected(),
+      account,
+      tokens
+    );
   }
 
   async saveAppCredentials(
@@ -443,6 +481,7 @@ export class MarketplaceOAuthService {
     }
 
     const tokens = this.decryptTokens(account);
+    this.assertNotSandboxInRealMode(account, tokens);
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -473,6 +512,7 @@ export class MarketplaceOAuthService {
 
     // Another worker may have refreshed while this worker waited for the lock.
     const tokens = this.decryptTokens(account);
+    this.assertNotSandboxInRealMode(account, tokens);
     if (tokens.expiresAt.getTime() > this.now().getTime() + REFRESH_SKEW_MS) {
       return {
         accessToken: tokens.accessToken,
@@ -515,6 +555,77 @@ export class MarketplaceOAuthService {
       accessToken: refreshed.accessToken,
       account: { id: saved.id, revision: saved.revision },
     };
+  }
+
+  private async startSandbox(
+    marketplace: Marketplace,
+    successUrl: string
+  ): Promise<MarketplaceOAuthStartResult> {
+    // Validate the configured URL before persisting anything.
+    let returnUrl: URL;
+    try {
+      returnUrl = new URL(successUrl);
+    } catch {
+      throw new ConfigurationError('OLX sandbox success URL must be an absolute URL');
+    }
+    returnUrl.searchParams.set('oauth', 'success');
+    returnUrl.searchParams.set('marketplaceId', marketplace.id);
+    returnUrl.searchParams.set('sandbox', '1');
+
+    const expiresAt = new Date(this.now().getTime());
+    expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + OLX_SANDBOX_TOKEN_LIFETIME_YEARS);
+    const existing = await this.deps.accountRepo.findByMarketplaceId(marketplace.id);
+    await this.deps.accountRepo.upsert({
+      id: existing?.id ?? this.deps.idGenerator(),
+      marketplaceId: marketplace.id,
+      handle: OLX_SANDBOX_ACCOUNT_HANDLE,
+      credentials: this.deps.credentialVault.encrypt({
+        accessToken: OLX_SANDBOX_ACCESS_TOKEN,
+        tokenType: OLX_SANDBOX_TOKEN_TYPE,
+        scopes: [...OLX_SANDBOX_SCOPES],
+        expiresAt,
+      }),
+      status: 'connected',
+      scopes: [...OLX_SANDBOX_SCOPES],
+    });
+
+    // Same ordering as complete(): the local flag follows the persisted account.
+    marketplace.connect();
+    await this.deps.marketplaceRepo.save(marketplace);
+    return {
+      authorizationUrl: returnUrl.toString(),
+      state: 'sandbox',
+      expiresAt: expiresAt.toISOString(),
+      sandbox: true,
+    };
+  }
+
+  // Readable credentials identify a sandbox account by the token type encrypted inside
+  // them, so a real account that carries the sandbox handle is not mistaken for one.
+  // Sandbox rows written before that marker existed still hold the dummy access token,
+  // which no real OLX token equals. The fixed handle only stands in when no credentials
+  // are readable, such as after a disconnect cleared them.
+  private isSandboxAccount(
+    account: MarketplaceAccountRecord,
+    tokens?: OlxOAuthTokens | null
+  ): boolean {
+    return tokens
+      ? tokens.tokenType === OLX_SANDBOX_TOKEN_TYPE ||
+          tokens.accessToken === OLX_SANDBOX_ACCESS_TOKEN
+      : account.handle === OLX_SANDBOX_ACCOUNT_HANDLE;
+  }
+
+  // Both token paths run this right after decryption, before any token is returned or
+  // refreshed, so stored sandbox credentials never reach real OLX.
+  private assertNotSandboxInRealMode(
+    account: MarketplaceAccountRecord,
+    tokens: OlxOAuthTokens
+  ): void {
+    if (!this.deps.sandbox?.enabled && this.isSandboxAccount(account, tokens)) {
+      throw new InvalidStateError(
+        'Sandbox OLX account cannot be used in real mode; disconnect and reconnect OLX'
+      );
+    }
   }
 
   private decryptTokens(account: MarketplaceAccountRecord): OlxOAuthTokens {
@@ -563,7 +674,8 @@ export class MarketplaceOAuthService {
     providerKey: MarketplaceKey,
     marketplaceConnected: boolean,
     account: MarketplaceAccountRecord | null,
-    tokens: OlxOAuthTokens | null
+    tokens: OlxOAuthTokens | null,
+    sandbox = account ? this.isSandboxAccount(account, tokens) : false
   ): MarketplaceOAuthStatus {
     const connected = marketplaceConnected && account?.status === 'connected' && tokens !== null;
     return {
@@ -580,6 +692,7 @@ export class MarketplaceOAuthService {
         : null,
       tokenExpiresAt: tokens?.expiresAt.toISOString(),
       refreshable: Boolean(tokens?.refreshToken),
+      sandbox,
     };
   }
 }
