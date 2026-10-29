@@ -1,0 +1,1 @@
+{"id":"0cce5319749efb817845e0a356f29dbd.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/api/baseApi.test.ts#session expiry does not treat wrong credentials as an expired session","name":"does not treat wrong credentials as an expired session","status":"passed","testResultsByEnv":{"default":"fa0b660a4837d2a2d667c29ffe12c906"}}

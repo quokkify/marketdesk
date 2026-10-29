@@ -1,0 +1,1 @@
+{"id":"02397df85aadcabced5e1b0ae87f46ba.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/hermesProviderMode.test.ts#resolveHermesProviderMode defaults to auto when HERMES_PROVIDER_MODE is \"\"","name":"defaults to auto when HERMES_PROVIDER_MODE is \"\"","status":"passed","testResultsByEnv":{"default":"96ddef51bb2775c9b388299575f8ab2d"}}

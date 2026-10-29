@@ -1,0 +1,1 @@
+{"id":"bb25365298905e8571567adaf9ddb6c2.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#assertStartupConfiguration (fail-fast boot) accepts a JWT_SECRET of exactly 32 characters","name":"accepts a JWT_SECRET of exactly 32 characters","status":"passed","testResultsByEnv":{"default":"c64e91fcc84f302a5b4a361563e37ffc"}}

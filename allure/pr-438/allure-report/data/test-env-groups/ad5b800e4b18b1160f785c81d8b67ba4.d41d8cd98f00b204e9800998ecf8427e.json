@@ -1,0 +1,1 @@
+{"id":"ad5b800e4b18b1160f785c81d8b67ba4.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/env.test.ts#assertStartupConfiguration (fail-fast boot) ignores ALLOW_INSECURE_DEV_JWT in production","name":"ignores ALLOW_INSECURE_DEV_JWT in production","status":"passed","testResultsByEnv":{"default":"91c5cb9d3ef65baa7a7c783f84c644bc"}}

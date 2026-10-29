@@ -1,0 +1,1 @@
+{"id":"a64bd3f9370e2a2af7291f0293251110.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/AuthBootstrap.test.ts#isSessionRejected ends the session when /auth/me answers 401","name":"ends the session when /auth/me answers 401","status":"passed","testResultsByEnv":{"default":"6a5f8d2a188568661b2753d4696d625c"}}

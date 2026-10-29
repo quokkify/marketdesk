@@ -1,0 +1,1 @@
+{"id":"c35be026734b51c6851bc3b606f816e6.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/utils/operationId.test.ts#newOperationId uses crypto.randomUUID where the browser exposes it","name":"uses crypto.randomUUID where the browser exposes it","status":"passed","testResultsByEnv":{"default":"5ce73e2cc4ceeecf36d02b4d552644b3"}}

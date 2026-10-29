@@ -1,0 +1,1 @@
+{"id":"241bbbfeea798abee45ce2f1d276372a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/hermesProviderMode.test.ts#resolveHermesProviderMode rejects \"online\" with a clear error","name":"rejects \"online\" with a clear error","status":"passed","testResultsByEnv":{"default":"b329ff61db465f5adc89ac5451b941cc"}}

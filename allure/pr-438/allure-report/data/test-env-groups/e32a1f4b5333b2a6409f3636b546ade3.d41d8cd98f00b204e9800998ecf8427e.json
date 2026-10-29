@@ -1,0 +1,1 @@
+{"id":"e32a1f4b5333b2a6409f3636b546ade3.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/api/baseApi.test.ts#session expiry keeps the session when a request fails with 429","name":"keeps the session when a request fails with 429","status":"passed","testResultsByEnv":{"default":"d76544b3d060f03acfab218cb3458b6d"}}
