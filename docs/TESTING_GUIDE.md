@@ -118,7 +118,7 @@ What to check:
 ### 4. Review Hermes suggestions
 
 1. On the product page, choose **Suggest improvements**. You get proposed title and description wording and a price suggestion, each with its reason. They are for review only. To use one, edit the product or listing yourself.
-2. Choose the analyze button. It reads **Analyze with Hermes** while a Hermes Agent API server is configured and reachable, and **Analyze (offline heuristics)** when the built-in heuristics answer, which is the default for testers. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
+2. Choose the analyze button. It reads **Analyze with Hermes** while a Hermes Agent API server is configured and reachable, and **Analyze (offline heuristics)** when the built-in heuristics answer, which is the default for testers. While the provider status is still loading or unknown, the button reads a bare **Analyze**. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
 
 What to check:
 
@@ -143,7 +143,7 @@ Known limitations:
 | --- | --- | --- |
 | Sandbox only | No real OLX call is ever made. The OLX connection, its category list and its publication quota are built-in stand-ins. Sandbox adverts have no OLX page and show a **Sandbox advert** label instead of a link. A real OLX connection needs approved OLX Partner API credentials and is not part of this setup. | Approved deviation: Sandbox mode |
 | Offline AI | Without a reachable Hermes Agent API server, suggestions come from simple built-in heuristics. They are labelled as offline and always wait for review. | Approved deviation: Sandbox mode |
-| Hermes runs | There is no whole-catalogue run, and no scheduled run is started from the UI. Analyze one product at a time. Every analysis is review-only. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
+| Hermes runs | There is no whole-catalogue run and no scheduled run at all. Hermes analyzes one product at a time, on request, and every analysis is review-only. | Removed for the stage focus (#444) |
 | Price edits | Editing the price of a live listing by hand changes MarketDesk only. OLX is updated only when the listing is published again. Approving a Hermes price suggestion applies the price and queues an update for live listings. | By design |
 | Accounts | No e-mail confirmation, password reset or password change. | Not built yet |
 
