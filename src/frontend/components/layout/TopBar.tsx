@@ -1,5 +1,5 @@
 // Contextual 64px application bar: route identity, global command palette,
-// theme, honest notification availability, mobile navigation, and creation.
+// theme, mobile navigation, and creation.
 import React, { useEffect, useState } from 'react';
 import {
   AppBar,
@@ -15,7 +15,6 @@ import { alpha } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -31,21 +30,9 @@ export interface TopBarRouteMeta {
 }
 
 const ROUTE_META: Record<string, TopBarRouteMeta> = {
-  '/': {
-    title: 'Dashboard',
-    subtitle: 'Products, marketplaces, and Hermes suggestions in one command center.',
-  },
   '/products': {
     title: 'Products',
     subtitle: 'Manage your catalogue across every marketplace.',
-  },
-  '/listings': {
-    title: 'Listings',
-    subtitle: 'Every live and draft listing across connected marketplaces.',
-  },
-  '/analytics': {
-    title: 'Analytics',
-    subtitle: 'Performance across marketplaces.',
   },
   '/hermes': {
     title: 'Hermes AI',
@@ -97,7 +84,6 @@ const iconButtonSx = {
   color: 'text.secondary',
   '& .MuiSvgIcon-root': { fontSize: 18 },
   '&:hover': { bgcolor: 'surface2' },
-  '&.Mui-disabled': { bgcolor: 'background.paper', borderColor: 'divider' },
 } as const;
 
 export const ThemeToggleButton: React.FC<{
@@ -256,14 +242,6 @@ export const TopBar: React.FC = () => {
           </Tooltip>
 
           <ThemeToggleButton resolvedMode={resolvedMode} onToggle={toggleTheme} />
-
-          <Tooltip title="Notifications are not available yet">
-            <Box component="span" sx={{ display: 'inline-flex' }}>
-              <IconButton disabled aria-label="Notifications unavailable" sx={iconButtonSx}>
-                <NotificationsNoneOutlinedIcon />
-              </IconButton>
-            </Box>
-          </Tooltip>
 
           <Button
             variant="contained"

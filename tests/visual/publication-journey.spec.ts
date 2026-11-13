@@ -76,6 +76,10 @@ test.beforeEach(async ({ page }) => {
       connected: true, marketplaceId: 'm1', providerKey: 'olx', status: 'connected',
     };
     else if (path === '/api/hermes/events') { data = []; pagination = true; }
+    else if (path === '/api/hermes/status') data = {
+      mode: 'offline', activeProvider: 'offline', hermesConfigured: false,
+      hermesReachable: null, checkedAt: now,
+    };
     else if (path === '/api/settings/preferences') data = { themeMode: 'light' };
     else if (path === '/api/settings/hermes') data = {
       agents: { listingSeo: { enabled: true } }, guardrails: {},
@@ -102,7 +106,7 @@ test('shows the product creation entry point and review-only assistance', async 
   await page.goto('/products');
   await expect(page.getByText('Mirrorless camera kit').first()).toBeVisible();
   await page.getByRole('button', { name: 'New product' }).click();
-  await expect(page.getByText('Creating saves the product and opens a marketplace listing draft for review.')).toBeVisible();
+  await expect(page.getByText('Creating saves the product and opens its OLX listing draft for review. Publishing still needs your confirmation.')).toBeVisible();
   await page.getByRole('dialog').screenshot({
     path: `${imagePath}/01-create-product.png`, animations: 'disabled',
   });
@@ -110,10 +114,10 @@ test('shows the product creation entry point and review-only assistance', async 
   await page.goto('/products/p1');
   await expect(page.getByText('Publication readiness check')).toBeVisible();
   await page.getByRole('button', { name: 'Suggest improvements' }).click();
-  await expect(page.getByText('Suggested price: 990 PLN')).toBeVisible();
+  await expect(page.getByText('Suggested price: 990 zł')).toBeVisible();
   await expect(page.getByText('Suggestions are for review only.')).toBeVisible();
   await page.locator('.MuiCard-root').filter({
-    has: page.getByText('Product assistant', { exact: true }),
+    has: page.getByText('Hermes', { exact: true }),
   }).screenshot({ path: `${imagePath}/02-review-suggestions.png`, animations: 'disabled' });
 
   await page.getByRole('button', { name: 'Publish', exact: true }).click();

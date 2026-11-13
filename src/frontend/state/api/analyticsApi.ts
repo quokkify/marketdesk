@@ -6,8 +6,6 @@ import { unwrap } from './envelope.js';
 import type {
   AnalyticsQueryParams,
   AnalyticsOverview,
-  AnalyticsRevenue,
-  ListingPerformance,
 } from './dto.js';
 
 export const analyticsApi = baseApi.injectEndpoints({
@@ -17,23 +15,7 @@ export const analyticsApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<AnalyticsOverview>) => unwrap(res),
       providesTags: [{ type: 'Analytics', id: 'OVERVIEW' }],
     }),
-
-    getAnalyticsRevenue: builder.query<AnalyticsRevenue, AnalyticsQueryParams | void>({
-      query: (params) => `/analytics/revenue${buildQueryString({ ...(params ?? {}) })}`,
-      transformResponse: (res: ApiResponse<AnalyticsRevenue>) => unwrap(res),
-      providesTags: [{ type: 'Analytics', id: 'REVENUE' }],
-    }),
-
-    getAnalyticsListings: builder.query<ListingPerformance[], AnalyticsQueryParams | void>({
-      query: (params) => `/analytics/listings${buildQueryString({ ...(params ?? {}) })}`,
-      transformResponse: (res: ApiResponse<ListingPerformance[]>) => unwrap(res),
-      providesTags: [{ type: 'Analytics', id: 'LISTINGS' }],
-    }),
   }),
 });
 
-export const {
-  useGetAnalyticsOverviewQuery,
-  useGetAnalyticsRevenueQuery,
-  useGetAnalyticsListingsQuery,
-} = analyticsApi;
+export const { useGetAnalyticsOverviewQuery } = analyticsApi;

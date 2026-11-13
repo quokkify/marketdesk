@@ -149,16 +149,6 @@ export class HermesController {
     ok(res, result.value);
   };
 
-  run = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const result = await this.hermes.runHermes({
-      workspaceId: req.user!.workspaceId!,
-      trigger: req.body?.trigger ?? 'manual',
-      productId: req.body?.productId,
-    });
-    if (result.isErr()) return next(result.error);
-    ok(res, result.value, 202);
-  };
-
   runForProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const result = await this.hermes.runHermes({
       workspaceId: req.user!.workspaceId!,

@@ -27,14 +27,11 @@ const workspaceSlice = createSlice({
     setWorkspace(_state, action: PayloadAction<WorkspaceState>) {
       return action.payload;
     },
-    setAutonomyLevel(state, action: PayloadAction<AutonomyLevel>) {
-      state.autonomyLevel = action.payload;
-    },
     clearWorkspace() {
       return initialState;
     },
   },
 });
 
-export const { setWorkspace, setAutonomyLevel, clearWorkspace } = workspaceSlice.actions;
+export const { setWorkspace, clearWorkspace } = workspaceSlice.actions;
 export default workspaceSlice.reducer;

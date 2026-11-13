@@ -261,12 +261,6 @@ export const env = {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
 
-  // Rate Limiting
-  rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '15', 10) * 60 * 1000,
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
-  },
-
   // File Upload
   upload: {
     maxFileSize: positiveInt(process.env.MAX_FILE_SIZE, 52_428_800, 'MAX_FILE_SIZE'),
@@ -281,16 +275,6 @@ export const env = {
       'MAX_UPLOAD_WORKSPACE_FILES',
     ),
     uploadDir: process.env.UPLOAD_DIR || './uploads',
-  },
-
-  // Timezone
-  timezone: process.env.TIMEZONE || 'UTC',
-
-  // Feature Flags
-  features: {
-    enableBulkOperations: process.env.ENABLE_BULK_OPERATIONS === 'true',
-    enablePriceOptimization: process.env.ENABLE_PRICE_OPTIMIZATION === 'true',
-    enableInventorySync: process.env.ENABLE_INVENTORY_SYNC === 'true',
   },
 
   // Settings above that could not be parsed, each with its error, for the boot gate.

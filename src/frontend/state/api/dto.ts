@@ -216,66 +216,6 @@ export interface UpdateMarketplaceArg {
   patch: UpdateMarketplaceInput;
 }
 
-export interface MarketplaceImportPreviewInput {
-  id: string;
-  pageSize?: number;
-  statuses?: string[];
-}
-
-export interface MarketplaceImportApplyInput extends MarketplaceImportPreviewInput {
-  externalListingIds?: string[];
-}
-
-export type MarketplaceImportPreviewItemStatus =
-  'new' | 'already_imported' | 'changed' | 'unsupported' | 'failed';
-
-export interface MarketplaceImportPreviewItem {
-  status: MarketplaceImportPreviewItemStatus;
-  externalListingId: string;
-  externalUrl?: string | null;
-  title: string;
-  remoteStatus: string | null;
-  warnings: string[];
-  proposed: {
-    externalListingId: string;
-    externalUrl?: string | null;
-    title: string;
-    description?: string | null;
-    price?: number | null;
-    currency?: string | null;
-    status: ListingStatus;
-    remoteStatus?: string | null;
-    category?: string | null;
-    imageUrls: string[];
-    remoteUpdatedAt?: string | null;
-    metrics?: { views?: number; watchers?: number; messages?: number };
-  };
-}
-
-export interface MarketplaceImportPreview {
-  marketplaceId: string;
-  marketplaceKey: Marketplace['key'];
-  readOnly: true;
-  totals: Record<MarketplaceImportPreviewItemStatus, number> & { discovered: number };
-  items: MarketplaceImportPreviewItem[];
-}
-
-export interface MarketplaceImportApplyResult {
-  marketplaceId: string;
-  marketplaceKey: Marketplace['key'];
-  imported: number;
-  updated: number;
-  skipped: number;
-  failed: number;
-  results: Array<{
-    externalListingId: string;
-    status: 'imported' | 'updated' | 'skipped' | 'failed';
-    productId?: string;
-    listingId?: string;
-    reason?: string;
-  }>;
-}
-
 // ----------------------------------------------------------------------------
 // Hermes
 // ----------------------------------------------------------------------------
@@ -330,7 +270,7 @@ export interface AnalyticsQueryParams {
   marketplaceId?: string;
 }
 
-// GET /analytics/overview → dashboard aggregates. `previous` is always present
+// GET /analytics/overview → workspace-wide aggregates. `previous` is always present
 // (null until a historical analytics source is wired) and carries the same shape
 // minus its own `previous`, so delta tiles can compare period-over-period.
 export interface AnalyticsOverview {
@@ -353,39 +293,4 @@ export interface AnalyticsOverview {
     AnalyticsOverview,
     'currency' | 'revenue' | 'profit' | 'totalViews' | 'sales' | 'conversion'
   > | null;
-}
-
-export interface RevenuePoint {
-  date: string; // ISO date bucket
-  revenue: number | null;
-  profit: number | null;
-  previous: number | null;
-}
-
-// GET /analytics/revenue → { series, currency }. `series` is always an array
-// (empty until historical data is wired); `currency` is null when unknown.
-export interface AnalyticsRevenue {
-  series: RevenuePoint[];
-  currency: string | null;
-}
-
-// GET /analytics/listings → per-listing performance rows.
-export interface ListingPerformance {
-  listingId: string;
-  productId: string;
-  productName: string | null;
-  productSku: string | null;
-  marketplaceId: string;
-  marketplaceName: string | null;
-  marketplaceListingId: string | null;
-  status: ListingStatus;
-  price: number;
-  revenue: number | null;
-  profit: number | null;
-  currency: string | null;
-  sales: number;
-  views: number;
-  conversion: number;
-  watchers: number;
-  messages: number;
 }

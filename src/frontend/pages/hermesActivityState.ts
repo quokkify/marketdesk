@@ -188,11 +188,13 @@ const countOf = (count: number, noun: string) => `${count} ${count === 1 ? noun 
 // of claiming it watches the listings.
 export function hermesWatching(
   overview: QueryOf<{ liveListingCount: number }>,
-  marketplaces: QueryOf<ReadonlyArray<Pick<Marketplace, 'connected' | 'sandbox'>>>,
+  marketplaces: QueryOf<ReadonlyArray<Pick<Marketplace, 'key' | 'connected' | 'sandbox'>>>,
 ): HermesWatching {
   if (overview.isError || marketplaces.isError) return { kind: 'unavailable' };
   if (overview.data === undefined || marketplaces.data === undefined) return { kind: 'loading' };
-  const connected = marketplaces.data.filter((marketplace) => marketplace.connected);
+  const connected = marketplaces.data.filter(
+    (marketplace) => marketplace.key === 'olx' && marketplace.connected,
+  );
   return {
     kind: 'ready',
     sentence: `${countOf(overview.data.liveListingCount, 'live listing')} on ${countOf(connected.length, 'marketplace')} · Hermes runs when you analyze a product`,

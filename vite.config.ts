@@ -31,8 +31,6 @@ export default defineConfig({
             vendor: ['react', 'react-dom', 'react-router-dom'],
             redux: ['redux', '@reduxjs/toolkit', 'react-redux'],
             ui: ['@mui/material', '@emotion/react', '@emotion/styled'],
-            query: ['@tanstack/react-query'],
-            charts: ['recharts'],
           };
 
           for (const [chunkName, packages] of Object.entries(chunks)) {

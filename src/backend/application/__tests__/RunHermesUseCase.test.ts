@@ -83,26 +83,13 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
   );
   const service = new HermesApplicationService(eventRepo, runHermes, approve, dismiss);
 
-  return { runHermes, service, eventRepo, publisher, workspaceRepo, productRepo };
+  return { runHermes, service, eventRepo, workspaceRepo, productRepo };
 }
 
 describe('RunHermesUseCase', () => {
-  it('runs the engine and persists generated events', async () => {
-    const { runHermes, eventRepo, publisher } = setup();
-
-    const result = await runHermes.execute({ workspaceId: 'ws-1' });
-
-    expect(result.isOk()).toBe(true);
-    const events = unwrap(result);
-    expect(events.length).toBeGreaterThan(0);
-    expect(events.every((e) => e.status === 'pending_review')).toBe(true);
-    expect(eventRepo.items.size).toBe(events.length);
-    expect(publisher.published.map((e) => e.type)).toContain('hermes.run_completed');
-  });
-
   it('fails when the workspace is missing', async () => {
     const { runHermes } = setup();
-    const result = await runHermes.execute({ workspaceId: 'missing' });
+    const result = await runHermes.execute({ workspaceId: 'missing', productId: 'prod-1' });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.code).toBe('NOT_FOUND');
   });
@@ -262,7 +249,7 @@ describe('RunHermesUseCase', () => {
   it('exposes generated events as presented views via the application service', async () => {
     const { service } = setup();
 
-    const result = await service.runHermes({ workspaceId: 'ws-1' });
+    const result = await service.runHermes({ workspaceId: 'ws-1', productId: 'prod-1' });
 
     expect(result.isOk()).toBe(true);
     const views = unwrap(result);

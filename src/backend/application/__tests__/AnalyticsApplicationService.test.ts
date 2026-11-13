@@ -23,62 +23,7 @@ function setup() {
 }
 
 describe('AnalyticsApplicationService', () => {
-  it('returns human-readable listing identity metadata', async () => {
-    const { service, productRepo, listingRepo, marketplaceRepo } = setup();
-    const product = unwrap(
-      Product.create({
-        id: 'product-1',
-        workspaceId: 'ws-1',
-        sku: 'AIRPODS4-PL-001',
-        name: 'AirPods 4',
-        description: 'AirPods in good condition with all required details.',
-        costPrice: money(649),
-        sellingPrice: money(799),
-        condition: 'good',
-        category: 'audio',
-      }),
-    );
-    productRepo.items.set(product.id, product);
-    const marketplace = unwrap(
-      Marketplace.create({
-        id: 'marketplace-olx',
-        workspaceId: 'ws-1',
-        key: 'olx',
-        name: 'OLX',
-        connected: true,
-      }),
-    );
-    marketplaceRepo.items.set(marketplace.id, marketplace);
-    const listing = unwrap(
-      Listing.create({
-        id: 'listing-1',
-        productId: product.id,
-        marketplaceId: marketplace.id,
-        marketplaceListingId: 'olx-123',
-        price: money(799),
-        status: 'live',
-        views: 42,
-      }),
-    );
-    listingRepo.items.set(listing.id, listing);
-    listingRepo.listingWorkspaces.set(listing.id, 'ws-1');
-
-    const rows = await service.getListingPerformance('ws-1');
-
-    expect(rows).toEqual([
-      expect.objectContaining({
-        listingId: 'listing-1',
-        productId: 'product-1',
-        productName: 'AirPods 4',
-        productSku: 'AIRPODS4-PL-001',
-        marketplaceId: 'marketplace-olx',
-        marketplaceName: 'OLX',
-        marketplaceListingId: 'olx-123',
-      }),
-    ]);
-  });
-
-  it('uses persisted events for canonical current/previous metrics and marketplace-filtered reports', async () => {
+  it('uses persisted events for canonical current/previous metrics and marketplace-filtered overview', async () => {
     const { productRepo, listingRepo, marketplaceRepo } = setup();
     const product = unwrap(Product.create({
       id: 'product-1', workspaceId: 'ws-1', sku: 'SKU-1', name: 'Camera',
@@ -147,28 +92,14 @@ describe('AnalyticsApplicationService', () => {
       revenue: 200, profit: 100, totalViews: 100, sales: 2, conversion: 2,
       previous: { revenue: 100, profit: 60, totalViews: 50, sales: 1, conversion: 2 },
     });
-    const revenue = await service.getRevenue('ws-1', range);
-    expect(revenue.currency).toBe('PLN');
-    expect(revenue.series).toEqual(expect.arrayContaining([
-      expect.objectContaining({ revenue: 200, profit: 100 }),
-    ]));
-    const performance = await service.getListingPerformance('ws-1', range);
-    expect(performance[0]).toMatchObject({
-      listingId: listing.id, revenue: 200, profit: 100, currency: 'PLN', views: 100, sales: 2, conversion: 2,
-    });
 
     const mixedCurrencyRange = { ...range, marketplaceId: undefined };
     const mixedOverview = await service.getDashboardMetrics('ws-1', mixedCurrencyRange);
     expect(mixedOverview).toMatchObject({ currency: null, revenue: null, profit: null, sales: 3 });
-    const mixedRevenue = await service.getRevenue('ws-1', mixedCurrencyRange);
-    expect(mixedRevenue.currency).toBeNull();
-    expect(mixedRevenue.series.every((point) => point.revenue === null && point.profit === null)).toBe(true);
 
     events[1].costAtSale = null;
     const incompleteOverview = await service.getDashboardMetrics('ws-1', range);
     expect(incompleteOverview.revenue).toBe(200);
     expect(incompleteOverview.profit).toBeNull();
-    const incompletePerformance = await service.getListingPerformance('ws-1', range);
-    expect(incompletePerformance[0].profit).toBeNull();
   });
 });

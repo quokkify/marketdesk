@@ -1,5 +1,5 @@
 // Marketplace-agnostic adapter PORT (interface only). Concrete adapters
-// (OLXAdapter, AllegroAdapter, ...) are implemented in infrastructure (Group 3B).
+// (OLXAdapter) are implemented in infrastructure.
 // The domain stays completely agnostic to marketplace specifics.
 
 import type { MarketplaceKey, ListingStatus, MarketplaceCategoryMetadata } from '../../../shared/types';

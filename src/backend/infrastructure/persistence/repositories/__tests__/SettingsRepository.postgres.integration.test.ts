@@ -60,7 +60,7 @@ describeDatabase('SettingsRepository on already-migrated PostgreSQL (integration
     }
   });
 
-  it('persists atomic settings, enforces tenant ownership/cascade, and scopes API-key counts', async () => {
+  it('persists atomic settings, enforces tenant ownership and cascade', async () => {
     if (!ready) return;
     const first = new SettingsRepository(pool);
 
@@ -68,59 +68,22 @@ describeDatabase('SettingsRepository on already-migrated PostgreSQL (integration
       first.updateUserPreferences(workspaceA, userA, { themeMode: 'dark' }),
       first.updateUserPreferences(workspaceA, userA, { density: 'compact' }),
     ]);
-    await Promise.all([
-      first.updateNotificationPreferences(workspaceA, userA, {
-        events: { sync_error: { email: false } },
-      }),
-      first.updateNotificationPreferences(workspaceA, userA, {
-        events: { sync_error: { telegram: true } },
-      }),
-    ]);
-
     const second = new SettingsRepository(pool);
     await expect(second.getUserPreferences(workspaceA, userA)).resolves.toMatchObject({
       themeMode: 'dark',
       density: 'compact',
-    });
-    await expect(second.getNotificationPreferences(workspaceA, userA)).resolves.toMatchObject({
-      events: { sync_error: { email: false, inApp: true, telegram: true } },
     });
 
     await expect(
       second.updateUserPreferences(workspaceA, userB, { themeMode: 'light' })
     ).rejects.toMatchObject({ code: '23503' });
 
-    await pool.query(
-      `INSERT INTO api_keys (workspace_id, name, key_hash, revoked)
-       VALUES ($1, 'active-a', $2, FALSE), ($1, 'revoked-a', $3, TRUE),
-              ($4, 'active-b', $5, FALSE)`,
-      [
-        workspaceA,
-        `hash-${randomUUID()}`,
-        `hash-${randomUUID()}`,
-        workspaceB,
-        `hash-${randomUUID()}`,
-      ]
-    );
-    await expect(second.getApiKeySummary(workspaceA)).resolves.toEqual({
-      total: 2,
-      active: 1,
-      revoked: 1,
-    });
-    await expect(second.getApiKeySummary(workspaceB)).resolves.toEqual({
-      total: 1,
-      active: 1,
-      revoked: 0,
-    });
-
     await pool.query('DELETE FROM users WHERE id = $1', [userA]);
     const cascade = await pool.query(
-      `SELECT
-         (SELECT COUNT(*) FROM user_preferences WHERE user_id = $1)::int AS user_count,
-         (SELECT COUNT(*) FROM notification_preferences WHERE user_id = $1)::int AS notification_count`,
+      'SELECT COUNT(*)::int AS user_count FROM user_preferences WHERE user_id = $1',
       [userA]
     );
-    expect(cascade.rows[0]).toEqual({ user_count: 0, notification_count: 0 });
+    expect(cascade.rows[0]).toEqual({ user_count: 0 });
   });
 
   it('safely reruns migration 030 and verifies real catalog constraints without a fresh reset', async () => {

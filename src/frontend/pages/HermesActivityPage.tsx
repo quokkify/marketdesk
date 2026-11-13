@@ -72,8 +72,6 @@ const SEVERITY_LABELS: Record<HermesSeverity, string> = {
   critical: 'Critical',
 };
 
-export const HERMES_SETTINGS_PATH = `${APP_ROUTE_PATHS.settings}?section=hermes`;
-
 // The one literal colour pair of the page: the companion's Hermes banner gradient.
 const HERMES_BANNER_FROM = '#5B5BD6';
 const HERMES_BANNER_TO = '#A24BD6';
@@ -139,9 +137,8 @@ const HermesWatchingLine: React.FC<{ watching: HermesWatching }> = ({ watching }
 export const HermesHero: React.FC<{
   provider: HermesStatusChip;
   watching: HermesWatching;
-  onConfigure: () => void;
   onSelectProduct: () => void;
-}> = ({ provider, watching, onConfigure, onSelectProduct }) => (
+}> = ({ provider, watching, onSelectProduct }) => (
   <Card
     sx={{
       mb: 2.5,
@@ -184,17 +181,6 @@ export const HermesHero: React.FC<{
           </Box>
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            onClick={onConfigure}
-            sx={{
-              bgcolor: 'common.white',
-              color: HERMES_BANNER_FROM,
-              '&:hover': { bgcolor: (t) => alpha(t.palette.common.white, 0.88) },
-            }}
-          >
-            Configure
-          </Button>
           <Button
             variant="outlined"
             color="inherit"
@@ -331,7 +317,6 @@ const HermesActivityPage: React.FC<HermesActivityPageProps> = ({
       <HermesHero
         provider={hermesStatusChip(status.data, status)}
         watching={hermesWatching(overview, marketplaces)}
-        onConfigure={() => navigate(HERMES_SETTINGS_PATH)}
         onSelectProduct={() => navigate(APP_ROUTE_PATHS.products)}
       />
       <HermesMetrics metrics={metrics} />

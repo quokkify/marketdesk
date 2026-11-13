@@ -34,7 +34,6 @@ import { ProductApplicationService } from '../../application/services/ProductApp
 import { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
-import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import {
   MarketplaceOAuthService,
   type MarketplaceAccountRecord,
@@ -171,7 +170,6 @@ function buildSandboxApp() {
       scheduleRepeat: async () => undefined,
       removeRepeat: async () => undefined,
     }),
-    marketplaceImportService: {} as unknown as MarketplaceImportService,
     olxPublicationQuotaService: quotaService,
     olxTaxonomyResolver: async () => new StubOlxTaxonomyResolver(),
     marketplaceOAuthReturnUrl: SUCCESS_URL,

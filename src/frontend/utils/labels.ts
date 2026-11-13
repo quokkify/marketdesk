@@ -1,5 +1,5 @@
 // Human-readable labels for domain enums used across the UI.
-import type { ProductCondition, SyncMode, AutonomyLevel, HermesEventType, HermesEvent } from '@shared/types';
+import type { ProductCondition, SyncMode, HermesEventType, HermesEvent } from '@shared/types';
 
 export const CONDITION_LABELS: Record<ProductCondition, string> = {
   new: 'New',
@@ -25,21 +25,6 @@ export const SYNC_MODE_LABELS: Record<SyncMode, string> = {
   realtime: 'Real-time',
   hourly: 'Hourly',
   manual: 'Manual',
-};
-
-export const AUTONOMY_LABELS: Record<AutonomyLevel, string> = {
-  suggest_only: 'Suggest only',
-  balanced: 'Balanced',
-  full_auto: 'Full auto',
-};
-
-export const AUTONOMY_DESCRIPTIONS: Record<AutonomyLevel, string> = {
-  suggest_only:
-    'Hermes surfaces suggestions but never changes anything on its own. Every action waits for your explicit approval.',
-  balanced:
-    'Hermes auto-applies safe, low-risk actions (relisting, descriptions, new listings) within your guardrails. Pricing and risky changes still require approval.',
-  full_auto:
-    'Hermes acts autonomously across pricing, listings and content within your guardrails. Changes are applied and recorded in the activity feed.',
 };
 
 export const HERMES_TYPE_LABELS: Record<HermesEventType, string> = {

@@ -11,6 +11,9 @@ export DB_PASSWORD=marketdesk-ci
 export JWT_SECRET=marketdesk-ci-jwt-secret
 export HERMES_API_KEY=marketdesk-ci-hermes-key
 export APP_PORT=3000
+selenium_port="${SELENIUM_PORT:-4444}"
+export SELENIUM_PORT="$selenium_port"
+export COMPOSE_FILE="docker-compose.yml:docker/selenium-grid/docker-compose.yml"
 
 cd "$repo_root"
 
@@ -42,11 +45,44 @@ for attempt in {1..90}; do
 done
 
 if [[ "$ready" != true ]]; then
-  docker compose ps
-  docker compose logs --no-color app migrate postgres redis
+  docker compose ps || true
+  docker compose logs --no-color app migrate postgres redis selenium || true
   echo "MarketDesk API did not become ready" >&2
   exit 1
 fi
 
+grid_ready=false
+for attempt in {1..60}; do
+  if grid_status="$(curl --fail --silent "http://127.0.0.1:${selenium_port}/status")" \
+    && [[ "$grid_status" =~ \"ready\":\ *true ]]; then
+    grid_ready=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$grid_ready" != true ]]; then
+  docker compose ps || true
+  docker compose logs --no-color app migrate postgres redis selenium || true
+  echo "Selenium Grid did not become ready" >&2
+  exit 1
+fi
+
+export BROWSER_REMOTE_URL="http://127.0.0.1:${selenium_port}/wd/hub"
+export MARKETDESK_UI_BASE_URI=http://localhost:3000
+
 cd "$repo_root/test-automation"
-./gradlew test apiTest --console=plain
+gradle_status=0
+./gradlew test apiTest uiTest --console=plain || gradle_status=$?
+
+# Regression guard: the Allure results are published with the report even when tests fail, and a
+# published access token fails the secret scan of every branch.
+if [[ ! -d build/allure-results ]]; then
+  echo "No Allure results to check for access tokens" >&2
+  exit 1
+fi
+if grep -rlE 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' build/allure-results; then
+  echo "The Allure results above carry an access token; keep it out of the report" >&2
+  exit 1
+fi
+exit "$gradle_status"

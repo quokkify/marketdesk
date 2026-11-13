@@ -389,7 +389,7 @@ describe('product detail Hermes card', () => {
       analyzing: false,
       analyzeDisabled: true,
       suggesting: true,
-      note: 'Enable the listing SEO agent in Hermes settings first.',
+      note: 'The listing SEO agent is switched off for this workspace.',
       onAnalyze: () => undefined,
       onSuggest: () => undefined,
     }) as ElementLike;
@@ -409,7 +409,7 @@ describe('product detail Hermes card', () => {
     expect(analyze!.props.disabled).toBe(true);
     expect(suggest!.props.disabled).toBe(true);
     expect(textContent(suggest)).toBe('Preparing suggestions…');
-    expect(render(blocked)).toContain('Enable the listing SEO agent in Hermes settings first.');
+    expect(render(blocked)).toContain('The listing SEO agent is switched off for this workspace.');
     expect(failed).toContain('role="alert"');
     expect(failed).toContain('Hermes is unavailable');
   });

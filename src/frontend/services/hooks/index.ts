@@ -35,8 +35,6 @@ import {
   useConnectMarketplaceMutation,
   useCheckMarketplaceQuery,
   useLazyCheckMarketplaceQuery,
-  useImportMarketplacePreviewMutation,
-  useImportMarketplaceAdvertsMutation,
   useUpdateMarketplaceMutation,
   useGetHermesEventsQuery,
   useGetHermesEventsFeedInfiniteQuery,
@@ -47,11 +45,8 @@ import {
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
   useGetAnalyticsOverviewQuery,
-  useGetAnalyticsRevenueQuery,
-  useGetAnalyticsListingsQuery,
   useGetPriceHistoryQuery,
   useGetWorkspaceQuery,
-  useUpdateWorkspaceMutation,
   useLoginMutation,
   useRegisterMutation,
   useMeQuery,
@@ -81,8 +76,6 @@ type ListingsOpts = QueryOptions<typeof useGetListingsQuery>;
 type HermesOpts = QueryOptions<typeof useGetHermesEventsQuery>;
 type HermesFeedOpts = QueryOptions<typeof useGetHermesEventsFeedInfiniteQuery>;
 type OverviewOpts = QueryOptions<typeof useGetAnalyticsOverviewQuery>;
-type RevenueOpts = QueryOptions<typeof useGetAnalyticsRevenueQuery>;
-type ListingMetricsOpts = QueryOptions<typeof useGetAnalyticsListingsQuery>;
 
 // ---- Products ----
 export function useProducts(params: ProductListParams = {}, options?: ProductsOpts) {
@@ -126,8 +119,6 @@ export const useConnectMarketplace = useConnectMarketplaceMutation;
 export const useCheckMarketplace = useLazyCheckMarketplaceQuery;
 // Subscribes to the OAuth check, the authoritative OLX connection state.
 export const useMarketplaceConnection = useCheckMarketplaceQuery;
-export const useImportMarketplacePreview = useImportMarketplacePreviewMutation;
-export const useImportMarketplaceAdverts = useImportMarketplaceAdvertsMutation;
 export const useUpdateMarketplace = useUpdateMarketplaceMutation;
 
 // ---- Hermes ----
@@ -164,24 +155,9 @@ export function useAnalyticsOverview(
   const workspaceId = useWorkspaceId();
   return useGetAnalyticsOverviewQuery({ workspaceId, ...params }, options);
 }
-export function useAnalyticsRevenue(
-  params: AnalyticsQueryParams = {},
-  options?: RevenueOpts,
-) {
-  const workspaceId = useWorkspaceId();
-  return useGetAnalyticsRevenueQuery({ workspaceId, ...params }, options);
-}
-export function useAnalyticsListings(
-  params: AnalyticsQueryParams = {},
-  options?: ListingMetricsOpts,
-) {
-  const workspaceId = useWorkspaceId();
-  return useGetAnalyticsListingsQuery({ workspaceId, ...params }, options);
-}
 
 // ---- Workspace ----
 export const useWorkspace = useGetWorkspaceQuery;
-export const useUpdateWorkspace = useUpdateWorkspaceMutation;
 
 // ---- Auth ----
 export const useLogin = useLoginMutation;

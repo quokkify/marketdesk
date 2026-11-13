@@ -12,8 +12,6 @@ import {
   densityOptions,
   MarketplaceAccountsList,
   marketplaceAccountStatus,
-  RoadmapPanel,
-  SecurityPanel,
   SettingsSectionNavigation,
   shouldHydrateWorkspaceDraft,
   workspaceSettingsPatch,
@@ -62,9 +60,9 @@ function visibleText(html: string): string {
     .trim();
 }
 
-type MarketplaceItem = Extract<IntegrationSettingsStatus, { category: 'marketplace' }>;
-
-function marketplaceItem(overrides: Partial<MarketplaceItem> = {}): MarketplaceItem {
+function marketplaceItem(
+  overrides: Partial<IntegrationSettingsStatus> = {}
+): IntegrationSettingsStatus {
   return {
     category: 'marketplace',
     id: 'marketplace-olx',
@@ -79,17 +77,34 @@ function marketplaceItem(overrides: Partial<MarketplaceItem> = {}): MarketplaceI
   };
 }
 
-const NOT_AVAILABLE = 'Not available in this release';
-
 describe('SettingsPage shell navigation', () => {
+  it('offers four sections', () => {
+    expect(settingsSections.map((section) => section.id)).toEqual([
+      'general',
+      'marketplaces',
+      'appearance',
+      'about',
+    ]);
+  });
+
+  it.each(['hermes', 'notifications', 'apiKeys', 'telegram', 'security'])(
+    'opens General for the removed section %s',
+    (section) => {
+      expect(settingsSectionFromLocation({ search: `?section=${section}`, hash: '' })).toBe(
+        'general'
+      );
+      expect(settingsSectionFromHash(`#${section}`)).toBe('general');
+    }
+  );
+
   it('opens the requested settings section from ?section= and falls back to the legacy hash', () => {
-    expect(settingsSectionFromLocation({ search: '?section=hermes', hash: '' })).toBe('hermes');
-    expect(settingsSectionFromLocation({ search: '', hash: '#notifications' })).toBe(
-      'notifications'
+    expect(settingsSectionFromLocation({ search: '?section=marketplaces', hash: '' })).toBe(
+      'marketplaces'
     );
-    expect(settingsSectionFromLocation({ search: '?section=security', hash: '#hermes' })).toBe(
-      'security'
-    );
+    expect(settingsSectionFromLocation({ search: '', hash: '#appearance' })).toBe('appearance');
+    expect(
+      settingsSectionFromLocation({ search: '?section=marketplaces', hash: '#appearance' })
+    ).toBe('marketplaces');
     expect(settingsSectionFromLocation({ search: '?section=bogus', hash: '#appearance' })).toBe(
       'appearance'
     );
@@ -98,9 +113,9 @@ describe('SettingsPage shell navigation', () => {
   });
 
   it('keeps hash parsing and builds ?section= paths', () => {
-    expect(settingsSectionFromHash('#hermes')).toBe('hermes');
+    expect(settingsSectionFromHash('#appearance')).toBe('appearance');
     expect(settingsSectionFromHash('#unknown')).toBe('general');
-    expect(settingsSectionPath('notifications')).toBe('/settings?section=notifications');
+    expect(settingsSectionPath('appearance')).toBe('/settings?section=appearance');
   });
 
   it('shows section titles only and marks General as the default active section', () => {
@@ -121,7 +136,7 @@ describe('SettingsPage shell navigation', () => {
 
   it('tints the active item with the primary palette and leaves others transparent', () => {
     const tree = SettingsSectionNavigation({
-      activeSection: 'hermes',
+      activeSection: 'appearance',
       onSectionChange: jest.fn(),
     }) as ElementLike;
     const styleFor = (label: string) => {
@@ -129,7 +144,7 @@ describe('SettingsPage shell navigation', () => {
       return (button?.props.sx as (theme: Theme) => Record<string, unknown>)(lightTheme);
     };
 
-    expect(styleFor('Hermes AI')).toMatchObject({
+    expect(styleFor('Appearance')).toMatchObject({
       bgcolor: alpha(lightTheme.palette.primary.main, 0.12),
       color: lightTheme.palette.primary.main,
     });
@@ -146,17 +161,17 @@ describe('SettingsPage shell navigation', () => {
       onSectionChange,
     }) as ElementLike;
 
-    const hermesButton = findByType(tree, Button).find((button) =>
-      textContent(button).includes('Hermes AI')
+    const appearanceButton = findByType(tree, Button).find((button) =>
+      textContent(button).includes('Appearance')
     );
-    hermesButton?.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+    appearanceButton?.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
-    expect(onSectionChange).toHaveBeenCalledWith('hermes');
+    expect(onSectionChange).toHaveBeenCalledWith('appearance');
   });
 
-  it('moves the current-page marker when Notifications becomes the selected section', () => {
+  it('moves the current-page marker when Appearance becomes the selected section', () => {
     const tree = SettingsSectionNavigation({
-      activeSection: 'notifications',
+      activeSection: 'appearance',
       onSectionChange: jest.fn(),
     }) as ElementLike;
 
@@ -164,7 +179,7 @@ describe('SettingsPage shell navigation', () => {
       (button) => button.props['aria-current'] === 'page'
     );
 
-    expect(current.map((button) => textContent(button))).toEqual(['Notifications']);
+    expect(current.map((button) => textContent(button))).toEqual(['Appearance']);
   });
 
   it('shows the installed release version in the About block', () => {
@@ -299,78 +314,42 @@ describe('Marketplace Accounts panel', () => {
     expect(text).not.toContain('Connected');
   });
 
-  it('lists roadmap channels as unavailable without status or manage controls', () => {
+  it('shows an OLX item flagged unavailable as a normal connected account', () => {
     const html = render(
-      <MarketplaceAccountsList
-        items={[
-          marketplaceItem({
-            id: 'marketplace-allegro',
-            providerKey: 'allegro',
-            name: 'Allegro',
-            available: false,
-            configured: false,
-            connected: false,
-            account: null,
-            sandbox: false,
-          }),
-        ]}
-      />
+      <MarketplaceAccountsList items={[marketplaceItem({ available: false })]} />
     );
     const text = visibleText(html);
 
-    expect(text).toContain('Allegro');
-    expect(text).toContain('Roadmap');
-    expect(text).toContain(NOT_AVAILABLE);
-    expect(text).not.toContain('Connected');
-    expect(text).not.toContain('Disconnected');
-    expect(text).not.toContain('Manage');
-    expect(html).not.toContain('/marketplaces');
+    expect(text).not.toContain('Roadmap');
+    expect(text).not.toContain('Not available');
+    expect(text).toContain('seller@example.test');
+    expect(text).toContain('Connected');
+    expect(html).toMatch(/<a[^>]*href="\/marketplaces"[^>]*>Manage</);
+  });
+
+  it('ignores a stored marketplace that is not OLX', () => {
+    const text = visibleText(
+      render(
+        <MarketplaceAccountsList
+          items={[
+            marketplaceItem(),
+            marketplaceItem({
+              id: 'marketplace-allegro',
+              providerKey: 'allegro',
+              name: 'Allegro',
+            }),
+          ]}
+        />
+      )
+    );
+
+    expect(text).toContain('OLX');
+    expect(text).not.toContain('Allegro');
   });
 
   it('explains an empty list instead of rendering nothing', () => {
     expect(visibleText(render(<MarketplaceAccountsList items={[]} />))).toContain(
       'No marketplace accounts'
-    );
-  });
-});
-
-describe('Security panel', () => {
-  it('lists password, two-factor and sessions with disabled actions and an explicit label', () => {
-    const html = render(<SecurityPanel />);
-    const text = visibleText(html);
-
-    expect(text).toContain('Password');
-    expect(text).toContain('Two-factor authentication');
-    expect(text).toContain('Active sessions');
-    expect(text.split(NOT_AVAILABLE)).toHaveLength(4);
-    expect(html.match(/<button/g)).toHaveLength(3);
-    expect(html.match(/<button[^>]*disabled/g)).toHaveLength(3);
-  });
-
-  it('does not fabricate security state', () => {
-    const text = visibleText(render(<SecurityPanel />));
-
-    expect(text).not.toMatch(/last changed|devices|warsaw|krak|authenticator app enabled/i);
-    expect(text).not.toMatch(/\bOn\b/);
-  });
-});
-
-describe('Roadmap panel', () => {
-  it('shows a roadmap marker and one explanatory line without actions', () => {
-    const html = render(<RoadmapPanel detail="API key management is on the roadmap." />);
-    const text = visibleText(html);
-
-    expect(text).toBe('Roadmap API key management is on the roadmap.');
-    expect(html).not.toContain('<button');
-  });
-});
-
-describe('Notifications section copy', () => {
-  it('does not claim delivery in its subtitle', () => {
-    const notifications = settingsSections.find((section) => section.id === 'notifications');
-
-    expect(notifications?.description).toBe(
-      'Preferences are saved now; delivery is not active in this release.'
     );
   });
 });

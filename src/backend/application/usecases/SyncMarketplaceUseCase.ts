@@ -3,7 +3,7 @@
 // pulls fresh stats/status via the appropriate adapter.
 
 import { Result, Ok, Err } from '../../domain/shared/Result';
-import { NotFoundError } from '../../domain/shared/DomainError';
+import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IJobQueue, SyncMarketplaceJob } from '../ports/IJobQueue';
@@ -30,6 +30,9 @@ export class SyncMarketplaceUseCase {
       : await this.marketplaceRepo.findById(input.marketplaceId);
     if (!marketplace) {
       return Err(new NotFoundError(`Marketplace not found: ${input.marketplaceId}`));
+    }
+    if (marketplace.key !== 'olx') {
+      return Err(new InvalidStateError('Only OLX can be synced'));
     }
 
     const listings = await this.listingRepo.findByMarketplace(marketplace.id);

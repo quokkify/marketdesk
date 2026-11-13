@@ -14,7 +14,6 @@ import {
 import { createPool } from './config/database.js';
 import { createRedisClient } from './config/redis.js';
 import { buildApp } from './presentation/http/app.js';
-import { HermesLiveUpdates } from './presentation/websocket/HermesLiveUpdates.js';
 import { buildContainer, type AppContainer } from './config/di/index.js';
 import { safeErrorDetails } from './config/safeErrorDetails.js';
 import { verifyUploadStorageWritable } from './infrastructure/storage/verifyUploadStorage.js';
@@ -48,8 +47,8 @@ const startupSensitiveValues = [
 
 // Composition seam. The DI container (config/di) constructs the full object graph
 // — repositories, infrastructure services, ports and application services — and
-// returns an AppDeps-compatible container plus the WS event subscriber and the
-// lifecycle handles needed for graceful shutdown.
+// returns an AppDeps-compatible container plus the lifecycle handles needed for
+// graceful shutdown.
 function resolveContainer(): AppContainer {
   return buildContainer({ logger });
 }
@@ -176,13 +175,6 @@ const startServer = async () => {
 
     const server = http.createServer(app);
 
-    // Mount the Hermes live-updates WebSocket server, feeding it the container's
-    // IEventSubscriber (the event broker's in-process fan-out) so published domain
-    // events reach subscribed clients.
-    const hermesLive = new HermesLiveUpdates({ subscriber: container.subscriber });
-    hermesLive.attach(server);
-    logger.info('Hermes live WebSocket attached at /api/hermes/live');
-
     server.listen(env.appPort, () => {
       logger.info(
         { port: env.appPort, environment: env.nodeEnv },
@@ -199,7 +191,6 @@ const startServer = async () => {
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info(`${signal} received, starting graceful shutdown`);
-      await hermesLive.close();
       // Closes the Bull queues, Redis client and pg pool.
       await container.shutdown();
       server.close(() => {

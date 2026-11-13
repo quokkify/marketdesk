@@ -97,12 +97,6 @@ export function firstWizardStepWithErrors(errors: ProductFieldErrors): number | 
 
 const MARKETPLACE_OPTIONS: ReadonlyArray<{ key: MarketplaceKey; name: string }> = [
   { key: 'olx', name: 'OLX' },
-  { key: 'allegro', name: 'Allegro' },
-  { key: 'vinted', name: 'Vinted' },
-  { key: 'facebook', name: 'Facebook Marketplace' },
-  { key: 'ebay', name: 'eBay' },
-  { key: 'etsy', name: 'Etsy' },
-  { key: 'amazon', name: 'Amazon' },
 ];
 
 export interface WizardMarketplaceOption {
@@ -136,8 +130,11 @@ export async function verifyWizardMarketplaceReadiness(
   check: (id: string) => Promise<MarketplaceReadinessStatus>
 ): Promise<VerifiedMarketplaceResult> {
   let hadCheckError = false;
+  const offered = marketplaces.filter((marketplace) =>
+    MARKETPLACE_OPTIONS.some((option) => option.key === marketplace.key)
+  );
   const verified = await Promise.all(
-    marketplaces.map(async (marketplace) => {
+    offered.map(async (marketplace) => {
       if (!marketplace.connected) return marketplace;
       try {
         const status = await check(marketplace.id);
@@ -169,6 +166,25 @@ export function buildWizardMarketplaceOptions(
       sandbox: isSandboxMarketplace(configured),
     };
   });
+}
+
+function connectedWizardKeys(marketplaces: Marketplace[] | undefined): Set<MarketplaceKey> {
+  return new Set(
+    buildWizardMarketplaceOptions(marketplaces)
+      .filter((option) => option.connected)
+      .map((option) => option.key)
+  );
+}
+
+export function shouldClearWizardTarget(
+  targetMarketplace: MarketplaceKey | null,
+  marketplaces: Marketplace[] | undefined
+): boolean {
+  return (
+    targetMarketplace !== null &&
+    marketplaces !== undefined &&
+    !connectedWizardKeys(marketplaces).has(targetMarketplace)
+  );
 }
 
 export function validateWizardStep(
@@ -206,11 +222,7 @@ export function validateWizardStep(
     };
   }
 
-  const connectedKeys = new Set(
-    (marketplaces ?? [])
-      .filter((marketplace) => marketplace.connected)
-      .map((marketplace) => marketplace.key)
-  );
+  const connectedKeys = connectedWizardKeys(marketplaces);
   // Without a connected marketplace the product is created as a draft.
   if (connectedKeys.size === 0) return { fieldErrors };
   if (!targetMarketplace || !connectedKeys.has(targetMarketplace)) {
@@ -456,13 +468,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
   }, [activeStep, onDraftChange, targetMarketplace, values]);
 
   useEffect(() => {
-    if (
-      targetMarketplace &&
-      marketplaces &&
-      !marketplaces.some(
-        (marketplace) => marketplace.key === targetMarketplace && marketplace.connected
-      )
-    ) {
+    if (shouldClearWizardTarget(targetMarketplace, marketplaces)) {
       setTargetMarketplace(null);
     }
   }, [marketplaces, targetMarketplace]);
@@ -859,13 +865,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                               <Chip
                                 size="small"
                                 color={marketplace.connected ? 'success' : 'default'}
-                                label={
-                                  marketplace.connected
-                                    ? 'Connected'
-                                    : marketplace.integrated
-                                      ? 'Not connected'
-                                      : 'Not available yet'
-                                }
+                                label={marketplace.connected ? 'Connected' : 'Not connected'}
                               />
                             )}
                           </Stack>
@@ -873,11 +873,9 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                         <Typography variant="caption" color="text.secondary">
                           {marketplace.connected
                             ? 'Connected to this workspace and available for publishing.'
-                            : !marketplace.integrated
-                              ? 'Roadmap channel. MarketDesk currently integrates OLX only.'
-                              : marketplace.configured
-                                ? 'Reconnect OLX from Marketplaces to publish.'
-                                : 'Connect OLX from Marketplaces to publish.'}
+                            : marketplace.configured
+                              ? 'Reconnect OLX from Marketplaces to publish.'
+                              : 'Connect OLX from Marketplaces to publish.'}
                         </Typography>
                       </Box>
                     }

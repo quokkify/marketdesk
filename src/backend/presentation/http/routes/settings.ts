@@ -4,7 +4,6 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
 import {
   updateHermesSettingsSchema,
-  updateNotificationPreferencesSchema,
   updateUserPreferencesSchema,
   updateWorkspaceSettingsSchema,
 } from '../validation/schemas';
@@ -22,12 +21,6 @@ export function createSettingsRoutes(controller: SettingsController): Router {
     '/preferences',
     validateBody(updateUserPreferencesSchema),
     asyncHandler(controller.updatePreferences)
-  );
-  router.get('/notifications', asyncHandler(controller.getNotifications));
-  router.patch(
-    '/notifications',
-    validateBody(updateNotificationPreferencesSchema),
-    asyncHandler(controller.updateNotifications)
   );
   router.get('/hermes', asyncHandler(controller.getHermes));
   router.patch(
