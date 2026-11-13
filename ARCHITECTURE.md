@@ -97,7 +97,7 @@ MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage 
 - **Domain Services**: Business logic, validations, event emission
 - **Repositories**: Data access (PostgreSQL), marketplace credential vaults
 - **Event Broker**: Decouples services, enables async workflows
-- **Background Jobs**: Marketplace sync, Hermes runs, analytics aggregation
+- **Background Jobs**: Marketplace sync and listing publishing (the `sync-marketplace` and `publish-listing` queues)
 - **External APIs**: Marketplace adapters (pluggable); local Hermes Agent API Server for AI/agent work
 
 ---
@@ -483,7 +483,7 @@ src/frontend/
 │       └── ApprovalButtons.tsx
 │
 ├── services/                        # API client layer
-│   ├── api.ts                       # Axios/fetch configuration
+│   ├── api.ts                       # fetch configuration
 │   ├── endpoints/
 │   │   ├── products.ts
 │   │   ├── listings.ts
@@ -1379,8 +1379,8 @@ const jobOptions = {
   removeOnFail: false,
 };
 
-// Failures are logged by the worker; there is no notification channel
-// (the notifiers were removed in the stage-focus cut, #444).
+// There is no notification channel: the notifiers were removed in the
+// stage-focus cut (#444).
 ```
 
 ---
@@ -2056,10 +2056,8 @@ CREATE TABLE analytics_events_2026_01 PARTITION OF analytics_events
 ### 3. Caching Strategy
 
 ```
-L1: Application cache (Redis) - 5 min TTL
-  - Product list per workspace
-  - Marketplace list
-  - User preferences
+L1: No application cache. The Redis cache was removed in the
+    stage-focus cut (#444); Redis serves the event stream and the Bull queues.
 
 L2: HTTP cache headers
   - GET /products: public, max-age=300
@@ -2194,17 +2192,15 @@ Metrics to track:
 |-----------|------------|-----------|
 | **Language** | TypeScript | Type safety, shared types frontend/backend |
 | **Backend** | Node.js + Express | Fast iteration, JavaScript ecosystem, event-driven |
-| **Frontend** | React 18 | Component reusability, large ecosystem, React Query |
+| **Frontend** | React 18 | Component reusability, large ecosystem |
 | **State** | Redux + RTK Query | Scalable, normalized cache, optimistic updates |
 | **UI Framework** | MUI Material | Production-grade, accessibility, theming |
 | **Database** | PostgreSQL | ACID compliance, JSONB, excellent scaling |
-| **Cache** | Redis | Fast in-memory, event broker, job queue backing |
+| **Redis** | Redis | Event stream and Bull job queue backing (the application cache was removed in the stage-focus cut, #444) |
 | **Events** | Redis Streams | Simple, append-only, self-hosted friendly |
 | **Jobs** | Bull + Redis | Node.js native, reliable, excellent for VPS |
 | **Scheduler** | Bull repeatable jobs + Redis | Durable deterministic schedules share the existing queue/runtime |
 | **AI** | Hermes Agent API Server | Uses the native Hermes instance on the same VPS; provider/model/tooling stays centralized |
-| **Email** | SendGrid / Mailgun | Transactional reliability, SMTP fallback |
-| **Telegram** | node-telegram-bot-api | Direct bot integration |
 | **Auth** | JWT + bcrypt | Stateless, scalable, standard |
 | **Encryption** | NaCl / libsodium | Fast, modern, audited library |
 | **Testing** | Jest + Supertest | Excellent TypeScript support, fast |
