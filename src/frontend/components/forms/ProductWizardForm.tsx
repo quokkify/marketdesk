@@ -178,10 +178,12 @@ export function wizardMarketplaceStatus(
   return resolveTargetMarketplace(marketplaces) ? 'connected' : 'none';
 }
 
+const NO_PHOTO_REASON = 'Add at least one product photo.';
+
 export function photosBlocker(images: string[]): string | null {
   const validImages = images.filter((image) => image.trim().length > 0);
   if (validImages.length !== images.length) return 'Remove blank product photos.';
-  if (validImages.length === 0) return 'Add at least one product photo.';
+  if (validImages.length === 0) return NO_PHOTO_REASON;
   if (validImages.length > MAX_PHOTOS) return 'Add no more than 12 product photos.';
   return null;
 }
@@ -202,11 +204,22 @@ function firstFieldError(errors: ProductFieldErrors): string | null {
 
 const BELOW_COST_REASON = 'Confirm the below-cost price.';
 
+// A converted six-step draft can reach the review screen without the photos it once required.
+function hasPhoto(values: ProductFormValues): boolean {
+  return values.images.some((image) => image.trim().length > 0);
+}
+
+// A converted six-step draft can carry a SKU, and the server can reject one as a duplicate.
+export function showWizardSku(values: ProductFormValues, errors: ProductFieldErrors): boolean {
+  return values.sku !== '' || Boolean(errors.sku);
+}
+
 // A below-cost price needs the seller's confirmation on both buttons.
 export function draftBlocker(
   values: ProductFormValues,
   belowCostConfirmed: boolean
 ): string | null {
+  if (!hasPhoto(values)) return NO_PHOTO_REASON;
   const fieldError = firstFieldError(validateProductValues(values));
   if (fieldError) return fieldError;
   return belowCostConfirmationRequired(values, belowCostConfirmed) ? BELOW_COST_REASON : null;
@@ -228,6 +241,7 @@ export function publishBlocker({
   belowCostConfirmed,
   categoryChanging,
 }: PublishBlockerInput): string | null {
+  if (!hasPhoto(values)) return NO_PHOTO_REASON;
   const errors = validateForPublish(values);
   if (errors.sellingPrice) errors.sellingPrice = 'Add a price above 0.';
   const fieldError = firstFieldError(errors);
@@ -391,7 +405,11 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
         </Stack>
       ) : (
         <Stack spacing={2}>
-          <NameSkuFields {...fieldProps} showSku={false} showCategory={false} />
+          <NameSkuFields
+            {...fieldProps}
+            showSku={showWizardSku(values, errors)}
+            showCategory={false}
+          />
           <DescriptionTagsFields {...fieldProps} showTags={false} />
           <PriceFields {...fieldProps} currency={currency} />
           <Typography variant="body2" color="text.secondary" aria-live="polite">

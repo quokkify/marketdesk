@@ -89,7 +89,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   return (
     <form onSubmit={handleSubmit} noValidate>
       <Stack spacing={2.5}>
-        <NameSkuFields {...fieldProps} />
+        <NameSkuFields {...fieldProps} skuReadOnly={Boolean(initial)} />
         <DescriptionTagsFields {...fieldProps} />
         <PriceFields {...fieldProps} />
         {warning && (

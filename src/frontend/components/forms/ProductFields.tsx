@@ -26,6 +26,8 @@ export interface ProductFieldsProps {
   showStatus?: boolean;
   showCategory?: boolean;
   showSku?: boolean;
+  // The edit form: an update does not change the SKU.
+  skuReadOnly?: boolean;
   showTags?: boolean;
   currency?: string;
 }
@@ -46,6 +48,7 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
   onChange,
   showCategory = true,
   showSku = true,
+  skuReadOnly = false,
 }) => (
   <Stack spacing={2}>
     <TextField
@@ -66,7 +69,8 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
             value={values.sku}
             onChange={(e) => onChange('sku', e.target.value)}
             error={Boolean(errors.sku)}
-            helperText={errors.sku}
+            helperText={errors.sku ?? (skuReadOnly ? 'Set when the product was created.' : undefined)}
+            slotProps={skuReadOnly ? { htmlInput: { readOnly: true } } : undefined}
           />
         )}
         {showCategory && (

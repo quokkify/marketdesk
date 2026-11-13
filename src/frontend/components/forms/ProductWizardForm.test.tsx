@@ -17,6 +17,7 @@ import {
   publishBlocker,
   resolveTargetMarketplace,
   shouldClearWizardTarget,
+  showWizardSku,
   STEPS,
   verifyWizardMarketplaceReadiness,
   wizardMarketplaceStatus,
@@ -379,6 +380,43 @@ describe('ProductWizardForm two screens', () => {
     });
     expect(html).toContain('Name is already used.');
     expect(html).toContain('The product was not created: Invalid product');
+  });
+
+  it('shows the SKU field only for a draft that carries a SKU or a SKU error', () => {
+    expect(showWizardSku(reviewValues(), {})).toBe(false);
+    expect(showWizardSku({ ...reviewValues(), sku: 'CAM-001' }, {})).toBe(true);
+    expect(showWizardSku(reviewValues(), { sku: 'SKU is already used.' })).toBe(true);
+
+    const html = view({
+      values: { ...reviewValues(), sku: 'CAM-001' },
+      errors: { sku: 'SKU is already used.' },
+      serverError: 'Product SKU conflict.',
+    });
+    expect(html).toContain('SKU');
+    expect(html).toContain('value="CAM-001"');
+    expect(html).toContain('SKU is already used.');
+  });
+
+  it('asks for a photo first on both buttons', () => {
+    const noPhotos = { ...reviewValues(), images: [], name: '' };
+    expect(
+      publishBlocker({
+        values: noPhotos,
+        olxCategory: null,
+        marketplaceStatus: 'connected',
+        belowCostConfirmed: false,
+        categoryChanging: false,
+      })
+    ).toBe('Add at least one product photo.');
+    expect(draftBlocker(noPhotos, false)).toBe('Add at least one product photo.');
+    expect(draftBlocker({ ...reviewValues(), images: [' '] }, false)).toBe(
+      'Add at least one product photo.'
+    );
+
+    const html = view({ values: { ...reviewValues(), images: [] } });
+    expect(buttonTag(html, 'Publish to OLX')).toContain('disabled=""');
+    expect(buttonTag(html, 'Save as draft')).toContain('disabled=""');
+    expect(html).toContain('Add at least one product photo.');
   });
 
   it('disables both buttons while submitting', () => {

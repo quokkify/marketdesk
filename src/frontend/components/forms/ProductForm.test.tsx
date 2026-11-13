@@ -47,6 +47,19 @@ describe('ProductForm photos', () => {
     expect(html).not.toContain('Paste an image URL');
   });
 
+  it('shows the SKU read-only, because an update does not change it', () => {
+    const html = render(
+      <ProductForm
+        initial={product}
+        onSubmit={() => undefined}
+        onUploadImage={() => Promise.reject(new Error('not used'))}
+      />
+    );
+
+    expect(html).toMatch(/<input[^>]*readOnly=""[^>]*value="SKU-38412"/);
+    expect(html).toContain('Set when the product was created.');
+  });
+
   it('keeps photos saved on the product in storage until the edit is saved', async () => {
     const onDeleteImage = jest.fn(() => Promise.resolve());
     const deleteImage = unsavedImageDeleter(product.images, onDeleteImage);
