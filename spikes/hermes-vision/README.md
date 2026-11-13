@@ -21,4 +21,6 @@ The script exits with code 0 even when probes fail: a failed probe is a result.
 
 ## Send back
 
-Send back the Markdown table the script prints (`probe | result | latency_ms | note`).
+Send back the Markdown table the script prints (`probe | result | latency_ms | note`). The
+script redacts the API key, the host and common secret shapes, but read the table before pasting
+it anywhere public.

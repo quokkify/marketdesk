@@ -25,18 +25,36 @@ const SCHEMA_PROMPT =
   'priceEstimatePln (positive number or null), categorySearchTerms (array of at most 5 strings, 2-80 chars each).';
 
 const IMAGE_QUESTION = 'What object is in this image, and what text is written on it?';
-const OBJECT_PATTERN = /mug|12\s*pln|red/i;
+const OBJECT_PATTERN = /\bmug\b|\b12\s*pln\b|\bred\b/i;
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const hostParts = (() => {
+  try {
+    const url = new URL(BASE_URL);
+    return [url.host, url.hostname].filter(Boolean);
+  } catch {
+    return [];
+  }
+})();
 
 const scrub = (text) => {
   let out = String(text);
   if (API_KEY) out = out.split(API_KEY).join('[redacted]');
-  return out.replace(/\s+/g, ' ').trim();
+  for (const part of hostParts) out = out.replace(new RegExp(escapeRegExp(part), 'gi'), '[host]');
+  return out
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/(sk|key|token)[-_A-Za-z0-9*.]{6,}/gi, '[redacted]')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[host]')
+    .replace(/\b[\w.-]+:\d{2,5}\b/g, '[host]')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 const errorNote = (err) => {
   const parts = [err?.name, err?.message];
-  const cause = err?.cause;
-  if (cause) parts.push(`cause: ${cause.code ?? ''} ${cause.message ?? cause}`);
+  const code = err?.cause?.code;
+  if (code) parts.push(`cause: ${code}`);
   return scrub(parts.filter(Boolean).join(': ')).slice(0, 240);
 };
 
@@ -248,10 +266,9 @@ const main = async () => {
     }
     const list = Array.isArray(json) ? json : (json?.toolsets ?? json?.data ?? null);
     if (!Array.isArray(list)) return `unrecognized shape: ${scrub(bodyText).slice(0, 200)}`;
-    return list
-      .map((t) => `${t?.name ?? t?.id ?? '?'}=${t?.enabled === undefined ? 'n/a' : t.enabled}`)
-      .join(', ')
-      .slice(0, 400);
+    return scrub(
+      list.map((t) => `${t?.name ?? t?.id ?? '?'}=${t?.enabled === undefined ? 'n/a' : t.enabled}`).join(', '),
+    ).slice(0, 400);
   });
 
   await probe('image-instruction', async () => {
@@ -271,7 +288,7 @@ const main = async () => {
 const cell = (value) => String(value).replace(/\|/g, '\\|');
 
 await main().catch((err) => {
-  results.push({ name: 'script-setup', result: 'fail', latency: 0, note: errorNote(err) });
+  results.push({ name: 'script-setup', result: 'fail', latency: '-', note: errorNote(err) });
 });
 
 console.log('| probe | result | latency_ms | note |');
