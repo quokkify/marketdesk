@@ -215,6 +215,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.olxPublicationQuotaService,
       deps.marketplaceOAuthReturnUrl,
       deps.olxAdapterMode,
+      deps.olxTaxonomyResolver,
       deps.logger
     ),
     hermes: new HermesController(

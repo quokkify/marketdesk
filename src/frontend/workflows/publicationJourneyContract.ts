@@ -1,10 +1,8 @@
 import type { MarketplaceKey } from '@shared/types';
 
-export const PUBLICATION_JOURNEY_VERSION = 'publication-journey@1';
+export const PUBLICATION_JOURNEY_VERSION = 'publication-journey@2';
 
-export const WIZARD_PHASES = [
-  'photos', 'basic_info', 'pricing', 'category', 'marketplace', 'review',
-] as const;
+export const WIZARD_PHASES = ['photos', 'review'] as const;
 
 export type WizardPhase = (typeof WIZARD_PHASES)[number];
 export type PublicationPhase = WizardPhase | 'product_saved' | 'listing_draft' | 'publication_review' | 'blocked' | 'approved' | 'queued';
@@ -16,6 +14,8 @@ export interface PublicationJourneyState {
   marketplaceKey?: MarketplaceKey;
   publishAllowed?: boolean;
   quotaOverrideEligible?: boolean;
+  providerCategoryId?: string;
+  approvedInWizard?: boolean;
 }
 
 export function wizardPhaseAt(index: number): WizardPhase {

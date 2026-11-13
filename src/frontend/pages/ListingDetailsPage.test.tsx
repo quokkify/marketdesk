@@ -5,6 +5,8 @@ import {
   buildPublishListingInput,
   categoryConflictEvidenceLines,
   categoryLookupUnavailable,
+  creationJourneyFailureMessage,
+  creationJourneyStart,
   CategoryLookupUnavailableNotice,
   delistSuccessMessage,
   editRequestedByNavigation,
@@ -21,6 +23,7 @@ import {
   ProductRecheckReview,
   PublishPreviewReview,
   productScopedHermesRunInput,
+  PublicationCategoryControls,
   publicationReviewSubtitle,
   remoteMarketplaceChipColor,
   remoteMarketplacePresentation,
@@ -609,5 +612,138 @@ describe('publication review subtitle', () => {
     expect(publicationReviewSubtitle('olx', true)).toBe('OLX · Sandbox');
     expect(publicationReviewSubtitle('olx', false)).toBe('OLX');
     expect(publicationReviewSubtitle(undefined, false)).toBe('Marketplace');
+  });
+});
+
+describe('creation journey failure alert', () => {
+  it('names each failed step and keeps the product saved', () => {
+    const failure = new Error('Service unavailable');
+    expect(creationJourneyFailureMessage('listing', failure)).toBe(
+      'The product is saved. Creating the listing failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('category', failure)).toBe(
+      'The product is saved. Saving the category failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('preview', failure)).toBe(
+      'The product is saved. Checking the listing failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('publish', failure)).toBe(
+      'The product is saved. Queueing the publication failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+  });
+
+  it('names no step when the failure happened outside the journey steps', () => {
+    expect(creationJourneyFailureMessage(null, new Error('Unexpected'))).toBe(
+      'The product is saved. Preparing the advert failed: Unexpected. Use Publish to OLX to try again.'
+    );
+  });
+
+  it('uses the API error message without doubling its full stop', () => {
+    expect(
+      creationJourneyFailureMessage('publish', { data: { error: { message: 'Quota exceeded.' } } })
+    ).toBe(
+      'The product is saved. Queueing the publication failed: Quota exceeded. Use Publish to OLX to try again.'
+    );
+  });
+});
+
+describe('creation journey start', () => {
+  const olx = { id: 'marketplace-1', key: 'olx', connected: true } as Marketplace;
+  const loaded = {
+    listings: { isLoading: false, isFetching: false, isError: false },
+    marketplaces: { data: [olx], isLoading: false, isError: false },
+  };
+  const failure = { status: 500, data: { error: { message: 'Service unavailable.' } } };
+
+  it('waits while the listings or the marketplaces are still loading', () => {
+    expect(
+      creationJourneyStart({ ...loaded, listings: { ...loaded.listings, isLoading: true } })
+    ).toEqual({ kind: 'wait' });
+    expect(
+      creationJourneyStart({ ...loaded, listings: { ...loaded.listings, isFetching: true } })
+    ).toEqual({ kind: 'wait' });
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        marketplaces: { data: undefined, isLoading: true, isError: false },
+      })
+    ).toEqual({ kind: 'wait' });
+  });
+
+  it('names the failure when the listings or the marketplaces failed to load', () => {
+    const message =
+      'The product is saved. Preparing the advert failed: Service unavailable. Use Publish to OLX to try again.';
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        listings: { isLoading: false, isFetching: false, isError: true, error: failure },
+      })
+    ).toEqual({ kind: 'failed', message });
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        marketplaces: { data: undefined, isLoading: false, isError: true, error: failure },
+      })
+    ).toEqual({ kind: 'failed', message });
+  });
+
+  it('runs once the listings and the marketplaces are loaded', () => {
+    expect(creationJourneyStart(loaded)).toEqual({ kind: 'run', marketplaces: [olx] });
+  });
+});
+
+describe('publication review category controls', () => {
+  const render = (value: React.ComponentProps<typeof PublicationCategoryControls>['value']) =>
+    renderToStaticMarkup(
+      <PublicationCategoryControls
+        value={value}
+        seed="Blue phone"
+        search={async () => []}
+        providerCategoryId="101"
+        onProviderCategoryIdChange={() => undefined}
+        onPick={() => undefined}
+        onVerify={() => undefined}
+      />
+    );
+
+  it('shows the saved category in the picker and hides the numeric ID under Advanced', () => {
+    const html = render({ providerCategoryId: '101', name: 'Phones', path: ['Electronics', 'Phones'] });
+
+    expect(html).toContain('Electronics &gt; Phones');
+    expect(html).toContain('Advanced');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('OLX category ID');
+    expect(html).toContain('Verify OLX category');
+    expect(html).not.toContain('Find categories');
+    expect(html).not.toContain('Search OLX categories');
+  });
+
+  it('keeps the numeric category fallback when the category search is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <PublicationCategoryControls
+        value={null}
+        seed="Blue phone"
+        search={async () => []}
+        searchUnavailableMessage="OLX category search is temporarily unavailable"
+        providerCategoryId=""
+        onProviderCategoryIdChange={() => undefined}
+        onPick={() => undefined}
+        onVerify={() => undefined}
+      />
+    );
+
+    expect(html).toContain('OLX category lookup is unavailable');
+    expect(html).toContain('OLX category search is temporarily unavailable');
+    expect(html).not.toContain('value="Blue phone"');
+    expect(html).toContain('Advanced');
+    expect(html).toContain('OLX category ID');
+  });
+
+  it('offers the search box when the listing has no category yet', () => {
+    const html = render(null);
+
+    expect(html).toContain('OLX category');
+    expect(html).toContain('value="Blue phone"');
+    expect(html).not.toContain('Change');
   });
 });

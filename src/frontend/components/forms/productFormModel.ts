@@ -60,7 +60,6 @@ export function productToValues(product: Product): ProductFormValues {
 export function validateProductValues(values: ProductFormValues): ProductFieldErrors {
   const errors: ProductFieldErrors = {};
   if (!values.name.trim()) errors.name = 'Name is required.';
-  if (!values.sku.trim()) errors.sku = 'SKU is required.';
 
   const descLen = values.description.trim().length;
   if (descLen < PRODUCT_DESCRIPTION_MIN_LENGTH) {
@@ -76,6 +75,24 @@ export function validateProductValues(values: ProductFormValues): ProductFieldEr
     errors.sellingPrice = 'Price must be a non-negative number.';
   }
   return errors;
+}
+
+export function validateForPublish(values: ProductFormValues): ProductFieldErrors {
+  const errors = validateProductValues(values);
+  if (!(values.sellingPrice > 0)) errors.sellingPrice ??= 'Enter a price above 0 to publish.';
+  return errors;
+}
+
+export interface WizardOlxCategory {
+  providerCategoryId: string;
+  name: string;
+  path: string[];
+}
+
+const UNCATEGORISED = 'uncategorised';
+
+export function deriveProductCategory(path: readonly string[] | null): string {
+  return path?.[0] || UNCATEGORISED;
 }
 
 // Soft warning: selling below cost is allowed but flagged.

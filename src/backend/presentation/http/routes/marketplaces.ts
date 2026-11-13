@@ -1,15 +1,25 @@
 // Marketplace routes.
 
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { MarketplaceController } from '../controllers/MarketplaceController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
 import { setOlxPublicationQuotaSchema, updateMarketplaceSchema } from '../validation/schemas';
 
+const categorySearchLimiter: RequestHandler = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.userId || ipKeyGenerator(req.ip || 'unknown'),
+});
+
 export function createMarketplaceRoutes(controller: MarketplaceController): Router {
   const router = Router();
   router.get('/', asyncHandler(controller.list));
   router.get('/:id', asyncHandler(controller.get));
+  router.get('/:id/categories', categorySearchLimiter, asyncHandler(controller.searchCategories));
   router.get('/:id/quotas', asyncHandler(controller.listQuotas));
   router.put(
     '/:id/quotas',

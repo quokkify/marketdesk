@@ -34,13 +34,13 @@ import type { BlockerFunction } from 'react-router-dom';
 import type { Marketplace, Product } from '@shared/types';
 import {
   useCreateProduct,
-  useGenerateProductAIDraft,
   useUploadProductImage,
   useDeleteProductImage,
   useCheckMarketplace,
   useMarketplaces,
   useProducts,
 } from '../services/hooks/index.js';
+import { useLazyGetProductQuery, useLazySearchMarketplaceCategoriesQuery } from '../state/api/index.js';
 import type { ProductListParams } from '../state/api/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
@@ -67,8 +67,8 @@ import type {
 import {
   ProductWizardForm,
   hasMeaningfulProductWizardDraft,
-  productFieldErrorsFromApi,
   productWizardDraftStorageKey,
+  productWizardTabId,
   readProductWizardDraft,
   removeProductWizardDraft,
   verifyWizardMarketplaceReadiness,
@@ -76,10 +76,13 @@ import {
 } from '../components/forms/index.js';
 import type {
   ApiFieldErrors,
-  ProductSubmissionValues,
   ProductWizardDraftState,
+  WizardSubmission,
 } from '../components/forms/index.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
+import { advancePublicationJourney } from '../workflows/publicationJourneyGraph.js';
+import { submitWizardProduct } from '../workflows/creationJourney.js';
+import type { TargetConnection } from '../workflows/creationJourney.js';
 
 export function shouldBlockProductWizardNavigation(
   wizardOpen: boolean,
@@ -105,6 +108,18 @@ function browserStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+function browserSessionStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function isNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { status?: unknown }).status === 404);
 }
 
 function errorMessage(err: unknown): string {
@@ -170,6 +185,7 @@ const ProductsPage: React.FC = () => {
     () => (workspaceId && userId ? productWizardDraftStorageKey(workspaceId, userId) : null),
     [userId, workspaceId]
   );
+  const tabId = useMemo(() => productWizardTabId(browserSessionStorage()), []);
   const [initialDraft, setInitialDraft] = useState<ProductWizardDraftState | null>(null);
   const [loadedDraftKey, setLoadedDraftKey] = useState<string | null>(null);
   const draftLoaded = Boolean(draftKey) && loadedDraftKey === draftKey;
@@ -269,7 +285,8 @@ const ProductsPage: React.FC = () => {
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessError, setReadinessError] = useState(false);
   const [createProduct, { isLoading: creating }] = useCreateProduct();
-  const [generateProductAIDraft] = useGenerateProductAIDraft();
+  const [getProduct] = useLazyGetProductQuery();
+  const [searchMarketplaceCategories] = useLazySearchMarketplaceCategoriesQuery();
   const [uploadProductImage] = useUploadProductImage();
   const [deleteProductImage] = useDeleteProductImage();
 
@@ -305,7 +322,16 @@ const ProductsPage: React.FC = () => {
   }, [draftDirty, wizardOpen]);
 
   const handleDraftChange = useCallback(
-    (draft: ProductWizardDraftState) => {
+    (formDraft: ProductWizardDraftState) => {
+      // The form does not know about a product created by an earlier attempt.
+      const stored = formDraft.createdProductId ? null : readStoredDraft();
+      const draft: ProductWizardDraftState = stored
+        ? {
+            ...formDraft,
+            createdProductId: stored.createdProductId,
+            createdByTabId: stored.createdByTabId,
+          }
+        : formDraft;
       const meaningful = hasMeaningfulProductWizardDraft(draft);
       setDraftDirty(meaningful);
       const storage = browserStorage();
@@ -318,7 +344,7 @@ const ProductsPage: React.FC = () => {
         : removeProductWizardDraft(storage, draftKey);
       setDraftSaveError(!saved);
     },
-    [draftKey]
+    [draftKey, readStoredDraft]
   );
 
   const completeWizardNavigation = () => {
@@ -413,6 +439,18 @@ const ProductsPage: React.FC = () => {
     wizardOpen,
   ]);
 
+  const connectedOlxId = verifiedMarketplaces?.find(
+    (marketplace) => marketplace.key === 'olx' && marketplace.connected
+  )?.id;
+  const searchCategories = useMemo(
+    () =>
+      connectedOlxId
+        ? (query: string) =>
+            searchMarketplaceCategories({ marketplaceId: connectedOlxId, query }).unwrap()
+        : undefined,
+    [connectedOlxId, searchMarketplaceCategories]
+  );
+
   const items = useMemo<Product[]>(() => currentData?.items ?? [], [currentData?.items]);
   useEffect(() => {
     const visible = new Set(items.map((product) => product.id));
@@ -450,59 +488,105 @@ const ProductsPage: React.FC = () => {
   const editProduct = (product: Product) =>
     navigate(`/products/${product.id}`, { state: { editProduct: true } });
 
-  const handleCreate = async (values: ProductSubmissionValues): Promise<ApiFieldErrors | void> => {
+  const rememberCreatedProduct = (productId: string) => {
+    const stored = readStoredDraft();
+    if (draftKey && stored) {
+      writeProductWizardDraft(browserStorage(), draftKey, {
+        ...stored,
+        createdProductId: productId,
+        createdByTabId: tabId,
+      });
+    }
+  };
+
+  // Asks the server at submit time; a failed request rejects and counts as unknown.
+  const checkTarget = async (marketplaceKey: Marketplace['key']): Promise<TargetConnection> => {
+    const target = marketplaces.data?.find((marketplace) => marketplace.key === marketplaceKey);
+    if (!marketplaces.data) return 'unknown';
+    if (!target) return 'disconnected';
+    const status = await checkMarketplace(target.id).unwrap();
+    return status.connected &&
+      status.marketplaceId === target.id &&
+      status.providerKey === marketplaceKey
+      ? 'connected'
+      : 'disconnected';
+  };
+
+  const productExists = (productId: string) =>
+    getProduct(productId)
+      .unwrap()
+      .then(
+        () => true,
+        (err: unknown) => {
+          if (isNotFound(err)) return false;
+          throw err;
+        }
+      );
+
+  const clearDraftAfterCreate = () => {
+    if (draftKey && !clearStoredDraft()) {
+      dispatch(
+        enqueueToast({
+          message: 'Product created, but the local wizard draft could not be cleared.',
+          severity: 'warning',
+        })
+      );
+    }
+  };
+
+  const handleCreate = async (submission: WizardSubmission): Promise<ApiFieldErrors | void> => {
     if (!workspaceId) {
       dispatch(enqueueToast({ message: 'No active workspace selected.', severity: 'error' }));
       return;
     }
     try {
-      const { targetMarketplace, ...productValues } = values;
-      // No target means no connected marketplace: the product is created as a draft.
-      const selectedMarketplace = targetMarketplace
-        ? verifiedMarketplaces?.find(
-            (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
-          )
-        : undefined;
-      if (targetMarketplace && !selectedMarketplace) {
-        throw new Error('The selected marketplace is no longer connected. Choose it again.');
-      }
-      const product = await createProduct({ ...productValues, workspaceId }).unwrap();
-      const journey = selectedMarketplace
-        ? await import('../workflows/publicationJourneyGraph.js').then(({ advancePublicationJourney }) =>
-            advancePublicationJourney(
-              { phase: 'review' },
-              { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
-            ),
-          )
-        : null;
-      if (draftKey && !clearStoredDraft()) {
-        dispatch(
-          enqueueToast({
-            message: 'Product created, but the local wizard draft could not be cleared.',
-            severity: 'warning',
-          })
-        );
-      }
+      const stored = readStoredDraft();
+      const outcome = await submitWizardProduct(
+        submission,
+        {
+          createdProductId: stored?.createdProductId ?? null,
+          createdByTabId: stored?.createdByTabId,
+          tabId,
+          marketplaces: verifiedMarketplaces,
+        },
+        {
+          createProduct: (values) => createProduct({ ...values, workspaceId }).unwrap(),
+          productExists,
+          checkTarget,
+          rememberCreatedProduct,
+          clearDraft: clearDraftAfterCreate,
+          advanceJourney: advancePublicationJourney,
+        }
+      );
+      if (outcome.kind === 'rejected') return outcome.errors;
       setDraftDirty(false);
       setInitialDraft(null);
       allowWizardNavigationRef.current = true;
-      if (!journey) {
-        dispatch(
-          enqueueToast({
-            message: 'Product created as a draft. Connect OLX to publish it.',
-            severity: 'success',
-          })
-        );
-        navigate(`/products/${product.id}`);
+      if (outcome.kind === 'publish_started') {
+        dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
+        navigate(`/products/${outcome.productId}`, {
+          state: { publicationJourney: { ...outcome.journey, version: PUBLICATION_JOURNEY_VERSION } },
+        });
         return;
       }
-      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
-      navigate(`/products/${product.id}`, {
-        state: { publicationJourney: { ...journey, version: PUBLICATION_JOURNEY_VERSION } },
-      });
+      dispatch(
+        enqueueToast(
+          outcome.kind === 'disconnected_saved_as_draft'
+            ? {
+                message:
+                  'OLX is no longer connected. The product was saved as a draft; reconnect OLX and publish it from this page.',
+                severity: 'warning',
+              }
+            : {
+                message: outcome.marketplaceConnected
+                  ? 'Product saved as a draft.'
+                  : 'Product created as a draft. Connect OLX to publish it.',
+                severity: 'success',
+              }
+        )
+      );
+      navigate(`/products/${outcome.productId}`);
     } catch (err) {
-      const rejected = productFieldErrorsFromApi(err);
-      if (Object.keys(rejected.fieldErrors).length > 0) return rejected;
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -827,8 +911,9 @@ const ProductsPage: React.FC = () => {
         open={wizardOpen}
         onClose={requestWizardClose}
         title="New product"
-        subtitle="Add a product to your catalogue in a few steps."
+        subtitle="Add photos, then review and publish."
         maxWidth="md"
+        fullScreenOnMobile
       >
         {!draftKey ? (
           <Alert severity="warning">
@@ -845,7 +930,7 @@ const ProductsPage: React.FC = () => {
             marketplacesError={readinessError}
             currency={currency}
             onSubmit={handleCreate}
-            onGenerateAIDraft={(request) => generateProductAIDraft(request).unwrap()}
+            searchCategories={searchCategories}
             onUploadImage={(file) => uploadProductImage(file).unwrap()}
             onDeleteImage={async (imageId) => {
               await deleteProductImage(imageId).unwrap();

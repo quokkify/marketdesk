@@ -92,22 +92,19 @@ Connect first, so that the product you create next can be published.
 
 ### 2. Create a product with photos
 
-1. Choose **New product** in the top bar. The wizard has six steps: Photos, Basic info, Pricing, Category, Marketplaces and Review.
-2. **Photos:** add 1 to 12 photos in JPEG, PNG or WebP format. The first photo is the cover. You can reorder photos or mark another one as the cover. **Create from photos** and **Start with title** ask the AI provider for a draft that you review. Nothing is saved until you apply it.
-3. **Basic info:** name, SKU, a description of 20 to 2000 characters, condition and tags.
-4. **Pricing:** cost and selling price. Selling below cost needs an explicit confirmation. Use a selling price above zero if you plan to publish: zero is allowed for drafts, but publication is blocked with "Listing price must be set before publish".
-5. **Category:** one of the six product categories.
-6. **Marketplaces:** select OLX.
-7. **Review:** check the summary, then choose **Create product**. MarketDesk saves the product and opens an OLX listing draft, then opens the publication review by itself. Nothing is published yet: closing the review publishes nothing, and you can reopen it from the product page (step 3).
+1. Choose **New product** in the top bar. The wizard has two screens: **Photos**, then **Review and publish**.
+2. **Photos:** add 1 to 12 photos in JPEG, PNG or WebP format. The first photo is the cover. You can reorder photos or mark another one as the cover. Choose **Continue**.
+3. **Review and publish:** fill in the name, a description of 20 to 2000 characters, the condition and the selling price. The cost price is optional; selling below cost needs an explicit confirmation. There is no SKU field: the server generates one, and the product page shows it read-only.
+4. **OLX category:** type a word such as "camera" into **OLX category** and pick a result from the list. In sandbox mode the category list is a small built-in one (Cameras, Phones, Headphones, Computers, Clothing, Furniture, Equipment and Other), not the real OLX category tree. If a search finds nothing, try one of those words. **Change** replaces the chosen category; **Publish to OLX** stays disabled until a new one is picked.
+5. Choose **Publish to OLX**. It stays disabled, with the reason shown above the buttons, until the photos, name, description, a price above 0 and a category are in place. Without a connected OLX account, **Save as draft** is the only way to finish.
 
 What to check: the product appears under **Products** with its photos, and the photos are still there after you reload the page.
 
 ### 3. Publish to OLX (sandbox)
 
-1. If the publication review is not already open after **Create product**, open the product from **Products** and choose **Publish to OLX**. The listings table on the same page also has a **Publish** action.
-2. Choose the exact OLX category: type at least two letters into **Search OLX categories**, choose **Find categories**, then pick a result. In sandbox mode the category list is a small built-in one (Cameras, Phones, Headphones, Computers, Clothing, Furniture, Equipment and Other), not the real OLX category tree. If a search finds nothing, try one of those words.
-3. Review the price, the category path and any warnings, then choose **Confirm category and queue publish**. You see "Publication was accepted and queued."
-4. Publication runs in the background. After a few seconds, reload the product page. The listing should change from Draft to Live and carry a **Sandbox** label.
+1. After **Publish to OLX** in the wizard, MarketDesk saves the product, opens its page, creates the OLX listing draft with the chosen category and checks it. When the check passes with the same category, the advert is queued without a second dialog and you see "Publication was accepted and queued."
+2. When the check needs a decision (a quota or fee warning, a blocker, or a category that differs from the one you chose), the publication review opens instead. Review the price, the category path and any warnings, then choose **Confirm category and queue publish**. The same review opens from **Publish to OLX** on the product page and from the **Publish** action in its listings table.
+3. Publication runs in the background. After a publish (not a relist), the product page shows "Waiting for OLX…" and checks the listing every 5 seconds for up to 2 minutes. The listing should change from Draft to Live and carry a **Sandbox** label. If OLX reports a failure, the page shows it in full in an alert; if nothing changes in 2 minutes, the page says "Still waiting for OLX. Refresh this page in a minute."
 
 What to check:
 

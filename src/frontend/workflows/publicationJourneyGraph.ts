@@ -5,7 +5,13 @@ import type { PublicationJourneyState, WizardPhase } from './publicationJourneyC
 export type PublicationJourneyEvent =
   | { type: 'next'; validated: true }
   | { type: 'back' }
-  | { type: 'product_created'; productId: string; marketplaceKey: MarketplaceKey }
+  | {
+      type: 'product_created';
+      productId: string;
+      marketplaceKey: MarketplaceKey;
+      providerCategoryId?: string;
+      approvedInWizard?: boolean;
+    }
   | { type: 'listing_created'; listingId: string }
   | { type: 'preview_loaded'; canPublish: boolean; quotaOverrideEligible: boolean }
   | { type: 'approval_given'; quotaOverrideConfirmed: boolean }
@@ -39,7 +45,14 @@ export async function advancePublicationJourney(
     case 'product_created':
       requirePhase(state, 'review');
       if (!event.productId.trim()) throw new Error('Created product ID is required');
-      return { ...state, phase: 'product_saved', productId: event.productId, marketplaceKey: event.marketplaceKey };
+      return {
+        ...state,
+        phase: 'product_saved',
+        productId: event.productId,
+        marketplaceKey: event.marketplaceKey,
+        ...(event.providerCategoryId !== undefined && { providerCategoryId: event.providerCategoryId }),
+        ...(event.approvedInWizard !== undefined && { approvedInWizard: event.approvedInWizard }),
+      };
     case 'listing_created':
       requirePhase(state, 'product_saved');
       if (!event.listingId.trim()) throw new Error('Created listing ID is required');
