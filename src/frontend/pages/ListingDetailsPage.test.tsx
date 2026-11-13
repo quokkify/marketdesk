@@ -6,6 +6,7 @@ import {
   categoryConflictEvidenceLines,
   categoryLookupUnavailable,
   creationJourneyFailureMessage,
+  creationJourneyStart,
   CategoryLookupUnavailableNotice,
   delistSuccessMessage,
   editRequestedByNavigation,
@@ -643,6 +644,51 @@ describe('creation journey failure alert', () => {
     ).toBe(
       'The product is saved. Queueing the publication failed: Quota exceeded. Use Publish to OLX to try again.'
     );
+  });
+});
+
+describe('creation journey start', () => {
+  const olx = { id: 'marketplace-1', key: 'olx', connected: true } as Marketplace;
+  const loaded = {
+    listings: { isLoading: false, isFetching: false, isError: false },
+    marketplaces: { data: [olx], isLoading: false, isError: false },
+  };
+  const failure = { status: 500, data: { error: { message: 'Service unavailable.' } } };
+
+  it('waits while the listings or the marketplaces are still loading', () => {
+    expect(
+      creationJourneyStart({ ...loaded, listings: { ...loaded.listings, isLoading: true } })
+    ).toEqual({ kind: 'wait' });
+    expect(
+      creationJourneyStart({ ...loaded, listings: { ...loaded.listings, isFetching: true } })
+    ).toEqual({ kind: 'wait' });
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        marketplaces: { data: undefined, isLoading: true, isError: false },
+      })
+    ).toEqual({ kind: 'wait' });
+  });
+
+  it('names the failure when the listings or the marketplaces failed to load', () => {
+    const message =
+      'The product is saved. Preparing the advert failed: Service unavailable. Use Publish to OLX to try again.';
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        listings: { isLoading: false, isFetching: false, isError: true, error: failure },
+      })
+    ).toEqual({ kind: 'failed', message });
+    expect(
+      creationJourneyStart({
+        ...loaded,
+        marketplaces: { data: undefined, isLoading: false, isError: true, error: failure },
+      })
+    ).toEqual({ kind: 'failed', message });
+  });
+
+  it('runs once the listings and the marketplaces are loaded', () => {
+    expect(creationJourneyStart(loaded)).toEqual({ kind: 'run', marketplaces: [olx] });
   });
 });
 

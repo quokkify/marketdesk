@@ -68,6 +68,7 @@ import {
   ProductWizardForm,
   hasMeaningfulProductWizardDraft,
   productWizardDraftStorageKey,
+  productWizardTabId,
   readProductWizardDraft,
   removeProductWizardDraft,
   verifyWizardMarketplaceReadiness,
@@ -104,6 +105,14 @@ export function shouldDebounceCatalogueSearch(
 function browserStorage(): Storage | null {
   try {
     return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function browserSessionStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.sessionStorage;
   } catch {
     return null;
   }
@@ -176,6 +185,7 @@ const ProductsPage: React.FC = () => {
     () => (workspaceId && userId ? productWizardDraftStorageKey(workspaceId, userId) : null),
     [userId, workspaceId]
   );
+  const tabId = useMemo(() => productWizardTabId(browserSessionStorage()), []);
   const [initialDraft, setInitialDraft] = useState<ProductWizardDraftState | null>(null);
   const [loadedDraftKey, setLoadedDraftKey] = useState<string | null>(null);
   const draftLoaded = Boolean(draftKey) && loadedDraftKey === draftKey;
@@ -314,10 +324,14 @@ const ProductsPage: React.FC = () => {
   const handleDraftChange = useCallback(
     (formDraft: ProductWizardDraftState) => {
       // The form does not know about a product created by an earlier attempt.
-      const draft = {
-        ...formDraft,
-        createdProductId: formDraft.createdProductId ?? readStoredDraft()?.createdProductId ?? null,
-      };
+      const stored = formDraft.createdProductId ? null : readStoredDraft();
+      const draft: ProductWizardDraftState = stored
+        ? {
+            ...formDraft,
+            createdProductId: stored.createdProductId,
+            createdByTabId: stored.createdByTabId,
+          }
+        : formDraft;
       const meaningful = hasMeaningfulProductWizardDraft(draft);
       setDraftDirty(meaningful);
       const storage = browserStorage();
@@ -477,7 +491,11 @@ const ProductsPage: React.FC = () => {
   const rememberCreatedProduct = (productId: string) => {
     const stored = readStoredDraft();
     if (draftKey && stored) {
-      writeProductWizardDraft(browserStorage(), draftKey, { ...stored, createdProductId: productId });
+      writeProductWizardDraft(browserStorage(), draftKey, {
+        ...stored,
+        createdProductId: productId,
+        createdByTabId: tabId,
+      });
     }
   };
 
@@ -522,10 +540,13 @@ const ProductsPage: React.FC = () => {
       return;
     }
     try {
+      const stored = readStoredDraft();
       const outcome = await submitWizardProduct(
         submission,
         {
-          createdProductId: readStoredDraft()?.createdProductId ?? null,
+          createdProductId: stored?.createdProductId ?? null,
+          createdByTabId: stored?.createdByTabId,
+          tabId,
           marketplaces: verifiedMarketplaces,
         },
         {

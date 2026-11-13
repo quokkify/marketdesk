@@ -283,7 +283,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: 'p1', marketplaces: connected },
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -305,7 +305,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission({ intent: 'draft' }),
-      { createdProductId: 'p1', marketplaces: connected },
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -320,7 +320,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: null, marketplaces: connected },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -339,7 +339,7 @@ describe('submitWizardProduct', () => {
     });
 
     await expect(
-      submitWizardProduct(submission(), { createdProductId: null, marketplaces: connected }, deps),
+      submitWizardProduct(submission(), { createdProductId: null, tabId: 'tab-a', marketplaces: connected }, deps),
     ).rejects.toBe(failure);
     expect(calls).toEqual(['createProduct', 'remember:p1']);
   });
@@ -349,7 +349,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: null, marketplaces: connected },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -366,7 +366,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission({ intent: 'draft', targetMarketplace: null }),
-      { createdProductId: null, marketplaces: [] },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: [] },
       deps,
     );
 
@@ -391,7 +391,7 @@ describe('submitWizardProduct', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: null, marketplaces: connected },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -411,10 +411,61 @@ describe('submitWizardProduct', () => {
     });
 
     await expect(
-      submitWizardProduct(submission(), { createdProductId: null, marketplaces: connected }, deps),
+      submitWizardProduct(submission(), { createdProductId: null, tabId: 'tab-a', marketplaces: connected }, deps),
     ).rejects.toBe(failure);
     expect(deps.rememberCreatedProduct).not.toHaveBeenCalled();
     expect(deps.clearDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('submitWizardProduct across browser tabs', () => {
+  it('resumes a product created by the same tab', async () => {
+    const deps = productDeps();
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-a', marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.createProduct).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ kind: 'publish_started', productId: 'p1' });
+  });
+
+  it('creates a new product when another tab created the remembered one', async () => {
+    const calls: string[] = [];
+    const deps = productDeps(calls, {
+      createProduct: jest.fn(async () => {
+        calls.push('createProduct');
+        return { id: 'p2' };
+      }),
+    });
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-b', marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.productExists).not.toHaveBeenCalled();
+    expect(deps.createProduct).toHaveBeenCalledWith(submission().values);
+    expect(calls).toEqual(['createProduct', 'remember:p2', 'advanceJourney', 'clearDraft']);
+    expect(outcome).toMatchObject({ kind: 'publish_started', productId: 'p2' });
+  });
+
+  it('creates a new product when the remembered one names no tab', async () => {
+    const deps = productDeps([], {
+      createProduct: jest.fn(async () => ({ id: 'p2' })),
+    });
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: 'p1', tabId: 'tab-a', marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.createProduct).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ kind: 'publish_started', productId: 'p2' });
   });
 });
 
@@ -424,7 +475,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: null, marketplaces: disconnected },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: disconnected },
       deps,
     );
 
@@ -443,7 +494,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
       const outcome = await submitWizardProduct(
         submission(),
-        { createdProductId: null, marketplaces: undefined },
+        { createdProductId: null, tabId: 'tab-a', marketplaces: undefined },
         deps,
       );
 
@@ -462,7 +513,7 @@ describe('submitWizardProduct connection check and resume', () => {
       let settled = false;
       const result = submitWizardProduct(
         submission(),
-        { createdProductId: null, marketplaces: connected },
+        { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
         deps,
       ).finally(() => {
         settled = true;
@@ -488,7 +539,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
       const outcome = await submitWizardProduct(
         submission(),
-        { createdProductId: null, marketplaces: connected },
+        { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
         deps,
       );
 
@@ -504,7 +555,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
     await submitWizardProduct(
       submission({ intent: 'draft' }),
-      { createdProductId: null, marketplaces: connected },
+      { createdProductId: null, tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -523,7 +574,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: 'p1', marketplaces: connected },
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 
@@ -541,7 +592,7 @@ describe('submitWizardProduct connection check and resume', () => {
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: 'p1', marketplaces: connected },
+      { createdProductId: 'p1', createdByTabId: 'tab-a', tabId: 'tab-a', marketplaces: connected },
       deps,
     );
 

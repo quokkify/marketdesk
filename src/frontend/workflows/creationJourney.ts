@@ -89,6 +89,9 @@ export async function runCreationJourney(
 export interface WizardProductContext {
   // Set when an earlier attempt of this wizard draft already created the product.
   createdProductId: string | null;
+  // The tab that created `createdProductId`; only that tab continues with it.
+  createdByTabId?: string;
+  tabId: string;
   marketplaces: ReadonlyArray<Pick<Marketplace, 'key' | 'connected'>> | undefined;
 }
 
@@ -132,7 +135,7 @@ export async function submitWizardProduct(
   context: WizardProductContext,
   deps: WizardProductDeps,
 ): Promise<WizardProductOutcome> {
-  let productId = context.createdProductId;
+  let productId = context.createdByTabId === context.tabId ? context.createdProductId : null;
   if (productId && !(await deps.productExists(productId).catch(() => true))) productId = null;
   // A retry continues with the product already created; values edited since are not re-sent.
   if (!productId) {

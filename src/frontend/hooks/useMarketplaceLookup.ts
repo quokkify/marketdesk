@@ -7,7 +7,12 @@ import type { Marketplace } from '@shared/types';
 import { isSandboxMarketplace } from '../utils/sandbox.js';
 
 export function useMarketplaceLookup() {
-  const { data: marketplaces } = useMarketplaces();
+  const {
+    data: marketplaces,
+    isLoading: marketplacesLoading,
+    isError: marketplacesFailed,
+    error: marketplacesError,
+  } = useMarketplaces();
 
   const byId = useMemo(() => {
     const map = new Map<string, string>();
@@ -39,5 +44,13 @@ export function useMarketplaceLookup() {
     [marketplaces],
   );
 
-  return { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox };
+  return {
+    marketplaces,
+    marketplacesLoading,
+    marketplacesFailed,
+    marketplacesError,
+    resolveMarketplaceName,
+    resolveMarketplaceKey,
+    resolveMarketplaceSandbox,
+  };
 }

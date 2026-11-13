@@ -30,6 +30,7 @@ export type {
 export {
   hasMeaningfulProductWizardDraft,
   productWizardDraftStorageKey,
+  productWizardTabId,
   readProductWizardDraft,
   removeProductWizardDraft,
   writeProductWizardDraft,

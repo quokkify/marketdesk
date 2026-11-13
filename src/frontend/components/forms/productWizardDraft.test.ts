@@ -3,6 +3,7 @@ import {
   PRODUCT_WIZARD_DRAFT_MAX_AGE_MS,
   hasMeaningfulProductWizardDraft,
   productWizardDraftStorageKey,
+  productWizardTabId,
   readProductWizardDraft,
   removeProductWizardDraft,
   writeProductWizardDraft,
@@ -125,6 +126,30 @@ describe('product wizard draft persistence', () => {
     expect(hasMeaningfulProductWizardDraft({ ...empty, createdProductId: 'p1' })).toBe(false);
   });
 
+  it('keeps the id of the tab that created the product', () => {
+    const storage = new MemoryStorage();
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    const created = { ...draft(), createdProductId: 'p1', createdByTabId: 'tab-a' };
+
+    writeProductWizardDraft(storage, key, created, 1_000);
+
+    expect(readProductWizardDraft(storage, key, 2_000)).toEqual(created);
+  });
+
+  it('loads a version 2 draft stored before drafts named their tab', () => {
+    const storage = new MemoryStorage();
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    storage.setItem(
+      key,
+      JSON.stringify({ ...draft(), createdProductId: 'p1', version: 2, updatedAt: 1_000 })
+    );
+
+    const restored = readProductWizardDraft(storage, key, 2_000);
+
+    expect(restored).toMatchObject({ createdProductId: 'p1' });
+    expect(restored?.createdByTabId).toBeUndefined();
+  });
+
   it('converts a six-step draft to the review screen', () => {
     const storage = new MemoryStorage();
     const now = 5_000;
@@ -220,5 +245,37 @@ describe('product wizard draft persistence', () => {
     expect(readProductWizardDraft(null, key)).toEqual(draft());
     expect(removeProductWizardDraft(null, key)).toBe(false);
     expect(readProductWizardDraft(null, key)).toBeNull();
+  });
+});
+
+describe('product wizard tab id', () => {
+  it('keeps one id per tab across reloads and gives another tab its own', () => {
+    const tabA = new MemoryStorage();
+    const tabB = new MemoryStorage();
+    let next = 0;
+    const newId = () => `id-${++next}`;
+
+    const first = productWizardTabId(tabA, newId);
+
+    expect(productWizardTabId(tabA, newId)).toBe(first);
+    expect(productWizardTabId(tabB, newId)).not.toBe(first);
+  });
+
+  it('keeps an in-memory id when session storage is unavailable', () => {
+    const broken = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    let next = 0;
+    const newId = () => `id-${++next}`;
+
+    const first = productWizardTabId(null, newId);
+
+    expect(productWizardTabId(null, newId)).toBe(first);
+    expect(productWizardTabId(broken, newId)).toBe(first);
   });
 });

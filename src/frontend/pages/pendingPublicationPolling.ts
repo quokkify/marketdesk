@@ -7,6 +7,7 @@ import type { Listing } from '@shared/types';
 
 export const PENDING_PUBLICATION_POLL_INTERVAL_MS = 5000;
 export const PENDING_PUBLICATION_TIMEOUT_MS = 120000;
+const UNNAMED_FAILURE_MESSAGE = 'OLX did not accept the advert.';
 
 export type PendingPublicationStop =
   | { kind: 'settled' }
@@ -62,7 +63,7 @@ export function createPendingPublicationPoller({
       if (!running) return;
       const newNote = Boolean(listing.syncError) && listing.syncError !== baselineSyncError;
       if (listing.status === 'error' || newNote) {
-        stop({ kind: 'failed', message: listing.syncError ?? '' });
+        stop({ kind: 'failed', message: listing.syncError || UNNAMED_FAILURE_MESSAGE });
       } else if (listing.status !== 'draft') {
         stop({ kind: 'settled' });
       }

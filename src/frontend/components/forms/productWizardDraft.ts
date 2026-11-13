@@ -1,5 +1,6 @@
 import type { MarketplaceKey, ProductCondition, ProductStatus } from '@shared/types';
 import { MARKETPLACE_KEY_LIST, PRODUCT_STATUS_LIST } from '@shared/constants';
+import { newOperationId } from '../../utils/operationId.js';
 import { emptyProductValues } from './productFormModel.js';
 import type { ProductFormValues, WizardOlxCategory } from './productFormModel.js';
 
@@ -24,6 +25,8 @@ export interface ProductWizardDraftState {
   targetMarketplace: MarketplaceKey | null;
   olxCategory: WizardOlxCategory | null;
   createdProductId: string | null;
+  // The browser tab that created `createdProductId`; a draft stored without it is no tab's.
+  createdByTabId?: string;
 }
 
 interface StoredProductWizardDraft extends ProductWizardDraftState {
@@ -50,6 +53,7 @@ function cloneDraft(draft: ProductWizardDraftState): ProductWizardDraftState {
       ? { ...draft.olxCategory, path: [...draft.olxCategory.path] }
       : null,
     createdProductId: draft.createdProductId,
+    createdByTabId: draft.createdByTabId,
   };
 }
 
@@ -185,6 +189,8 @@ function parseStoredDraft(raw: string, now: number): ProductWizardDraftState | n
   const targetMarketplace = parseTargetMarketplace(parsed.targetMarketplace);
   const olxCategory = parseOlxCategory(parsed.olxCategory);
   const createdProductId = parsed.createdProductId;
+  const createdByTabId =
+    typeof parsed.createdByTabId === 'string' ? parsed.createdByTabId : undefined;
   const values = parseValues(parsed.values);
   if (
     activeStep === null ||
@@ -201,6 +207,7 @@ function parseStoredDraft(raw: string, now: number): ProductWizardDraftState | n
     targetMarketplace,
     olxCategory,
     createdProductId,
+    createdByTabId,
   };
 }
 
@@ -276,4 +283,28 @@ export function removeProductWizardDraft(storage: DraftStorage | null, key: stri
     discardedDraftKeys.add(key);
     return false;
   }
+}
+
+const TAB_ID_STORAGE_KEY = 'marketdesk.productWizardTabId';
+let inMemoryTabId: string | null = null;
+
+// A random id for this browser tab. Session storage keeps it across a reload of the same tab;
+// without session storage the id lives as long as the page.
+export function productWizardTabId(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  newId: () => string = newOperationId
+): string {
+  if (storage) {
+    try {
+      const stored = storage.getItem(TAB_ID_STORAGE_KEY);
+      if (stored) return stored;
+      const id = newId();
+      storage.setItem(TAB_ID_STORAGE_KEY, id);
+      return id;
+    } catch {
+      // Falls back to the in-memory id below.
+    }
+  }
+  inMemoryTabId ??= newId();
+  return inMemoryTabId;
 }

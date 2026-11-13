@@ -108,6 +108,18 @@ describe('createPendingPublicationPoller', () => {
     expect(stops).toEqual([{ kind: 'failed', message: 'OLX refused the advert: duplicate.' }]);
   });
 
+  it('names a failure for an error status that carries no sync error', () => {
+    // The API sends null for a listing without a note.
+    for (const syncError of [null as unknown as string, undefined, '']) {
+      const { stops, instance } = poller();
+
+      instance.start();
+      instance.observe(listing({ status: 'error', syncError }));
+
+      expect(stops).toEqual([{ kind: 'failed', message: 'OLX did not accept the advert.' }]);
+    }
+  });
+
   it('reports an error status as a failure even when the text is unchanged', () => {
     const note = 'OLX refused the advert: duplicate.';
     const { stops, instance } = poller();

@@ -485,6 +485,31 @@ export function creationJourneyFailureMessage(step: CreationJourneyStep | null, 
   return `The product is saved. ${stepName} failed: ${reason}. Use Publish to OLX to try again.`;
 }
 
+export interface CreationJourneyQueries {
+  listings: { isLoading: boolean; isFetching: boolean; isError: boolean; error?: unknown };
+  marketplaces: { data: Marketplace[] | undefined; isLoading: boolean; isError: boolean; error?: unknown };
+}
+
+export type CreationJourneyStart =
+  | { kind: 'wait' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'run'; marketplaces: Marketplace[] };
+
+// Whether the journey queued by the wizard can start once its data has loaded. A failed load
+// is reported, so the seller is not left at "Preparing its marketplace listing".
+export function creationJourneyStart({ listings, marketplaces }: CreationJourneyQueries): CreationJourneyStart {
+  if (listings.isLoading || listings.isFetching || marketplaces.isLoading) return { kind: 'wait' };
+  if (listings.isError) {
+    return { kind: 'failed', message: creationJourneyFailureMessage(null, listings.error) };
+  }
+  if (!marketplaces.data) {
+    return marketplaces.isError
+      ? { kind: 'failed', message: creationJourneyFailureMessage(null, marketplaces.error) }
+      : { kind: 'wait' };
+  }
+  return { kind: 'run', marketplaces: marketplaces.data };
+}
+
 export const PublicationCategoryControls: React.FC<{
   value: WizardOlxCategory | null;
   seed: string;
@@ -640,8 +665,15 @@ const ListingDetailsPage: React.FC = () => {
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
   const hermesStatus = useHermesStatus();
   const activeProvider = hermesStatus.data?.activeProvider;
-  const { marketplaces, resolveMarketplaceName, resolveMarketplaceKey, resolveMarketplaceSandbox } =
-    useMarketplaceLookup();
+  const {
+    marketplaces,
+    marketplacesLoading,
+    marketplacesFailed,
+    marketplacesError,
+    resolveMarketplaceName,
+    resolveMarketplaceKey,
+    resolveMarketplaceSandbox,
+  } = useMarketplaceLookup();
 
   const [updateProduct, { isLoading: updating }] = useUpdateProduct();
   const [uploadProductImage] = useUploadProductImage();
@@ -1012,15 +1044,33 @@ const ListingDetailsPage: React.FC = () => {
     } | null)?.publicationJourney;
     if (!pending || pending.version !== PUBLICATION_JOURNEY_VERSION ||
         pending.phase !== 'product_saved' || pending.productId !== productId ||
-        !pending.marketplaceKey || !product.data || listings.isLoading || listings.isFetching ||
-        listings.isError || !marketplaces) return;
+        !pending.marketplaceKey || !product.data) return;
+    const start = creationJourneyStart({
+      listings: {
+        isLoading: listings.isLoading,
+        isFetching: listings.isFetching,
+        isError: listings.isError,
+        error: listings.error,
+      },
+      marketplaces: {
+        data: marketplaces,
+        isLoading: marketplacesLoading,
+        isError: marketplacesFailed,
+        error: marketplacesError,
+      },
+    });
+    if (start.kind === 'wait') return;
 
     const journeyKey = `${pending.productId}:${pending.marketplaceKey}`;
     if (consumedCreationJourney.current === journeyKey) return;
     consumedCreationJourney.current = journeyKey;
     navigate(location.pathname, { replace: true, state: null });
+    if (start.kind === 'failed') {
+      setCreationFailure(start.message);
+      return;
+    }
 
-    const marketplace = marketplaces.find(
+    const marketplace = start.marketplaces.find(
       (item) => item.key === pending.marketplaceKey && item.connected,
     );
     if (!marketplace) {
@@ -1070,8 +1120,8 @@ const ListingDetailsPage: React.FC = () => {
         previewInFlight.current = false;
         setPreviewingPublication(false);
       });
-  }, [createListing, dispatch, listingItems, listings.isError, listings.isFetching,
-    listings.isLoading, location.pathname, location.state, marketplaces, navigate,
+  }, [createListing, dispatch, listingItems, listings.error, listings.isError, listings.isFetching,
+    listings.isLoading, location.pathname, location.state, marketplaces, marketplacesError, marketplacesFailed, marketplacesLoading, navigate,
     product.data, productId, publishListing, publishListingPreview, setMarketplaceCategory]);
 
   useEffect(() => {
