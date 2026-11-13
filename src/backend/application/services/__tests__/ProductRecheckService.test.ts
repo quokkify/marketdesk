@@ -93,12 +93,17 @@ describe('ProductRecheckService', () => {
       taxonomyVerifiedAt: new Date(NOW.getTime() + 5).toISOString(),
       taxonomyStaleAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString(),
     };
-    let clockReads = 0;
+    let clockOffsetMs = 0;
     const service = new ProductRecheckService(
       productRepo, listingRepo, marketplaceRepo, accountRepo, activityLog,
-      async () => ({ verify: jest.fn(async () => verifiedAfterStart) }),
+      async () => ({
+        verify: jest.fn(async () => {
+          clockOffsetMs = 10;
+          return verifiedAfterStart;
+        }),
+      }),
       () => 'audit-id',
-      () => new Date(NOW.getTime() + (clockReads++ === 0 ? 0 : 10)),
+      () => new Date(NOW.getTime() + clockOffsetMs),
     );
 
     const result = await service.recheck(input);

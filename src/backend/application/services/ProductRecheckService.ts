@@ -142,6 +142,7 @@ export class ProductRecheckService {
         ? item('marketplace', 'ready', `${marketplace.name} OAuth account is connected`)
         : item('marketplace', 'fix', 'Connect the target OLX OAuth account before publication', 'marketplace'));
 
+      // Not `checkedAt` (the recheck start): the guard needs a time no earlier than the verification it judges.
       const guard = evaluateOlxCategory(product, category, this.clock());
       const categoryStatus: ProductRecheckItemStatus = guard.allowed
         ? 'ready'
