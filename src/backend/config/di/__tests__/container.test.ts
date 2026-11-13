@@ -223,7 +223,7 @@ describe('buildContainer (composition root)', () => {
     const container = build();
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
-    expect(container.cache).toBeDefined();
+    expect('cache' in container).toBe(false);
     expect(container.queues).toHaveLength(3);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {

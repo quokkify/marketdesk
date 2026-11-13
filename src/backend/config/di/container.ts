@@ -65,13 +65,11 @@ async function withPoolTransaction<T>(
 import {
   createRedisEventBroker,
   createEventPublisher,
-  createRedisCache,
 } from '../../infrastructure/eventBroker/RedisWiring';
 import type {
   EventBroker,
   EventSubscriber,
 } from '../../infrastructure/eventBroker/RedisEventBroker';
-import type { RedisCache } from '../../infrastructure/cache/RedisCache';
 import { BullJobQueue } from '../../infrastructure/jobQueue/BullJobQueue';
 import { MarketplaceAdapterFactory } from '../../infrastructure/adapters/MarketplaceAdapterFactory';
 import { FetchMarketplaceHttpClient } from '../../infrastructure/adapters/FetchMarketplaceHttpClient';
@@ -88,8 +86,6 @@ import { HermesCompletionClient } from '../../infrastructure/external/HermesComp
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
-import { createEmailProvider } from '../../infrastructure/external/EmailProvider';
-import { createTelegramBot } from '../../infrastructure/external/TelegramBot';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import {
@@ -238,7 +234,6 @@ export interface AppContainer {
   // Lifecycle handles for graceful shutdown / health checks.
   pool: Pool;
   redis: Redis;
-  cache: RedisCache;
   queues: ManagedQueue<unknown>[];
   shutdown(): Promise<void>;
 }
@@ -253,7 +248,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const broker: EventBroker & EventSubscriber =
     overrides.eventBroker ?? createRedisEventBroker(redis);
   const eventPublisher = createEventPublisher(broker);
-  const cache = createRedisCache(redis);
 
   // 3. Cross-cutting ports.
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
@@ -297,11 +291,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       deliveryOptionCode: env.marketplaces.olx.deliveryOptionCode,
     },
   });
-  // Notifiers are constructed (stubbed when unconfigured) so the graph is complete
-  // and ready for future notification wiring; no consumer requires them yet.
-  createEmailProvider();
-  createTelegramBot();
-
   const createQueue = overrides.createQueue ?? (<T>(name: string) => new BullManagedQueue<T>(name));
 
   // 4. Repositories. They use the injected pool (or the module-level default if
@@ -790,7 +779,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     subscriber: broker,
     pool,
     redis,
-    cache,
     queues,
     shutdown,
   };
