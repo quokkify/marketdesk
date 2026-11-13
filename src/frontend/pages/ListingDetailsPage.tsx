@@ -163,7 +163,7 @@ export function productHermesDisabledReason(input: {
 }): string | null {
   if (!input.productId) return 'Select one product before running Hermes analysis.';
   if (!input.settingsLoaded) return 'Hermes settings are still loading.';
-  if (!input.listingSeoEnabled) return 'Enable the listing SEO agent in Hermes settings first.';
+  if (!input.listingSeoEnabled) return 'The listing SEO agent is switched off for this workspace.';
   return null;
 }
 

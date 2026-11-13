@@ -193,6 +193,15 @@ describe('hermesWatching', () => {
     });
   });
 
+  it('counts only OLX among the connected marketplaces', () => {
+    expect(
+      hermesWatching(ready({ liveListingCount: 2 }), ready([
+        marketplace({ id: 'a' }),
+        marketplace({ id: 'b', key: 'allegro', sandbox: true }),
+      ])),
+    ).toMatchObject({ sentence: expect.stringContaining('on 1 marketplace ·'), sandbox: false });
+  });
+
   it('uses singular and plural nouns', () => {
     expect(
       hermesWatching(ready({ liveListingCount: 1 }), ready([])),
@@ -201,7 +210,7 @@ describe('hermesWatching', () => {
     });
   });
 
-  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  // Guard: nothing schedules Hermes in this build.
   it('never claims background Hermes work, which this build does not run', () => {
     const ready = hermesWatching(
       { data: { liveListingCount: 12 }, isLoading: false, isError: false },

@@ -1,22 +1,15 @@
-// Marketplaces (PRD §12): summary bar, the live OLX card, roadmap cards for the
-// channels MarketDesk does not integrate yet, and the Configure drawer. The
-// OAuth check is the authoritative OLX connection state.
+// Marketplaces (PRD §12): the live OLX card and its Configure drawer. The OAuth
+// check is the authoritative OLX connection state.
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alert, Box, Button, Chip, Skeleton, Stack, Typography } from '@mui/material';
+import { Box, Skeleton, Stack } from '@mui/material';
 import type { Marketplace, MarketplaceKey, SyncMode } from '@shared/types';
-import { MARKETPLACE_KEY_LIST, MARKETPLACE_NAMES } from '@shared/constants';
-import type {
-  MarketplaceImportPreview,
-  MarketplaceOAuthStatus,
-  SaveMarketplaceAppCredentialsInput,
-} from '../state/api/index.js';
+import { MARKETPLACE_NAMES } from '@shared/constants';
+import type { MarketplaceOAuthStatus, SaveMarketplaceAppCredentialsInput } from '../state/api/index.js';
 import {
   useAnalyticsOverview,
   useCheckMarketplace,
   useConnectMarketplace,
-  useImportMarketplaceAdverts,
-  useImportMarketplacePreview,
   useMarketplaceAppCredentials,
   useMarketplaceConnection,
   useMarketplaces,
@@ -33,15 +26,10 @@ import { EmptyState } from '../components/common/EmptyState.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { MarketplaceCard } from '../components/marketplaces/MarketplaceCard.js';
 import { MarketplaceConfigureDrawer } from '../components/marketplaces/MarketplaceConfigureDrawer.js';
-import { MarketplaceSummaryBar } from '../components/marketplaces/MarketplaceSummaryBar.js';
-import { RoadmapMarketplaceCard } from '../components/marketplaces/RoadmapMarketplaceCard.js';
 
-// OLX is the only live integration (docs/spec/PRODUCT.md); every other channel
-// is a roadmap card, whatever the API reports for it.
+// OLX is the only live integration (docs/spec/PRODUCT.md); a stored marketplace
+// with any other key is ignored, whatever the API reports for it.
 const LIVE_MARKETPLACE: MarketplaceKey = 'olx';
-const ROADMAP_MARKETPLACES = MARKETPLACE_KEY_LIST.filter((key) => key !== LIVE_MARKETPLACE);
-
-const IMPORT_STATUSES = ['active', 'new', 'moderation', 'limited', 'expired', 'removed', 'rejected'];
 
 const SANDBOX_CONNECTED_TOAST = 'Sandbox OLX connected — no real marketplace calls are made';
 
@@ -70,18 +58,6 @@ function marketplaceLabel(m: Marketplace): string {
   return m.sandbox ? `${name} (sandbox)` : name;
 }
 
-// The oldest last sync among connected marketplaces; unknown while any of
-// them has never synced.
-function lastFullSync(marketplaces: Marketplace[]): string | undefined {
-  if (marketplaces.length === 0) return undefined;
-  let oldest: string | undefined;
-  for (const m of marketplaces) {
-    if (!m.lastSyncAt) return undefined;
-    if (!oldest || Date.parse(m.lastSyncAt) < Date.parse(oldest)) oldest = m.lastSyncAt;
-  }
-  return oldest;
-}
-
 const MarketplacesPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -89,25 +65,20 @@ const MarketplacesPage: React.FC = () => {
   const { data, isLoading, isError, error, refetch } = useMarketplaces();
   const olx = data?.find((m) => m.key === LIVE_MARKETPLACE);
   const { data: olxCheck } = useMarketplaceConnection(olx?.id ?? '', { skip: !olx });
-  const { data: workspaceOverview } = useAnalyticsOverview();
   const { data: olxOverview } = useAnalyticsOverview({ marketplaceId: olx?.id }, { skip: !olx });
   const { data: olxCredentials } = useMarketplaceAppCredentials(olx?.id ?? '', { skip: !olx });
   const [saveCredentials, { isLoading: savingCredentials }] = useSaveMarketplaceAppCredentials();
   const [syncMarketplace] = useSyncMarketplace();
   const [connectMarketplace] = useConnectMarketplace();
   const [checkMarketplace] = useCheckMarketplace();
-  const [importMarketplacePreview] = useImportMarketplacePreview();
-  const [importMarketplaceAdverts] = useImportMarketplaceAdverts();
   const [updateMarketplace] = useUpdateMarketplace();
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [configureOpen, setConfigureOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
-  const [importPreview, setImportPreview] = useState<MarketplaceImportPreview | null>(null);
 
   // The list view's flag only stands in until the OAuth check answers.
   const olxConnected = olxCheck?.connected ?? olx?.connected ?? false;
-  const connectedMarketplaces = olx && olxConnected ? [olx] : [];
 
   useEffect(() => {
     const oauthResult = searchParams.get('oauth');
@@ -146,25 +117,18 @@ const MarketplacesPage: React.FC = () => {
       .finally(() => setBusy(false));
   }, [checkMarketplace, dispatch, refetch, searchParams, setSearchParams]);
 
-  const handleSyncAll = async () => {
-    if (connectedMarketplaces.length === 0) return;
+  const handleSync = async (m: Marketplace) => {
     setSyncing(true);
-    const results = await Promise.allSettled(
-      connectedMarketplaces.map((m) => syncMarketplace(m.id).unwrap()),
-    );
-    setSyncing(false);
-    const queued: string[] = [];
-    const failed: string[] = [];
-    results.forEach((result, index) => {
-      const label = marketplaceLabel(connectedMarketplaces[index]);
-      if (result.status === 'fulfilled') queued.push(label);
-      else failed.push(`${label} sync failed: ${errorMessage(result.reason)}`);
-    });
-    const message = [queued.length > 0 ? `Sync queued for ${queued.join(', ')}.` : null, ...failed]
-      .filter(Boolean)
-      .join(' ');
-    const severity: ToastSeverity = failed.length === 0 ? 'success' : queued.length > 0 ? 'warning' : 'error';
-    dispatch(enqueueToast({ message, severity }));
+    try {
+      await syncMarketplace(m.id).unwrap();
+      dispatch(enqueueToast({ message: `Sync queued for ${marketplaceLabel(m)}.`, severity: 'success' }));
+    } catch (err) {
+      dispatch(
+        enqueueToast({ message: `${marketplaceLabel(m)} sync failed: ${errorMessage(err)}`, severity: 'error' }),
+      );
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleConnect = async (m: Marketplace) => {
@@ -222,54 +186,6 @@ const MarketplacesPage: React.FC = () => {
     }
   };
 
-  const handleImportPreview = async (m: Marketplace) => {
-    setBusy(true);
-    try {
-      const preview = await importMarketplacePreview({ id: m.id, statuses: IMPORT_STATUSES }).unwrap();
-      setImportPreview(preview);
-      dispatch(
-        enqueueToast({
-          message: `OLX preview found ${preview.totals.discovered} advert(s).`,
-          severity: 'success',
-        }),
-      );
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleImportAllEligible = async () => {
-    if (!importPreview) return;
-    const eligibleIds = importPreview.items
-      .filter((item) => item.status === 'new' || item.status === 'changed')
-      .map((item) => item.externalListingId);
-    if (eligibleIds.length === 0) {
-      dispatch(enqueueToast({ message: 'No eligible OLX adverts to import.', severity: 'info' }));
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await importMarketplaceAdverts({
-        id: importPreview.marketplaceId,
-        externalListingIds: eligibleIds,
-      }).unwrap();
-      dispatch(
-        enqueueToast({
-          message: `Imported ${result.imported}, updated ${result.updated}, skipped ${result.skipped}.`,
-          severity: result.failed > 0 ? 'warning' : 'success',
-        }),
-      );
-      void refetch();
-      setImportPreview(null);
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const olxSlot = isLoading ? (
     <Skeleton variant="rounded" height={300} />
   ) : isError ? null : olx ? (
@@ -283,7 +199,7 @@ const MarketplacesPage: React.FC = () => {
       onConnect={handleConnect}
       onRequestDisconnect={() => setDisconnectOpen(true)}
       onConfigure={() => setConfigureOpen(true)}
-      onImportPreview={handleImportPreview}
+      onSync={handleSync}
     />
   ) : (
     <Card>
@@ -297,63 +213,10 @@ const MarketplacesPage: React.FC = () => {
 
   return (
     <Stack spacing={2.5}>
-      {isError ? (
+      {isError && (
         <Card>
           <ErrorRetry compact error={error} title="Marketplaces could not be loaded" onRetry={refetch} />
         </Card>
-      ) : isLoading ? (
-        <Skeleton variant="rounded" height={80} />
-      ) : (
-        <MarketplaceSummaryBar
-          connectedCount={connectedMarketplaces.length}
-          totalCount={MARKETPLACE_KEY_LIST.length}
-          liveListingCount={workspaceOverview?.liveListingCount ?? null}
-          lastFullSyncAt={lastFullSync(connectedMarketplaces)}
-          sandbox={Boolean(olx?.sandbox)}
-          syncing={syncing}
-          onSyncAll={handleSyncAll}
-        />
-      )}
-
-      {importPreview && (
-        <Alert severity="info">
-          <Stack spacing={1}>
-            <Typography variant="subtitle2">Read-only OLX import preview</Typography>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              <Chip size="small" label={`Discovered: ${importPreview.totals.discovered}`} />
-              <Chip size="small" color="success" label={`New: ${importPreview.totals.new}`} />
-              <Chip size="small" color="info" label={`Changed: ${importPreview.totals.changed}`} />
-              <Chip size="small" label={`Already imported: ${importPreview.totals.already_imported}`} />
-              <Chip size="small" color="warning" label={`Unsupported: ${importPreview.totals.unsupported}`} />
-              <Chip size="small" color="error" label={`Failed: ${importPreview.totals.failed}`} />
-            </Stack>
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                variant="contained"
-                disabled={busy || importPreview.totals.new + importPreview.totals.changed === 0}
-                onClick={handleImportAllEligible}
-              >
-                Import eligible OLX adverts
-              </Button>
-              <Button size="small" variant="text" onClick={() => setImportPreview(null)}>
-                Dismiss preview
-              </Button>
-            </Stack>
-            {importPreview.items.slice(0, 5).map((item) => (
-              <Typography key={item.externalListingId} variant="body2">
-                {item.title} — {item.status}
-                {item.remoteStatus ? ` (${item.remoteStatus})` : ''}
-                {item.warnings.length > 0 ? ` · ${item.warnings.join(', ')}` : ''}
-              </Typography>
-            ))}
-            {importPreview.items.length > 5 && (
-              <Typography variant="body2" color="text.secondary">
-                Showing first 5 of {importPreview.items.length} adverts.
-              </Typography>
-            )}
-          </Stack>
-        </Alert>
       )}
 
       <Box
@@ -368,9 +231,6 @@ const MarketplacesPage: React.FC = () => {
         }}
       >
         {olxSlot}
-        {ROADMAP_MARKETPLACES.map((key) => (
-          <RoadmapMarketplaceCard key={key} marketplaceKey={key} />
-        ))}
       </Box>
 
       {olx && (

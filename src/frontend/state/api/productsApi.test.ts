@@ -95,14 +95,13 @@ describe('product deletion cache invalidation', () => {
       middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(baseApi.middleware),
     });
 
-  // One subscriber per tag the delete can invalidate, as on the Products, Dashboard,
-  // Analytics and Hermes screens.
+  // One subscriber per tag the delete can invalidate, as on the Products, Marketplaces
+  // and Hermes screens.
   const viewsOfTheProduct = [
     'GET /api/products',
     'GET /api/products/product-1',
     'GET /api/listings',
     'GET /api/analytics/overview',
-    'GET /api/analytics/listings',
     'GET /api/hermes/events',
   ];
 
@@ -115,7 +114,6 @@ describe('product deletion cache invalidation', () => {
       store.dispatch(productsApi.endpoints.getProduct.initiate('product-1')),
       store.dispatch(listingsApi.endpoints.getListings.initiate()),
       store.dispatch(analyticsApi.endpoints.getAnalyticsOverview.initiate()),
-      store.dispatch(analyticsApi.endpoints.getAnalyticsListings.initiate()),
       store.dispatch(hermesApi.endpoints.getHermesEvents.initiate()),
     ];
     try {
@@ -129,7 +127,7 @@ describe('product deletion cache invalidation', () => {
     }
   }
 
-  it('refetches every view that counted a deleted product, Dashboard KPIs and Hermes events included', async () => {
+  it('refetches every view that counted a deleted product, analytics overview and Hermes events included', async () => {
     await whileTheProductIsOnScreen(async (store) => {
       await store.dispatch(productsApi.endpoints.deleteProduct.initiate('product-1'));
       await settle(() => viewsOfTheProduct.every((request) => requested.includes(request)));

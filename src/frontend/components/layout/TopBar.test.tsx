@@ -28,9 +28,7 @@ jest.mock('./CommandPalette.js', () => ({
 
 describe('canonical MarketDesk shell contract', () => {
   it.each([
-    ['/', 'Dashboard'],
     ['/products', 'Products'],
-    ['/analytics', 'Analytics'],
     ['/hermes', 'Hermes AI'],
     ['/marketplaces', 'Marketplaces'],
     ['/settings', 'Settings'],
@@ -45,16 +43,15 @@ describe('canonical MarketDesk shell contract', () => {
     });
   });
 
-  it('keeps Listings routable but out of primary PRD navigation', () => {
-    expect(APP_ROUTE_PATHS.listings).toBe('/listings');
+  it('lists the four stage-focus destinations', () => {
     expect(NAV_ITEMS.map(({ path }) => path)).toEqual([
-      '/',
       '/products',
-      '/analytics',
       '/hermes',
       '/marketplaces',
       '/settings',
     ]);
+    expect(Object.values(APP_ROUTE_PATHS)).not.toContain('/analytics');
+    expect(Object.values(APP_ROUTE_PATHS)).not.toContain('/listings');
   });
 
   it('falls back to the product brand for unknown routes', () => {
@@ -64,7 +61,7 @@ describe('canonical MarketDesk shell contract', () => {
     });
   });
 
-  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  // Guard: nothing schedules Hermes in this build.
   it('never claims background Hermes work in any route subtitle', () => {
     const paths = [
       '/',
@@ -111,7 +108,7 @@ describe('PRD top bar', () => {
     </ThemeProvider>
   );
 
-  it('renders the theme and notification controls as bordered 36px squares', () => {
+  it('renders the theme control as a bordered 36px square', () => {
     expect(html).toMatch(/<button(?=[^>]*aria-label="Toggle theme")[^>]*>/);
     expect(html).toContain('width:36px;height:36px');
     expect(html).toContain('border-radius:10px');
@@ -119,10 +116,8 @@ describe('PRD top bar', () => {
     expect(html).toContain('border-color:#E7E9EF');
   });
 
-  it('keeps notifications visibly unavailable', () => {
-    expect(html).toMatch(
-      /<button(?=[^>]*disabled="")(?=[^>]*aria-label="Notifications unavailable")[^>]*>/
-    );
+  it('has no notifications control', () => {
+    expect(html).not.toMatch(/notification/i);
   });
 
   it('offers the command palette with a keyboard shortcut hint', () => {

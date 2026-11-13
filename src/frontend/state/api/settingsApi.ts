@@ -1,10 +1,7 @@
 import type {
   ApiResponse,
   HermesSettings,
-  HermesSettingsPatch,
   IntegrationsSettings,
-  NotificationPreferences,
-  NotificationPreferencesPatch,
   UserPreferences,
   UserPreferencesPatch,
   WorkspaceSettings,
@@ -22,35 +19,9 @@ export function settingsPrincipalKey(principal: SettingsPrincipal): string {
   return `${principal.workspaceId}:${principal.userId}`;
 }
 
-export function notificationChannelPatch(
-  event: keyof NotificationPreferences['events'],
-  channel: keyof NotificationPreferences['events'][keyof NotificationPreferences['events']],
-  enabled: boolean
-): NotificationPreferencesPatch {
-  return { events: { [event]: { [channel]: enabled } } };
-}
-
-export function hermesAutomationPatch(
-  field: 'autoCreateListings' | 'autoAdjustPricing' | 'autoRelist' | 'smartTitleAndSEO',
-  enabled: boolean
-): HermesSettingsPatch {
-  return { guardrails: { [field]: enabled } };
-}
-
-export function hermesCreativityPatch(
-  creativityPreset: HermesSettingsPatch['creativityPreset']
-): HermesSettingsPatch {
-  return { creativityPreset };
-}
-
-export function hermesListingSeoEnabledPatch(enabled: boolean): HermesSettingsPatch {
-  return { agents: { listingSeo: { enabled } } };
-}
-
 export const settingsRequest = {
   workspace: () => '/settings/workspace',
   preferences: () => '/settings/preferences',
-  notifications: () => '/settings/notifications',
   hermes: () => '/settings/hermes',
   integrations: () => '/settings/integrations',
 };
@@ -115,54 +86,10 @@ export const settingsApi = baseApi.injectEndpoints({
         { type: 'Settings', id: tagId('PREFERENCES', principal) },
       ],
     }),
-    getNotificationPreferences: builder.query<NotificationPreferences, SettingsPrincipal>({
-      query: settingsRequest.notifications,
-      transformResponse: (response: ApiResponse<NotificationPreferences>) => unwrap(response),
-      providesTags: (_result, _error, principal) => [
-        { type: 'Settings', id: tagId('NOTIFICATIONS', principal) },
-      ],
-    }),
-    updateNotificationPreferences: builder.mutation<
-      NotificationPreferences,
-      PrincipalMutation<NotificationPreferencesPatch>
-    >({
-      query: ({ patch }) => ({
-        url: settingsRequest.notifications(),
-        method: 'PATCH',
-        body: patch,
-      }),
-      transformResponse: (response: ApiResponse<NotificationPreferences>) => unwrap(response),
-      async onQueryStarted({ principal }, { dispatch, queryFulfilled }) {
-        try {
-          const { data } = await queryFulfilled;
-          dispatch(settingsApi.util.upsertQueryData('getNotificationPreferences', principal, data));
-        } catch {
-          // Keep the last confirmed cache value.
-        }
-      },
-      invalidatesTags: (_result, _error, { principal }) => [
-        { type: 'Settings', id: tagId('NOTIFICATIONS', principal) },
-      ],
-    }),
     getHermesSettings: builder.query<HermesSettings, SettingsPrincipal>({
       query: settingsRequest.hermes,
       transformResponse: (response: ApiResponse<HermesSettings>) => unwrap(response),
       providesTags: (_result, _error, principal) => [
-        { type: 'Settings', id: tagId('HERMES', principal) },
-      ],
-    }),
-    updateHermesSettings: builder.mutation<HermesSettings, PrincipalMutation<HermesSettingsPatch>>({
-      query: ({ patch }) => ({ url: settingsRequest.hermes(), method: 'PATCH', body: patch }),
-      transformResponse: (response: ApiResponse<HermesSettings>) => unwrap(response),
-      async onQueryStarted({ principal }, { dispatch, queryFulfilled }) {
-        try {
-          const { data } = await queryFulfilled;
-          dispatch(settingsApi.util.upsertQueryData('getHermesSettings', principal, data));
-        } catch {
-          // Keep the last confirmed cache value.
-        }
-      },
-      invalidatesTags: (_result, _error, { principal }) => [
         { type: 'Settings', id: tagId('HERMES', principal) },
       ],
     }),
@@ -181,9 +108,6 @@ export const {
   useUpdateWorkspaceSettingsMutation,
   useGetUserPreferencesQuery,
   useUpdateUserPreferencesMutation,
-  useGetNotificationPreferencesQuery,
-  useUpdateNotificationPreferencesMutation,
   useGetHermesSettingsQuery,
-  useUpdateHermesSettingsMutation,
   useGetIntegrationSettingsQuery,
 } = settingsApi;

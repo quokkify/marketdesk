@@ -46,7 +46,6 @@ export function resolveSidebarResponsiveMode(width: number): SidebarResponsiveMo
 }
 
 export function isPrimaryNavActive(current: string, target: string): boolean {
-  if (target === '/') return current === '/';
   return current === target || current.startsWith(`${target}/`);
 }
 

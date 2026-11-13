@@ -3,12 +3,11 @@
 // the authoritative connection state from the OAuth check and confirms every
 // disconnect before it happens.
 import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Stack, Switch, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import LinkIcon from '@mui/icons-material/Link';
+import SyncIcon from '@mui/icons-material/Sync';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import type { Marketplace } from '@shared/types';
 import { MARKETPLACE_NAMES } from '@shared/constants';
 import { Card } from '../common/Card.js';
@@ -16,8 +15,6 @@ import { Badge } from '../common/Badge.js';
 import { formatNumber, formatRelativeTime } from '../../utils/formatters.js';
 import { SYNC_MODE_LABELS } from '../../utils/labels.js';
 import { MarketplaceBrandChip } from './MarketplaceBrandChip.js';
-
-export const SYNC_ISSUES_PATH = '/listings?status=error';
 
 const pulse = keyframes`
   0%, 100% { opacity: 1; }
@@ -73,7 +70,7 @@ export interface MarketplaceCardProps {
   onConnect: (marketplace: Marketplace) => void;
   onRequestDisconnect: (marketplace: Marketplace) => void;
   onConfigure: (marketplace: Marketplace) => void;
-  onImportPreview: (marketplace: Marketplace) => void;
+  onSync: (marketplace: Marketplace) => void;
 }
 
 export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
@@ -86,7 +83,7 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
   onConnect,
   onRequestDisconnect,
   onConfigure,
-  onImportPreview,
+  onSync,
 }) => {
   const name = MARKETPLACE_NAMES[m.key];
   const titleId = `marketplace-${m.id}-title`;
@@ -150,19 +147,6 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
           <DetailRow label="Last sync" value={m.lastSyncAt ? formatRelativeTime(m.lastSyncAt) : 'Never'} />
         </Stack>
 
-        {m.errorCount > 0 && (
-          <Button
-            component={RouterLink}
-            to={SYNC_ISSUES_PATH}
-            variant="outlined"
-            color="error"
-            size="small"
-            startIcon={<ErrorOutlineIcon />}
-          >
-            Review sync issues
-          </Button>
-        )}
-
         {!connected && credentialsMissing && (
           <Typography variant="body2" color="text.secondary">
             Add your OLX app credentials in Configure before connecting.
@@ -178,14 +162,15 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
           >
             Configure
           </Button>
-          {connected && !m.sandbox && (
+          {connected && (
             <Button
               variant="outlined"
-              onClick={() => onImportPreview(m)}
-              disabled={busy}
+              startIcon={<SyncIcon />}
+              onClick={() => onSync(m)}
+              disabled={busy || syncing}
               sx={{ flex: '1 1 140px' }}
             >
-              Preview import
+              {syncing ? 'Syncing…' : 'Sync now'}
             </Button>
           )}
           {!connected && (

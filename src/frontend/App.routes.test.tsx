@@ -1,5 +1,5 @@
 import React from 'react';
-import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { RouteError } from './components/common/RouteError';
 import { AppShell } from './components/layout/AppShell';
 import './App';
@@ -43,5 +43,36 @@ describe('app routes', () => {
     );
 
     expect(isRouteError(shell?.errorElement)).toBe(true);
+  });
+
+  const shellRoutes = () =>
+    findRoute(
+      routes,
+      (route) => React.isValidElement(route.element) && route.element.type === AppShell
+    )?.children ?? [];
+
+  it('sends the index route to Products', () => {
+    const index = shellRoutes().find((route) => route.index);
+    expect(React.isValidElement(index?.element) && index.element.type === Navigate).toBe(true);
+    expect(
+      (index?.element as React.ReactElement<{ to: string; replace?: boolean }>).props
+    ).toMatchObject({
+      to: '/products',
+      replace: true,
+    });
+  });
+
+  it('has no Dashboard, Analytics or Listings route and keeps the not-found fallback', () => {
+    const paths = shellRoutes()
+      .filter((route) => !route.index)
+      .map((route) => route.path);
+    expect(paths).toEqual([
+      '/products',
+      '/products/:productId',
+      '/hermes',
+      '/marketplaces',
+      '/settings',
+      '*',
+    ]);
   });
 });

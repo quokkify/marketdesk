@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage products and listings across marketplaces from a single unified dashboard. OLX is the only connected marketplace: the Allegro, Vinted, Facebook and eBay adapters were removed in the stage-focus cut (#444), and the other marketplace keys stay in the key list without an adapter. The system is powered by Hermes, an autonomous AI agent that suggests and executes optimizations with human-in-the-loop approval gates.
+MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage products and listings across marketplaces from a single unified workspace. OLX is the only connected marketplace: the Allegro, Vinted, Facebook and eBay adapters were removed in the stage-focus cut (#444), and the other marketplace keys stay in the key list without an adapter. The system is powered by Hermes, an autonomous AI agent that suggests and executes optimizations with human-in-the-loop approval gates.
 
 **Architectural Vision**: Clean architecture principles with marketplace-agnostic abstraction. The system is designed as a collection of independent, loosely-coupled domains (Products, Listings, Marketplaces, Analytics, AI) communicating via events. This enables:
 - **Extensibility**: New marketplaces add via adapter pattern, not core logic changes
@@ -30,7 +30,7 @@ MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage 
 ┌─────────────────────────────────────────────────────────────┐
 │                    Presentation Layer                        │
 │         React SPA + MUI Material Components                 │
-│    (Dashboard, Products, Listings, Analytics, Hermes)       │
+│      (Products, Hermes AI, Marketplaces, Settings)          │
 └──────────────────┬──────────────────────────────────────────┘
                    │ REST API
 ┌──────────────────▼──────────────────────────────────────────┐
@@ -68,7 +68,7 @@ MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │                        Frontend (React)                            │
-│  Dashboard | Products | Listings | Analytics | Hermes | Settings  │
+│     Products | Hermes AI | Marketplaces | Settings                │
 └─────────────────────┬──────────────────────────────────────────────┘
                       │ REST API (JSON)
 ┌─────────────────────▼──────────────────────────────────────────────┐
@@ -446,11 +446,9 @@ app.post('/products', async (req, res) => {
 ```
 src/frontend/
 ├── pages/                           # Route pages (not Next.js, plain React Router)
-│   ├── DashboardPage.tsx
 │   ├── ProductsPage.tsx
 │   ├── ListingDetailsPage.tsx
 │   ├── HermesActivityPage.tsx
-│   ├── AnalyticsPage.tsx
 │   ├── MarketplacesPage.tsx
 │   └── SettingsPage.tsx
 │
@@ -468,12 +466,7 @@ src/frontend/
 │   │   └── Skeleton.tsx
 │   ├── tables/
 │   │   ├── ProductsTable.tsx
-│   │   ├── ListingsTable.tsx
-│   │   └── AnalyticsTable.tsx
-│   ├── charts/
-│   │   ├── RevenueChart.tsx
-│   │   ├── ViewsChart.tsx
-│   │   └── ConversionChart.tsx
+│   │   └── ListingsTable.tsx
 │   ├── forms/
 │   │   ├── ProductForm.tsx
 │   │   ├── PricingForm.tsx
@@ -510,7 +503,6 @@ src/frontend/
 ├── hooks/                           # Custom React hooks
 │   ├── useAuth.ts
 │   ├── useWorkspace.ts
-│   ├── useNotifications.ts
 │   └── useDebounce.ts
 │
 ├── utils/

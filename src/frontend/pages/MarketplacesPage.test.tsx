@@ -5,8 +5,6 @@ import type { Marketplace } from '@shared/types';
 import type { ConfirmDialogProps } from '../components/common/ConfirmDialog';
 import type { MarketplaceCardProps } from '../components/marketplaces/MarketplaceCard';
 import type { MarketplaceConfigureDrawerProps } from '../components/marketplaces/MarketplaceConfigureDrawer';
-import type { MarketplaceSummaryBarProps } from '../components/marketplaces/MarketplaceSummaryBar';
-import { ROADMAP_CARD_COPY } from '../components/marketplaces/RoadmapMarketplaceCard';
 import type { MarketplaceOAuthStatus } from '../state/api/index.js';
 import MarketplacesPage, { oauthReturnToast } from './MarketplacesPage';
 
@@ -14,7 +12,6 @@ import MarketplacesPage, { oauthReturnToast } from './MarketplacesPage';
 // effects and ignores state updates after render, so tests drive the page's
 // handlers through these captured callbacks.
 const mockCapture: {
-  summary?: MarketplaceSummaryBarProps;
   card?: MarketplaceCardProps;
   drawer?: MarketplaceConfigureDrawerProps;
   confirm?: ConfirmDialogProps;
@@ -38,25 +35,12 @@ jest.mock('../services/hooks/index.js', () => ({
   useSyncMarketplace: () => [mockSync],
   useConnectMarketplace: () => [mockConnect],
   useCheckMarketplace: () => [jest.fn()],
-  useImportMarketplacePreview: () => [jest.fn()],
-  useImportMarketplaceAdverts: () => [jest.fn()],
   useUpdateMarketplace: () => [mockUpdate],
 }));
 
 jest.mock('../state/hooks.js', () => ({
   useAppDispatch: () => mockDispatch,
 }));
-
-jest.mock('../components/marketplaces/MarketplaceSummaryBar.js', () => {
-  const actual = jest.requireActual('../components/marketplaces/MarketplaceSummaryBar');
-  return {
-    ...actual,
-    MarketplaceSummaryBar: (props: MarketplaceSummaryBarProps) => {
-      mockCapture.summary = props;
-      return actual.MarketplaceSummaryBar(props);
-    },
-  };
-});
 
 jest.mock('../components/marketplaces/MarketplaceCard.js', () => {
   const actual = jest.requireActual('../components/marketplaces/MarketplaceCard');
@@ -90,8 +74,6 @@ jest.mock('../components/common/ConfirmDialog.js', () => {
     },
   };
 });
-
-const ROADMAP_NAMES = ['Allegro', 'Vinted', 'Facebook Marketplace', 'eBay', 'Etsy', 'Amazon'];
 
 function olx(overrides: Partial<Marketplace> = {}): Marketplace {
   return {
@@ -160,26 +142,24 @@ function toast(message: string, severity: string) {
 describe('MarketplacesPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    delete mockCapture.summary;
     delete mockCapture.card;
     delete mockCapture.drawer;
     delete mockCapture.confirm;
     setup();
   });
 
-  it('renders one OLX card and six roadmap cards', () => {
+  it('renders the OLX card and nothing else', () => {
     const html = renderPage();
 
-    expect(count(html, '<section')).toBe(7);
+    expect(count(html, '<section')).toBe(1);
     expect(count(html, 'aria-label="OLX logo"')).toBe(1);
-    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
-    expect(count(html, '>Not available yet</span>')).toBe(6);
-    for (const name of ROADMAP_NAMES) {
-      expect(html).toContain(`>${name}</h2>`);
-    }
+    expect(html).not.toContain('Not available yet');
+    expect(html).not.toContain('marketplaces connected');
+    expect(html).not.toContain('Preview import');
+    expect(html).not.toContain('Import eligible');
   });
 
-  it('roadmap cards expose no connect action', () => {
+  it('ignores a stored marketplace that is not OLX', () => {
     setup({
       marketplaces: [
         olx(),
@@ -188,23 +168,18 @@ describe('MarketplacesPage', () => {
     });
     const html = renderPage();
 
-    expect(count(html, '>Allegro</h2>')).toBe(1);
-    expect(count(html, '(not available yet)"')).toBe(6);
-    expect(html).not.toMatch(/Connect (with|sandbox) (?!OLX)/);
-    expect(html).toContain('>1 of 7 marketplaces connected</');
+    expect(count(html, '<section')).toBe(1);
+    expect(html).not.toContain('Allegro');
   });
 
   it('sandbox badge shown when marketplace.sandbox', () => {
     setup({ marketplaces: [olx({ sandbox: true, connected: false })], check: { connected: false, sandbox: false } });
     const sandboxHtml = renderPage();
-    const sandboxSummary = mockCapture.summary;
     setup({ marketplaces: [olx({ connected: false })], check: { connected: false, sandbox: false } });
     const realHtml = renderPage();
 
-    expect(sandboxSummary?.sandbox).toBe(true);
-    expect(count(sandboxHtml, '>Sandbox</span>')).toBe(2);
+    expect(count(sandboxHtml, '>Sandbox</span>')).toBe(1);
     expect(sandboxHtml).toContain('Connect sandbox OLX');
-    expect(mockCapture.summary?.sandbox).toBe(false);
     expect(realHtml).not.toContain('>Sandbox</span>');
     expect(realHtml).toContain('Connect with OLX');
   });
@@ -215,22 +190,20 @@ describe('MarketplacesPage', () => {
 
     expect(mockConnection).toHaveBeenCalledWith('marketplace-olx', { skip: false });
     expect(html).toContain('>Disconnected</');
-    expect(html).toContain('>0 of 7 marketplaces connected</');
     expect(html).toContain('Connect with OLX');
   });
 
   it('falls back to the list flag until the OAuth check answers', () => {
     setup({ marketplaces: [olx({ connected: true })], check: null });
 
-    expect(renderPage()).toContain('>1 of 7 marketplaces connected</');
+    expect(renderPage()).toContain('>Connected</');
   });
 
-  it('shows workspace and OLX live listing counts from analytics', () => {
+  it('shows the OLX live listing count from analytics', () => {
     const html = renderPage();
 
     expect(mockOverview).toHaveBeenCalledWith({ marketplaceId: 'marketplace-olx' }, { skip: false });
     expect(html).toContain('>9 live</dd>');
-    expect(html).toContain('12 active listings');
   });
 
   it('asks for OLX app credentials before a real connect', () => {
@@ -254,7 +227,7 @@ describe('MarketplacesPage', () => {
     expect(renderPage()).not.toContain('Add your OLX app credentials');
   });
 
-  it('shows placeholders while marketplaces load and keeps the roadmap visible', () => {
+  it('shows placeholders while marketplaces load', () => {
     mockMarketplaces.mockReturnValue({
       data: undefined,
       isLoading: true,
@@ -264,10 +237,9 @@ describe('MarketplacesPage', () => {
     });
     const html = renderPage();
 
-    expect(count(html, 'class="MuiSkeleton-root')).toBe(2);
+    expect(count(html, 'class="MuiSkeleton-root')).toBe(1);
     expect(html).not.toContain('marketplaces connected');
     expect(html).not.toContain('aria-label="OLX logo"');
-    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
   });
 
   it('says when the workspace has no OLX marketplace record', () => {
@@ -276,12 +248,10 @@ describe('MarketplacesPage', () => {
 
     expect(mockConnection).toHaveBeenCalledWith('', { skip: true });
     expect(html).toContain('OLX is not set up');
-    expect(html).toContain('>0 of 7 marketplaces connected</');
     expect(html).not.toContain('Connect with OLX');
-    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
   });
 
-  it('shows a retry card when marketplaces fail to load and keeps the roadmap visible', () => {
+  it('shows a retry card when marketplaces fail to load', () => {
     mockMarketplaces.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -293,10 +263,9 @@ describe('MarketplacesPage', () => {
 
     expect(html).toContain('Try again');
     expect(html).not.toContain('marketplaces connected');
-    expect(count(html, ROADMAP_CARD_COPY)).toBe(6);
   });
 
-  it('Sync all queues a sync for the connected OLX marketplace only', async () => {
+  it('Sync now queues a sync for the OLX marketplace', async () => {
     setup({
       marketplaces: [
         olx(),
@@ -306,7 +275,10 @@ describe('MarketplacesPage', () => {
     mockSync.mockReturnValue({ unwrap: () => Promise.resolve({ marketplaceId: 'marketplace-olx', enqueued: true }) });
     renderPage();
 
-    await mockCapture.summary?.onSyncAll();
+    const rendered = mockCapture.card?.marketplace;
+    if (!rendered) throw new Error('The marketplace card was not rendered');
+    expect(rendered.key).toBe('olx');
+    await mockCapture.card?.onSync(rendered);
 
     expect(mockSync).toHaveBeenCalledTimes(1);
     expect(mockSync).toHaveBeenCalledWith('marketplace-olx');
@@ -320,7 +292,7 @@ describe('MarketplacesPage', () => {
     });
     renderPage();
 
-    await mockCapture.summary?.onSyncAll();
+    await mockCapture.card?.onSync(olx({ sandbox: true }));
 
     expect(mockDispatch).toHaveBeenCalledWith(
       toast('OLX (sandbox) sync failed: Sync queue unavailable', 'error'),

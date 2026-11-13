@@ -10,6 +10,7 @@ import {
   firstWizardStepWithErrors,
   NoMarketplaceConnectedCard,
   ProductWizardForm,
+  shouldClearWizardTarget,
   validateWizardStep,
   verifyWizardMarketplaceReadiness,
   WizardReviewSummary,
@@ -116,34 +117,41 @@ describe('ProductWizardForm required-step validation', () => {
     );
     expect(validateWizardStep(4, validValues(), 'olx', [connected])).toEqual({ fieldErrors: {} });
   });
+
+  it('ignores a connected marketplace that is not OLX when validating the Marketplace step', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(validateWizardStep(4, validValues(), null, [allegro])).toEqual({ fieldErrors: {} });
+  });
+
+  it('rejects a non-OLX target even when such a row is connected', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(
+      validateWizardStep(4, validValues(), 'allegro', [marketplace(), allegro]).marketplaceError
+    ).toBe('Select a connected marketplace.');
+  });
+
+  it('clears a restored target that is not a connected wizard option', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(shouldClearWizardTarget('allegro', [marketplace(), allegro])).toBe(true);
+    expect(shouldClearWizardTarget('olx', [marketplace({ connected: false })])).toBe(true);
+    expect(shouldClearWizardTarget('olx', [marketplace()])).toBe(false);
+    expect(shouldClearWizardTarget('olx', undefined)).toBe(false);
+    expect(shouldClearWizardTarget(null, [marketplace()])).toBe(false);
+  });
 });
 
 describe('ProductWizardForm marketplace options', () => {
-  it('enables only connections reported as connected by the API', () => {
+  it('offers OLX only and ignores other stored marketplaces', () => {
     const options = buildWizardMarketplaceOptions([
       marketplace(),
-      marketplace({
-        id: 'marketplace-allegro',
-        key: 'allegro',
-        name: 'Allegro',
-        connected: false,
-      }),
+      marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro', connected: true }),
     ]);
 
-    expect(options).toHaveLength(7);
-    expect(options.find((option) => option.key === 'olx')).toMatchObject({
-      configured: true,
-      connected: true,
-    });
-    expect(options.find((option) => option.key === 'allegro')).toMatchObject({
-      configured: true,
-      connected: false,
-    });
-    expect(options.find((option) => option.key === 'ebay')).toMatchObject({
-      configured: false,
-      connected: false,
-      integrated: false,
-    });
+    expect(options.map((option) => option.key)).toEqual(['olx']);
+    expect(options[0]).toMatchObject({ configured: true, connected: true, integrated: true });
   });
 
   it('marks OLX as the integrated channel and carries the sandbox flag', () => {
@@ -306,5 +314,33 @@ describe('ProductWizardForm authoritative marketplace readiness', () => {
     expect(check).toHaveBeenCalledTimes(2);
     expect(result.marketplaces.every((item) => !item.connected)).toBe(true);
     expect(result.hadCheckError).toBe(true);
+  });
+
+  it('ignores a stored non-OLX row when verifying readiness', async () => {
+    const olx = marketplace({ connected: false });
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', connected: true });
+    const check = jest.fn(async () => {
+      throw new Error('only OLX can be checked');
+    });
+
+    const result = await verifyWizardMarketplaceReadiness([olx, allegro], check);
+
+    expect(check).not.toHaveBeenCalled();
+    expect(result.hadCheckError).toBe(false);
+    expect(result.marketplaces).toEqual([{ ...olx, connected: false }]);
+  });
+
+  it('reports a failed OLX check even when a non-OLX row is stored as connected', async () => {
+    const olx = marketplace();
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', connected: true });
+    const check = jest.fn(async () => {
+      throw new Error('credentials cannot be decrypted');
+    });
+
+    const result = await verifyWizardMarketplaceReadiness([olx, allegro], check);
+
+    expect(result.hadCheckError).toBe(true);
+    expect(result.marketplaces.map((item) => item.key)).toEqual(['olx']);
+    expect(result.marketplaces.some((item) => item.connected)).toBe(false);
   });
 });

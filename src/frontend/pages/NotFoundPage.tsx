@@ -2,6 +2,7 @@
 import React from 'react';
 import { Button, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { APP_ROUTE_PATHS } from '../utils/constants.js';
 
 const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,8 +14,8 @@ const NotFoundPage: React.FC = () => {
       <Typography variant="body1" color="text.secondary">
         The page you are looking for does not exist.
       </Typography>
-      <Button variant="contained" onClick={() => navigate('/')}>
-        Back to dashboard
+      <Button variant="contained" onClick={() => navigate(APP_ROUTE_PATHS.products)}>
+        Back to Products
       </Button>
     </Stack>
   );

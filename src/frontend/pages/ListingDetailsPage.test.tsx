@@ -91,7 +91,7 @@ describe('ListingDetailsPage presentation', () => {
         settingsLoaded: true,
         listingSeoEnabled: false,
       })
-    ).toBe('Enable the listing SEO agent in Hermes settings first.');
+    ).toBe('The listing SEO agent is switched off for this workspace.');
     expect(
       productHermesDisabledReason({
         productId: 'product-1',

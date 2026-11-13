@@ -2,7 +2,7 @@
 
 # MarketDesk
 
-**One workspace for seller operations: products, marketplace listings, analytics, and reviewable AI assistance.**
+**One workspace for seller operations: products, marketplace listings, and reviewable AI assistance.**
 
 Project status: [prototype, not production-certified](.github/project-status.yml) · active implementation. Current releases use independent `backend-v*`, `frontend-v*`, and `assets-v*` component tags; combined `marketdesk-v*` tags remain historical rollback references.
 
@@ -19,13 +19,12 @@ Project status: [prototype, not production-certified](.github/project-status.yml
 
 [View the editable desktop source](docs/design/readme-showcase/marketdesk-readme-source.html)
 
-MarketDesk is a workspace-scoped product and listing management platform. **OLX is the only validated real marketplace integration**; other channels are roadmap surfaces. In the default local setup OLX runs as a labelled [sandbox](#sandbox-mode) that never contacts OLX. Hermes recommendations require human review and guarded execution—not unattended automation. This project is a prototype, not production-certified.
+MarketDesk is a workspace-scoped product and listing management platform. **OLX is the only validated real marketplace integration**; no other channel is offered. In the default local setup OLX runs as a labelled [sandbox](#sandbox-mode) that never contacts OLX. Hermes recommendations require human review and guarded execution—not unattended automation. This project is a prototype, not production-certified.
 
 ## What you can do
 
 - **Manage a product catalog** and prepare marketplace listings from one workspace.
 - **Review listing and provider state** without confusing local drafts with marketplace truth.
-- **Track operations and analytics** across current product/listing workflows.
 - **Use Hermes-assisted recommendations** as proposals to inspect, approve, or dismiss. Without a Hermes Agent API server, simple built-in heuristics answer instead and are labelled as such.
 
 ## Get started
@@ -54,7 +53,7 @@ With the default `.env`, OLX runs as a labelled sandbox (`OLX_ADAPTER_MODE=stub`
 
 - Connecting OLX from the Marketplaces page creates a stand-in account that needs no OLX credentials. OLX state is labelled **Sandbox** wherever it is shown.
 - Publishing still goes through the category review and confirmation, against built-in stand-ins for the OLX category tree and the publication quota. Sandbox adverts have no page on olx.pl, so MarketDesk shows a **Sandbox advert** label where a real advert would link to OLX.
-- Importing existing OLX adverts is unavailable, and there are no real sales. Views and watchers are simulated by the OLX sandbox and grow on every sync, and the Listings and Analytics pages label them as sandbox data.
+- There are no real sales. Views and watchers are simulated by the OLX sandbox and grow on every sync (use **Sync now** on the OLX card), and the product page labels them as sandbox data.
 - `OLX_ADAPTER_MODE=real` switches to the real OLX Partner API and needs approved credentials; see [OLX real API readiness](docs/olx-real-api-readiness.md). A stored sandbox connection is refused in real mode and has to be reconnected. Do not publish, relist, or mutate real marketplace data without explicit authorization.
 - Real mode also needs `PUBLIC_BASE_URL`, the public address of this backend from which OLX downloads advert photos; the app refuses to start in real mode while it is empty, loopback or private.
 

@@ -1,12 +1,12 @@
 // Branded fallback for a route or page that crashed. It names the failure and offers a hard
-// reload and a way back to the dashboard. It is the router's errorElement (a whole page) and,
+// reload and a way back to Products. It is the router's errorElement (a whole page) and,
 // through RouteErrorBoundary, the stand-in for a crashed page inside the app shell.
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Link as RouterLink, isRouteErrorResponse, useRouteError } from 'react-router-dom';
-import { APP_NAME } from '../../utils/constants.js';
+import { APP_NAME, APP_ROUTE_PATHS } from '../../utils/constants.js';
 import { Card } from './Card.js';
 
 export function describeRouteError(error: unknown): string | undefined {
@@ -67,7 +67,7 @@ export const RouteErrorView: React.FC<RouteErrorViewProps> = ({
           Something went wrong
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {APP_NAME} could not display this page. Reload to try again, or go back to the dashboard.
+          {APP_NAME} could not display this page. Reload to try again, or go back to Products.
         </Typography>
         {detail && (
           <Typography
@@ -96,13 +96,13 @@ export const RouteErrorView: React.FC<RouteErrorViewProps> = ({
             variant="outlined"
             color="inherit"
             component={RouterLink}
-            to="/"
+            to={APP_ROUTE_PATHS.products}
             sx={{
               borderColor: 'borderStrong',
               '&:hover': { borderColor: 'borderStrong', bgcolor: 'surface2' },
             }}
           >
-            Back to dashboard
+            Back to Products
           </Button>
         </Stack>
       </Card>

@@ -41,19 +41,6 @@ export function formatNumber(value: number | null | undefined, locale = 'en-US')
   return new Intl.NumberFormat(locale).format(value);
 }
 
-export function formatPercent(
-  value: number | null | undefined,
-  fractionDigits = 1,
-  locale = 'en-US',
-): string {
-  if (value == null || Number.isNaN(value)) return '—';
-  return new Intl.NumberFormat(locale, {
-    style: 'percent',
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value / 100);
-}
-
 export function formatDate(
   iso: string | Date | null | undefined,
   timeZone: string = DEFAULT_TIMEZONE,
