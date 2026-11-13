@@ -240,22 +240,18 @@ export function ApplicationInfoBlock({
   );
 }
 
-type MarketplaceIntegration = Extract<IntegrationSettingsStatus, { category: 'marketplace' }>;
-
-const isMarketplaceIntegration = (
-  item: IntegrationSettingsStatus
-): item is MarketplaceIntegration => item.category === 'marketplace';
-
 const OLX_BRAND = { code: 'OL', color: '#12B6AB' };
 
-const isOlxIntegration = (item: MarketplaceIntegration): boolean => item.providerKey === 'olx';
+const isOlxIntegration = (item: IntegrationSettingsStatus): boolean => item.providerKey === 'olx';
 
-export function marketplaceAccountStatus(item: MarketplaceIntegration): MarketplaceAccountStatus {
+export function marketplaceAccountStatus(
+  item: IntegrationSettingsStatus
+): MarketplaceAccountStatus {
   if (item.account?.status === 'error') return 'error';
   return item.connected ? 'connected' : 'disconnected';
 }
 
-export function MarketplaceAccountsList({ items: stored }: { items: MarketplaceIntegration[] }) {
+export function MarketplaceAccountsList({ items: stored }: { items: IntegrationSettingsStatus[] }) {
   const items = stored.filter(isOlxIntegration);
   if (items.length === 0) {
     return (
@@ -454,7 +450,7 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const marketplaceItems = (integrations.currentData?.items ?? []).filter(isMarketplaceIntegration);
+  const marketplaceItems = integrations.currentData?.items ?? [];
 
   const renderSection = () => {
     switch (activeSection) {

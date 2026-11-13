@@ -22,8 +22,6 @@ export function createMarketplaceRoutes(controller: MarketplaceController): Rout
   router.put('/:id/app-credentials', asyncHandler(controller.saveAppCredentials));
   router.delete('/:id/app-credentials', asyncHandler(controller.removeAppCredentials));
   router.get('/:id/check', asyncHandler(controller.check));
-  router.post('/:id/import-preview', asyncHandler(controller.importPreview));
-  router.post('/:id/import', asyncHandler(controller.importApply));
   router.patch('/:id', validateBody(updateMarketplaceSchema), asyncHandler(controller.update));
   return router;
 }

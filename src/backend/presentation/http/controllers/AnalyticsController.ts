@@ -50,12 +50,4 @@ export class AnalyticsController {
   overview = async (req: Request, res: Response): Promise<void> => {
     ok(res, await this.analytics.getDashboardMetrics(req.user!.workspaceId!, parseAnalyticsRange(req.query)));
   };
-
-  revenue = async (req: Request, res: Response): Promise<void> => {
-    ok(res, await this.analytics.getRevenue(req.user!.workspaceId!, parseAnalyticsRange(req.query)));
-  };
-
-  listings = async (req: Request, res: Response): Promise<void> => {
-    ok(res, await this.analytics.getListingPerformance(req.user!.workspaceId!, parseAnalyticsRange(req.query)));
-  };
 }

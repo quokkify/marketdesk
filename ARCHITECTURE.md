@@ -1489,6 +1489,8 @@ async exportUserData(workspaceId: UUID): Promise<ExportFile> {
 
 ## 16. Analytics Architecture
 
+The HTTP surface is `GET /api/analytics/overview` only. The revenue and listings endpoints were removed in the stage-focus cut (#444), and marketplace sync keeps recording `view`, `message` and `sale` events. The code below is illustrative.
+
 ### Event Capture
 
 ```typescript

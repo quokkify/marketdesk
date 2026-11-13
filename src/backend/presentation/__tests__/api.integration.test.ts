@@ -38,7 +38,6 @@ import {
   type OlxOAuthAppCredentials,
   type OlxOAuthTokens,
 } from '../../application/services/MarketplaceOAuthService';
-import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import type { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -174,9 +173,6 @@ function stubAnalyticsService(): AnalyticsApplicationService {
     async getDashboardMetrics() {
       return { workspaceId: 'ws-1' };
     },
-    async getListingPerformance() {
-      return [];
-    },
   } as unknown as AnalyticsApplicationService;
 }
 
@@ -275,66 +271,6 @@ function sandboxMarketplaceOAuthService(
     stateGenerator: () => 'unused-oauth-state',
     sandbox: { enabled: true, successUrl: 'http://localhost:5173/marketplaces' },
   });
-}
-
-function stubMarketplaceImportService(): MarketplaceImportService {
-  return {
-    async preview() {
-      return Ok({
-        marketplaceId: 'marketplace-olx',
-        marketplaceKey: 'olx' as const,
-        readOnly: true as const,
-        totals: {
-          discovered: 1,
-          new: 1,
-          already_imported: 0,
-          changed: 0,
-          unsupported: 0,
-          failed: 0,
-        },
-        items: [
-          {
-            status: 'new' as const,
-            externalListingId: 'olx-1',
-            externalUrl: 'https://www.olx.pl/d/oferta/olx-1',
-            title: 'Remote camera',
-            remoteStatus: 'active',
-            warnings: [],
-            proposed: {
-              externalListingId: 'olx-1',
-              externalUrl: 'https://www.olx.pl/d/oferta/olx-1',
-              title: 'Remote camera',
-              description: 'Existing OLX advert',
-              price: 100,
-              currency: 'PLN',
-              status: 'live' as const,
-              remoteStatus: 'active',
-              category: 'electronics',
-              imageUrls: ['https://img.example/1.jpg'],
-            },
-          },
-        ],
-      });
-    },
-    async import() {
-      return Ok({
-        marketplaceId: 'marketplace-olx',
-        marketplaceKey: 'olx' as const,
-        imported: 1,
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-        results: [
-          {
-            externalListingId: 'olx-1',
-            status: 'imported' as const,
-            productId: 'product-imported',
-            listingId: 'listing-imported',
-          },
-        ],
-      });
-    },
-  } as unknown as MarketplaceImportService;
 }
 
 function stubOlxPublicationQuotaService(): OlxPublicationQuotaService {
@@ -554,7 +490,6 @@ async function buildTestApp(
     ) => MarketplaceOAuthService;
     olxAdapterMode?: OlxAdapterMode;
     hermesStatus?: AppDeps['hermesStatus'];
-    marketplaceImportService?: MarketplaceImportService;
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
     enableRateLimit?: boolean;
   } = {}
@@ -593,7 +528,6 @@ async function buildTestApp(
     marketplaceOAuthService:
       options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
-    marketplaceImportService: options.marketplaceImportService ?? stubMarketplaceImportService(),
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
       ? undefined
       : (options.olxPublicationQuotaService ?? stubOlxPublicationQuotaService()),
@@ -1416,78 +1350,14 @@ describe('Presentation API', () => {
       ]);
     });
 
-    it('previews existing OLX adverts through a read-only import endpoint', async () => {
-      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
-      const res = await auth(
-        request(app).post('/api/marketplaces/marketplace-olx/import-preview')
-      ).send({
-        statuses: ['active'],
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.readOnly).toBe(true);
-      expect(res.body.data.totals).toEqual({
-        discovered: 1,
-        new: 1,
-        already_imported: 0,
-        changed: 0,
-        unsupported: 0,
-        failed: 0,
-      });
-      expect(res.body.data.items[0]).toMatchObject({
-        status: 'new',
-        externalListingId: 'olx-1',
-        remoteStatus: 'active',
-      });
+    it.each(['import-preview', 'import'])('no longer serves POST %s', async (action) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).post(`/api/marketplaces/marketplace-olx/${action}`)).send(
+        {}
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
-
-    it('imports selected OLX adverts only after an explicit import request', async () => {
-      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
-      const res = await auth(request(app).post('/api/marketplaces/marketplace-olx/import')).send({
-        externalListingIds: ['olx-1'],
-      });
-
-      expect(res.status).toBe(201);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data).toMatchObject({ imported: 1, updated: 0, skipped: 0, failed: 0 });
-      expect(res.body.data.results[0]).toMatchObject({
-        externalListingId: 'olx-1',
-        status: 'imported',
-        productId: 'product-imported',
-        listingId: 'listing-imported',
-      });
-    });
-
-    it.each([
-      ['import-preview', {}],
-      ['import', { externalListingIds: ['olx-1'] }],
-    ])(
-      'POST /api/marketplaces/:id/%s returns 422 in sandbox mode without reaching the import service',
-      async (route, body) => {
-        const preview = jest.fn();
-        const importListings = jest.fn();
-        const { app } = await buildTestApp({
-          olxAdapterMode: 'stub',
-          marketplaceImportService: {
-            preview,
-            import: importListings,
-          } as unknown as MarketplaceImportService,
-        });
-
-        const res = await auth(
-          request(app).post(`/api/marketplaces/marketplace-olx/${route}`)
-        ).send(body);
-
-        expect(res.status).toBe(422);
-        expect(res.body.error).toMatchObject({
-          code: 'INVALID_STATE',
-          message: 'Marketplace import is not available in sandbox mode',
-        });
-        expect(preview).not.toHaveBeenCalled();
-        expect(importListings).not.toHaveBeenCalled();
-      }
-    );
 
     it('reads and validates authenticated OLX quota operator contracts', async () => {
       const { app } = await buildTestApp();
@@ -1880,10 +1750,10 @@ describe('Presentation API', () => {
     });
 
     it('runs product-scoped Hermes from the explicit route product only', async () => {
-      const calls: Array<{ workspaceId: string; productId?: string; trigger?: string }> = [];
+      const calls: Array<{ workspaceId: string; productId: string; trigger?: string }> = [];
       const hermesService = {
         ...stubHermesService(),
-        async runHermes(dto: { workspaceId: string; productId?: string; trigger?: string }) {
+        async runHermes(dto: { workspaceId: string; productId: string; trigger?: string }) {
           calls.push(dto);
           return Ok([{ ...appliedEvent, productId: dto.productId }]);
         },
@@ -2091,7 +1961,7 @@ describe('Presentation API', () => {
   });
 
   describe('persistent settings contracts', () => {
-    it('round-trips principal-scoped workspace, preferences, notifications, and Hermes settings', async () => {
+    it('round-trips principal-scoped workspace, preferences, and Hermes settings', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
 
       const workspace = await auth(request(app).patch('/api/settings/workspace')).send({
@@ -2115,15 +1985,6 @@ describe('Presentation API', () => {
         themeMode: 'dark',
         density: 'compact',
         revision: 1,
-      });
-
-      const notifications = await auth(request(app).patch('/api/settings/notifications')).send({
-        events: { new_sale: { telegram: true, email: false } },
-      });
-      expect(notifications.body.data.events.new_sale).toEqual({
-        email: false,
-        inApp: true,
-        telegram: true,
       });
 
       const hermes = await auth(request(app).patch('/api/settings/hermes')).send({
@@ -2230,7 +2091,7 @@ describe('Presentation API', () => {
       expect(legacy.body.data).toMatchObject({ name: 'Legacy rename', currency: 'EUR' });
     });
 
-    it('returns marketplace connection state and unavailable surfaces without credential fields', async () => {
+    it('returns marketplace connection state without credential fields', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
       const response = await auth(request(app).get('/api/settings/integrations'));
       expect(response.status).toBe(200);
@@ -2247,29 +2108,49 @@ describe('Presentation API', () => {
             account: { handle: 'OLX account', status: 'connected' },
             sandbox: true,
           },
-          {
-            category: 'telegram',
-            id: 'telegram',
-            name: 'Telegram',
-            available: false,
-            configured: false,
-          },
-          {
-            category: 'api_keys',
-            id: 'api_keys',
-            name: 'API keys',
-            available: false,
-            configured: false,
-            apiKeySummary: { total: 0, active: 0, revoked: 0 },
-          },
         ])
       );
       expect(
         response.body.data.items.map((item: { category: string }) => item.category).sort()
-      ).toEqual(['api_keys', 'marketplace', 'telegram']);
+      ).toEqual(['marketplace']);
       expect(JSON.stringify(response.body)).not.toMatch(
         /token|secret|hash|credentials|scopes|access[_-]?key|private[_-]?key/i
       );
+    });
+
+    it.each([
+      ['get', '/api/settings/notifications'],
+      ['patch', '/api/settings/notifications'],
+    ] as const)('no longer serves %s %s', async (method, path) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app)[method](path)).send({});
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('lists only marketplace integrations', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get('/api/settings/integrations'));
+      expect(res.status).toBe(200);
+      expect(res.body.data.items.map((item: { category: string }) => item.category)).toEqual([
+        'marketplace',
+      ]);
+    });
+  });
+
+  describe('analytics', () => {
+    it.each(['/api/analytics/revenue', '/api/analytics/listings'])('no longer serves %s', async (path) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get(path));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('still serves the overview', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get('/api/analytics/overview'));
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
     });
   });
 

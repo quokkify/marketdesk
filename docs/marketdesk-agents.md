@@ -1,6 +1,6 @@
 # MarketDesk agent execution contract
 
-MarketDesk owns a versioned allowlist of agents. The first profile is `listing-seo@1.0.0`. New product UI requests a product-scoped run with authenticated `POST /api/hermes/products/:productId/run`; the server resolves that product inside the caller's workspace. Legacy `POST /api/hermes/run` without `productId` remains available only for existing clients and compatibility tests, not as a new UI entry point.
+MarketDesk owns a versioned allowlist of agents. The first profile is `listing-seo@1.0.0`. New product UI requests a product-scoped run with authenticated `POST /api/hermes/products/:productId/run`; the server resolves that product inside the caller's workspace. There is no catalogue-wide run endpoint: every run is scoped to one product.
 
 `listing-seo` receives only typed product/listing JSON: identifiers, title/name, description, category, condition, tags, image count and marketplace identifier. Unknown fields are rejected. Credentials, tokens, internal paths, workspace settings/context, host Hermes skills, memories and files are never input. Its profile grants no web, network, terminal, filesystem or other tools. Creativity (`precise`, `balanced`, `creative`, default `balanced`) changes the versioned system instruction, not tool permissions or autonomy.
 
