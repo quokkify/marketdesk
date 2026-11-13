@@ -47,7 +47,8 @@ const startupSensitiveValues = [
 
 // Composition seam. The DI container (config/di) constructs the full object graph
 // — repositories, infrastructure services, ports and application services — and
-// returns an AppDeps-compatible container plus the lifecycle handles needed for graceful shutdown.
+// returns an AppDeps-compatible container plus the lifecycle handles needed for
+// graceful shutdown.
 function resolveContainer(): AppContainer {
   return buildContainer({ logger });
 }

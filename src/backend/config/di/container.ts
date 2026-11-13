@@ -145,16 +145,15 @@ export interface ManagedQueue<T> extends IJobQueue<T> {
   close(): Promise<void>;
 }
 
-export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
+export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) {
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
     // Publish retries resume from the durable checkpoint and never repeat an
     // ambiguous external POST. Backoff gives transient finalization failures time
     // to recover without hot-looping the queue.
-    ...(name === 'publish-listing' || name === 'sync-marketplace'
-      ? { attempts: 3, backoff: { type: 'exponential', delay: 1_000 } }
-      : {}),
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1_000 },
   };
 }
 

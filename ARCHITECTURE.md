@@ -2059,8 +2059,7 @@ CREATE TABLE analytics_events_2026_01 PARTITION OF analytics_events
 L1: No application cache. The Redis cache was removed in the
     stage-focus cut (#444); Redis serves the event stream and the Bull queues.
 
-L2: HTTP cache headers
-  - GET /products: public, max-age=300
+L2: No HTTP cache headers are set on API responses.
 
 L3: Browser cache
   - Static assets: 1 year
@@ -2192,7 +2191,7 @@ Metrics to track:
 |-----------|------------|-----------|
 | **Language** | TypeScript | Type safety, shared types frontend/backend |
 | **Backend** | Node.js + Express | Fast iteration, JavaScript ecosystem, event-driven |
-| **Frontend** | React 18 | Component reusability, large ecosystem |
+| **Frontend** | React 19 | Component reusability, large ecosystem |
 | **State** | Redux + RTK Query | Scalable, normalized cache, optimistic updates |
 | **UI Framework** | MUI Material | Production-grade, accessibility, theming |
 | **Database** | PostgreSQL | ACID compliance, JSONB, excellent scaling |
