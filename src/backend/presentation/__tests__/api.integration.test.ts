@@ -174,9 +174,6 @@ function stubAnalyticsService(): AnalyticsApplicationService {
     async getDashboardMetrics() {
       return { workspaceId: 'ws-1' };
     },
-    async getListingPerformance() {
-      return [];
-    },
   } as unknown as AnalyticsApplicationService;
 }
 
@@ -2265,6 +2262,22 @@ describe('Presentation API', () => {
       expect(res.body.data.items.map((item: { category: string }) => item.category)).toEqual([
         'marketplace',
       ]);
+    });
+  });
+
+  describe('analytics', () => {
+    it.each(['/api/analytics/revenue', '/api/analytics/listings'])('no longer serves %s', async (path) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get(path));
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('still serves the overview', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get('/api/analytics/overview'));
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
     });
   });
 

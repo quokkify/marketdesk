@@ -36,13 +36,9 @@ describe('AnalyticsController handlers', () => {
 
   it.each([
     ['overview', 'getDashboardMetrics'],
-    ['revenue', 'getRevenue'],
-    ['listings', 'getListingPerformance'],
   ] as const)('passes workspace and parsed range through %s', async (handler, serviceMethod) => {
     const result = { marker: handler };
-    const service = {
-      getDashboardMetrics: jest.fn(), getRevenue: jest.fn(), getListingPerformance: jest.fn(),
-    };
+    const service = { getDashboardMetrics: jest.fn() };
     service[serviceMethod].mockResolvedValue(result);
     const status = jest.fn();
     const json = jest.fn();

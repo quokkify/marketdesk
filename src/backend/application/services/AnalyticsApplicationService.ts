@@ -35,33 +35,6 @@ export interface DashboardMetrics extends PeriodMetrics {
   previous: PeriodMetrics | null;
 }
 
-export interface RevenuePoint {
-  date: string;
-  revenue: number | null;
-  profit: number | null;
-  previous: number | null;
-}
-
-export interface ListingPerformance {
-  listingId: string;
-  productId: string;
-  productName: string | null;
-  productSku: string | null;
-  marketplaceId: string;
-  marketplaceName: string | null;
-  marketplaceListingId: string | null;
-  status: ListingStatus;
-  price: number;
-  revenue: number | null;
-  profit: number | null;
-  currency: string | null;
-  sales: number;
-  views: number;
-  conversion: number;
-  watchers: number;
-  messages: number;
-}
-
 function aggregate(events: AnalyticsEventRecord[]): PeriodMetrics {
   let revenue = 0;
   let cost = 0;
@@ -92,18 +65,6 @@ function aggregate(events: AnalyticsEventRecord[]): PeriodMetrics {
     sales,
     conversion: totalViews > 0 ? (sales / totalViews) * 100 : 0,
   };
-}
-
-function bucketStart(date: Date, interval: 'day' | 'week' | 'month'): string {
-  const value = new Date(date);
-  value.setUTCHours(0, 0, 0, 0);
-  if (interval === 'week') {
-    const day = value.getUTCDay() || 7;
-    value.setUTCDate(value.getUTCDate() - day + 1);
-  } else if (interval === 'month') {
-    value.setUTCDate(1);
-  }
-  return value.toISOString();
 }
 
 export class AnalyticsApplicationService {
@@ -175,74 +136,5 @@ export class AnalyticsApplicationService {
       listingCount: listings.length, listingsByStatus, liveListingCount: listingsByStatus.live,
       totalWatchers, totalMessages: eventMessages, inventoryValue, ...current, previous,
     };
-  }
-
-  async getRevenue(workspaceId: string, range: AnalyticsRange): Promise<{ series: RevenuePoint[]; currency: string | null }> {
-    const interval = range.interval ?? 'day';
-    const [current, previous] = await Promise.all([
-      this.periodEvents(workspaceId, range),
-      this.periodEvents(workspaceId, {
-        ...range,
-        from: new Date(range.from.getTime() - (range.to.getTime() - range.from.getTime())),
-        to: range.from,
-      }),
-    ]);
-    const eventsByBucket = new Map<string, AnalyticsEventRecord[]>();
-    for (const event of current) {
-      const key = bucketStart(event.occurredAt, interval);
-      const bucketEvents = eventsByBucket.get(key);
-      if (bucketEvents) bucketEvents.push(event);
-      else eventsByBucket.set(key, [event]);
-    }
-    const byBucket = new Map([...eventsByBucket.entries()]
-      .map(([key, bucketEvents]) => [key, aggregate(bucketEvents)]));
-    const previousPeriod = aggregate(previous);
-    const currentPeriod = aggregate(current);
-    const previousRevenue = previousPeriod.currency === currentPeriod.currency ? previousPeriod.revenue : null;
-    const financialsUnavailable = currentPeriod.sales > 0 && currentPeriod.currency === null;
-    const series = [...byBucket.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, metrics], index) => ({
-      date,
-      revenue: financialsUnavailable ? null : metrics.revenue,
-      profit: financialsUnavailable ? null : metrics.profit,
-      previous: index === 0 ? previousRevenue : null,
-    }));
-    return { series, currency: currentPeriod.currency };
-  }
-
-  async getListingPerformance(workspaceId: string, range?: AnalyticsRange): Promise<ListingPerformance[]> {
-    const [allListings, products, marketplaces, events] = await Promise.all([
-      this.listingRepo.findByWorkspace(workspaceId), this.productRepo.findByWorkspace(workspaceId),
-      this.marketplaceRepo.findByWorkspace(workspaceId), range ? this.periodEvents(workspaceId, range) : Promise.resolve([]),
-    ]);
-    const listings = range?.marketplaceId
-      ? allListings.filter((listing) => listing.marketplaceId === range.marketplaceId)
-      : allListings;
-    const productById = new Map(products.map((product) => [product.id, product]));
-    const marketplaceById = new Map(marketplaces.map((marketplace) => [marketplace.id, marketplace]));
-    const eventByListing = new Map<string, AnalyticsEventRecord[]>();
-    for (const event of events) {
-      if (!event.listingId) continue;
-      eventByListing.set(event.listingId, [...(eventByListing.get(event.listingId) ?? []), event]);
-    }
-    return listings.map((listing) => {
-      const product = productById.get(listing.productId);
-      const marketplace = marketplaceById.get(listing.marketplaceId);
-      const metrics = range ? aggregate(eventByListing.get(listing.id) ?? []) : null;
-      const views = metrics?.totalViews ?? counter(listing.views);
-      const messages = range
-        ? (eventByListing.get(listing.id) ?? []).filter((event) => event.eventType === 'message').reduce((sum, event) => sum + event.quantity, 0)
-        : counter(listing.messages);
-      return {
-        listingId: listing.id, productId: listing.productId, productName: product?.name ?? null,
-        productSku: product?.sku ?? null, marketplaceId: listing.marketplaceId,
-        marketplaceName: marketplace?.name ?? null, marketplaceListingId: listing.marketplaceListingId,
-        status: listing.status, price: listing.price.amount,
-        revenue: metrics ? metrics.revenue : 0,
-        profit: metrics ? metrics.profit : 0,
-        currency: metrics ? metrics.currency : listing.price.currency,
-        sales: metrics?.sales ?? 0, views,
-        conversion: metrics?.conversion ?? 0, watchers: counter(listing.watchers), messages,
-      };
-    }).sort((a, b) => (b.revenue ?? Number.NEGATIVE_INFINITY) - (a.revenue ?? Number.NEGATIVE_INFINITY) || b.views - a.views);
   }
 }
