@@ -5,7 +5,8 @@ import type { ProductCondition } from '../../../shared/types';
 
 export interface CreateProductDTO {
   workspaceId: string;
-  sku: string;
+  // When omitted or blank, the server generates one from the product id.
+  sku?: string;
   name: string;
   description: string;
   // null when the purchase cost is unknown.

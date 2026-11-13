@@ -24,7 +24,7 @@ const currencySchema = z.string().regex(/^[A-Z]{3}$/, 'currency must be an ISO-4
 const createProductSchema = z
   .object({
     workspaceId: z.string().trim().min(1, 'workspaceId is required'),
-    sku: z.string().trim().min(1, 'sku is required'),
+    sku: z.string().trim().optional(),
     name: z.string().trim().min(1, 'name is required'),
     description: z.string().min(PRODUCT_DESCRIPTION_MIN_LENGTH).max(PRODUCT_DESCRIPTION_MAX_LENGTH),
     costPrice: z.number().finite().nonnegative().nullable(),
