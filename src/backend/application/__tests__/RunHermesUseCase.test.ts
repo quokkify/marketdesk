@@ -83,7 +83,7 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
   );
   const service = new HermesApplicationService(eventRepo, runHermes, approve, dismiss);
 
-  return { runHermes, service, eventRepo, publisher, workspaceRepo, productRepo };
+  return { runHermes, service, eventRepo, workspaceRepo, productRepo };
 }
 
 describe('RunHermesUseCase', () => {

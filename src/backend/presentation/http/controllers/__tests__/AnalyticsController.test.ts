@@ -34,12 +34,10 @@ describe('AnalyticsController handlers', () => {
     marketplaceId: 'marketplace-1', interval: undefined,
   };
 
-  it.each([
-    ['overview', 'getDashboardMetrics'],
-  ] as const)('passes workspace and parsed range through %s', async (handler, serviceMethod) => {
-    const result = { marker: handler };
+  it('passes workspace and parsed range through overview', async () => {
+    const result = { marker: 'overview' };
     const service = { getDashboardMetrics: jest.fn() };
-    service[serviceMethod].mockResolvedValue(result);
+    service.getDashboardMetrics.mockResolvedValue(result);
     const status = jest.fn();
     const json = jest.fn();
     status.mockReturnValue({ json });
@@ -47,9 +45,9 @@ describe('AnalyticsController handlers', () => {
     const res = { status } as unknown as Response;
 
     const controller = new AnalyticsController(service as unknown as AnalyticsApplicationService);
-    await controller[handler](req, res);
+    await controller.overview(req, res);
 
-    expect(service[serviceMethod]).toHaveBeenCalledWith('ws-1', range);
+    expect(service.getDashboardMetrics).toHaveBeenCalledWith('ws-1', range);
     expect(status).toHaveBeenCalledWith(200);
     expect(json).toHaveBeenCalledWith({ success: true, data: result });
   });

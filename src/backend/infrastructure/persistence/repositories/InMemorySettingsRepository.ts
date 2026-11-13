@@ -1,5 +1,5 @@
 import type { ISettingsRepository } from '../../../application/ports/ISettingsRepository';
-import { type UserPreferences, type UserPreferencesPatch } from '../../../../shared/types';
+import type { UserPreferences, UserPreferencesPatch } from '../../../../shared/types';
 
 export class InMemorySettingsRepository implements ISettingsRepository {
   private readonly users = new Map<string, UserPreferences>();

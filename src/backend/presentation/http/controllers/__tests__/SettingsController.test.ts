@@ -49,13 +49,11 @@ function oauthStatus(overrides: Partial<MarketplaceOAuthStatus> = {}): Marketpla
 function fixtures(check: jest.Mock = jest.fn().mockResolvedValue(oauthStatus())) {
   const getAppCredentialStatus = jest.fn();
   const oauth = { check, getAppCredentialStatus } as unknown as MarketplaceOAuthService;
-  const settings = {} as unknown as ISettingsRepository;
-  return { check, getAppCredentialStatus, oauth, settings };
+  return { check, getAppCredentialStatus, oauth };
 }
 
 async function readIntegrations(
   marketplaces: InMemoryMarketplaceRepository,
-  settings: ISettingsRepository,
   oauth: MarketplaceOAuthService,
   olxAdapterMode: OlxAdapterMode = 'stub'
 ): Promise<IntegrationSettingsStatus[]> {
@@ -63,7 +61,7 @@ async function readIntegrations(
   const status = jest.fn().mockReturnValue({ json });
   const controller = new SettingsController(
     {} as IWorkspaceRepository,
-    settings,
+    {} as ISettingsRepository, // unused stub: the constructor still takes it, getIntegrations never reads it
     marketplaces,
     oauth,
     olxAdapterMode
@@ -77,7 +75,7 @@ async function readIntegrations(
 
 function marketplaceItem(items: IntegrationSettingsStatus[], id: string) {
   const item = items.find((candidate) => candidate.id === id);
-  if (!item || item.category !== 'marketplace') throw new Error(`No marketplace item: ${id}`);
+  if (!item) throw new Error(`No marketplace item: ${id}`);
   return item;
 }
 
@@ -90,10 +88,10 @@ const OLX_ROW: MarketplaceRow = {
 
 describe('SettingsController.getIntegrations marketplace accounts', () => {
   it('merges the real connection flag with the OAuth account handle and status', async () => {
-    const { check, getAppCredentialStatus, oauth, settings } = fixtures();
+    const { check, getAppCredentialStatus, oauth } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
 
-    const items = await readIntegrations(repo, settings, oauth, 'real');
+    const items = await readIntegrations(repo, oauth, 'real');
 
     expect(check).toHaveBeenCalledWith({
       marketplaceId: 'marketplace-olx',
@@ -114,18 +112,18 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
   });
 
   it('reports a disconnected OLX row without an account as not configured', async () => {
-    const { oauth, settings } = fixtures(
+    const { oauth } = fixtures(
       jest.fn().mockResolvedValue(oauthStatus({ connected: false, account: null }))
     );
     const repo = await seedMarketplaces({ id: 'marketplace-olx', key: 'olx', name: 'OLX' });
 
-    const item = marketplaceItem(await readIntegrations(repo, settings, oauth), 'marketplace-olx');
+    const item = marketplaceItem(await readIntegrations(repo, oauth), 'marketplace-olx');
 
     expect(item).toMatchObject({ connected: false, configured: false, account: null });
   });
 
   it('keeps the retained handle and the error status of a connected row with unusable credentials', async () => {
-    const { oauth, settings } = fixtures(
+    const { oauth } = fixtures(
       jest.fn().mockResolvedValue(
         oauthStatus({
           account: { id: 'account-1', handle: 'seller@example.test', status: 'error', scopes: [] },
@@ -134,7 +132,7 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
     );
     const repo = await seedMarketplaces(OLX_ROW);
 
-    const item = marketplaceItem(await readIntegrations(repo, settings, oauth), 'marketplace-olx');
+    const item = marketplaceItem(await readIntegrations(repo, oauth), 'marketplace-olx');
 
     expect(item.account).toEqual({ handle: 'seller@example.test', status: 'error' });
   });
@@ -142,7 +140,7 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
   // In real mode check() disconnects a leftover sandbox account, so the marketplace row read
   // before it still says connected. The answer of check() decides.
   it('reports a leftover sandbox account that the check disconnected as not connected', async () => {
-    const { oauth, settings } = fixtures(
+    const { oauth } = fixtures(
       jest.fn().mockResolvedValue(
         oauthStatus({
           connected: false,
@@ -154,7 +152,7 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
     const repo = await seedMarketplaces(OLX_ROW);
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'real'),
+      await readIntegrations(repo, oauth, 'real'),
       'marketplace-olx'
     );
 
@@ -167,10 +165,10 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
   });
 
   it('never exposes scopes, token expiry or credentials from the OAuth status', async () => {
-    const { oauth, settings } = fixtures();
+    const { oauth } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
 
-    const items = await readIntegrations(repo, settings, oauth);
+    const items = await readIntegrations(repo, oauth);
 
     expect(JSON.stringify(items)).not.toMatch(
       /scopes|tokenExpiresAt|refreshable|token|secret|credential/i
@@ -178,7 +176,7 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
   });
 
   it('lists roadmap channels as unavailable and never asks OAuth about them', async () => {
-    const { check, oauth, settings } = fixtures();
+    const { check, oauth } = fixtures();
     const repo = await seedMarketplaces({
       id: 'marketplace-allegro',
       key: 'allegro',
@@ -186,7 +184,7 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
     });
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth),
+      await readIntegrations(repo, oauth),
       'marketplace-allegro'
     );
 
@@ -205,22 +203,22 @@ describe('SettingsController.getIntegrations marketplace accounts', () => {
   });
 
   it('does not swallow an OAuth status failure', async () => {
-    const { oauth, settings } = fixtures(jest.fn().mockRejectedValue(new Error('vault offline')));
+    const { oauth } = fixtures(jest.fn().mockRejectedValue(new Error('vault offline')));
     const repo = await seedMarketplaces(OLX_ROW);
 
-    await expect(readIntegrations(repo, settings, oauth)).rejects.toThrow('vault offline');
+    await expect(readIntegrations(repo, oauth)).rejects.toThrow('vault offline');
   });
 });
 
 describe('SettingsController.getIntegrations sandbox flag', () => {
   it('flags a never-connected OLX as sandbox while the adapter is in stub mode', async () => {
-    const { oauth, settings } = fixtures(
+    const { oauth } = fixtures(
       jest.fn().mockResolvedValue(oauthStatus({ connected: false, account: null, sandbox: false }))
     );
     const repo = await seedMarketplaces({ id: 'marketplace-olx', key: 'olx', name: 'OLX' });
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'stub'),
+      await readIntegrations(repo, oauth, 'stub'),
       'marketplace-olx'
     );
 
@@ -228,11 +226,11 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
   });
 
   it('treats the stub adapter mode as sandbox', async () => {
-    const { oauth, settings } = fixtures();
+    const { oauth } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'stub'),
+      await readIntegrations(repo, oauth, 'stub'),
       'marketplace-olx'
     );
 
@@ -240,11 +238,11 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
   });
 
   it('does not flag a live OLX adapter without a stored sandbox account', async () => {
-    const { oauth, settings } = fixtures();
+    const { oauth } = fixtures();
     const repo = await seedMarketplaces(OLX_ROW);
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'real'),
+      await readIntegrations(repo, oauth, 'real'),
       'marketplace-olx'
     );
 
@@ -252,13 +250,13 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
   });
 
   it('still flags a leftover sandbox account when the adapter is real', async () => {
-    const { oauth, settings } = fixtures(
+    const { oauth } = fixtures(
       jest.fn().mockResolvedValue(oauthStatus({ sandbox: true }))
     );
     const repo = await seedMarketplaces(OLX_ROW);
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'real'),
+      await readIntegrations(repo, oauth, 'real'),
       'marketplace-olx'
     );
 
@@ -266,7 +264,7 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
   });
 
   it('never flags roadmap channels as sandbox', async () => {
-    const { oauth, settings } = fixtures();
+    const { oauth } = fixtures();
     const repo = await seedMarketplaces({
       id: 'marketplace-allegro',
       key: 'allegro',
@@ -274,7 +272,7 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
     });
 
     const item = marketplaceItem(
-      await readIntegrations(repo, settings, oauth, 'stub'),
+      await readIntegrations(repo, oauth, 'stub'),
       'marketplace-allegro'
     );
 
