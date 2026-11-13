@@ -1,0 +1,1 @@
+{"id":"50cfe6adca145eae5547f334fe864801.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/eventBroker/__tests__/eventBroker.test.ts#RedisEventBroker returns an empty string when XADD yields null","name":"returns an empty string when XADD yields null","status":"passed","testResultsByEnv":{"default":"4e13bf8a948f7d194e8b04a6b7f2b2be"}}
