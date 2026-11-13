@@ -98,13 +98,13 @@ Connect first, so that the product you create next can be published.
 4. **Pricing:** cost and selling price. Selling below cost needs an explicit confirmation. Use a selling price above zero if you plan to publish: zero is allowed for drafts, but publication is blocked with "Listing price must be set before publish".
 5. **Category:** one of the six product categories.
 6. **Marketplaces:** select OLX.
-7. **Review:** check the summary, then choose **Create product**. MarketDesk saves the product and opens an OLX listing draft. Nothing is published yet.
+7. **Review:** check the summary, then choose **Create product**. MarketDesk saves the product and opens an OLX listing draft, then opens the publication review by itself. Nothing is published yet: closing the review publishes nothing, and you can reopen it from the product page (step 3).
 
 What to check: the product appears under **Products** with its photos, and the photos are still there after you reload the page.
 
 ### 3. Publish to OLX (sandbox)
 
-1. Open the product from **Products**. Choose **Publish to OLX** to open the publication review. The listings table on the same page also has a **Publish** action.
+1. If the publication review is not already open after **Create product**, open the product from **Products** and choose **Publish to OLX**. The listings table on the same page also has a **Publish** action.
 2. Choose the exact OLX category: type at least two letters into **Search OLX categories**, choose **Find categories**, then pick a result. In sandbox mode the category list is a small built-in one (Cameras, Phones, Headphones, Computers, Clothing, Furniture, Equipment and Other), not the real OLX category tree. If a search finds nothing, try one of those words.
 3. Review the price, the category path and any warnings, then choose **Confirm category and queue publish**. You see "Publication was accepted and queued."
 4. Publication runs in the background. After a few seconds, reload the product page. The listing should change from Draft to Live and carry a **Sandbox** label.
@@ -118,7 +118,7 @@ What to check:
 ### 4. Review Hermes suggestions
 
 1. On the product page, choose **Suggest improvements**. You get proposed title and description wording and a price suggestion, each with its reason. They are for review only. To use one, edit the product or listing yourself.
-2. Choose **Analyze with Hermes**. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
+2. Choose the analyze button. It reads **Analyze with Hermes** while a Hermes Agent API server is configured and reachable, and **Analyze (offline heuristics)** when the built-in heuristics answer, which is the default for testers. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
 
 What to check:
 
@@ -143,7 +143,7 @@ Known limitations:
 | --- | --- | --- |
 | Sandbox only | No real OLX call is ever made. The OLX connection, its category list and its publication quota are built-in stand-ins. Sandbox adverts have no OLX page and show a **Sandbox advert** label instead of a link. A real OLX connection needs approved OLX Partner API credentials and is not part of this setup. | Approved deviation: Sandbox mode |
 | Offline AI | Without a reachable Hermes Agent API server, suggestions come from simple built-in heuristics. They are labelled as offline and always wait for review. | Approved deviation: Sandbox mode |
-| Hermes runs | Whole-catalogue and scheduled runs are not started from the UI. Analyze one product at a time. Every analysis is review-only. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
+| Hermes runs | There is no whole-catalogue run, and no scheduled run is started from the UI. Analyze one product at a time. Every analysis is review-only. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
 | Price edits | Editing the price of a live listing by hand changes MarketDesk only. OLX is updated only when the listing is published again. Approving a Hermes price suggestion applies the price and queues an update for live listings. | By design |
 | Accounts | No e-mail confirmation, password reset or password change. | Not built yet |
 

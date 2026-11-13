@@ -1,5 +1,7 @@
 # OLX import/adopt workflow foundation
 
+> **Status.** Under the stage-focus deviation (#444) the import routes (`POST /api/marketplaces/:id/import-preview` and `/import`) are unmounted. `MarketplaceImportService` remains in the code and marketplace sync uses it to detect category mismatches. The rest of this document describes the foundation as it was designed.
+
 Issue #99 is larger than a single safe backend patch. This document defines the first implementation boundary added here: a read-only preview foundation.
 
 ## Current PR scope
