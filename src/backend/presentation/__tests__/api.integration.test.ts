@@ -38,7 +38,6 @@ import {
   type OlxOAuthAppCredentials,
   type OlxOAuthTokens,
 } from '../../application/services/MarketplaceOAuthService';
-import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import type { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -274,66 +273,6 @@ function sandboxMarketplaceOAuthService(
   });
 }
 
-function stubMarketplaceImportService(): MarketplaceImportService {
-  return {
-    async preview() {
-      return Ok({
-        marketplaceId: 'marketplace-olx',
-        marketplaceKey: 'olx' as const,
-        readOnly: true as const,
-        totals: {
-          discovered: 1,
-          new: 1,
-          already_imported: 0,
-          changed: 0,
-          unsupported: 0,
-          failed: 0,
-        },
-        items: [
-          {
-            status: 'new' as const,
-            externalListingId: 'olx-1',
-            externalUrl: 'https://www.olx.pl/d/oferta/olx-1',
-            title: 'Remote camera',
-            remoteStatus: 'active',
-            warnings: [],
-            proposed: {
-              externalListingId: 'olx-1',
-              externalUrl: 'https://www.olx.pl/d/oferta/olx-1',
-              title: 'Remote camera',
-              description: 'Existing OLX advert',
-              price: 100,
-              currency: 'PLN',
-              status: 'live' as const,
-              remoteStatus: 'active',
-              category: 'electronics',
-              imageUrls: ['https://img.example/1.jpg'],
-            },
-          },
-        ],
-      });
-    },
-    async import() {
-      return Ok({
-        marketplaceId: 'marketplace-olx',
-        marketplaceKey: 'olx' as const,
-        imported: 1,
-        updated: 0,
-        skipped: 0,
-        failed: 0,
-        results: [
-          {
-            externalListingId: 'olx-1',
-            status: 'imported' as const,
-            productId: 'product-imported',
-            listingId: 'listing-imported',
-          },
-        ],
-      });
-    },
-  } as unknown as MarketplaceImportService;
-}
-
 function stubOlxPublicationQuotaService(): OlxPublicationQuotaService {
   const quota = {
     id: 'quota-1',
@@ -551,7 +490,6 @@ async function buildTestApp(
     ) => MarketplaceOAuthService;
     olxAdapterMode?: OlxAdapterMode;
     hermesStatus?: AppDeps['hermesStatus'];
-    marketplaceImportService?: MarketplaceImportService;
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
     enableRateLimit?: boolean;
   } = {}
@@ -590,7 +528,6 @@ async function buildTestApp(
     marketplaceOAuthService:
       options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
-    marketplaceImportService: options.marketplaceImportService ?? stubMarketplaceImportService(),
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
       ? undefined
       : (options.olxPublicationQuotaService ?? stubOlxPublicationQuotaService()),
@@ -1413,78 +1350,14 @@ describe('Presentation API', () => {
       ]);
     });
 
-    it('previews existing OLX adverts through a read-only import endpoint', async () => {
-      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
-      const res = await auth(
-        request(app).post('/api/marketplaces/marketplace-olx/import-preview')
-      ).send({
-        statuses: ['active'],
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.readOnly).toBe(true);
-      expect(res.body.data.totals).toEqual({
-        discovered: 1,
-        new: 1,
-        already_imported: 0,
-        changed: 0,
-        unsupported: 0,
-        failed: 0,
-      });
-      expect(res.body.data.items[0]).toMatchObject({
-        status: 'new',
-        externalListingId: 'olx-1',
-        remoteStatus: 'active',
-      });
+    it.each(['import-preview', 'import'])('no longer serves POST %s', async (action) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).post(`/api/marketplaces/marketplace-olx/${action}`)).send(
+        {}
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     });
-
-    it('imports selected OLX adverts only after an explicit import request', async () => {
-      const { app } = await buildTestApp({ olxAdapterMode: 'real' });
-      const res = await auth(request(app).post('/api/marketplaces/marketplace-olx/import')).send({
-        externalListingIds: ['olx-1'],
-      });
-
-      expect(res.status).toBe(201);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data).toMatchObject({ imported: 1, updated: 0, skipped: 0, failed: 0 });
-      expect(res.body.data.results[0]).toMatchObject({
-        externalListingId: 'olx-1',
-        status: 'imported',
-        productId: 'product-imported',
-        listingId: 'listing-imported',
-      });
-    });
-
-    it.each([
-      ['import-preview', {}],
-      ['import', { externalListingIds: ['olx-1'] }],
-    ])(
-      'POST /api/marketplaces/:id/%s returns 422 in sandbox mode without reaching the import service',
-      async (route, body) => {
-        const preview = jest.fn();
-        const importListings = jest.fn();
-        const { app } = await buildTestApp({
-          olxAdapterMode: 'stub',
-          marketplaceImportService: {
-            preview,
-            import: importListings,
-          } as unknown as MarketplaceImportService,
-        });
-
-        const res = await auth(
-          request(app).post(`/api/marketplaces/marketplace-olx/${route}`)
-        ).send(body);
-
-        expect(res.status).toBe(422);
-        expect(res.body.error).toMatchObject({
-          code: 'INVALID_STATE',
-          message: 'Marketplace import is not available in sandbox mode',
-        });
-        expect(preview).not.toHaveBeenCalled();
-        expect(importListings).not.toHaveBeenCalled();
-      }
-    );
 
     it('reads and validates authenticated OLX quota operator contracts', async () => {
       const { app } = await buildTestApp();
