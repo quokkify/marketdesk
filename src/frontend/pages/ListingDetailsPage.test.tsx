@@ -5,6 +5,7 @@ import {
   buildPublishListingInput,
   categoryConflictEvidenceLines,
   categoryLookupUnavailable,
+  creationJourneyFailureMessage,
   CategoryLookupUnavailableNotice,
   delistSuccessMessage,
   editRequestedByNavigation,
@@ -21,6 +22,7 @@ import {
   ProductRecheckReview,
   PublishPreviewReview,
   productScopedHermesRunInput,
+  PublicationCategoryControls,
   publicationReviewSubtitle,
   remoteMarketplaceChipColor,
   remoteMarketplacePresentation,
@@ -609,5 +611,66 @@ describe('publication review subtitle', () => {
     expect(publicationReviewSubtitle('olx', true)).toBe('OLX · Sandbox');
     expect(publicationReviewSubtitle('olx', false)).toBe('OLX');
     expect(publicationReviewSubtitle(undefined, false)).toBe('Marketplace');
+  });
+});
+
+describe('creation journey failure alert', () => {
+  it('names each failed step and keeps the product saved', () => {
+    const failure = new Error('Service unavailable');
+    expect(creationJourneyFailureMessage('listing', failure)).toBe(
+      'The product is saved. Creating the listing failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('category', failure)).toBe(
+      'The product is saved. Saving the category failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('preview', failure)).toBe(
+      'The product is saved. Checking the listing failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+    expect(creationJourneyFailureMessage('publish', failure)).toBe(
+      'The product is saved. Queueing the publication failed: Service unavailable. Use Publish to OLX to try again.'
+    );
+  });
+
+  it('uses the API error message without doubling its full stop', () => {
+    expect(
+      creationJourneyFailureMessage('publish', { data: { error: { message: 'Quota exceeded.' } } })
+    ).toBe(
+      'The product is saved. Queueing the publication failed: Quota exceeded. Use Publish to OLX to try again.'
+    );
+  });
+});
+
+describe('publication review category controls', () => {
+  const render = (value: React.ComponentProps<typeof PublicationCategoryControls>['value']) =>
+    renderToStaticMarkup(
+      <PublicationCategoryControls
+        value={value}
+        seed="Blue phone"
+        search={async () => []}
+        providerCategoryId="101"
+        onProviderCategoryIdChange={() => undefined}
+        onPick={() => undefined}
+        onVerify={() => undefined}
+      />
+    );
+
+  it('shows the saved category in the picker and hides the numeric ID under Advanced', () => {
+    const html = render({ providerCategoryId: '101', name: 'Phones', path: ['Electronics', 'Phones'] });
+
+    expect(html).toContain('Electronics &gt; Phones');
+    expect(html).toContain('Advanced');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('OLX category ID');
+    expect(html).toContain('Verify OLX category');
+    expect(html).not.toContain('Find categories');
+    expect(html).not.toContain('Search OLX categories');
+  });
+
+  it('offers the search box when the listing has no category yet', () => {
+    const html = render(null);
+
+    expect(html).toContain('OLX category');
+    expect(html).toContain('value="Blue phone"');
+    expect(html).not.toContain('Change');
   });
 });

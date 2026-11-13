@@ -3,6 +3,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   AlertTitle,
   Box,
@@ -17,6 +20,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   AIProviderSource,
@@ -65,14 +69,16 @@ import { isSandboxMarketplace } from '../utils/sandbox.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyState } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyEvent } from '../workflows/publicationJourneyGraph.js';
+import { runCreationJourney } from '../workflows/creationJourney.js';
+import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { LoadingSkeleton } from '../components/common/Skeleton.js';
 import { ListingsTable } from '../components/tables/index.js';
-import { ProductForm } from '../components/forms/index.js';
-import type { ProductFormValues } from '../components/forms/index.js';
+import { OlxCategoryPicker, ProductForm } from '../components/forms/index.js';
+import type { ProductFormValues, WizardOlxCategory } from '../components/forms/index.js';
 import { PricingForm } from '../components/forms/index.js';
 import { SeoRecommendationQueue } from '../components/hermes/index.js';
 import {
@@ -462,6 +468,74 @@ function errorMessage(err: unknown): string {
   return 'Request failed';
 }
 
+type CreationJourneyStep = Extract<CreationJourneyOutcome, { kind: 'failed' }>['step'];
+
+const CREATION_JOURNEY_STEP_NAMES: Record<CreationJourneyStep, string> = {
+  listing: 'Creating the listing',
+  category: 'Saving the category',
+  preview: 'Checking the listing',
+  publish: 'Queueing the publication',
+};
+
+export function creationJourneyFailureMessage(step: CreationJourneyStep, error: unknown): string {
+  const reason = errorMessage(error).replace(/\.+$/, '');
+  return `The product is saved. ${CREATION_JOURNEY_STEP_NAMES[step]} failed: ${reason}. Use Publish to OLX to try again.`;
+}
+
+export const PublicationCategoryControls: React.FC<{
+  value: WizardOlxCategory | null;
+  seed: string;
+  search: (query: string) => Promise<OlxCategorySearchResult[]>;
+  disabled?: boolean;
+  providerCategoryId: string;
+  onProviderCategoryIdChange: (providerCategoryId: string) => void;
+  onPick: (providerCategoryId: string) => void;
+  onVerify: () => void;
+}> = ({
+  value,
+  seed,
+  search,
+  disabled,
+  providerCategoryId,
+  onProviderCategoryIdChange,
+  onPick,
+  onVerify,
+}) => (
+  <Stack spacing={1}>
+    <OlxCategoryPicker
+      value={value}
+      onChange={(next) => next && onPick(next.providerCategoryId)}
+      search={search}
+      seed={seed}
+      disabled={disabled}
+    />
+    <Accordion disableGutters elevation={0} sx={{ '&::before': { display: 'none' } }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
+        <Typography variant="body2">Advanced</Typography>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 0 }}>
+        <Stack spacing={1}>
+          <TextField
+            label="OLX category ID"
+            value={providerCategoryId}
+            onChange={(event) => onProviderCategoryIdChange(event.target.value)}
+            disabled={disabled}
+            slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 100 } }}
+            helperText="The category is checked against the live OLX taxonomy before it is saved."
+          />
+          <Button
+            variant="outlined"
+            disabled={disabled || !/^\d+$/.test(providerCategoryId.trim())}
+            onClick={onVerify}
+          >
+            Verify OLX category
+          </Button>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  </Stack>
+);
+
 async function advanceJourney(state: PublicationJourneyState, event: PublicationJourneyEvent) {
   const { advancePublicationJourney } = await import('../workflows/publicationJourneyGraph.js');
   return advancePublicationJourney(state, event);
@@ -568,7 +642,7 @@ const ListingDetailsPage: React.FC = () => {
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
   const [publishListingPreview] = usePublishListingPreview();
-  const [searchOlxCategories, { isLoading: searchingCategories }] = useSearchOlxCategories();
+  const [searchOlxCategories] = useSearchOlxCategories();
   const [setMarketplaceCategory, { isLoading: verifyingCategory }] = useSetListingMarketplaceCategory();
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
@@ -586,8 +660,6 @@ const ListingDetailsPage: React.FC = () => {
     journey: PublicationJourneyState;
   } | null>(null);
   const [providerCategoryId, setProviderCategoryId] = useState('');
-  const [categorySearch, setCategorySearch] = useState('');
-  const [categoryOptions, setCategoryOptions] = useState<OlxCategorySearchResult[]>([]);
   const [quotaOverrideAccepted, setQuotaOverrideAccepted] = useState(false);
   const [quotaOverrideReason, setQuotaOverrideReason] = useState('');
   const [previewingPublication, setPreviewingPublication] = useState(false);
@@ -595,6 +667,9 @@ const ListingDetailsPage: React.FC = () => {
   const [activeImage, setActiveImage] = useState(0);
   const [analysisState, setAnalysisState] = useState<ProductHermesAnalysisState>({ status: 'idle' });
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
+  const [creationFailure, setCreationFailure] = useState<string | null>(null);
+  // Set when the creation journey queued the advert; the status polling hooks in here.
+  const [, setQueuedListingId] = useState<string | null>(null);
   const consumedNavigationReview = useRef<string | null>(null);
   const consumedCreationJourney = useRef<string | null>(null);
   const previewInFlight = useRef(false);
@@ -633,7 +708,7 @@ const ListingDetailsPage: React.FC = () => {
     productId,
   });
   const publicationBusy =
-    previewingPublication || submittingPublication || publishing || relisting || delisting || verifyingCategory || searchingCategories;
+    previewingPublication || submittingPublication || publishing || relisting || delisting || verifyingCategory;
   const publicationActionsLocked = publicationBusy || Boolean(publishCandidate);
 
   const closePublicationReview = () => {
@@ -642,8 +717,6 @@ const ListingDetailsPage: React.FC = () => {
     setPublishCandidate(null);
     setQuotaOverrideAccepted(false);
     setQuotaOverrideReason('');
-    setCategoryOptions([]);
-    setCategorySearch('');
     setCategoryLookupError(null);
   };
 
@@ -802,8 +875,6 @@ const ListingDetailsPage: React.FC = () => {
         setQuotaOverrideAccepted(false);
         setQuotaOverrideReason('');
         setProviderCategoryId(preview.marketplaceCategory?.providerCategoryId ?? '');
-        setCategoryOptions([]);
-        setCategorySearch('');
         setCategoryLookupError(null);
         publicationReviewOpen.current = true;
         setPublishCandidate({ listing, preview, mode, journey });
@@ -823,6 +894,7 @@ const ListingDetailsPage: React.FC = () => {
   // The pricing card opens the same publication review as the listings table;
   // a product without an OLX listing gets its draft listing first.
   const handlePublishToOlx = async () => {
+    setCreationFailure(null);
     if (recheckListing) {
       await beginPublicationReview(recheckListing, 'publish');
       return;
@@ -899,7 +971,6 @@ const ListingDetailsPage: React.FC = () => {
       );
       setPublishCandidate({ ...publishCandidate, listing, preview, journey });
       setProviderCategoryId(selectedId.trim());
-      setCategoryOptions([]);
       setQuotaOverrideAccepted(false);
       setQuotaOverrideReason('');
     } catch (err) {
@@ -907,19 +978,13 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
-  const handleSearchCategories = async () => {
-    if (!publishCandidate || categorySearch.trim().length < 2) return;
-    try {
-      const options = await searchOlxCategories({
-        id: publishCandidate.listing.id,
-        query: categorySearch.trim(),
-      }).unwrap();
-      setCategoryOptions(options);
-    } catch (err) {
-      if (categoryLookupUnavailable(err)) setCategoryLookupError(errorMessage(err));
-      else dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
+  const searchListingCategories = (listingId: string, query: string) =>
+    searchOlxCategories({ id: listingId, query })
+      .unwrap()
+      .catch((err: unknown) => {
+        if (categoryLookupUnavailable(err)) setCategoryLookupError(errorMessage(err));
+        throw err;
+      });
 
   useEffect(() => {
     const pending = (location.state as {
@@ -943,38 +1008,42 @@ const ListingDetailsPage: React.FC = () => {
       return;
     }
 
-    void (async () => {
-      try {
-        const existing = listingItems.find((item) => item.marketplaceId === marketplace.id);
-        const listing = existing ?? await createListing({
-          productId,
-          marketplaceKey: marketplace.key,
-        }).unwrap();
-        if (listing.status !== 'draft') return;
-        const draftJourney = await advanceJourney(pending, {
-          type: 'listing_created', listingId: listing.id,
-        });
-        const preview = await publishListingPreview(listing.id).unwrap();
-        const journey = await advanceJourney(draftJourney, {
-          type: 'preview_loaded',
-          canPublish: preview.canPublish,
-          quotaOverrideEligible: preview.quotaOverrideEligibility.eligible,
-        });
-        setProviderCategoryId(preview.marketplaceCategory?.providerCategoryId ?? '');
-        setCategoryOptions([]);
-        setCategorySearch('');
-        setCategoryLookupError(null);
-        setQuotaOverrideAccepted(false);
-        setQuotaOverrideReason('');
-        publicationReviewOpen.current = true;
-        setPublishCandidate({ listing, preview, mode: 'publish', journey });
-      } catch (err) {
-        dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-      }
-    })();
+    previewInFlight.current = true;
+    setPreviewingPublication(true);
+    void runCreationJourney(pending, marketplace, {
+      findListing: (marketplaceId) => listingItems.find((item) => item.marketplaceId === marketplaceId),
+      createListing: (input) => createListing(input).unwrap(),
+      setCategory: (input) => setMarketplaceCategory(input).unwrap(),
+      preview: (listingId) => publishListingPreview(listingId).unwrap(),
+      publish: (input) => publishListing(input).unwrap(),
+    })
+      .then((outcome) => {
+        if (outcome.kind === 'queued') {
+          dispatch(enqueueToast({ message: 'Publication was accepted and queued.', severity: 'success' }));
+          setQueuedListingId(outcome.listing.id);
+        } else if (outcome.kind === 'review') {
+          setProviderCategoryId(outcome.preview.marketplaceCategory?.providerCategoryId ?? '');
+          setCategoryLookupError(null);
+          setQuotaOverrideAccepted(false);
+          setQuotaOverrideReason('');
+          publicationReviewOpen.current = true;
+          setPublishCandidate({
+            listing: outcome.listing,
+            preview: outcome.preview,
+            mode: 'publish',
+            journey: outcome.journey,
+          });
+        } else if (outcome.kind === 'failed') {
+          setCreationFailure(creationJourneyFailureMessage(outcome.step, outcome.error));
+        }
+      })
+      .finally(() => {
+        previewInFlight.current = false;
+        setPreviewingPublication(false);
+      });
   }, [createListing, dispatch, listingItems, listings.isError, listings.isFetching,
     listings.isLoading, location.pathname, location.state, marketplaces, navigate,
-    product.data, productId, publishListingPreview]);
+    product.data, productId, publishListing, publishListingPreview, setMarketplaceCategory]);
 
   useEffect(() => {
     if (!product.data || !editRequestedByNavigation(location.state)) return;
@@ -1084,6 +1153,11 @@ const ListingDetailsPage: React.FC = () => {
                 : []
             }
           />
+          {creationFailure && (
+            <Alert severity="error" onClose={() => setCreationFailure(null)}>
+              {creationFailure}
+            </Alert>
+          )}
           <Card
             title="Marketplace listings"
             action={
@@ -1370,49 +1444,24 @@ const ListingDetailsPage: React.FC = () => {
               <CategoryLookupUnavailableNotice message={categoryLookupError} />
             )}
             {publishCandidate.preview.marketplaceKey === 'olx' && !categoryLookupError && (
-              <Stack spacing={1}>
-                <TextField
-                  label="Search OLX categories"
-                  value={categorySearch}
-                  onChange={(event) => setCategorySearch(event.target.value)}
-                  disabled={publicationBusy}
-                  slotProps={{ htmlInput: { maxLength: 80 } }}
-                  helperText="Search by category name, then select the exact category."
-                />
-                <Button
-                  variant="outlined"
-                  disabled={publicationBusy || categorySearch.trim().length < 2}
-                  onClick={() => void handleSearchCategories()}
-                >
-                  Find categories
-                </Button>
-                {categoryOptions.map((option) => (
-                  <Button
-                    key={option.providerCategoryId}
-                    variant="text"
-                    disabled={publicationBusy}
-                    onClick={() => void handleVerifyCategory(option.providerCategoryId)}
-                    sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                  >
-                    {option.path.join(' → ')}
-                  </Button>
-                ))}
-                <TextField
-                  label="OLX category ID"
-                  value={providerCategoryId}
-                  onChange={(event) => setProviderCategoryId(event.target.value)}
-                  disabled={publicationBusy}
-                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 100 } }}
-                  helperText="The category is checked against the live OLX taxonomy before it is saved."
-                />
-                <Button
-                  variant="outlined"
-                  disabled={publicationBusy || !/^\d+$/.test(providerCategoryId.trim())}
-                  onClick={() => void handleVerifyCategory()}
-                >
-                  Verify OLX category
-                </Button>
-              </Stack>
+              <PublicationCategoryControls
+                value={
+                  publishCandidate.preview.marketplaceCategory
+                    ? {
+                        providerCategoryId: publishCandidate.preview.marketplaceCategory.providerCategoryId,
+                        name: publishCandidate.preview.marketplaceCategory.name,
+                        path: publishCandidate.preview.marketplaceCategory.path,
+                      }
+                    : null
+                }
+                seed={p.name}
+                search={(query) => searchListingCategories(publishCandidate.listing.id, query)}
+                disabled={publicationBusy}
+                providerCategoryId={providerCategoryId}
+                onProviderCategoryIdChange={setProviderCategoryId}
+                onPick={(selectedId) => void handleVerifyCategory(selectedId)}
+                onVerify={() => void handleVerifyCategory()}
+              />
             )}
             {publishCandidate.preview.quotaOverrideEligibility.eligible && (
               <Stack spacing={1}>

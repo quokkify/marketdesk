@@ -67,7 +67,6 @@ import type {
 import {
   ProductWizardForm,
   hasMeaningfulProductWizardDraft,
-  productFieldErrorsFromApi,
   productWizardDraftStorageKey,
   readProductWizardDraft,
   removeProductWizardDraft,
@@ -80,6 +79,8 @@ import type {
   WizardSubmission,
 } from '../components/forms/index.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
+import { advancePublicationJourney } from '../workflows/publicationJourneyGraph.js';
+import { submitWizardProduct } from '../workflows/creationJourney.js';
 
 export function shouldBlockProductWizardNavigation(
   wizardOpen: boolean,
@@ -305,7 +306,12 @@ const ProductsPage: React.FC = () => {
   }, [draftDirty, wizardOpen]);
 
   const handleDraftChange = useCallback(
-    (draft: ProductWizardDraftState) => {
+    (formDraft: ProductWizardDraftState) => {
+      // The form does not know about a product created by an earlier attempt.
+      const draft = {
+        ...formDraft,
+        createdProductId: formDraft.createdProductId ?? readStoredDraft()?.createdProductId ?? null,
+      };
       const meaningful = hasMeaningfulProductWizardDraft(draft);
       setDraftDirty(meaningful);
       const storage = browserStorage();
@@ -318,7 +324,7 @@ const ProductsPage: React.FC = () => {
         : removeProductWizardDraft(storage, draftKey);
       setDraftSaveError(!saved);
     },
-    [draftKey]
+    [draftKey, readStoredDraft]
   );
 
   const completeWizardNavigation = () => {
@@ -462,72 +468,72 @@ const ProductsPage: React.FC = () => {
   const editProduct = (product: Product) =>
     navigate(`/products/${product.id}`, { state: { editProduct: true } });
 
-  const handleCreate = async ({
-    intent,
-    values,
-    targetMarketplace,
-    olxCategory,
-  }: WizardSubmission): Promise<ApiFieldErrors | void> => {
+  const rememberCreatedProduct = (productId: string) => {
+    const stored = readStoredDraft();
+    if (draftKey && stored) {
+      writeProductWizardDraft(browserStorage(), draftKey, { ...stored, createdProductId: productId });
+    }
+  };
+
+  const clearDraftAfterCreate = () => {
+    if (draftKey && !clearStoredDraft()) {
+      dispatch(
+        enqueueToast({
+          message: 'Product created, but the local wizard draft could not be cleared.',
+          severity: 'warning',
+        })
+      );
+    }
+  };
+
+  const handleCreate = async (submission: WizardSubmission): Promise<ApiFieldErrors | void> => {
     if (!workspaceId) {
       dispatch(enqueueToast({ message: 'No active workspace selected.', severity: 'error' }));
       return;
     }
     try {
-      // A draft is created without a journey; publishing needs the connected target.
-      const selectedMarketplace =
-        intent === 'publish' && targetMarketplace
-          ? verifiedMarketplaces?.find(
-              (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
-            )
-          : undefined;
-      if (intent === 'publish' && !selectedMarketplace) {
-        throw new Error('The selected marketplace is no longer connected. Choose it again.');
-      }
-      const product = await createProduct({ ...values, workspaceId }).unwrap();
-      const journey = selectedMarketplace
-        ? await import('../workflows/publicationJourneyGraph.js').then(({ advancePublicationJourney }) =>
-            advancePublicationJourney(
-              { phase: 'review' },
-              {
-                type: 'product_created',
-                productId: product.id,
-                marketplaceKey: selectedMarketplace.key,
-                providerCategoryId: olxCategory?.providerCategoryId,
-                approvedInWizard: true,
-              },
-            ),
-          )
-        : null;
-      if (draftKey && !clearStoredDraft()) {
-        dispatch(
-          enqueueToast({
-            message: 'Product created, but the local wizard draft could not be cleared.',
-            severity: 'warning',
-          })
-        );
-      }
+      const outcome = await submitWizardProduct(
+        submission,
+        {
+          createdProductId: readStoredDraft()?.createdProductId ?? null,
+          marketplaces: verifiedMarketplaces,
+        },
+        {
+          createProduct: (values) => createProduct({ ...values, workspaceId }).unwrap(),
+          rememberCreatedProduct,
+          clearDraft: clearDraftAfterCreate,
+          advanceJourney: advancePublicationJourney,
+        }
+      );
+      if (outcome.kind === 'rejected') return outcome.errors;
       setDraftDirty(false);
       setInitialDraft(null);
       allowWizardNavigationRef.current = true;
-      if (!journey) {
-        dispatch(
-          enqueueToast({
-            message: targetMarketplace
-              ? 'Product saved as a draft.'
-              : 'Product created as a draft. Connect OLX to publish it.',
-            severity: 'success',
-          })
-        );
-        navigate(`/products/${product.id}`);
+      if (outcome.kind === 'publish_started') {
+        dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
+        navigate(`/products/${outcome.productId}`, {
+          state: { publicationJourney: { ...outcome.journey, version: PUBLICATION_JOURNEY_VERSION } },
+        });
         return;
       }
-      dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
-      navigate(`/products/${product.id}`, {
-        state: { publicationJourney: { ...journey, version: PUBLICATION_JOURNEY_VERSION } },
-      });
+      dispatch(
+        enqueueToast(
+          outcome.kind === 'disconnected_saved_as_draft'
+            ? {
+                message:
+                  'OLX is no longer connected. The product was saved as a draft; reconnect OLX and publish it from this page.',
+                severity: 'warning',
+              }
+            : {
+                message: outcome.marketplaceConnected
+                  ? 'Product saved as a draft.'
+                  : 'Product created as a draft. Connect OLX to publish it.',
+                severity: 'success',
+              }
+        )
+      );
+      navigate(`/products/${outcome.productId}`);
     } catch (err) {
-      const rejected = productFieldErrorsFromApi(err);
-      if (Object.keys(rejected.fieldErrors).length > 0) return rejected;
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
