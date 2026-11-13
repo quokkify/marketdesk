@@ -72,7 +72,6 @@ const SEVERITY_LABELS: Record<HermesSeverity, string> = {
   critical: 'Critical',
 };
 
-
 // The one literal colour pair of the page: the companion's Hermes banner gradient.
 const HERMES_BANNER_FROM = '#5B5BD6';
 const HERMES_BANNER_TO = '#A24BD6';

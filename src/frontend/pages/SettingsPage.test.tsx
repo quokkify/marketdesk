@@ -315,11 +315,16 @@ describe('Marketplace Accounts panel', () => {
   });
 
   it('lists no roadmap channel', () => {
-    const text = visibleText(render(<MarketplaceAccountsList items={[marketplaceItem()]} />));
+    const html = render(
+      <MarketplaceAccountsList items={[marketplaceItem({ available: false })]} />
+    );
+    const text = visibleText(html);
 
-    for (const name of ['Allegro', 'Vinted', 'Facebook', 'eBay', 'Etsy', 'Amazon', 'Roadmap']) {
-      expect(text).not.toContain(name);
-    }
+    expect(text).not.toContain('Roadmap');
+    expect(text).not.toContain('Not available');
+    expect(text).toContain('seller@example.test');
+    expect(text).toContain('Connected');
+    expect(html).toMatch(/<a[^>]*href="\/marketplaces"[^>]*>Manage</);
   });
 
   it('ignores a stored marketplace that is not OLX', () => {

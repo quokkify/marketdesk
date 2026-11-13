@@ -98,8 +98,6 @@ export function settingsSectionFromLocation(location: {
 export const settingsSectionPath = (section: SettingsSection) =>
   `${APP_ROUTE_PATHS.settings}?section=${section}`;
 
-const NOT_AVAILABLE_LABEL = 'Not available in this release';
-
 export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -311,31 +309,23 @@ export function MarketplaceAccountsList({ items: stored }: { items: MarketplaceI
                 {item.name}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                {item.available
-                  ? (item.account?.handle ?? 'No account linked')
-                  : NOT_AVAILABLE_LABEL}
+                {item.account?.handle ?? 'No account linked'}
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
               {item.sandbox === true && (
                 <Chip size="small" color="warning" variant="outlined" label="Sandbox" />
               )}
-              {item.available ? (
-                <ConnectionBadge status={marketplaceAccountStatus(item)} />
-              ) : (
-                <Chip size="small" variant="outlined" label="Roadmap" />
-              )}
-              {item.available && (
-                <Button
-                  component={RouterLink}
-                  to={APP_ROUTE_PATHS.marketplaces}
-                  size="small"
-                  variant="outlined"
-                  aria-label={`Manage ${item.name}`}
-                >
-                  Manage
-                </Button>
-              )}
+              <ConnectionBadge status={marketplaceAccountStatus(item)} />
+              <Button
+                component={RouterLink}
+                to={APP_ROUTE_PATHS.marketplaces}
+                size="small"
+                variant="outlined"
+                aria-label={`Manage ${item.name}`}
+              >
+                Manage
+              </Button>
             </Stack>
           </Stack>
         );
