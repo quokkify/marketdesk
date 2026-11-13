@@ -1,0 +1,1 @@
+{"id":"57a13e860ce95a8856e90a265791e757.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/workflows/creationJourney.test.ts#submitWizardProduct rethrows a creation failure that has no field errors","name":"rethrows a creation failure that has no field errors","status":"passed","testResultsByEnv":{"default":"19d81b1a1e50155849b8c4615d0d7739"}}

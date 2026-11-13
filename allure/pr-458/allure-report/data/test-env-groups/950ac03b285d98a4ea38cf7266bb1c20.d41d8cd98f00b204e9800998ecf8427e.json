@@ -1,0 +1,1 @@
+{"id":"950ac03b285d98a4ea38cf7266bb1c20.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/ApproveHermesEventUseCase.test.ts#ApproveHermesEventUseCase returns NOT_FOUND for an unknown event","name":"returns NOT_FOUND for an unknown event","status":"passed","testResultsByEnv":{"default":"8d5a24c0e7b43b99d7bdc4e4aa15e9b8"}}

@@ -1,0 +1,1 @@
+{"id":"a069380636c29e3f98823016f30e4ad9.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/forms/productWizardDraft.test.ts#product wizard draft persistence rejects a stored activeStep above 1","name":"rejects a stored activeStep above 1","status":"passed","testResultsByEnv":{"default":"ada389bb9b6707a59d0e1a567a90ee0a"}}

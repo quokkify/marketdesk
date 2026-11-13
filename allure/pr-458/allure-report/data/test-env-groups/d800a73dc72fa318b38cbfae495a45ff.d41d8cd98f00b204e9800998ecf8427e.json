@@ -1,0 +1,1 @@
+{"id":"d800a73dc72fa318b38cbfae495a45ff.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/CreateProductUseCase.test.ts#CreateProductUseCase SKU generation generates a SKU when none is given","name":"generates a SKU when none is given","status":"passed","testResultsByEnv":{"default":"92952bf428daefab347406ed5b401c40"}}
