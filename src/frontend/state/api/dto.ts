@@ -216,66 +216,6 @@ export interface UpdateMarketplaceArg {
   patch: UpdateMarketplaceInput;
 }
 
-export interface MarketplaceImportPreviewInput {
-  id: string;
-  pageSize?: number;
-  statuses?: string[];
-}
-
-export interface MarketplaceImportApplyInput extends MarketplaceImportPreviewInput {
-  externalListingIds?: string[];
-}
-
-export type MarketplaceImportPreviewItemStatus =
-  'new' | 'already_imported' | 'changed' | 'unsupported' | 'failed';
-
-export interface MarketplaceImportPreviewItem {
-  status: MarketplaceImportPreviewItemStatus;
-  externalListingId: string;
-  externalUrl?: string | null;
-  title: string;
-  remoteStatus: string | null;
-  warnings: string[];
-  proposed: {
-    externalListingId: string;
-    externalUrl?: string | null;
-    title: string;
-    description?: string | null;
-    price?: number | null;
-    currency?: string | null;
-    status: ListingStatus;
-    remoteStatus?: string | null;
-    category?: string | null;
-    imageUrls: string[];
-    remoteUpdatedAt?: string | null;
-    metrics?: { views?: number; watchers?: number; messages?: number };
-  };
-}
-
-export interface MarketplaceImportPreview {
-  marketplaceId: string;
-  marketplaceKey: Marketplace['key'];
-  readOnly: true;
-  totals: Record<MarketplaceImportPreviewItemStatus, number> & { discovered: number };
-  items: MarketplaceImportPreviewItem[];
-}
-
-export interface MarketplaceImportApplyResult {
-  marketplaceId: string;
-  marketplaceKey: Marketplace['key'];
-  imported: number;
-  updated: number;
-  skipped: number;
-  failed: number;
-  results: Array<{
-    externalListingId: string;
-    status: 'imported' | 'updated' | 'skipped' | 'failed';
-    productId?: string;
-    listingId?: string;
-    reason?: string;
-  }>;
-}
-
 // ----------------------------------------------------------------------------
 // Hermes
 // ----------------------------------------------------------------------------

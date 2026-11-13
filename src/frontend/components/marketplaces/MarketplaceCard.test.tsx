@@ -5,7 +5,6 @@ import { Button, Switch } from '@mui/material';
 import type { Marketplace } from '@shared/types';
 import { MarketplaceCard } from './MarketplaceCard';
 import type { MarketplaceCardProps } from './MarketplaceCard';
-import { ROADMAP_CARD_COPY, RoadmapMarketplaceCard } from './RoadmapMarketplaceCard';
 
 type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
 
@@ -40,7 +39,7 @@ function cardProps(
     onConnect: jest.fn(),
     onRequestDisconnect: jest.fn(),
     onConfigure: jest.fn(),
-    onImportPreview: jest.fn(),
+    onSync: jest.fn(),
     ...props,
   };
 }
@@ -165,16 +164,20 @@ describe('MarketplaceCard', () => {
     expect(html).toContain('>No errors</dd>');
   });
 
-  it('offers Preview import only for a connected marketplace outside sandbox mode', () => {
+  it('offers Sync now only for a connected marketplace and disables it while syncing', () => {
     const real = cardProps();
-    const preview = findByType(MarketplaceCard(real) as ElementLike, Button).find(
-      (button) => textContent(button) === 'Preview import',
+    const sync = findByType(MarketplaceCard(real) as ElementLike, Button).find(
+      (button) => textContent(button) === 'Sync now',
     );
 
-    (preview?.props.onClick as () => void)();
-    expect(real.onImportPreview).toHaveBeenCalledWith(real.marketplace);
-    expect(renderHtml(<MarketplaceCard {...cardProps({ sandbox: true })} />)).not.toContain('Preview import');
-    expect(renderHtml(<MarketplaceCard {...cardProps({ connected: false })} />)).not.toContain('Preview import');
+    (sync?.props.onClick as () => void)();
+    expect(real.onSync).toHaveBeenCalledWith(real.marketplace);
+    expect(renderHtml(<MarketplaceCard {...cardProps({ sandbox: true })} />)).toContain('Sync now');
+    expect(renderHtml(<MarketplaceCard {...cardProps({ connected: false })} />)).not.toContain('Sync now');
+    const syncing = findByType(MarketplaceCard(cardProps({}, { syncing: true })) as ElementLike, Button).find(
+      (button) => textContent(button) === 'Syncing…',
+    );
+    expect(syncing?.props.disabled).toBe(true);
   });
 
   it('opens configuration from the Configure button', () => {
@@ -193,24 +196,5 @@ describe('MarketplaceCard', () => {
     );
 
     expect(html).toContain('Add your OLX app credentials in Configure before connecting.');
-  });
-});
-
-describe('RoadmapMarketplaceCard', () => {
-  it('shows a muted roadmap card with a disabled switch and no actions', () => {
-    const tree = RoadmapMarketplaceCard({ marketplaceKey: 'allegro' }) as ElementLike;
-    const [toggle] = findByType(tree, Switch);
-    const html = renderHtml(<RoadmapMarketplaceCard marketplaceKey="allegro" />);
-
-    expect(ROADMAP_CARD_COPY).toBe('Roadmap channel. MarketDesk currently integrates OLX only.');
-    expect(html).toContain('aria-label="Allegro logo"');
-    expect(html).toContain('>Allegro</h2>');
-    expect(html).toContain('>Not available yet</span>');
-    expect(html).toContain(ROADMAP_CARD_COPY);
-    expect(toggle?.props.checked).toBe(false);
-    expect(toggle?.props.disabled).toBe(true);
-    expect(findByType(tree, Button)).toHaveLength(0);
-    expect(html).not.toContain('<button');
-    expect(html).not.toContain('Connect');
   });
 });

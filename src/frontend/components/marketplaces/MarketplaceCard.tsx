@@ -6,6 +6,7 @@ import React from 'react';
 import { Box, Button, Stack, Switch, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import LinkIcon from '@mui/icons-material/Link';
+import SyncIcon from '@mui/icons-material/Sync';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
 import type { Marketplace } from '@shared/types';
 import { MARKETPLACE_NAMES } from '@shared/constants';
@@ -69,7 +70,7 @@ export interface MarketplaceCardProps {
   onConnect: (marketplace: Marketplace) => void;
   onRequestDisconnect: (marketplace: Marketplace) => void;
   onConfigure: (marketplace: Marketplace) => void;
-  onImportPreview: (marketplace: Marketplace) => void;
+  onSync: (marketplace: Marketplace) => void;
 }
 
 export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
@@ -82,7 +83,7 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
   onConnect,
   onRequestDisconnect,
   onConfigure,
-  onImportPreview,
+  onSync,
 }) => {
   const name = MARKETPLACE_NAMES[m.key];
   const titleId = `marketplace-${m.id}-title`;
@@ -161,14 +162,15 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
           >
             Configure
           </Button>
-          {connected && !m.sandbox && (
+          {connected && (
             <Button
               variant="outlined"
-              onClick={() => onImportPreview(m)}
-              disabled={busy}
+              startIcon={<SyncIcon />}
+              onClick={() => onSync(m)}
+              disabled={busy || syncing}
               sx={{ flex: '1 1 140px' }}
             >
-              Preview import
+              {syncing ? 'Syncing…' : 'Sync now'}
             </Button>
           )}
           {!connected && (
