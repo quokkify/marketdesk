@@ -12,6 +12,8 @@
 
 **Scope of this plan:** pull request 1 of the four in the spec. It deletes no Jest or Playwright test. Pull requests 2, 3 and 4 each get their own plan after this one is merged, because they depend on what this one measures on the live stack (see "Later pull requests" at the end).
 
+**Amendment made during execution (Task 2):** the browser cannot open `http://app:3000`, because the application sends `upgrade-insecure-requests` and HSTS and a browser applies them to every host except localhost. Wherever this plan says the Grid joins `marketdesk-network` and the browser opens `http://app:3000`, read instead: the `selenium` service uses `network_mode: "service:app"`, port 4444 is published through the `app` service in the Grid Compose file, and `MARKETDESK_UI_BASE_URI` is `http://localhost:3000`. The project also declares `com.codeborne:selenide` directly, because q4j `selenide` 0.12.2 publishes it at runtime scope only.
+
 **Branch:** `test/java-test-foundation`, created from `docs/java-test-migration-design` so the spec and this plan travel with the code.
 
 ## Global Constraints
