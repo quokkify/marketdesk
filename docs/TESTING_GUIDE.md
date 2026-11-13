@@ -1,6 +1,6 @@
 # MarketDesk tester guide
 
-This guide takes you from a fresh clone to a tested seller journey: create an account, connect the sandbox OLX account, add a product with photos, publish it, review AI suggestions. It assumes you did not build the project.
+This guide takes you from a fresh clone to a tested seller journey: create an account, connect the sandbox OLX account, add a product with photos, publish it, and review AI suggestions. It assumes you did not build the project.
 
 MarketDesk is a prototype and is not production-certified (see the [project status](../.github/project-status.yml)). Report anything that looks broken, and anything that looks real but should not be.
 
