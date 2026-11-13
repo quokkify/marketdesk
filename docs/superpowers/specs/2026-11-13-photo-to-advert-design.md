@@ -132,11 +132,14 @@ changes.
 - "Change" opens the existing category search, seeded with the current title, searching as the
   seller types and saying "no matches" when there are none. The numeric category ID input
   moves behind an "advanced" disclosure.
-- Blockers that only the publication preflight can find (quota, OAuth expiry) are shown on this
-  screen with the existing override controls; they are not redesigned here.
+- Blockers that only the publication preflight can find (quota, OAuth expiry) need a listing,
+  which exists only after the product is created. When the preflight finds one, the existing
+  review dialog opens on the product page with the existing override controls; they are not
+  redesigned here. With no blocker the advert is queued without that dialog.
 - After queueing, the product page polls the listing while its status is pending and shows a
   failure in place.
-- The file input offers the camera on phones; one unsupported file is skipped with a message
+- The file input keeps the phone's own picker, which offers both camera and gallery (a
+  `capture` attribute would force the camera and hide the gallery); one unsupported file is skipped with a message
   instead of rejecting the whole selection; the review screen is full-screen at phone width
   with the publish button reachable without scrolling past secondary content.
 
@@ -303,6 +306,10 @@ Rollback is a revert of the step's commit. Step 1 removes UI only; no stored dat
   idempotency key (section 6.7).
 - The photo-draft model has its own settings that default to the Hermes values (section 6.6).
 - Step 1 updates the visual test and its tracked screenshots if they show the removed steps.
+- Step 1 alone reaches about 10 seller actions, not the 8 of G2: typing a category word and
+  picking the leaf are two actions, and "Continue" is one. Step 3 removes the category pair.
+- The misleading AI draft panel leaves the wizard in step 1; the photo draft of step 2
+  replaces it. The `title`-mode endpoint stays.
 - Step 1 ships before the AI steps so the flow improves even if step 0 goes badly.
 - Improvement suggestions that must be retyped, the quota override wording and the OAuth
   return path stay as they are.
