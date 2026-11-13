@@ -140,11 +140,13 @@ function view(overrides: Partial<React.ComponentProps<typeof ProductWizardView>>
       marketplaceStatus="connected"
       belowCostConfirmed={false}
       belowCostHasError={false}
+      categoryChanging={false}
       submitting={false}
       currency="PLN"
       searchCategories={() => Promise.resolve([])}
       onChange={() => undefined}
       onOlxCategoryChange={() => undefined}
+      onCategoryChangingChange={() => undefined}
       onBelowCostConfirmedChange={() => undefined}
       onUploadImage={() => Promise.reject(new Error('not used'))}
       onContinue={() => undefined}
@@ -209,6 +211,7 @@ describe('ProductWizardForm two screens', () => {
         olxCategory: chairs,
         marketplaceStatus: 'connected',
         belowCostConfirmed: false,
+        categoryChanging: false,
       })
     ).toBe('Add a price above 0.');
     const html = view({ values });
@@ -224,6 +227,7 @@ describe('ProductWizardForm two screens', () => {
         olxCategory: null,
         marketplaceStatus: 'connected',
         belowCostConfirmed: false,
+        categoryChanging: false,
       })
     ).toBe('Choose an OLX category.');
     const html = view({ olxCategory: null });
@@ -237,6 +241,7 @@ describe('ProductWizardForm two screens', () => {
       olxCategory: chairs,
       marketplaceStatus: 'connected' as const,
       belowCostConfirmed: false,
+      categoryChanging: false,
     };
     expect(publishBlocker(ready)).toBeNull();
     expect(publishBlocker({ ...ready, marketplaceStatus: 'loading' })).toBe(
@@ -253,16 +258,74 @@ describe('ProductWizardForm two screens', () => {
     );
   });
 
+  it('blocks publishing while the chosen category is being changed', () => {
+    expect(
+      publishBlocker({
+        values: reviewValues(),
+        olxCategory: chairs,
+        marketplaceStatus: 'connected',
+        belowCostConfirmed: false,
+        categoryChanging: true,
+      })
+    ).toBe('Choose an OLX category.');
+    const html = view({ categoryChanging: true });
+    expect(buttonTag(html, 'Publish to OLX')).toContain('disabled=""');
+    expect(html).toContain('Choose an OLX category.');
+  });
+
+  it('requires the below-cost confirmation for a draft too', () => {
+    const belowCost = { ...reviewValues(), costPrice: 150 };
+    expect(draftBlocker(belowCost, false)).toBe('Confirm the below-cost price.');
+    expect(draftBlocker(belowCost, true)).toBeNull();
+    const html = view({
+      values: belowCost,
+      marketplaceStatus: 'none',
+      searchCategories: undefined,
+    });
+    expect(buttonTag(html, 'Save as draft')).toContain('disabled=""');
+    expect(html).toContain('Confirm the below-cost price.');
+  });
+
+  it('never sends allowBelowCost without the confirmation, on either intent', () => {
+    const belowCost = { ...reviewValues(), costPrice: 150 };
+    for (const intent of ['draft', 'publish'] as const) {
+      expect(
+        buildWizardSubmission(intent, belowCost, chairs, [marketplace()], false).values
+      ).not.toHaveProperty('allowBelowCost');
+      expect(
+        buildWizardSubmission(intent, belowCost, chairs, [marketplace()], true).values
+          .allowBelowCost
+      ).toBe(true);
+    }
+    expect(
+      buildWizardSubmission('draft', reviewValues(), chairs, [marketplace()], true).values
+    ).not.toHaveProperty('allowBelowCost');
+  });
+
+  it('shows the below-cost alert in its error state while it blocks the primary button', () => {
+    const belowCost = { ...reviewValues(), costPrice: 150 };
+    expect(view({ values: belowCost })).toContain('MuiAlert-colorError');
+    expect(view({ values: belowCost, belowCostConfirmed: true })).not.toContain(
+      'MuiAlert-colorError'
+    );
+  });
+
   it('lets a draft through with only the product values valid', () => {
-    expect(draftBlocker({ ...reviewValues(), sellingPrice: 0 })).toBeNull();
-    expect(draftBlocker({ ...reviewValues(), name: '' })).toBe('Name is required.');
+    expect(draftBlocker({ ...reviewValues(), sellingPrice: 0 }, false)).toBeNull();
+    expect(draftBlocker({ ...reviewValues(), name: '' }, false)).toBe('Name is required.');
     expect(buttonTag(view({ values: { ...reviewValues(), name: '' } }), 'Save as draft')).toContain(
       'disabled=""'
     );
   });
 
   it('builds the publish submission with the target, category and derived product category', () => {
-    const submission = buildWizardSubmission('publish', reviewValues(), chairs, [marketplace()]);
+    const submission = buildWizardSubmission(
+      'publish',
+      reviewValues(),
+      chairs,
+      [marketplace()],
+      false
+    );
     expect(submission).toMatchObject({
       intent: 'publish',
       targetMarketplace: 'olx',
@@ -278,7 +341,8 @@ describe('ProductWizardForm two screens', () => {
       'publish',
       { ...reviewValues(), sku: 'CAM-001', category: 'Electronics' },
       chairs,
-      [marketplace()]
+      [marketplace()],
+      false
     );
     expect(submission.values.category).toBe('Electronics');
     expect(submission.values.sku).toBe('CAM-001');
@@ -293,7 +357,7 @@ describe('ProductWizardForm two screens', () => {
     expect(html).not.toContain('Publish to OLX');
     expect(html).toContain('No marketplace connected');
     expect(buttonTag(html, 'Save as draft')).not.toContain('disabled=""');
-    const submission = buildWizardSubmission('draft', reviewValues(), null, []);
+    const submission = buildWizardSubmission('draft', reviewValues(), null, [], false);
     expect(submission).toMatchObject({
       intent: 'draft',
       targetMarketplace: null,

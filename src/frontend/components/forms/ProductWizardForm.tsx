@@ -200,8 +200,16 @@ function firstFieldError(errors: ProductFieldErrors): string | null {
   return field ? errors[field]! : null;
 }
 
-export function draftBlocker(values: ProductFormValues): string | null {
-  return firstFieldError(validateProductValues(values));
+const BELOW_COST_REASON = 'Confirm the below-cost price.';
+
+// A below-cost price needs the seller's confirmation on both buttons.
+export function draftBlocker(
+  values: ProductFormValues,
+  belowCostConfirmed: boolean
+): string | null {
+  const fieldError = firstFieldError(validateProductValues(values));
+  if (fieldError) return fieldError;
+  return belowCostConfirmationRequired(values, belowCostConfirmed) ? BELOW_COST_REASON : null;
 }
 
 export interface PublishBlockerInput {
@@ -209,6 +217,8 @@ export interface PublishBlockerInput {
   olxCategory: WizardOlxCategory | null;
   marketplaceStatus: WizardMarketplaceStatus;
   belowCostConfirmed: boolean;
+  // The picker hides the chosen path while the seller is replacing it.
+  categoryChanging: boolean;
 }
 
 export function publishBlocker({
@@ -216,6 +226,7 @@ export function publishBlocker({
   olxCategory,
   marketplaceStatus,
   belowCostConfirmed,
+  categoryChanging,
 }: PublishBlockerInput): string | null {
   const errors = validateForPublish(values);
   if (errors.sellingPrice) errors.sellingPrice = 'Add a price above 0.';
@@ -223,26 +234,26 @@ export function publishBlocker({
   if (fieldError) return fieldError;
   // The category picker needs a connected marketplace, so loading is named first.
   if (marketplaceStatus === 'loading') return 'Marketplace connections are still loading.';
-  if (!olxCategory) return 'Choose an OLX category.';
-  if (belowCostConfirmationRequired(values, belowCostConfirmed)) {
-    return 'Confirm the below-cost price.';
-  }
-  return null;
+  if (!olxCategory || categoryChanging) return 'Choose an OLX category.';
+  return belowCostConfirmationRequired(values, belowCostConfirmed) ? BELOW_COST_REASON : null;
 }
 
 export function buildWizardSubmission(
   intent: WizardSubmitIntent,
   values: ProductFormValues,
   olxCategory: WizardOlxCategory | null,
-  marketplaces: Marketplace[] | undefined
+  marketplaces: Marketplace[] | undefined,
+  belowCostConfirmed: boolean
 ): WizardSubmission {
   // A converted six-step draft keeps the category the seller already chose.
   const category = values.category.trim()
     ? values.category
     : deriveProductCategory(olxCategory?.path ?? null);
+  const withCategory = { ...values, category };
+  // The below-cost override is only ever sent with the seller's confirmation.
   return {
     intent,
-    values: toProductSubmissionValues({ ...values, category }),
+    values: belowCostConfirmed ? toProductSubmissionValues(withCategory) : withCategory,
     targetMarketplace: resolveTargetMarketplace(marketplaces),
     olxCategory,
   };
@@ -286,11 +297,13 @@ export interface ProductWizardViewProps {
   marketplaceStatus: WizardMarketplaceStatus;
   belowCostConfirmed: boolean;
   belowCostHasError: boolean;
+  categoryChanging: boolean;
   submitting: boolean;
   currency: string;
   searchCategories?: (query: string) => Promise<OlxCategorySearchResult[]>;
   onChange: <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => void;
   onOlxCategoryChange: (category: WizardOlxCategory | null) => void;
+  onCategoryChangingChange: (changing: boolean) => void;
   onBelowCostConfirmedChange: (confirmed: boolean) => void;
   onUploadImage: (file: File) => Promise<UploadedProductImage>;
   onDeleteImage?: (imageId: string) => Promise<void>;
@@ -313,11 +326,13 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
   marketplaceStatus,
   belowCostConfirmed,
   belowCostHasError,
+  categoryChanging,
   submitting,
   currency,
   searchCategories,
   onChange,
   onOlxCategoryChange,
+  onCategoryChangingChange,
   onBelowCostConfirmedChange,
   onUploadImage,
   onDeleteImage,
@@ -332,12 +347,13 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
   const warning = marginWarning(values);
   const publishOffered = marketplaceStatus === 'loading' || marketplaceStatus === 'connected';
   const photosReason = photosBlocker(values.images);
-  const draftReason = draftBlocker(values);
+  const draftReason = draftBlocker(values, belowCostConfirmed);
   const publishReason = publishBlocker({
     values,
     olxCategory,
     marketplaceStatus,
     belowCostConfirmed,
+    categoryChanging,
   });
   const reason = activeStep === 0 ? photosReason : publishOffered ? publishReason : draftReason;
 
@@ -387,7 +403,7 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
             <BelowCostConfirmationAlert
               warning={warning}
               confirmed={belowCostConfirmed}
-              hasError={belowCostHasError}
+              hasError={belowCostHasError || reason === BELOW_COST_REASON}
               onConfirmedChange={onBelowCostConfirmedChange}
             />
           )}
@@ -395,6 +411,8 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
             <OlxCategoryPicker
               value={olxCategory}
               onChange={onOlxCategoryChange}
+              changing={categoryChanging}
+              onChangingChange={onCategoryChangingChange}
               search={searchCategories}
               seed={values.name}
               disabled={submitting}
@@ -508,6 +526,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
   const [errors, setErrors] = useState<ProductFieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const belowCostConfirmation = useBelowCostConfirmation();
+  const [categoryChanging, setCategoryChanging] = useState(false);
   const [targetMarketplace, setTargetMarketplace] = useState<MarketplaceKey | null>(
     initialDraft?.targetMarketplace ?? null
   );
@@ -564,14 +583,22 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
             olxCategory,
             marketplaceStatus,
             belowCostConfirmed: belowCostConfirmation.confirmed,
+            categoryChanging,
           })
-        : draftBlocker(values);
+        : draftBlocker(values, belowCostConfirmation.confirmed);
+    if (blocked === BELOW_COST_REASON) belowCostConfirmation.setHasError(true);
     if (blocked !== null || submittingRef.current) return;
     submittingRef.current = true;
     setServerError(null);
     try {
       const rejected = await onSubmit(
-        buildWizardSubmission(intent, values, olxCategory, marketplaces)
+        buildWizardSubmission(
+          intent,
+          values,
+          olxCategory,
+          marketplaces,
+          belowCostConfirmation.confirmed
+        )
       );
       if (rejected) {
         setErrors(rejected.fieldErrors);
@@ -592,11 +619,13 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
       marketplaceStatus={marketplaceStatus}
       belowCostConfirmed={belowCostConfirmation.confirmed}
       belowCostHasError={belowCostConfirmation.hasError}
+      categoryChanging={categoryChanging}
       submitting={submitting}
       currency={currency}
       searchCategories={searchCategories}
       onChange={change}
       onOlxCategoryChange={setOlxCategory}
+      onCategoryChangingChange={setCategoryChanging}
       onBelowCostConfirmedChange={belowCostConfirmation.changeConfirmed}
       onUploadImage={onUploadImage}
       onDeleteImage={onDeleteImage}

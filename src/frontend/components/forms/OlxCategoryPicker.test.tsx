@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ThemeProvider } from '@mui/material/styles';
 import { lightTheme } from '../../theme/lightTheme';
 import type { OlxCategorySearchState } from './olxCategorySearch';
-import { OlxCategoryPickerView } from './OlxCategoryPicker';
+import { OlxCategoryPicker, OlxCategoryPickerView } from './OlxCategoryPicker';
 
 const path = ['Dom i Ogród', 'Meble', 'Fotele'];
 const idle: OlxCategorySearchState = { query: '', status: 'idle', results: [] };
@@ -74,5 +74,32 @@ describe('OlxCategoryPickerView', () => {
 
   it('offers no Cancel when no category was chosen yet', () => {
     expect(render({})).not.toContain('Cancel');
+  });
+});
+
+describe('OlxCategoryPicker controlled changing state', () => {
+  const chosen = { providerCategoryId: '1', name: 'Fotele', path };
+  const picker = (changing?: boolean) =>
+    renderToStaticMarkup(
+      <ThemeProvider theme={lightTheme}>
+        <OlxCategoryPicker
+          value={chosen}
+          onChange={() => undefined}
+          search={() => Promise.resolve([])}
+          changing={changing}
+          onChangingChange={() => undefined}
+        />
+      </ThemeProvider>
+    );
+
+  it('hides the chosen path and offers Cancel while the owner says it is changing', () => {
+    const html = picker(true);
+    expect(html).not.toContain('Dom i Ogród &gt; Meble &gt; Fotele');
+    expect(html).toContain('OLX category');
+    expect(html).toContain('Cancel');
+  });
+
+  it('shows the chosen path when the owner says it is not changing', () => {
+    expect(picker(false)).toContain('Dom i Ogród &gt; Meble &gt; Fotele');
   });
 });

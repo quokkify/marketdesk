@@ -28,6 +28,9 @@ export interface OlxCategoryPickerProps {
   seed?: string;
   error?: string;
   disabled?: boolean;
+  // Controlled "Change" state, so the owner can see a replacement in progress.
+  changing?: boolean;
+  onChangingChange?: (changing: boolean) => void;
 }
 
 export interface OlxCategoryPickerViewProps {
@@ -126,13 +129,20 @@ export const OlxCategoryPicker: React.FC<OlxCategoryPickerProps> = ({
   seed,
   error,
   disabled,
+  changing: controlledChanging,
+  onChangingChange,
 }) => {
   const [state, setState] = useState<OlxCategorySearchState>({
     query: seed ?? '',
     status: 'idle',
     results: [],
   });
-  const [changing, setChanging] = useState(false);
+  const [ownChanging, setOwnChanging] = useState(false);
+  const changing = controlledChanging ?? ownChanging;
+  const setChanging = (next: boolean) => {
+    setOwnChanging(next);
+    onChangingChange?.(next);
+  };
   const searchRef = useRef(search);
   searchRef.current = search;
   const controllerRef = useRef<ReturnType<typeof createOlxCategorySearch> | null>(null);
