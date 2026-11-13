@@ -1,6 +1,6 @@
 # Move integration, API and UI tests to the Java project
 
-Date: 2026-11-13. Status: awaiting owner approval.
+Date: 2026-11-13. Status: approved by the owner; pull request 1 implemented.
 
 ## Intent
 

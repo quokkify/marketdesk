@@ -4,7 +4,7 @@
 
 **Goal:** Give the Java project `test-automation/` what every later stage needs: an authenticated API session, a `uiTest` Gradle task, and a browser that runs in a Selenium Grid container next to the application.
 
-**Architecture:** Each Java test class registers its own account through the public API and works inside that workspace. API tests call the application on `127.0.0.1:3000` from the host. UI tests drive a browser inside a `selenium/standalone-chromium` container that sits on the application's Compose network, so the browser opens the application as `http://app:3000`. The existing CI script starts the application and the Grid, runs `test apiTest uiTest`, and removes both.
+**Architecture:** Each Java test class registers its own account through the public API and works inside that workspace. API tests call the application on `127.0.0.1:3000` from the host. UI tests drive a browser inside a `selenium/standalone-chromium` container that shares the application container's network namespace, so the browser opens the application as `http://localhost:3000` (see the amendment below; the task text further down still shows the first design). The existing CI script starts the application and the Grid, runs `test apiTest uiTest`, and removes both.
 
 **Tech Stack:** Java 21, Gradle, TestNG, q4j 0.12.2 (`rest-assured`, `selenide`, `config`, `testng`), Allure, Docker Compose, Selenium Grid.
 
