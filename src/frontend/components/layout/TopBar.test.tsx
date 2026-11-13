@@ -117,7 +117,7 @@ describe('PRD top bar', () => {
   });
 
   it('has no notifications control', () => {
-    expect(html).not.toContain('Notifications');
+    expect(html).not.toMatch(/notification/i);
   });
 
   it('offers the command palette with a keyboard shortcut hint', () => {

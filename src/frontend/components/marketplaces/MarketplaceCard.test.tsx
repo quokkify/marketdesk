@@ -159,10 +159,10 @@ describe('MarketplaceCard', () => {
     expect(html).not.toContain('Review sync issues');
   });
 
-  it('hides the sync-issues link when there are no errors', () => {
+  it('shows the zero state of the error count', () => {
     const html = renderHtml(<MarketplaceCard {...cardProps({ errorCount: 0 })} />);
 
-    expect(html).not.toContain('Review sync issues');
+    expect(html).toContain('>No errors</dd>');
   });
 
   it('offers Preview import only for a connected marketplace outside sandbox mode', () => {
