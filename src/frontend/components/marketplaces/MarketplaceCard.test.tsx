@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { Button, Switch } from '@mui/material';
 import type { Marketplace } from '@shared/types';
-import { MarketplaceCard, SYNC_ISSUES_PATH } from './MarketplaceCard';
+import { MarketplaceCard } from './MarketplaceCard';
 import type { MarketplaceCardProps } from './MarketplaceCard';
 import { ROADMAP_CARD_COPY, RoadmapMarketplaceCard } from './RoadmapMarketplaceCard';
 
@@ -151,13 +151,12 @@ describe('MarketplaceCard', () => {
     expect(html).toContain('>Syncing…</');
   });
 
-  it('counts sync errors and links them to the listings error filter', () => {
+  it('counts sync errors without linking to a removed page', () => {
     const html = renderHtml(<MarketplaceCard {...cardProps({ errorCount: 2 })} />);
 
-    expect(SYNC_ISSUES_PATH).toBe('/listings?status=error');
     expect(html).toContain('>2 errors</dd>');
-    expect(html).toContain('href="/listings?status=error"');
-    expect(html).toContain('Review sync issues');
+    expect(html).not.toContain('href="/listings');
+    expect(html).not.toContain('Review sync issues');
   });
 
   it('hides the sync-issues link when there are no errors', () => {

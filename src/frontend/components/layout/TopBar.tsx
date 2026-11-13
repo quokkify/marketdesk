@@ -1,5 +1,5 @@
 // Contextual 64px application bar: route identity, global command palette,
-// theme, honest notification availability, mobile navigation, and creation.
+// theme, mobile navigation, and creation.
 import React, { useEffect, useState } from 'react';
 import {
   AppBar,
@@ -15,7 +15,6 @@ import { alpha } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -85,7 +84,6 @@ const iconButtonSx = {
   color: 'text.secondary',
   '& .MuiSvgIcon-root': { fontSize: 18 },
   '&:hover': { bgcolor: 'surface2' },
-  '&.Mui-disabled': { bgcolor: 'background.paper', borderColor: 'divider' },
 } as const;
 
 export const ThemeToggleButton: React.FC<{
@@ -244,14 +242,6 @@ export const TopBar: React.FC = () => {
           </Tooltip>
 
           <ThemeToggleButton resolvedMode={resolvedMode} onToggle={toggleTheme} />
-
-          <Tooltip title="Notifications are not available yet">
-            <Box component="span" sx={{ display: 'inline-flex' }}>
-              <IconButton disabled aria-label="Notifications unavailable" sx={iconButtonSx}>
-                <NotificationsNoneOutlinedIcon />
-              </IconButton>
-            </Box>
-          </Tooltip>
 
           <Button
             variant="contained"

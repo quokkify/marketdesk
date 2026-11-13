@@ -23,13 +23,10 @@ import {
 import { alpha } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import GridViewIcon from '@mui/icons-material/GridView';
 import ListIcon from '@mui/icons-material/ViewList';
-import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
@@ -761,21 +758,6 @@ const ProductsPage: React.FC = () => {
               flexItem
               sx={{ borderColor: 'rgba(255,255,255,.3)', display: { xs: 'none', md: 'block' } }}
             />
-            {[
-              [<LocalOfferOutlinedIcon key="tag" />, 'Add tag'],
-              [<EditOutlinedIcon key="price" />, 'Edit price'],
-              [<DeleteOutlineIcon key="delete" />, 'Delete'],
-            ].map(([icon, label]) => (
-              <Button
-                key={String(label)}
-                disabled
-                startIcon={icon}
-                aria-describedby="bulk-actions-note"
-                sx={{ '&.Mui-disabled': { color: 'inherit', opacity: 0.6 } }}
-              >
-                {label}
-              </Button>
-            ))}
             <Button color="inherit" startIcon={<DownloadIcon />} onClick={exportSelected}>
               Export CSV
             </Button>
@@ -784,14 +766,6 @@ const ProductsPage: React.FC = () => {
               Clear selection
             </Button>
           </Stack>
-          <Typography
-            id="bulk-actions-note"
-            variant="caption"
-            sx={{ display: 'block', px: 1, opacity: 0.9 }}
-          >
-            Bulk tag, price and delete changes are not available yet. Export works on the selected
-            rows.
-          </Typography>
         </Box>
       )}
 

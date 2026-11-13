@@ -108,7 +108,7 @@ describe('PRD top bar', () => {
     </ThemeProvider>
   );
 
-  it('renders the theme and notification controls as bordered 36px squares', () => {
+  it('renders the theme control as a bordered 36px square', () => {
     expect(html).toMatch(/<button(?=[^>]*aria-label="Toggle theme")[^>]*>/);
     expect(html).toContain('width:36px;height:36px');
     expect(html).toContain('border-radius:10px');
@@ -116,10 +116,8 @@ describe('PRD top bar', () => {
     expect(html).toContain('border-color:#E7E9EF');
   });
 
-  it('keeps notifications visibly unavailable', () => {
-    expect(html).toMatch(
-      /<button(?=[^>]*disabled="")(?=[^>]*aria-label="Notifications unavailable")[^>]*>/
-    );
+  it('has no notifications control', () => {
+    expect(html).not.toContain('Notifications');
   });
 
   it('offers the command palette with a keyboard shortcut hint', () => {

@@ -49,7 +49,6 @@ import {
   useGetAnalyticsOverviewQuery,
   useGetPriceHistoryQuery,
   useGetWorkspaceQuery,
-  useUpdateWorkspaceMutation,
   useLoginMutation,
   useRegisterMutation,
   useMeQuery,
@@ -163,7 +162,6 @@ export function useAnalyticsOverview(
 
 // ---- Workspace ----
 export const useWorkspace = useGetWorkspaceQuery;
-export const useUpdateWorkspace = useUpdateWorkspaceMutation;
 
 // ---- Auth ----
 export const useLogin = useLoginMutation;
