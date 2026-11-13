@@ -16,3 +16,17 @@ describe('Modal close lock', () => {
     expect((element as React.ReactElement<{ onClose?: unknown }>).props.onClose).toBeUndefined();
   });
 });
+
+describe('Modal full screen on mobile', () => {
+  it('styles the paper full screen below sm only when asked', () => {
+    const dialogProps = (fullScreenOnMobile?: boolean) =>
+      (
+        Modal({ open: true, onClose: () => undefined, fullScreenOnMobile }) as React.ReactElement<{
+          slotProps?: { paper?: { sx?: unknown } };
+        }>
+      ).props;
+
+    expect(dialogProps().slotProps).toBeUndefined();
+    expect(typeof dialogProps(true).slotProps?.paper?.sx).toBe('function');
+  });
+});

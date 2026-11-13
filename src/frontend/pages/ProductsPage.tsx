@@ -34,13 +34,13 @@ import type { BlockerFunction } from 'react-router-dom';
 import type { Marketplace, Product } from '@shared/types';
 import {
   useCreateProduct,
-  useGenerateProductAIDraft,
   useUploadProductImage,
   useDeleteProductImage,
   useCheckMarketplace,
   useMarketplaces,
   useProducts,
 } from '../services/hooks/index.js';
+import { useLazySearchMarketplaceCategoriesQuery } from '../state/api/index.js';
 import type { ProductListParams } from '../state/api/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
@@ -76,8 +76,8 @@ import {
 } from '../components/forms/index.js';
 import type {
   ApiFieldErrors,
-  ProductSubmissionValues,
   ProductWizardDraftState,
+  WizardSubmission,
 } from '../components/forms/index.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 
@@ -269,7 +269,7 @@ const ProductsPage: React.FC = () => {
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessError, setReadinessError] = useState(false);
   const [createProduct, { isLoading: creating }] = useCreateProduct();
-  const [generateProductAIDraft] = useGenerateProductAIDraft();
+  const [searchMarketplaceCategories] = useLazySearchMarketplaceCategoriesQuery();
   const [uploadProductImage] = useUploadProductImage();
   const [deleteProductImage] = useDeleteProductImage();
 
@@ -413,6 +413,18 @@ const ProductsPage: React.FC = () => {
     wizardOpen,
   ]);
 
+  const connectedOlxId = verifiedMarketplaces?.find(
+    (marketplace) => marketplace.key === 'olx' && marketplace.connected
+  )?.id;
+  const searchCategories = useMemo(
+    () =>
+      connectedOlxId
+        ? (query: string) =>
+            searchMarketplaceCategories({ marketplaceId: connectedOlxId, query }).unwrap()
+        : undefined,
+    [connectedOlxId, searchMarketplaceCategories]
+  );
+
   const items = useMemo<Product[]>(() => currentData?.items ?? [], [currentData?.items]);
   useEffect(() => {
     const visible = new Set(items.map((product) => product.id));
@@ -450,28 +462,39 @@ const ProductsPage: React.FC = () => {
   const editProduct = (product: Product) =>
     navigate(`/products/${product.id}`, { state: { editProduct: true } });
 
-  const handleCreate = async (values: ProductSubmissionValues): Promise<ApiFieldErrors | void> => {
+  const handleCreate = async ({
+    intent,
+    values,
+    targetMarketplace,
+    olxCategory,
+  }: WizardSubmission): Promise<ApiFieldErrors | void> => {
     if (!workspaceId) {
       dispatch(enqueueToast({ message: 'No active workspace selected.', severity: 'error' }));
       return;
     }
     try {
-      const { targetMarketplace, ...productValues } = values;
-      // No target means no connected marketplace: the product is created as a draft.
-      const selectedMarketplace = targetMarketplace
-        ? verifiedMarketplaces?.find(
-            (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
-          )
-        : undefined;
-      if (targetMarketplace && !selectedMarketplace) {
+      // A draft is created without a journey; publishing needs the connected target.
+      const selectedMarketplace =
+        intent === 'publish' && targetMarketplace
+          ? verifiedMarketplaces?.find(
+              (marketplace) => marketplace.key === targetMarketplace && marketplace.connected,
+            )
+          : undefined;
+      if (intent === 'publish' && !selectedMarketplace) {
         throw new Error('The selected marketplace is no longer connected. Choose it again.');
       }
-      const product = await createProduct({ ...productValues, workspaceId }).unwrap();
+      const product = await createProduct({ ...values, workspaceId }).unwrap();
       const journey = selectedMarketplace
         ? await import('../workflows/publicationJourneyGraph.js').then(({ advancePublicationJourney }) =>
             advancePublicationJourney(
               { phase: 'review' },
-              { type: 'product_created', productId: product.id, marketplaceKey: selectedMarketplace.key },
+              {
+                type: 'product_created',
+                productId: product.id,
+                marketplaceKey: selectedMarketplace.key,
+                providerCategoryId: olxCategory?.providerCategoryId,
+                approvedInWizard: true,
+              },
             ),
           )
         : null;
@@ -489,7 +512,9 @@ const ProductsPage: React.FC = () => {
       if (!journey) {
         dispatch(
           enqueueToast({
-            message: 'Product created as a draft. Connect OLX to publish it.',
+            message: targetMarketplace
+              ? 'Product saved as a draft.'
+              : 'Product created as a draft. Connect OLX to publish it.',
             severity: 'success',
           })
         );
@@ -827,8 +852,9 @@ const ProductsPage: React.FC = () => {
         open={wizardOpen}
         onClose={requestWizardClose}
         title="New product"
-        subtitle="Add a product to your catalogue in a few steps."
+        subtitle="Add photos, then review and publish."
         maxWidth="md"
+        fullScreenOnMobile
       >
         {!draftKey ? (
           <Alert severity="warning">
@@ -845,7 +871,7 @@ const ProductsPage: React.FC = () => {
             marketplacesError={readinessError}
             currency={currency}
             onSubmit={handleCreate}
-            onGenerateAIDraft={(request) => generateProductAIDraft(request).unwrap()}
+            searchCategories={searchCategories}
             onUploadImage={(file) => uploadProductImage(file).unwrap()}
             onDeleteImage={async (imageId) => {
               await deleteProductImage(imageId).unwrap();

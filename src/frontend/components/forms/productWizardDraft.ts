@@ -1,9 +1,11 @@
 import type { MarketplaceKey, ProductCondition, ProductStatus } from '@shared/types';
 import { MARKETPLACE_KEY_LIST, PRODUCT_STATUS_LIST } from '@shared/constants';
 import { emptyProductValues } from './productFormModel.js';
-import type { ProductFormValues } from './productFormModel.js';
+import type { ProductFormValues, WizardOlxCategory } from './productFormModel.js';
 
-export const PRODUCT_WIZARD_DRAFT_VERSION = 1;
+export const PRODUCT_WIZARD_DRAFT_VERSION = 2;
+const LEGACY_PRODUCT_WIZARD_DRAFT_VERSION = 1;
+const LEGACY_MAX_ACTIVE_STEP = 5;
 export const PRODUCT_WIZARD_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const PRODUCT_CONDITIONS: readonly ProductCondition[] = [
@@ -18,8 +20,10 @@ const PRODUCT_CONDITIONS: readonly ProductCondition[] = [
 
 export interface ProductWizardDraftState {
   values: ProductFormValues;
-  activeStep: number;
+  activeStep: 0 | 1;
   targetMarketplace: MarketplaceKey | null;
+  olxCategory: WizardOlxCategory | null;
+  createdProductId: string | null;
 }
 
 interface StoredProductWizardDraft extends ProductWizardDraftState {
@@ -42,6 +46,10 @@ function cloneDraft(draft: ProductWizardDraftState): ProductWizardDraftState {
     values: { ...draft.values, tags: [...draft.values.tags], images: [...draft.values.images] },
     activeStep: draft.activeStep,
     targetMarketplace: draft.targetMarketplace,
+    olxCategory: draft.olxCategory
+      ? { ...draft.olxCategory, path: [...draft.olxCategory.path] }
+      : null,
+    createdProductId: draft.createdProductId,
   };
 }
 
@@ -93,14 +101,56 @@ function parseValues(value: unknown): ProductFormValues | null {
   };
 }
 
+function parseOlxCategory(value: unknown): WizardOlxCategory | null | undefined {
+  if (value === null) return null;
+  if (
+    !isRecord(value) ||
+    typeof value.providerCategoryId !== 'string' ||
+    typeof value.name !== 'string' ||
+    !isStringArray(value.path)
+  ) {
+    return undefined;
+  }
+  return { providerCategoryId: value.providerCategoryId, name: value.name, path: [...value.path] };
+}
+
+function parseActiveStep(value: unknown, maxStep: number): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= maxStep
+    ? value
+    : null;
+}
+
+function parseTargetMarketplace(value: unknown): MarketplaceKey | null | undefined {
+  if (value === null) return null;
+  return MARKETPLACE_KEY_LIST.includes(value as MarketplaceKey)
+    ? (value as MarketplaceKey)
+    : undefined;
+}
+
+const STORAGE_KEY_PREFIX = 'marketdesk.productWizardDraft.v';
+
+function storageKeyForVersion(version: number, workspaceId: string, userId: string): string {
+  return `${STORAGE_KEY_PREFIX}${version}.${encodeURIComponent(workspaceId)}.${encodeURIComponent(userId)}`;
+}
+
 export function productWizardDraftStorageKey(workspaceId: string, userId: string): string {
-  return `marketdesk.productWizardDraft.v${PRODUCT_WIZARD_DRAFT_VERSION}.${encodeURIComponent(workspaceId)}.${encodeURIComponent(userId)}`;
+  return storageKeyForVersion(PRODUCT_WIZARD_DRAFT_VERSION, workspaceId, userId);
+}
+
+// The version 1 key for the same workspace and user, or null for a key of another shape.
+function legacyStorageKey(key: string): string | null {
+  const current = `${STORAGE_KEY_PREFIX}${PRODUCT_WIZARD_DRAFT_VERSION}.`;
+  return key.startsWith(current)
+    ? `${STORAGE_KEY_PREFIX}${LEGACY_PRODUCT_WIZARD_DRAFT_VERSION}.${key.slice(current.length)}`
+    : null;
 }
 
 export function hasMeaningfulProductWizardDraft(draft: ProductWizardDraftState): boolean {
   return (
     draft.activeStep > 0 ||
     draft.targetMarketplace !== null ||
+    draft.olxCategory !== null ||
+    draft.createdProductId !== null ||
     JSON.stringify(draft.values) !== JSON.stringify(emptyProductValues())
   );
 }
@@ -119,38 +169,70 @@ export function readProductWizardDraft(
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed)) return null;
-    if (parsed.version !== PRODUCT_WIZARD_DRAFT_VERSION) return null;
-    if (typeof parsed.updatedAt !== 'number' || !timestampIsValid(parsed.updatedAt, now)) {
-      return null;
-    }
-    if (
-      typeof parsed.activeStep !== 'number' ||
-      !Number.isInteger(parsed.activeStep) ||
-      parsed.activeStep < 0 ||
-      parsed.activeStep > 5
-    ) {
-      return null;
-    }
-    const targetMarketplace = parsed.targetMarketplace;
-    if (
-      targetMarketplace !== null &&
-      !MARKETPLACE_KEY_LIST.includes(targetMarketplace as MarketplaceKey)
-    ) {
-      return null;
-    }
-    const values = parseValues(parsed.values);
-    if (!values) return null;
-    return {
-      values,
-      activeStep: parsed.activeStep,
-      targetMarketplace: targetMarketplace as MarketplaceKey | null,
-    };
+    if (raw) return parseStoredDraft(raw, now);
+    return convertLegacyDraft(storage, key, now);
   } catch {
     return null;
   }
+}
+
+function parseStoredDraft(raw: string, now: number): ProductWizardDraftState | null {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isRecord(parsed) || parsed.version !== PRODUCT_WIZARD_DRAFT_VERSION) return null;
+  if (typeof parsed.updatedAt !== 'number' || !timestampIsValid(parsed.updatedAt, now)) {
+    return null;
+  }
+  const activeStep = parseActiveStep(parsed.activeStep, 1);
+  const targetMarketplace = parseTargetMarketplace(parsed.targetMarketplace);
+  const olxCategory = parseOlxCategory(parsed.olxCategory);
+  const createdProductId = parsed.createdProductId;
+  const values = parseValues(parsed.values);
+  if (
+    activeStep === null ||
+    targetMarketplace === undefined ||
+    olxCategory === undefined ||
+    (createdProductId !== null && typeof createdProductId !== 'string') ||
+    !values
+  ) {
+    return null;
+  }
+  return {
+    values,
+    activeStep: activeStep === 0 ? 0 : 1,
+    targetMarketplace,
+    olxCategory,
+    createdProductId,
+  };
+}
+
+// Reads a six-step version 1 draft, stores it as version 2 and removes the old key.
+function convertLegacyDraft(
+  storage: DraftStorage,
+  key: string,
+  now: number
+): ProductWizardDraftState | null {
+  const legacyKey = legacyStorageKey(key);
+  const raw = legacyKey ? storage.getItem(legacyKey) : null;
+  if (!legacyKey || !raw) return null;
+  const parsed: unknown = JSON.parse(raw);
+  if (!isRecord(parsed) || parsed.version !== LEGACY_PRODUCT_WIZARD_DRAFT_VERSION) return null;
+  if (typeof parsed.updatedAt !== 'number' || !timestampIsValid(parsed.updatedAt, now)) {
+    return null;
+  }
+  const activeStep = parseActiveStep(parsed.activeStep, LEGACY_MAX_ACTIVE_STEP);
+  const targetMarketplace = parseTargetMarketplace(parsed.targetMarketplace);
+  const values = parseValues(parsed.values);
+  if (activeStep === null || targetMarketplace === undefined || !values) return null;
+  const draft: ProductWizardDraftState = {
+    values,
+    activeStep: activeStep === 0 ? 0 : 1,
+    targetMarketplace,
+    olxCategory: null,
+    createdProductId: null,
+  };
+  writeProductWizardDraft(storage, key, draft, parsed.updatedAt);
+  storage.removeItem(legacyKey);
+  return draft;
 }
 
 export function writeProductWizardDraft(

@@ -5,7 +5,11 @@ export type { OlxCategoryPickerProps } from './OlxCategoryPicker.js';
 export { PricingForm } from './PricingForm.js';
 export type { PricingFormProps } from './PricingForm.js';
 export { ProductWizardForm, verifyWizardMarketplaceReadiness } from './ProductWizardForm.js';
-export type { ProductWizardFormProps } from './ProductWizardForm.js';
+export type {
+  ProductWizardFormProps,
+  WizardSubmission,
+  WizardSubmitIntent,
+} from './ProductWizardForm.js';
 export {
   emptyProductValues,
   productToValues,
