@@ -11,6 +11,8 @@ export DB_PASSWORD=marketdesk-ci
 export JWT_SECRET=marketdesk-ci-jwt-secret
 export HERMES_API_KEY=marketdesk-ci-hermes-key
 export APP_PORT=3000
+selenium_port="${SELENIUM_PORT:-4444}"
+export SELENIUM_PORT="$selenium_port"
 export COMPOSE_FILE="docker-compose.yml:docker/selenium-grid/docker-compose.yml"
 
 cd "$repo_root"
@@ -51,7 +53,8 @@ fi
 
 grid_ready=false
 for attempt in {1..60}; do
-  if curl --fail --silent http://127.0.0.1:4444/status | grep -q '"ready": *true'; then
+  if grid_status="$(curl --fail --silent "http://127.0.0.1:${selenium_port}/status")" \
+    && [[ "$grid_status" =~ \"ready\":\ *true ]]; then
     grid_ready=true
     break
   fi
@@ -65,7 +68,7 @@ if [[ "$grid_ready" != true ]]; then
   exit 1
 fi
 
-export BROWSER_REMOTE_URL=http://127.0.0.1:4444/wd/hub
+export BROWSER_REMOTE_URL="http://127.0.0.1:${selenium_port}/wd/hub"
 export MARKETDESK_UI_BASE_URI=http://localhost:3000
 
 cd "$repo_root/test-automation"
