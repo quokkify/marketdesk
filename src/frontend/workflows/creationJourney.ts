@@ -14,6 +14,8 @@ export interface CreationJourneyDeps {
   setCategory: (input: { id: string; providerCategoryId: string }) => Promise<Listing>;
   preview: (listingId: string) => Promise<PublishListingPreview>;
   publish: (input: PublishListingInput) => Promise<Listing>;
+  // Defaults to the publication journey graph; injectable for tests.
+  advance?: typeof advancePublicationJourney;
 }
 
 export type CreationJourneyOutcome =
@@ -27,6 +29,7 @@ export async function runCreationJourney(
   marketplace: Pick<Marketplace, 'id' | 'key'>,
   deps: CreationJourneyDeps,
 ): Promise<CreationJourneyOutcome> {
+  const advance = deps.advance ?? advancePublicationJourney;
   let listing: Listing;
   let journey: PublicationJourneyState;
   try {
@@ -35,7 +38,7 @@ export async function runCreationJourney(
       deps.findListing(marketplace.id) ??
       (await deps.createListing({ productId: pending.productId, marketplaceKey: marketplace.key }));
     if (listing.status !== 'draft') return { kind: 'skipped', reason: 'listing_not_draft' };
-    journey = await advancePublicationJourney(pending, { type: 'listing_created', listingId: listing.id });
+    journey = await advance(pending, { type: 'listing_created', listingId: listing.id });
   } catch (error) {
     return { kind: 'failed', step: 'listing', error };
   }
@@ -52,7 +55,7 @@ export async function runCreationJourney(
   let preview: PublishListingPreview;
   try {
     preview = await deps.preview(listing.id);
-    journey = await advancePublicationJourney(journey, {
+    journey = await advance(journey, {
       type: 'preview_loaded',
       canPublish: preview.canPublish,
       quotaOverrideEligible: preview.quotaOverrideEligibility.eligible,
@@ -64,20 +67,23 @@ export async function runCreationJourney(
   const nothingBlocks =
     pending.approvedInWizard === true &&
     preview.canPublish === true &&
+    Boolean(wantedCategoryId) &&
     preview.marketplaceCategory?.providerCategoryId === wantedCategoryId;
   if (!nothingBlocks) return { kind: 'review', listing, preview, journey };
 
+  let approved: PublicationJourneyState;
+  let published: Listing;
   try {
-    const approved = await advancePublicationJourney(journey, {
-      type: 'approval_given',
-      quotaOverrideConfirmed: false,
-    });
-    const published = await deps.publish({ id: listing.id });
-    const queued = await advancePublicationJourney(approved, { type: 'publication_queued' });
-    return { kind: 'queued', listing: published, journey: queued };
+    approved = await advance(journey, { type: 'approval_given', quotaOverrideConfirmed: false });
+    published = await deps.publish({ id: listing.id });
   } catch (error) {
     return { kind: 'failed', step: 'publish', error, listing };
   }
+  // The server accepted the publication, so a retry must not be offered.
+  const queued = await advance(approved, { type: 'publication_queued' }).catch(
+    (): PublicationJourneyState => ({ ...approved, phase: 'queued' }),
+  );
+  return { kind: 'queued', listing: published, journey: queued };
 }
 
 export interface WizardProductContext {
@@ -86,8 +92,14 @@ export interface WizardProductContext {
   marketplaces: ReadonlyArray<Pick<Marketplace, 'key' | 'connected'>> | undefined;
 }
 
+// `unknown` means the check itself failed; it is never reported as a disconnect.
+export type TargetConnection = 'connected' | 'disconnected' | 'unknown';
+
 export interface WizardProductDeps {
   createProduct: (values: ProductSubmissionValues) => Promise<{ id: string }>;
+  // False only when the server says the product is gone.
+  productExists: (productId: string) => Promise<boolean>;
+  checkTarget: (marketplaceKey: MarketplaceKey) => Promise<TargetConnection>;
   rememberCreatedProduct: (productId: string) => void;
   clearDraft: () => void;
   advanceJourney: typeof advancePublicationJourney;
@@ -106,6 +118,7 @@ export async function submitWizardProduct(
   deps: WizardProductDeps,
 ): Promise<WizardProductOutcome> {
   let productId = context.createdProductId;
+  if (productId && !(await deps.productExists(productId).catch(() => true))) productId = null;
   // A retry continues with the product already created; values edited since are not re-sent.
   if (!productId) {
     try {
@@ -118,18 +131,16 @@ export async function submitWizardProduct(
     deps.rememberCreatedProduct(productId);
   }
 
-  const target = submission.targetMarketplace
-    ? context.marketplaces?.find(
-        (marketplace) => marketplace.key === submission.targetMarketplace && marketplace.connected,
-      )
-    : undefined;
-
   if (submission.intent === 'draft') {
     deps.clearDraft();
     const marketplaceConnected = Boolean(context.marketplaces?.some((marketplace) => marketplace.connected));
     return { kind: 'draft_saved', productId, marketplaceConnected };
   }
-  if (!target) {
+  const target = submission.targetMarketplace;
+  const connection: TargetConnection = target
+    ? await deps.checkTarget(target).catch((): TargetConnection => 'unknown')
+    : 'disconnected';
+  if (!target || connection === 'disconnected') {
     deps.clearDraft();
     return { kind: 'disconnected_saved_as_draft', productId };
   }
@@ -139,7 +150,7 @@ export async function submitWizardProduct(
     {
       type: 'product_created',
       productId,
-      marketplaceKey: target.key,
+      marketplaceKey: target,
       providerCategoryId: submission.olxCategory?.providerCategoryId,
       approvedInWizard: true,
     },

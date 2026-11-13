@@ -150,7 +150,6 @@ export function hasMeaningfulProductWizardDraft(draft: ProductWizardDraftState):
     draft.activeStep > 0 ||
     draft.targetMarketplace !== null ||
     draft.olxCategory !== null ||
-    draft.createdProductId !== null ||
     JSON.stringify(draft.values) !== JSON.stringify(emptyProductValues())
   );
 }

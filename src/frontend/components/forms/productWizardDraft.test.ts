@@ -121,7 +121,8 @@ describe('product wizard draft persistence', () => {
     expect(hasMeaningfulProductWizardDraft({ ...empty, olxCategory: draft().olxCategory })).toBe(
       true
     );
-    expect(hasMeaningfulProductWizardDraft({ ...empty, createdProductId: 'p1' })).toBe(true);
+    // A remembered product alone is no reason to keep or offer a draft.
+    expect(hasMeaningfulProductWizardDraft({ ...empty, createdProductId: 'p1' })).toBe(false);
   });
 
   it('converts a six-step draft to the review screen', () => {

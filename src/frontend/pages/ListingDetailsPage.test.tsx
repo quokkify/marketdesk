@@ -631,6 +631,12 @@ describe('creation journey failure alert', () => {
     );
   });
 
+  it('names no step when the failure happened outside the journey steps', () => {
+    expect(creationJourneyFailureMessage(null, new Error('Unexpected'))).toBe(
+      'The product is saved. Preparing the advert failed: Unexpected. Use Publish to OLX to try again.'
+    );
+  });
+
   it('uses the API error message without doubling its full stop', () => {
     expect(
       creationJourneyFailureMessage('publish', { data: { error: { message: 'Quota exceeded.' } } })
@@ -664,6 +670,27 @@ describe('publication review category controls', () => {
     expect(html).toContain('Verify OLX category');
     expect(html).not.toContain('Find categories');
     expect(html).not.toContain('Search OLX categories');
+  });
+
+  it('keeps the numeric category fallback when the category search is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <PublicationCategoryControls
+        value={null}
+        seed="Blue phone"
+        search={async () => []}
+        searchUnavailableMessage="OLX category search is temporarily unavailable"
+        providerCategoryId=""
+        onProviderCategoryIdChange={() => undefined}
+        onPick={() => undefined}
+        onVerify={() => undefined}
+      />
+    );
+
+    expect(html).toContain('OLX category lookup is unavailable');
+    expect(html).toContain('OLX category search is temporarily unavailable');
+    expect(html).not.toContain('value="Blue phone"');
+    expect(html).toContain('Advanced');
+    expect(html).toContain('OLX category ID');
   });
 
   it('offers the search box when the listing has no category yet', () => {

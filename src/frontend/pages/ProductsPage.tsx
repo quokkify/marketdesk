@@ -40,7 +40,7 @@ import {
   useMarketplaces,
   useProducts,
 } from '../services/hooks/index.js';
-import { useLazySearchMarketplaceCategoriesQuery } from '../state/api/index.js';
+import { useLazyGetProductQuery, useLazySearchMarketplaceCategoriesQuery } from '../state/api/index.js';
 import type { ProductListParams } from '../state/api/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
@@ -81,6 +81,7 @@ import type {
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 import { advancePublicationJourney } from '../workflows/publicationJourneyGraph.js';
 import { submitWizardProduct } from '../workflows/creationJourney.js';
+import type { TargetConnection } from '../workflows/creationJourney.js';
 
 export function shouldBlockProductWizardNavigation(
   wizardOpen: boolean,
@@ -106,6 +107,10 @@ function browserStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+function isNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && (err as { status?: unknown }).status === 404);
 }
 
 function errorMessage(err: unknown): string {
@@ -270,6 +275,7 @@ const ProductsPage: React.FC = () => {
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [readinessError, setReadinessError] = useState(false);
   const [createProduct, { isLoading: creating }] = useCreateProduct();
+  const [getProduct] = useLazyGetProductQuery();
   const [searchMarketplaceCategories] = useLazySearchMarketplaceCategoriesQuery();
   const [uploadProductImage] = useUploadProductImage();
   const [deleteProductImage] = useDeleteProductImage();
@@ -475,6 +481,30 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Asks the server at submit time; a failed request rejects and counts as unknown.
+  const checkTarget = async (marketplaceKey: Marketplace['key']): Promise<TargetConnection> => {
+    const target = marketplaces.data?.find((marketplace) => marketplace.key === marketplaceKey);
+    if (!marketplaces.data) return 'unknown';
+    if (!target) return 'disconnected';
+    const status = await checkMarketplace(target.id).unwrap();
+    return status.connected &&
+      status.marketplaceId === target.id &&
+      status.providerKey === marketplaceKey
+      ? 'connected'
+      : 'disconnected';
+  };
+
+  const productExists = (productId: string) =>
+    getProduct(productId)
+      .unwrap()
+      .then(
+        () => true,
+        (err: unknown) => {
+          if (isNotFound(err)) return false;
+          throw err;
+        }
+      );
+
   const clearDraftAfterCreate = () => {
     if (draftKey && !clearStoredDraft()) {
       dispatch(
@@ -500,6 +530,8 @@ const ProductsPage: React.FC = () => {
         },
         {
           createProduct: (values) => createProduct({ ...values, workspaceId }).unwrap(),
+          productExists,
+          checkTarget,
           rememberCreatedProduct,
           clearDraft: clearDraftAfterCreate,
           advanceJourney: advancePublicationJourney,

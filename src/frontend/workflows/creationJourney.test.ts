@@ -4,7 +4,7 @@ import type { WizardSubmission } from '../components/forms/ProductWizardForm';
 import type { PublicationJourneyState } from './publicationJourneyContract';
 import { advancePublicationJourney } from './publicationJourneyGraph';
 import { runCreationJourney, submitWizardProduct } from './creationJourney';
-import type { CreationJourneyDeps, WizardProductDeps } from './creationJourney';
+import type { CreationJourneyDeps, TargetConnection, WizardProductDeps } from './creationJourney';
 
 const marketplace = { id: 'marketplace-1', key: 'olx' as const };
 
@@ -185,6 +185,38 @@ describe('runCreationJourney', () => {
     ).resolves.toMatchObject({ kind: 'failed', step: 'publish', error: failure });
   });
 
+  it('opens the review when neither the wizard nor the preview names a category', async () => {
+    const deps = journeyDeps({
+      preview: jest.fn(async () => preview({ marketplaceCategory: null })),
+    });
+    const { providerCategoryId: _category, ...uncategorised } = pending;
+
+    const outcome = await runCreationJourney(uncategorised, marketplace, deps);
+
+    expect(deps.setCategory).not.toHaveBeenCalled();
+    expect(deps.publish).not.toHaveBeenCalled();
+    expect(outcome.kind).toBe('review');
+  });
+
+  it('reports a published advert as queued even when the last journey step fails', async () => {
+    const published = listing({ status: 'live' });
+    const deps = journeyDeps({
+      publish: jest.fn(async () => published),
+      advance: jest.fn(async (...args: Parameters<typeof advancePublicationJourney>) => {
+        if (args[1].type === 'publication_queued') throw new Error('graph broke');
+        return advancePublicationJourney(...args);
+      }),
+    });
+
+    const outcome = await runCreationJourney(pending, marketplace, deps);
+
+    expect(deps.publish).toHaveBeenCalledTimes(1);
+    expect(outcome.kind).toBe('queued');
+    if (outcome.kind !== 'queued') return;
+    expect(outcome.listing).toBe(published);
+    expect(outcome.journey.phase).toBe('queued');
+  });
+
   it('skips a listing that is no longer a draft', async () => {
     const deps = journeyDeps({ findListing: jest.fn(() => listing({ status: 'live' })) });
 
@@ -239,6 +271,8 @@ function productDeps(calls: string[] = [], overrides: Partial<WizardProductDeps>
       calls.push('advanceJourney');
       return advancePublicationJourney(...args);
     }),
+    checkTarget: jest.fn(async (): Promise<TargetConnection> => 'connected'),
+    productExists: jest.fn(async () => true),
     ...overrides,
   };
 }
@@ -310,15 +344,16 @@ describe('submitWizardProduct', () => {
     expect(calls).toEqual(['createProduct', 'remember:p1']);
   });
 
-  it('saves the product as a draft when the marketplace disconnected after validation', async () => {
-    const deps = productDeps();
+  it('saves the product as a draft when the submit-time check finds OLX disconnected', async () => {
+    const deps = productDeps([], { checkTarget: jest.fn(async () => 'disconnected' as const) });
 
     const outcome = await submitWizardProduct(
       submission(),
-      { createdProductId: null, marketplaces: disconnected },
+      { createdProductId: null, marketplaces: connected },
       deps,
     );
 
+    expect(deps.checkTarget).toHaveBeenCalledWith('olx');
     expect(outcome).toEqual({ kind: 'disconnected_saved_as_draft', productId: 'p1' });
     expect(deps.createProduct).toHaveBeenCalledTimes(1);
     expect(deps.advanceJourney).not.toHaveBeenCalled();
@@ -380,5 +415,91 @@ describe('submitWizardProduct', () => {
     ).rejects.toBe(failure);
     expect(deps.rememberCreatedProduct).not.toHaveBeenCalled();
     expect(deps.clearDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('submitWizardProduct connection check and resume', () => {
+  it('checks the target at submit time and continues when it is connected', async () => {
+    const deps = productDeps();
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: null, marketplaces: disconnected },
+      deps,
+    );
+
+    expect(deps.checkTarget).toHaveBeenCalledTimes(1);
+    expect(outcome.kind).toBe('publish_started');
+  });
+
+  it('does not claim a disconnect when the connection check is inconclusive', async () => {
+    for (const checkTarget of [
+      jest.fn(async () => 'unknown' as const),
+      jest.fn(async (): Promise<TargetConnection> => {
+        throw new Error('timeout');
+      }),
+    ]) {
+      const deps = productDeps([], { checkTarget });
+
+      const outcome = await submitWizardProduct(
+        submission(),
+        { createdProductId: null, marketplaces: undefined },
+        deps,
+      );
+
+      expect(outcome.kind).toBe('publish_started');
+      if (outcome.kind !== 'publish_started') return;
+      expect(outcome.journey.marketplaceKey).toBe('olx');
+    }
+  });
+
+  it('does not check the connection for a draft', async () => {
+    const deps = productDeps();
+
+    await submitWizardProduct(
+      submission({ intent: 'draft' }),
+      { createdProductId: null, marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.checkTarget).not.toHaveBeenCalled();
+  });
+
+  it('creates a new product when the remembered one no longer exists', async () => {
+    const calls: string[] = [];
+    const deps = productDeps(calls, {
+      productExists: jest.fn(async () => false),
+      createProduct: jest.fn(async () => {
+        calls.push('createProduct');
+        return { id: 'p2' };
+      }),
+    });
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: 'p1', marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.productExists).toHaveBeenCalledWith('p1');
+    expect(calls).toEqual(['createProduct', 'remember:p2', 'advanceJourney', 'clearDraft']);
+    expect(outcome).toMatchObject({ kind: 'publish_started', productId: 'p2' });
+  });
+
+  it('keeps the remembered product when its existence cannot be checked', async () => {
+    const deps = productDeps([], {
+      productExists: jest.fn(async () => {
+        throw new Error('Network down');
+      }),
+    });
+
+    const outcome = await submitWizardProduct(
+      submission(),
+      { createdProductId: 'p1', marketplaces: connected },
+      deps,
+    );
+
+    expect(deps.createProduct).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ kind: 'publish_started', productId: 'p1' });
   });
 });

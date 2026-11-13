@@ -477,15 +477,19 @@ const CREATION_JOURNEY_STEP_NAMES: Record<CreationJourneyStep, string> = {
   publish: 'Queueing the publication',
 };
 
-export function creationJourneyFailureMessage(step: CreationJourneyStep, error: unknown): string {
+// `null` is a failure outside the named steps.
+export function creationJourneyFailureMessage(step: CreationJourneyStep | null, error: unknown): string {
   const reason = errorMessage(error).replace(/\.+$/, '');
-  return `The product is saved. ${CREATION_JOURNEY_STEP_NAMES[step]} failed: ${reason}. Use Publish to OLX to try again.`;
+  const stepName = step ? CREATION_JOURNEY_STEP_NAMES[step] : 'Preparing the advert';
+  return `The product is saved. ${stepName} failed: ${reason}. Use Publish to OLX to try again.`;
 }
 
 export const PublicationCategoryControls: React.FC<{
   value: WizardOlxCategory | null;
   seed: string;
   search: (query: string) => Promise<OlxCategorySearchResult[]>;
+  // Replaces the picker with a notice; the numeric ID under Advanced stays usable.
+  searchUnavailableMessage?: string | null;
   disabled?: boolean;
   providerCategoryId: string;
   onProviderCategoryIdChange: (providerCategoryId: string) => void;
@@ -495,6 +499,7 @@ export const PublicationCategoryControls: React.FC<{
   value,
   seed,
   search,
+  searchUnavailableMessage,
   disabled,
   providerCategoryId,
   onProviderCategoryIdChange,
@@ -502,13 +507,17 @@ export const PublicationCategoryControls: React.FC<{
   onVerify,
 }) => (
   <Stack spacing={1}>
-    <OlxCategoryPicker
-      value={value}
-      onChange={(next) => next && onPick(next.providerCategoryId)}
-      search={search}
-      seed={seed}
-      disabled={disabled}
-    />
+    {searchUnavailableMessage ? (
+      <CategoryLookupUnavailableNotice message={searchUnavailableMessage} />
+    ) : (
+      <OlxCategoryPicker
+        value={value}
+        onChange={(next) => next && onPick(next.providerCategoryId)}
+        search={search}
+        seed={seed}
+        disabled={disabled}
+      />
+    )}
     <Accordion disableGutters elevation={0} sx={{ '&::before': { display: 'none' } }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
         <Typography variant="body2">Advanced</Typography>
@@ -1035,8 +1044,16 @@ const ListingDetailsPage: React.FC = () => {
           });
         } else if (outcome.kind === 'failed') {
           setCreationFailure(creationJourneyFailureMessage(outcome.step, outcome.error));
+        } else {
+          dispatch(
+            enqueueToast({
+              message: 'This listing is no longer a draft, so nothing was queued.',
+              severity: 'info',
+            })
+          );
         }
       })
+      .catch((err: unknown) => setCreationFailure(creationJourneyFailureMessage(null, err)))
       .finally(() => {
         previewInFlight.current = false;
         setPreviewingPublication(false);
@@ -1440,10 +1457,7 @@ const ListingDetailsPage: React.FC = () => {
         {publishCandidate && (
           <Stack spacing={2}>
             <PublishPreviewReview preview={publishCandidate.preview} />
-            {publishCandidate.preview.marketplaceKey === 'olx' && categoryLookupError && (
-              <CategoryLookupUnavailableNotice message={categoryLookupError} />
-            )}
-            {publishCandidate.preview.marketplaceKey === 'olx' && !categoryLookupError && (
+            {publishCandidate.preview.marketplaceKey === 'olx' && (
               <PublicationCategoryControls
                 value={
                   publishCandidate.preview.marketplaceCategory
@@ -1456,6 +1470,7 @@ const ListingDetailsPage: React.FC = () => {
                 }
                 seed={p.name}
                 search={(query) => searchListingCategories(publishCandidate.listing.id, query)}
+                searchUnavailableMessage={categoryLookupError}
                 disabled={publicationBusy}
                 providerCategoryId={providerCategoryId}
                 onProviderCategoryIdChange={setProviderCategoryId}
