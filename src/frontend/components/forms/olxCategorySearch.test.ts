@@ -1,6 +1,7 @@
 import type { OlxCategorySearchResult } from '../../state/api/listingsApi';
 import {
   createOlxCategorySearch,
+  seedOnMount,
   seedSearchTerm,
   type OlxCategorySearchState,
 } from './olxCategorySearch';
@@ -105,5 +106,40 @@ describe('olxCategorySearch', () => {
     jest.advanceTimersByTime(300);
     expect(states.length).toBe(count);
     expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the searching state and drops old results as soon as a new query is typed', async () => {
+    let resolveFirst: (r: OlxCategorySearchResult[]) => void = () => undefined;
+    const search = jest
+      .fn()
+      .mockImplementationOnce(() => new Promise((r) => (resolveFirst = r)))
+      .mockResolvedValueOnce([chair]);
+    const { controller, states } = setup(search);
+    controller.setQuery('fot');
+    jest.advanceTimersByTime(300);
+    controller.setQuery('stol');
+    expect(states[states.length - 1]).toEqual({ query: 'stol', status: 'searching', results: [] });
+    resolveFirst([{ ...chair, providerCategoryId: 'old' }]);
+    await Promise.resolve();
+    expect(states[states.length - 1]).toEqual({ query: 'stol', status: 'searching', results: [] });
+    jest.advanceTimersByTime(300);
+    await Promise.resolve();
+    expect(states[states.length - 1]).toEqual({ query: 'stol', status: 'results', results: [chair] });
+  });
+
+  it('reports a synchronous throw from search as unavailable', () => {
+    const search = jest.fn(() => {
+      throw new Error('no marketplace');
+    });
+    const { controller, states } = setup(search);
+    controller.searchSeed('Fotel');
+    expect(states[states.length - 1]).toEqual({ query: 'Fotel', status: 'unavailable', results: [] });
+  });
+
+  it('searches the seed on mount only when no category is chosen', () => {
+    expect(seedOnMount(null, 'Fotel IKEA')).toBe('Fotel IKEA');
+    expect(seedOnMount({ providerCategoryId: '1', name: 'Fotele', path: chair.path }, 'Fotel IKEA'))
+      .toBeUndefined();
+    expect(seedOnMount(null, undefined)).toBeUndefined();
   });
 });

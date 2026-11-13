@@ -65,4 +65,14 @@ describe('OlxCategoryPickerView', () => {
   it('renders the error prop', () => {
     expect(render({ error: 'Choose an OLX category.' })).toContain('Choose an OLX category.');
   });
+
+  it('offers Cancel while changing an existing category', () => {
+    const html = render({ onCancelChange: () => undefined });
+    expect(html).toContain('OLX category');
+    expect(html).toContain('Cancel');
+  });
+
+  it('offers no Cancel when no category was chosen yet', () => {
+    expect(render({})).not.toContain('Cancel');
+  });
 });

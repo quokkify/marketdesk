@@ -1,6 +1,7 @@
 // Framework-free state machine behind OlxCategoryPicker: debounce, minimum length,
 // stale-answer discard and disposal live here so they can be tested without a DOM.
 import type { OlxCategorySearchResult } from '../../state/api/listingsApi.js';
+import type { WizardOlxCategory } from './productFormModel.js';
 
 export type OlxCategorySearchState = {
   query: string;
@@ -22,6 +23,13 @@ export function seedSearchTerm(seed: string | undefined): string | null {
   return seed?.split(/\s+/).find((word) => word.length >= MIN_SEED_WORD_LENGTH) ?? null;
 }
 
+export function seedOnMount(
+  value: WizardOlxCategory | null,
+  seed: string | undefined
+): string | undefined {
+  return value === null ? seed : undefined;
+}
+
 export function createOlxCategorySearch(options: OlxCategorySearchOptions) {
   const { search, onState, debounceMs = DEFAULT_DEBOUNCE_MS } = options;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -39,7 +47,14 @@ export function createOlxCategorySearch(options: OlxCategorySearchOptions) {
   const run = (query: string) => {
     const current = ++sequence;
     emit({ query, status: 'searching', results: [] });
-    search(query.trim()).then(
+    let pending: Promise<OlxCategorySearchResult[]>;
+    try {
+      pending = search(query.trim());
+    } catch {
+      emit({ query, status: 'unavailable', results: [] });
+      return;
+    }
+    pending.then(
       (results) => {
         if (current !== sequence) return;
         emit({ query, status: results.length > 0 ? 'results' : 'empty', results });
@@ -55,11 +70,12 @@ export function createOlxCategorySearch(options: OlxCategorySearchOptions) {
     setQuery(query: string) {
       if (disposed) return;
       clearTimer();
+      sequence++;
       if (query.trim().length < MIN_QUERY_LENGTH) {
-        sequence++;
         emit({ query, status: 'idle', results: [] });
         return;
       }
+      emit({ query, status: 'searching', results: [] });
       timer = setTimeout(() => {
         timer = null;
         run(query);

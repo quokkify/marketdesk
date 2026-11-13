@@ -17,6 +17,7 @@ import type { OlxCategorySearchResult } from '../../state/api/listingsApi.js';
 import type { WizardOlxCategory } from './productFormModel.js';
 import {
   createOlxCategorySearch,
+  seedOnMount,
   type OlxCategorySearchState,
 } from './olxCategorySearch.js';
 
@@ -37,6 +38,8 @@ export interface OlxCategoryPickerViewProps {
   onQueryChange: (query: string) => void;
   onPick: (result: OlxCategorySearchResult) => void;
   onChangeRequested: () => void;
+  // Present only while the seller is replacing an already chosen category.
+  onCancelChange?: () => void;
 }
 
 const PATH_SEPARATOR = ' > ';
@@ -49,6 +52,7 @@ export const OlxCategoryPickerView: React.FC<OlxCategoryPickerViewProps> = ({
   onQueryChange,
   onPick,
   onChangeRequested,
+  onCancelChange,
 }) => (
   <Stack spacing={1}>
     {value ? (
@@ -68,6 +72,16 @@ export const OlxCategoryPickerView: React.FC<OlxCategoryPickerViewProps> = ({
           onChange={(e) => onQueryChange(e.target.value)}
           error={Boolean(error)}
         />
+        {onCancelChange && (
+          <Button
+            size="small"
+            onClick={onCancelChange}
+            disabled={disabled}
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            Cancel
+          </Button>
+        )}
         {state.status === 'searching' && (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <CircularProgress size={16} />
@@ -129,12 +143,13 @@ export const OlxCategoryPicker: React.FC<OlxCategoryPickerProps> = ({
       onState: setState,
     });
     controllerRef.current = controller;
-    if (seed) controller.searchSeed(seed);
+    const initialSeed = seedOnMount(value, seed);
+    if (initialSeed) controller.searchSeed(initialSeed);
     return () => {
       controller.dispose();
       controllerRef.current = null;
     };
-    // The seed is searched once on mount only.
+    // The seed is searched once on mount only, and only when no category is chosen yet.
   }, []);
 
   return (
@@ -146,9 +161,14 @@ export const OlxCategoryPicker: React.FC<OlxCategoryPickerProps> = ({
       onQueryChange={(query) => controllerRef.current?.setQuery(query)}
       onPick={(result) => {
         setChanging(false);
-        onChange({ providerCategoryId: result.providerCategoryId, name: result.name, path: result.path });
+        onChange({
+          providerCategoryId: result.providerCategoryId,
+          name: result.name,
+          path: result.path,
+        });
       }}
       onChangeRequested={() => setChanging(true)}
+      onCancelChange={changing && value ? () => setChanging(false) : undefined}
     />
   );
 };
