@@ -1,0 +1,15 @@
+{
+  "name": "hermes-vision-spike",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "spike": "node spike.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.4.1",
+    "@langchain/openai": "^1.8.4",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  }
+}
