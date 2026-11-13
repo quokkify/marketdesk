@@ -57,7 +57,6 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
       <TextField
         label="SKU"
-        required
         fullWidth
         value={values.sku}
         onChange={(e) => onChange('sku', e.target.value)}

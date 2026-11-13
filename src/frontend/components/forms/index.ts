@@ -1,5 +1,7 @@
 export { ProductForm } from './ProductForm.js';
 export type { ProductFormProps } from './ProductForm.js';
+export { OlxCategoryPicker } from './OlxCategoryPicker.js';
+export type { OlxCategoryPickerProps } from './OlxCategoryPicker.js';
 export { PricingForm } from './PricingForm.js';
 export type { PricingFormProps } from './PricingForm.js';
 export { ProductWizardForm, verifyWizardMarketplaceReadiness } from './ProductWizardForm.js';
