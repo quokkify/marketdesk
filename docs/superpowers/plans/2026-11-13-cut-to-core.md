@@ -68,7 +68,7 @@ Create each branch from `main` after the previous wave merged. If it has not mer
 - Modify: `docs/spec/PRODUCT.md`
 
 **Interfaces:**
-- Produces: the issue number, written `#N` below. Every later task that edits `TRACEABILITY.md` or `PRODUCT.md` cites it.
+- Produces: the issue number, written `#444` below. Every later task that edits `TRACEABILITY.md` or `PRODUCT.md` cites it.
 
 - [ ] **Step 1: Show the owner the issue text and wait for approval**
 
@@ -104,7 +104,7 @@ No schema change. Design: `docs/superpowers/specs/2026-11-13-cut-to-core-design.
 - [ ] **Step 2: Create the issue after the owner approves**
 
 Run: `gh issue create --repo quokkify/marketdesk --title "<title>" --body-file <file with the body>`
-Expected: a URL ending in the issue number. Record it as `#N`.
+Expected: a URL ending in the issue number. Record it as `#444`.
 
 - [ ] **Step 3: Amend the source-of-truth hierarchy in `docs/spec/PRODUCT.md`**
 
@@ -114,7 +114,7 @@ Replace the last sentence of item 4 with:
 - [ ] **Step 4: Add the deviation row to the "Approved deviations" table**
 
 ```markdown
-| Stage focus: autopilot selling | At this stage MarketDesk serves one concept: AI sells a product on autopilot. PRD surfaces that do not serve it are removed or hidden until the stage ends. | Removed: Dashboard, the Analytics screen, the Listings page, roadmap marketplace channels, notification preferences, the Security, API Keys and Telegram settings panels, the notifications control and the bulk-action placeholders. Hidden, with backend code and stored data kept: Hermes autonomy settings, the catalogue-wide Hermes run, import of existing OLX adverts. Kept: the product journey, the Hermes feed with approve and dismiss, the OLX publication pipeline and its guards, sale recording. Each surface changes status in `TRACEABILITY.md` in the pull request that removes it. | PRD §6 · §9 · §10 · §12 · §13 · §14 · `docs/superpowers/specs/2026-11-13-cut-to-core-design.md` · #N |
+| Stage focus: autopilot selling | At this stage MarketDesk serves one concept: AI sells a product on autopilot. PRD surfaces that do not serve it are removed or hidden until the stage ends. | Removed: Dashboard, the Analytics screen, the Listings page, roadmap marketplace channels, notification preferences, the Security, API Keys and Telegram settings panels, the notifications control and the bulk-action placeholders. Hidden, with backend code and stored data kept: Hermes autonomy settings, the catalogue-wide Hermes run, import of existing OLX adverts. Kept: the product journey, the Hermes feed with approve and dismiss, the OLX publication pipeline and its guards, sale recording. Each surface changes status in `TRACEABILITY.md` in the pull request that removes it. | PRD §6 · §9 · §10 · §12 · §13 · §14 · `docs/superpowers/specs/2026-11-13-cut-to-core-design.md` · #444 |
 ```
 
 - [ ] **Step 5: Verify**
@@ -409,7 +409,7 @@ Run: `grep -nE "WebSocket|hermes/live|EmailProvider|TelegramBot|RedisCache|Alleg
 
 - [ ] **Step 2: Rewrite each hit so it states what the code does now**
 
-A removed component is described as removed in the stage-focus cut (#N), not as running.
+A removed component is described as removed in the stage-focus cut (#444), not as running.
 
 - [ ] **Step 3: Run the wave gate**
 
@@ -734,12 +734,12 @@ git commit -m "refactor!: list only OLX in the product wizard"
 
 | Row | Status | Must say |
 | --- | --- | --- |
-| §4 Information architecture | Partial | four destinations; `src/frontend/utils/constants.ts`; `TopBar.test.tsx`; #N |
-| §6 Dashboard | Not implemented | removed for the stage focus; `src/frontend/App.tsx` redirects `/` to `/products`; `App.routes.test.tsx`; #N |
-| §9 Analytics | Not implemented | screen removed, sale recording kept; `src/backend/config/di/container.ts`; `App.routes.test.tsx`; #N |
-| §12 Marketplaces | Partial | OLX only, roadmap channels and import entry removed; `MarketplacesPage.test.tsx`; #N |
-| §13 Settings | Partial | four sections; `SettingsPage.test.tsx`; #N |
-| §14 Global interactions | Partial | notifications control and bulk placeholders removed; `TopBar.test.tsx`; #N |
+| §4 Information architecture | Partial | four destinations; `src/frontend/utils/constants.ts`; `TopBar.test.tsx`; #444 |
+| §6 Dashboard | Not implemented | removed for the stage focus; `src/frontend/App.tsx` redirects `/` to `/products`; `App.routes.test.tsx`; #444 |
+| §9 Analytics | Not implemented | screen removed, sale recording kept; `src/backend/config/di/container.ts`; `App.routes.test.tsx`; #444 |
+| §12 Marketplaces | Partial | OLX only, roadmap channels and import entry removed; `MarketplacesPage.test.tsx`; #444 |
+| §13 Settings | Partial | four sections; `SettingsPage.test.tsx`; #444 |
+| §14 Global interactions | Partial | notifications control and bulk placeholders removed; `TopBar.test.tsx`; #444 |
 
 Update the "Screen acceptance map" in the same file: delete the Dashboard and Analytics lines.
 
@@ -1004,9 +1004,9 @@ git commit -m "refactor!: unmount the import routes"
 
 | Row | Status | Must say |
 | --- | --- | --- |
-| §9 Analytics | Not implemented | revenue and listings endpoints removed, overview and sale recording kept; `src/backend/presentation/http/routes/analytics.ts`; `api.integration.test.ts`; #N |
-| §10 Hermes AI overview | Partial | product-scoped analysis only, catalogue-wide run endpoint removed; `src/backend/presentation/http/routes/hermes.ts`; `productFlow.e2e.test.ts`; #N |
-| §13 Settings | Partial | notification endpoints removed, Hermes settings API kept without a screen; `SettingsController.test.ts`; #N |
+| §9 Analytics | Not implemented | revenue and listings endpoints removed, overview and sale recording kept; `src/backend/presentation/http/routes/analytics.ts`; `api.integration.test.ts`; #444 |
+| §10 Hermes AI overview | Partial | product-scoped analysis only, catalogue-wide run endpoint removed; `src/backend/presentation/http/routes/hermes.ts`; `productFlow.e2e.test.ts`; #444 |
+| §13 Settings | Partial | notification endpoints removed, Hermes settings API kept without a screen; `SettingsController.test.ts`; #444 |
 
 - [ ] **Step 2: Update the documents that describe the removed endpoints**
 
