@@ -142,7 +142,7 @@ export class ProductRecheckService {
         ? item('marketplace', 'ready', `${marketplace.name} OAuth account is connected`)
         : item('marketplace', 'fix', 'Connect the target OLX OAuth account before publication', 'marketplace'));
 
-      const guard = evaluateOlxCategory(product, category, checkedAt);
+      const guard = evaluateOlxCategory(product, category, this.clock());
       const categoryStatus: ProductRecheckItemStatus = guard.allowed
         ? 'ready'
         : guard.reason === 'semantic_mismatch' || guard.reason === 'category_low_confidence'

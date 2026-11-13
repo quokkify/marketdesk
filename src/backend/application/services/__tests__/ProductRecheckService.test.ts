@@ -85,6 +85,32 @@ describe('ProductRecheckService', () => {
     expect(JSON.stringify(activityLog.entries)).not.toMatch(/token|secret|credential/i);
   });
 
+  // Regression guard: the resolver stamps the verification after the recheck started.
+  it('accepts a category the resolver verified after the recheck began', async () => {
+    const { productRepo, listingRepo, marketplaceRepo, accountRepo, activityLog, input } = setup();
+    const verifiedAfterStart = {
+      ...CATEGORY,
+      taxonomyVerifiedAt: new Date(NOW.getTime() + 5).toISOString(),
+      taxonomyStaleAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    };
+    let clockReads = 0;
+    const service = new ProductRecheckService(
+      productRepo, listingRepo, marketplaceRepo, accountRepo, activityLog,
+      async () => ({ verify: jest.fn(async () => verifiedAfterStart) }),
+      () => 'audit-id',
+      () => new Date(NOW.getTime() + (clockReads++ === 0 ? 0 : 10)),
+    );
+
+    const result = await service.recheck(input);
+
+    expect(result.category.reason).toBeNull();
+    expect(result.items.find(({ key }) => key === 'category')).toMatchObject({
+      status: 'ready', message: expect.stringContaining('Exact category verified'),
+    });
+    expect(result.checkedAt).toBe(NOW.toISOString());
+    expect(activityLog.entries[0]).toMatchObject({ action: 'product.recheck.started', createdAt: NOW });
+  });
+
   it('never marks a projector in the wireless-headphones category ready', async () => {
     const { service, input } = setup('Portable projector');
     const result = await service.recheck(input);
