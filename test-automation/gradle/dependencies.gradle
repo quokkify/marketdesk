@@ -8,6 +8,7 @@ dependencies {
     implementation libs.q4j.sql
     implementation libs.q4j.tyrus
     implementation libs.q4j.selenide
+    implementation libs.selenide
     implementation libs.q4j.rest.assured
     implementation libs.q4j.jackson.json
     testImplementation libs.testng

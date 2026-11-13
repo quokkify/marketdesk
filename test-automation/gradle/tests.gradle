@@ -1,10 +1,12 @@
 tasks.withType(Test).configureEach {
     useTestNG()
     systemProperty 'file.encoding', 'UTF-8'
-    // Forward this explicit override to the separate test JVM.
-    def baseUri = System.getProperty('MARKETDESK_API_BASE_URI')
-    if (baseUri != null) {
-        systemProperty 'MARKETDESK_API_BASE_URI', baseUri
+    // Forward these explicit overrides to the separate test JVM.
+    ['MARKETDESK_API_BASE_URI', 'MARKETDESK_UI_BASE_URI'].each { key ->
+        def value = System.getProperty(key)
+        if (value != null) {
+            systemProperty key, value
+        }
     }
     testLogging {
         events 'passed', 'skipped', 'failed'
@@ -13,10 +15,11 @@ tasks.withType(Test).configureEach {
 }
 
 // Keep the default suite safe for fast local development. Live HTTP checks live in the
-// test.api package and run only in `apiTest`, against the Compose application in CI.
+// test.api package and run only in `apiTest`, browser checks live in test.ui and run only in
+// `uiTest`; both run against the Compose application in CI.
 // q4j SuiteListener rebuilds the suite and drops TestNG groups, so the split is by package.
 tasks.named('test', Test) {
-    exclude '**/test/api/**'
+    exclude '**/test/api/**', '**/test/ui/**'
     // No unit tests exist yet; the task must not fail for finding none.
     failOnNoDiscoveredTests = false
 }
@@ -30,4 +33,15 @@ tasks.register('apiTest', Test) {
     // The result depends on the running application, which Gradle cannot see as an input.
     outputs.upToDateWhen { false }
     shouldRunAfter tasks.named('test')
+}
+
+tasks.register('uiTest', Test) {
+    description = 'Runs UI tests against a running MarketDesk application.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/test/ui/**'
+    // The result depends on the running application, which Gradle cannot see as an input.
+    outputs.upToDateWhen { false }
+    shouldRunAfter tasks.named('apiTest')
 }
