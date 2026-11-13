@@ -65,13 +65,8 @@ async function withPoolTransaction<T>(
 import {
   createRedisEventBroker,
   createEventPublisher,
-  createRedisCache,
 } from '../../infrastructure/eventBroker/RedisWiring';
-import type {
-  EventBroker,
-  EventSubscriber,
-} from '../../infrastructure/eventBroker/RedisEventBroker';
-import type { RedisCache } from '../../infrastructure/cache/RedisCache';
+import type { EventBroker } from '../../infrastructure/eventBroker/RedisEventBroker';
 import { BullJobQueue } from '../../infrastructure/jobQueue/BullJobQueue';
 import { MarketplaceAdapterFactory } from '../../infrastructure/adapters/MarketplaceAdapterFactory';
 import { FetchMarketplaceHttpClient } from '../../infrastructure/adapters/FetchMarketplaceHttpClient';
@@ -88,14 +83,8 @@ import { HermesCompletionClient } from '../../infrastructure/external/HermesComp
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
-import { createEmailProvider } from '../../infrastructure/external/EmailProvider';
-import { createTelegramBot } from '../../infrastructure/external/TelegramBot';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
-import {
-  HermesRunHandler,
-  type HermesEngine,
-} from '../../infrastructure/jobQueue/JobHandlers/HermesRunHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
@@ -141,12 +130,10 @@ import type {
   JobEnqueueOptions,
   PublishListingJob,
   SyncMarketplaceJob,
-  HermesRunJob,
 } from '../../application/ports/IJobQueue';
 
 // --- Presentation ---
 import type { AppDeps } from '../../presentation/http/app';
-import type { IEventSubscriber } from '../../presentation/websocket/HermesLiveUpdates';
 import type { ErrorLogger } from '../../presentation/http/middleware/ErrorHandlingMiddleware';
 
 // A queue the container owns end-to-end: enqueue (the application IJobQueue port),
@@ -158,16 +145,15 @@ export interface ManagedQueue<T> extends IJobQueue<T> {
   close(): Promise<void>;
 }
 
-export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
+export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) {
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
     // Publish retries resume from the durable checkpoint and never repeat an
     // ambiguous external POST. Backoff gives transient finalization failures time
     // to recover without hot-looping the queue.
-    ...(name === 'publish-listing' || name === 'sync-marketplace'
-      ? { attempts: 3, backoff: { type: 'exponential', delay: 1_000 } }
-      : {}),
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1_000 },
   };
 }
 
@@ -222,7 +208,7 @@ class BullManagedQueue<T> implements ManagedQueue<T> {
 export interface ContainerOverrides {
   pool?: Pool;
   redis?: Redis;
-  eventBroker?: EventBroker & EventSubscriber;
+  eventBroker?: EventBroker;
   aiProvider?: IAIProvider;
   idGenerator?: IdGenerator;
   logger?: ErrorLogger & ProductDraftLogger;
@@ -233,12 +219,9 @@ export interface ContainerOverrides {
 
 export interface AppContainer {
   deps: AppDeps;
-  // Injected into HermesLiveUpdates so the WS fans domain events out to clients.
-  subscriber: IEventSubscriber;
   // Lifecycle handles for graceful shutdown / health checks.
   pool: Pool;
   redis: Redis;
-  cache: RedisCache;
   queues: ManagedQueue<unknown>[];
   shutdown(): Promise<void>;
 }
@@ -249,11 +232,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const pool = overrides.pool ?? createPool();
   const redis = overrides.redis ?? createRedisClient();
 
-  // 2. Event broker (publish + in-process fan-out) and publisher.
-  const broker: EventBroker & EventSubscriber =
+  // 2. Event broker and publisher.
+  const broker: EventBroker =
     overrides.eventBroker ?? createRedisEventBroker(redis);
   const eventPublisher = createEventPublisher(broker);
-  const cache = createRedisCache(redis);
 
   // 3. Cross-cutting ports.
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
@@ -297,11 +279,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       deliveryOptionCode: env.marketplaces.olx.deliveryOptionCode,
     },
   });
-  // Notifiers are constructed (stubbed when unconfigured) so the graph is complete
-  // and ready for future notification wiring; no consumer requires them yet.
-  createEmailProvider();
-  createTelegramBot();
-
   const createQueue = overrides.createQueue ?? (<T>(name: string) => new BullManagedQueue<T>(name));
 
   // 4. Repositories. They use the injected pool (or the module-level default if
@@ -384,7 +361,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   //    once the services they depend on exist.
   const publishQueue = createQueue<PublishListingJob>('publish-listing');
   const syncQueue = createQueue<SyncMarketplaceJob>('sync-marketplace');
-  const hermesQueue = createQueue<HermesRunJob>('hermes-run');
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
 
   // 6. Domain services.
@@ -712,27 +688,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   syncQueue.registerHandler((data) => syncHandler.handle(data));
 
-  // Adapt the Hermes application service to the handler's minimal HermesEngine port.
-  const hermesEnginePort: HermesEngine = {
-    run: async (data) => {
-      const result = await hermesService.runHermes({
-        workspaceId: data.workspaceId,
-        trigger: data.trigger,
-      });
-      // Throw on failure so the Bull job records a failure (and retries) instead
-      // of reporting eventsGenerated:0 as a success and swallowing the error (C2).
-      if (result.isErr()) {
-        throw result.error;
-      }
-      return {
-        workspaceId: data.workspaceId,
-        eventsGenerated: result.value.length,
-      };
-    },
-  };
-  const hermesHandler = new HermesRunHandler(hermesEnginePort, eventPublisher);
-  hermesQueue.registerHandler((data) => hermesHandler.handle(data));
-
   // 10. Assemble AppDeps.
   const deps: AppDeps = {
     productService,
@@ -770,7 +725,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const queues: ManagedQueue<unknown>[] = [
     publishQueue as ManagedQueue<unknown>,
     syncQueue as ManagedQueue<unknown>,
-    hermesQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {
@@ -787,10 +741,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
 
   return {
     deps,
-    subscriber: broker,
     pool,
     redis,
-    cache,
     queues,
     shutdown,
   };

@@ -4,8 +4,7 @@
 //   1. every required AppDeps field is populated,
 //   2. the optional ports (price history, id generator) are wired,
 //   3. buildApp(deps) returns a working Express app without throwing,
-//   4. the WS subscriber is a functioning EventSubscriber,
-//   5. shutdown() resolves.
+//   4. shutdown() resolves.
 
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
@@ -178,53 +177,39 @@ describe('buildContainer (composition root)', () => {
     expect(typeof app.use).toBe('function');
   });
 
-  it('exposes a functioning WS event subscriber fed by the broker', () => {
-    const { subscriber } = build();
-    expect(typeof subscriber.subscribe).toBe('function');
-    const received: unknown[] = [];
-    const unsubscribe = subscriber.subscribe((e) => received.push(e));
-    expect(typeof unsubscribe).toBe('function');
-    unsubscribe();
+  it('exposes no in-process event subscriber', () => {
+    expect('subscriber' in build()).toBe(false);
   });
 
-  it('propagates a Hermes-run failure through the job handler (C2)', async () => {
-    // Capture the handler registered on the hermes-run queue.
-    let hermesHandler: ((data: unknown) => Promise<unknown>) | undefined;
-    const capturingQueue = <T>(name: string): ManagedQueue<T> => ({
-      enqueue: jest.fn(async () => undefined),
-      enqueueAll: jest.fn(async () => undefined),
-      scheduleRepeat: jest.fn(async () => undefined),
-      removeRepeat: jest.fn(async () => undefined),
-      registerHandler: jest.fn((h: (data: T) => Promise<unknown>) => {
-        if (name === 'hermes-run') {
-          hermesHandler = h as (data: unknown) => Promise<unknown>;
-        }
-      }),
-      close: jest.fn(async () => undefined),
-    });
-
-    // fakePool.query returns no rows, so workspaceRepo.findById -> null and
-    // runHermes returns Err(NotFound). The container's engine port must THROW on
-    // that Err rather than reporting eventsGenerated:0 as success.
+  it('creates exactly the publish and sync queues', () => {
+    const names: string[] = [];
     buildContainer({
       pool: fakePool,
       redis: fakeRedis,
       aiProvider: fakeAi,
       idGenerator: () => 'fixed-id',
       marketplaceCredentialsKey: validCredentialsKey,
-      createQueue: capturingQueue,
+      createQueue: <T>(name: string): ManagedQueue<T> => {
+        names.push(name);
+        return {
+          enqueue: jest.fn(async () => undefined),
+          enqueueAll: jest.fn(async () => undefined),
+          scheduleRepeat: jest.fn(async () => undefined),
+          removeRepeat: jest.fn(async () => undefined),
+          registerHandler: jest.fn(),
+          close: jest.fn(async () => undefined),
+        };
+      },
     });
-
-    expect(hermesHandler).toBeDefined();
-    await expect(hermesHandler!({ workspaceId: 'missing', trigger: 'manual' })).rejects.toThrow();
+    expect(names).toEqual(['publish-listing', 'sync-marketplace']);
   });
 
   it('exposes lifecycle handles and a resolving shutdown()', async () => {
     const container = build();
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
-    expect(container.cache).toBeDefined();
-    expect(container.queues).toHaveLength(3);
+    expect('cache' in container).toBe(false);
+    expect(container.queues).toHaveLength(2);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

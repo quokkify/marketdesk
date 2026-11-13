@@ -16,6 +16,10 @@ import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createAuthRoutes } from '../http/routes/auth';
 import type { AuthController } from '../http/controllers/AuthController';
 import { InMemoryAuthStore } from '../testkit/support';
+import { RecordingJobQueue } from '../../application/testkit/support';
+import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
+import type { SyncMarketplaceJob } from '../../application/ports/IJobQueue';
+import type { SyncMarketplaceDTO } from '../../application/dto/HermesDTO';
 import { Ok, Err } from '../../domain/shared/Result';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { Product } from '../../domain/entities/Product';
@@ -142,7 +146,7 @@ function stubHermesService(): HermesApplicationService {
   } as unknown as HermesApplicationService;
 }
 
-function stubListingService(): ListingApplicationService {
+function stubListingService(syncMarketplaceUseCase: SyncMarketplaceUseCase): ListingApplicationService {
   return {
     async listByWorkspace() {
       return { items: [], total: 0, page: 1, limit: 20, totalPages: 0 };
@@ -159,8 +163,8 @@ function stubListingService(): ListingApplicationService {
     async relistListing() {
       return Err(new InvalidStateError('Only expired or error listings may be relisted'));
     },
-    async syncMarketplace() {
-      return Ok({ marketplaceId: 'm1', enqueued: true, externalListingCount: 0 });
+    async syncMarketplace(dto: SyncMarketplaceDTO) {
+      return syncMarketplaceUseCase.execute(dto);
     },
   } as unknown as ListingApplicationService;
 }
@@ -572,7 +576,13 @@ async function buildTestApp(
   const deps: AppDeps = {
     productService: stubProductService(),
     productRecheckService: options.productRecheckService,
-    listingService: stubListingService(),
+    listingService: stubListingService(
+      new SyncMarketplaceUseCase(
+        marketplaceRepo as IMarketplaceRepository,
+        listingRepo as IListingRepository,
+        new RecordingJobQueue<SyncMarketplaceJob>()
+      )
+    ),
     hermesService: options.hermesService ?? stubHermesService(),
     hermesStatus: options.hermesStatus,
     productAssistanceGraph: options.productAssistanceGraph,
@@ -1244,6 +1254,49 @@ describe('Presentation API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.authorizationUrl).toContain('https://www.olx.pl/oauth/authorize');
       expect(res.body.data.state).toBe('oauth-state');
+    });
+
+    it('refuses to connect a marketplace other than OLX', async () => {
+      const { app, marketplaceRepo } = await buildTestApp();
+      const allegro = Marketplace.create({
+        id: 'marketplace-allegro',
+        workspaceId: 'ws-1',
+        key: 'allegro',
+        name: 'Allegro',
+        connected: false,
+        syncMode: 'manual',
+      });
+      if (allegro.isErr()) throw allegro.error;
+      await marketplaceRepo.save(allegro.value);
+
+      const res = await auth(request(app).patch('/api/marketplaces/marketplace-allegro')).send({
+        connected: true,
+      });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('INVALID_STATE');
+      expect(res.body.error.message).toBe('Only OLX can be connected');
+      expect((await marketplaceRepo.findById('marketplace-allegro'))?.isConnected()).toBe(false);
+    });
+
+    it('refuses to sync a marketplace other than OLX', async () => {
+      const { app, marketplaceRepo } = await buildTestApp();
+      const allegro = Marketplace.create({
+        id: 'marketplace-allegro',
+        workspaceId: 'ws-1',
+        key: 'allegro',
+        name: 'Allegro',
+        connected: true,
+        syncMode: 'manual',
+      });
+      if (allegro.isErr()) throw allegro.error;
+      await marketplaceRepo.save(allegro.value);
+
+      const res = await auth(request(app).post('/api/marketplaces/marketplace-allegro/sync')).send({});
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('INVALID_STATE');
+      expect(res.body.error.message).toBe('Only OLX can be synced');
     });
 
     it('accepts the provider callback without a bearer token and returns the API envelope', async () => {

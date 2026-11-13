@@ -100,4 +100,14 @@ describe('MarketplaceSyncScheduler', () => {
 
     expect(removed).toEqual(['sync-marketplace:m-2:hourly']);
   });
+
+  it('never schedules a repeat job for a marketplace other than OLX and removes any existing one', async () => {
+    const { scheduler, scheduled, removed } = schedulerHarness();
+    const m = marketplace({ key: 'allegro', name: 'Allegro', connected: true, syncMode: 'hourly' });
+
+    await scheduler.reconcile(m);
+
+    expect(scheduled).toEqual([]);
+    expect(removed).toEqual(['sync-marketplace:m-1:hourly']);
+  });
 });

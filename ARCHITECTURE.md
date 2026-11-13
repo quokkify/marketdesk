@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage products and listings across 7+ marketplaces (OLX, Allegro, Vinted, Facebook Marketplace, eBay, Etsy, Amazon) from a single unified dashboard. The system is powered by Hermes, an autonomous AI agent that suggests and executes optimizations with human-in-the-loop approval gates.
+MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage products and listings across marketplaces from a single unified dashboard. OLX is the only connected marketplace: the Allegro, Vinted, Facebook and eBay adapters were removed in the stage-focus cut (#444), and the other marketplace keys stay in the key list without an adapter. The system is powered by Hermes, an autonomous AI agent that suggests and executes optimizations with human-in-the-loop approval gates.
 
 **Architectural Vision**: Clean architecture principles with marketplace-agnostic abstraction. The system is designed as a collection of independent, loosely-coupled domains (Products, Listings, Marketplaces, Analytics, AI) communicating via events. This enables:
 - **Extensibility**: New marketplaces add via adapter pattern, not core logic changes
@@ -81,9 +81,9 @@ MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage 
           │                  │                  │
     ┌─────▼──────┐    ┌──────▼────────┐  ┌────▼──────────────┐
     │ PostgreSQL │    │ Redis Broker  │  │ Marketplace APIs  │
-    │ (Products, │    │ (Event Stream)│  │ (OLX, Allegro,    │
-    │  Listings, │    │               │  │  Vinted, eBay...)  │
-    │  Events,   │    │ Redis Cache   │  └────────────────────┘
+    │ (Products, │    │ (Event Stream)│  │ (OLX)             │
+    │  Listings, │    │               │  └───────────────────┘
+    │  Events,   │    │               │
     │  Analytics)│    │               │  ┌─────────────────────────┐
     └────────────┘    │ Bull Jobs     │  │ Hermes Agent API       │
                       │ (Background   │  │ (native agent runtime)  │
@@ -92,12 +92,12 @@ MarketDesk is a multi-marketplace SaaS control panel enabling sellers to manage 
 ```
 
 **Component Responsibilities**:
-- **Frontend**: User interactions, real-time UI updates, state management
+- **Frontend**: User interactions, state management
 - **API Gateway**: Auth, request validation, rate limiting
 - **Domain Services**: Business logic, validations, event emission
 - **Repositories**: Data access (PostgreSQL), marketplace credential vaults
 - **Event Broker**: Decouples services, enables async workflows
-- **Background Jobs**: Marketplace sync, Hermes runs, analytics aggregation
+- **Background Jobs**: Marketplace sync and listing publishing (the `sync-marketplace` and `publish-listing` queues)
 - **External APIs**: Marketplace adapters (pluggable); local Hermes Agent API Server for AI/agent work
 
 ---
@@ -112,7 +112,7 @@ Workspace (Root Aggregate)
   ├── has many Products
   ├── has many Marketplaces
   ├── has many HermesEvents
-  └── Preferences (autonomyLevel, notificationSettings, etc.)
+  └── Preferences (autonomyLevel, etc.)
 
 Product (Aggregate Root)
   ├── id, sku, name, description
@@ -241,27 +241,18 @@ src/backend/
 │   ├── adapters/                    # Marketplace-specific implementations
 │   │   ├── MarketplaceAdapterFactory.ts
 │   │   ├── OLXAdapter.ts
-│   │   ├── AllegroAdapter.ts
-│   │   ├── VintedAdapter.ts
-│   │   ├── FacebookAdapter.ts
-│   │   ├── EbayAdapter.ts (stub)
 │   │   └── BaseMarketplaceAdapter.ts (abstract)
 │   ├── external/
 │   │   ├── HermesAI.ts
-│   │   ├── HermesCompletionClient.ts
-│   │   ├── EmailProvider.ts
-│   │   └── TelegramBot.ts
+│   │   └── HermesCompletionClient.ts
 │   ├── eventBroker/
 │   │   ├── RedisEventBroker.ts
 │   │   └── EventPublisher.ts
-│   ├── jobQueue/
-│   │   ├── BullJobQueue.ts
-│   │   └── JobHandlers/
-│   │       ├── SyncMarketplaceHandler.ts
-│   │       ├── PublishListingHandler.ts
-│   │       └── HermesRunHandler.ts
-│   └── cache/
-│       └── RedisCache.ts
+│   └── jobQueue/
+│       ├── BullJobQueue.ts
+│       └── JobHandlers/
+│           ├── SyncMarketplaceHandler.ts
+│           └── PublishListingHandler.ts
 │
 ├── presentation/                    # HTTP controllers, middleware
 │   ├── http/
@@ -284,9 +275,6 @@ src/backend/
 │   │   └── formatters/
 │   │       ├── ProductFormatter.ts
 │   │       └── ResponseFormatter.ts
-│   └── websocket/
-│       ├── handlers/ (real-time events)
-│       └── HermesLiveUpdates.ts
 │
 ├── shared/
 │   ├── types/                       # TypeScript types (domain-agnostic)
@@ -495,7 +483,7 @@ src/frontend/
 │       └── ApprovalButtons.tsx
 │
 ├── services/                        # API client layer
-│   ├── api.ts                       # Axios/fetch configuration
+│   ├── api.ts                       # fetch configuration
 │   ├── endpoints/
 │   │   ├── products.ts
 │   │   ├── listings.ts
@@ -583,30 +571,7 @@ function ProductsPage() {
 
 ### Real-Time Updates
 
-```typescript
-// WebSocket hook for Hermes live updates
-function useHermesLive() {
-  const dispatch = useDispatch();
-  
-  useEffect(() => {
-    const ws = new WebSocket('ws://api/hermes/live');
-    
-    ws.onmessage = (messageEvent) => {
-      const event = JSON.parse(messageEvent.data);
-      // Update RTK Query cache or Redux state
-      dispatch(hermesApi.util.updateQueryData(
-        'getHermesEvents',
-        undefined,
-        (draft) => {
-          draft.unshift(event);
-        }
-      ));
-    };
-    
-    return () => ws.close();
-  }, [dispatch]);
-}
-```
+The WebSocket live updates (`HermesLiveUpdates`, the `/api/hermes/live` endpoint and the `useHermesLive` client hook) were removed in the stage-focus cut (#444). No client connected to them. The SPA reads Hermes events through RTK Query and refetches on demand.
 
 ---
 
@@ -708,13 +673,13 @@ hermes-marketdesk/
 
 ### Adapter Pattern (Strategy)
 
-Each marketplace (OLX, Allegro, Vinted, eBay, etc.) is wrapped in an adapter implementing a common interface. This keeps the domain layer completely agnostic to marketplace specifics.
+Each marketplace is wrapped in an adapter implementing a common interface; OLX is the only adapter that exists after the stage-focus cut (#444). This keeps the domain layer completely agnostic to marketplace specifics.
 
 ```typescript
 // Domain Interface (infrastructure/adapters/MarketplaceAdapter.ts)
 export interface IMarketplaceAdapter {
   // Configuration
-  getKey(): string; // 'olx', 'allegro', etc.
+  getKey(): string; // 'olx'
   
   // Authentication
   authenticate(credentials: unknown): Promise<{ accessToken: string }>;
@@ -748,15 +713,11 @@ export interface IMarketplaceAdapter {
 ```typescript
 // infrastructure/adapters/OLXAdapter.ts
 export class OLXAdapter implements IMarketplaceAdapter {
-  private client: AxiosInstance;
   private credentials: OLXCredentials;
   
-  constructor(credentials: OLXCredentials) {
+  // The HTTP transport is injected (MarketplaceHttpClient), so tests never touch the network.
+  constructor(private client: MarketplaceHttpClient, credentials: OLXCredentials) {
     this.credentials = credentials;
-    this.client = axios.create({
-      baseURL: 'https://api.olx.pl/v1',
-      headers: { Authorization: `Bearer ${credentials.accessToken}` },
-    });
   }
   
   async publishListing(listing: ListingPublishDTO): Promise<{
@@ -764,14 +725,19 @@ export class OLXAdapter implements IMarketplaceAdapter {
     publishedAt: Date;
   }> {
     try {
-      const response = await this.client.post('/user/ads', {
-        title: listing.product.name,
-        description: listing.product.description,
-        price: listing.price,
-        category_id: this.mapCategory(listing.product.category),
-        images: listing.product.images.map(img => img.url),
-        params: {
-          condition: this.mapCondition(listing.product.condition),
+      const response = await this.client.request({
+        method: 'POST',
+        url: 'https://api.olx.pl/v1/user/ads',
+        headers: { Authorization: `Bearer ${this.credentials.accessToken}` },
+        body: {
+          title: listing.product.name,
+          description: listing.product.description,
+          price: listing.price,
+          category_id: this.mapCategory(listing.product.category),
+          images: listing.product.images.map(img => img.url),
+          params: {
+            condition: this.mapCondition(listing.product.condition),
+          },
         },
       });
       
@@ -786,7 +752,11 @@ export class OLXAdapter implements IMarketplaceAdapter {
   
   async syncListings(externalListingIds: string[]): Promise<SyncedListing[]> {
     const results = await Promise.all(
-      externalListingIds.map(id => this.client.get(`/user/ads/${id}`))
+      externalListingIds.map(id => this.client.request({
+        method: 'GET',
+        url: `https://api.olx.pl/v1/user/ads/${id}`,
+        headers: { Authorization: `Bearer ${this.credentials.accessToken}` },
+      }))
     );
     
     return results.map(res => ({
@@ -808,12 +778,12 @@ export class OLXAdapter implements IMarketplaceAdapter {
   }
   
   translateError(error: unknown): MarketplaceError {
-    if (axios.isAxiosError(error)) {
-      if (error.response?.status === 401) {
+    if (error instanceof HttpError) {
+      if (error.status === 401) {
         return new AuthenticationError('OLX: Invalid credentials');
-      } else if (error.response?.status === 404) {
+      } else if (error.status === 404) {
         return new NotFoundError('OLX: Listing not found');
-      } else if (error.response?.status === 429) {
+      } else if (error.status === 429) {
         return new RateLimitError('OLX: Rate limit exceeded');
       }
     }
@@ -831,10 +801,8 @@ export class MarketplaceAdapterFactory {
   
   constructor() {
     this.register('olx', OLXAdapter);
-    this.register('allegro', AllegroAdapter);
-    this.register('vinted', VintedAdapter);
-    this.register('facebook', FacebookAdapter);
-    // eBay, Etsy, Amazon registered but not yet implemented
+    // Other keys have no adapter; the Allegro, Vinted, Facebook and eBay
+    // adapters were removed in the stage-focus cut (#444).
   }
   
   register(key: string, adapterClass: new (...args: any[]) => IMarketplaceAdapter) {
@@ -1126,7 +1094,6 @@ export class HermesAI implements IAIProvider {
 // infrastructure/eventBroker/RedisEventBroker.ts
 export class RedisEventBroker implements IEventBroker {
   private redis: Redis;
-  private subscribers: Map<string, (event: DomainEvent) => Promise<void>> = new Map();
   
   constructor(redisClient: Redis) {
     this.redis = redisClient;
@@ -1146,27 +1113,11 @@ export class RedisEventBroker implements IEventBroker {
       'timestamp', event.timestamp.toISOString(),
       'version', event.version.toString()
     );
-    
-    // Publish to subscribers (pub/sub for real-time)
-    await this.redis.publish(`event:${event.type}`, JSON.stringify(event));
-  }
-  
-  subscribe(eventType: string, handler: (event: DomainEvent) => Promise<void>): void {
-    this.subscribers.set(eventType, handler);
-  }
-  
-  async startConsuming(): Promise<void> {
-    const subscriber = this.redis.duplicate();
-    
-    for (const [eventType, handler] of this.subscribers) {
-      await subscriber.subscribe(`event:${eventType}`, (message) => {
-        const event = JSON.parse(message);
-        handler(event).catch(err => console.error(`Handler error: ${err}`));
-      });
-    }
   }
 }
 ```
+
+The broker only publishes to the Redis stream. The in-process `EventSubscriber` port, which only the WebSocket live updates used, was removed in the stage-focus cut (#444); nothing in the process subscribes to domain events.
 
 ### Event Types & Publishing
 
@@ -1257,44 +1208,7 @@ class ListingService {
 
 ### Event Subscribers
 
-```typescript
-// application/subscribers/
-export class SendNotificationOnListingPublished {
-  constructor(
-    private notificationService: NotificationService,
-    private productRepo: ProductRepository
-  ) {}
-  
-  async handle(event: ListingPublishedEvent): Promise<void> {
-    const product = await this.productRepo.getById(event.payload.productId);
-    await this.notificationService.send({
-      type: 'listing_published',
-      message: `"${product.name}" published on ${event.payload.marketplaceKey}`,
-      userId: product.workspaceId,
-    });
-  }
-}
-
-export class LogPriceChangeToAnalytics {
-  constructor(private analyticsRepo: AnalyticsRepository) {}
-  
-  async handle(event: PriceChangedEvent): Promise<void> {
-    await this.analyticsRepo.recordEvent({
-      type: 'price_change',
-      listingId: event.payload.listingId,
-      oldPrice: event.payload.oldPrice,
-      newPrice: event.payload.newPrice,
-      changedBy: event.payload.changedBy,
-      timestamp: event.timestamp,
-    });
-  }
-}
-
-// Register subscribers in app startup
-eventBroker.subscribe('product.created', productCreatedHandler.handle.bind(productCreatedHandler));
-eventBroker.subscribe('listing.published', listingPublishedHandler.handle.bind(listingPublishedHandler));
-eventBroker.subscribe('listing.price_changed', priceChangeHandler.handle.bind(priceChangeHandler));
-```
+There are no in-process subscribers: the `EventSubscriber` port was removed in the stage-focus cut (#444), and with it the notification and analytics subscriber examples that this section once showed. Domain events are published to the Redis stream.
 
 ---
 
@@ -1310,13 +1224,11 @@ export class JobQueueService {
   private syncQueue: Queue.Queue;
   private publishQueue: Queue.Queue;
   private analyticsQueue: Queue.Queue;
-  private hermesQueue: Queue.Queue;
   
   constructor(redisConfig: RedisOptions) {
     this.syncQueue = new Queue('marketplace-sync', redisConfig);
     this.publishQueue = new Queue('listing-publish', redisConfig);
     this.analyticsQueue = new Queue('analytics-aggregate', redisConfig);
-    this.hermesQueue = new Queue('hermes-run', redisConfig);
     
     this.registerHandlers();
   }
@@ -1345,12 +1257,6 @@ export class JobQueueService {
     // Analytics aggregation
     this.analyticsQueue.process(async (job) => {
       const handler = new AggregateAnalyticsHandler(this.analyticsRepo);
-      return await handler.handle(job.data);
-    });
-    
-    // Hermes run
-    this.hermesQueue.process(async (job) => {
-      const handler = new HermesRunHandler(this.hermesEngine, this.eventRepo);
       return await handler.handle(job.data);
     });
   }
@@ -1382,21 +1288,12 @@ export class JobQueueService {
     });
   }
   
-  async enqueueHermesRun(workspaceId: UUID): Promise<void> {
-    await this.hermesQueue.add({ workspaceId }, {
-      attempts: 1,
-      removeOnComplete: true,
-      priority: 15,
-    });
-  }
-  
   // Monitoring
   async getQueueStats(): Promise<{ [key: string]: QueueMetrics }> {
     return {
       sync: await this.getMetrics(this.syncQueue),
       publish: await this.getMetrics(this.publishQueue),
       analytics: await this.getMetrics(this.analyticsQueue),
-      hermes: await this.getMetrics(this.hermesQueue),
     };
   }
   
@@ -1412,6 +1309,8 @@ export class JobQueueService {
   }
 }
 ```
+
+The `hermes-run` queue, `HermesRunHandler` and `enqueueHermesRun` were removed in the stage-focus cut (#444): nothing produced those jobs. A Hermes run is started through `RunHermesUseCase`, scoped to a product. The queues that remain are `publish-listing` and `sync-marketplace`; the snippet above shows the shape, not the exact queue names.
 
 ### Job Handlers Example
 
@@ -1480,16 +1379,8 @@ const jobOptions = {
   removeOnFail: false,
 };
 
-// Monitor & alert on repeated failures
-eventBroker.subscribe('job.failed', async (event) => {
-  if (event.attempts >= 3) {
-    await notificationService.send({
-      type: 'job_failed',
-      message: `Job ${event.jobType} failed after 3 attempts`,
-      userId: event.workspaceId,
-    });
-  }
-});
+// There is no notification channel: the notifiers were removed in the
+// stage-focus cut (#444).
 ```
 
 ---
@@ -1510,116 +1401,7 @@ Evidence: `src/backend/application/services/MarketplaceSyncScheduler.ts`, `src/b
 
 ## 14. Notification System
 
-### Multi-Channel Notifications
-
-```typescript
-// application/services/NotificationService.ts
-export class NotificationService {
-  constructor(
-    private emailProvider: EmailProvider,
-    private telegramBot: TelegramBot,
-    private notificationRepo: NotificationRepository,
-    private workspaceRepo: WorkspaceRepository
-  ) {}
-  
-  async send(notification: NotificationDTO): Promise<void> {
-    const workspace = await this.workspaceRepo.getById(notification.workspaceId);
-    const preferences = workspace.notificationSettings;
-    
-    // Check which channels are enabled for this event type
-    const channels = this.determineChannels(notification.type, preferences);
-    
-    for (const channel of channels) {
-      try {
-        if (channel === 'email') {
-          await this.emailProvider.send({
-            to: workspace.ownerEmail,
-            subject: this.formatSubject(notification),
-            html: this.formatEmailBody(notification),
-          });
-        } else if (channel === 'telegram') {
-          await this.telegramBot.send({
-            chatId: workspace.telegramChatId,
-            text: this.formatTelegramMessage(notification),
-          });
-        } else if (channel === 'push') {
-          await this.sendPushNotification(workspace.id, notification);
-        } else if (channel === 'in_app') {
-          await this.notificationRepo.create({
-            workspaceId: workspace.id,
-            type: notification.type,
-            title: notification.title,
-            message: notification.message,
-            readAt: null,
-          });
-        }
-      } catch (error) {
-        console.error(`Failed to send via ${channel}:`, error);
-        // Log failure but don't block other channels
-      }
-    }
-  }
-  
-  private determineChannels(
-    eventType: string,
-    preferences: NotificationPreferences
-  ): NotificationChannel[] {
-    const channels: NotificationChannel[] = [];
-    
-    const matrix = preferences.notificationMatrix[eventType];
-    if (!matrix) return ['in_app']; // Default to in-app
-    
-    if (matrix.email) channels.push('email');
-    if (matrix.telegram) channels.push('telegram');
-    if (matrix.push) channels.push('push');
-    if (matrix.inApp !== false) channels.push('in_app');
-    
-    return channels;
-  }
-  
-  private formatEmailBody(notification: NotificationDTO): string {
-    // HTML template rendering
-    return `<h2>${notification.title}</h2><p>${notification.message}</p>`;
-  }
-  
-  private formatTelegramMessage(notification: NotificationDTO): string {
-    return `${notification.title}\n${notification.message}`;
-  }
-}
-```
-
-### Event-Driven Notification Triggers
-
-```typescript
-// Subscribe to domain events and send notifications
-
-eventBroker.subscribe('listing.published', async (event) => {
-  await notificationService.send({
-    workspaceId: event.payload.workspaceId,
-    type: 'listing_published',
-    title: 'Listing published',
-    message: `"${event.payload.productName}" published on ${event.payload.marketplaceKey}`,
-  });
-});
-
-eventBroker.subscribe('hermes_event.pending_review', async (event) => {
-  await notificationService.send({
-    workspaceId: event.payload.workspaceId,
-    type: 'hermes_suggestion',
-    title: event.payload.title,
-    message: event.payload.detail,
-  });
-});
-
-eventBroker.subscribe('marketplace.sync_error', async (event) => {
-  await notificationService.send({
-    workspaceId: event.payload.workspaceId,
-    type: 'sync_error',
-    title: 'Sync error on ' + event.payload.marketplaceName,
-    message: event.payload.errorMessage,
-  });
-});
-```
+Removed in the stage-focus cut (#444). `EmailProvider` and `TelegramBot` had no caller, and no `NotificationService` consumes domain events. MarketDesk sends no email or Telegram notifications.
 
 ---
 
@@ -1734,14 +1516,9 @@ export class AnalyticsTracker {
   }
 }
 
-// Triggered from event subscribers
-eventBroker.subscribe('listing.viewed', async (event) => {
-  await analyticsTracker.recordListingEvent(listing, 'view');
-});
-
-eventBroker.subscribe('listing.sold', async (event) => {
-  await analyticsTracker.recordListingEvent(listing, 'sale', event.quantity);
-});
+// Illustrative: called directly by the code path that records the view or the sale
+await analyticsTracker.recordListingEvent(listing, 'view');
+await analyticsTracker.recordListingEvent(listing, 'sale', quantity);
 ```
 
 ### Aggregation Pipeline
@@ -2212,10 +1989,7 @@ try {
 } catch (error) {
   if (error instanceof CircuitBreakerError) {
     // Circuit is open; marketplace is down
-    await notificationService.send({
-      type: 'marketplace_unavailable',
-      message: `${marketplace.name} is currently unavailable`,
-    });
+    logger.warn(`${marketplace.name} is currently unavailable`);
   }
 }
 ```
@@ -2282,13 +2056,10 @@ CREATE TABLE analytics_events_2026_01 PARTITION OF analytics_events
 ### 3. Caching Strategy
 
 ```
-L1: Application cache (Redis) - 5 min TTL
-  - Product list per workspace
-  - Marketplace list
-  - User preferences
+L1: No application cache. The Redis cache was removed in the
+    stage-focus cut (#444); Redis serves the event stream and the Bull queues.
 
-L2: HTTP cache headers
-  - GET /products: public, max-age=300
+L2: No HTTP cache headers are set on API responses.
 
 L3: Browser cache
   - Static assets: 1 year
@@ -2299,10 +2070,6 @@ L3: Browser cache
 **Job Queue Scaling**:
 - Bull workers can scale horizontally (multiple server instances processing same queue)
 - Use `queue.process(concurrency)` to tune per-server parallelism
-
-**WebSocket Scaling**:
-- Use Redis Pub/Sub to broadcast events across servers
-- Each server maintains WebSocket connections to its clients
 
 ### 5. Marketplace Integration Scaling
 
@@ -2424,17 +2191,15 @@ Metrics to track:
 |-----------|------------|-----------|
 | **Language** | TypeScript | Type safety, shared types frontend/backend |
 | **Backend** | Node.js + Express | Fast iteration, JavaScript ecosystem, event-driven |
-| **Frontend** | React 18 | Component reusability, large ecosystem, React Query |
+| **Frontend** | React 19 | Component reusability, large ecosystem |
 | **State** | Redux + RTK Query | Scalable, normalized cache, optimistic updates |
 | **UI Framework** | MUI Material | Production-grade, accessibility, theming |
 | **Database** | PostgreSQL | ACID compliance, JSONB, excellent scaling |
-| **Cache** | Redis | Fast in-memory, event broker, job queue backing |
+| **Redis** | Redis | Event stream and Bull job queue backing (the application cache was removed in the stage-focus cut, #444) |
 | **Events** | Redis Streams | Simple, append-only, self-hosted friendly |
 | **Jobs** | Bull + Redis | Node.js native, reliable, excellent for VPS |
 | **Scheduler** | Bull repeatable jobs + Redis | Durable deterministic schedules share the existing queue/runtime |
 | **AI** | Hermes Agent API Server | Uses the native Hermes instance on the same VPS; provider/model/tooling stays centralized |
-| **Email** | SendGrid / Mailgun | Transactional reliability, SMTP fallback |
-| **Telegram** | node-telegram-bot-api | Direct bot integration |
 | **Auth** | JWT + bcrypt | Stateless, scalable, standard |
 | **Encryption** | NaCl / libsodium | Fast, modern, audited library |
 | **Testing** | Jest + Supertest | Excellent TypeScript support, fast |
@@ -2465,7 +2230,7 @@ Metrics to track:
 
 **Phase 2 (Q3 2026)**:
 - Multi-user accounts with role-based access control (RBAC)
-- eBay, Etsy, Amazon adapter implementations
+- Adapters for further marketplaces (the Allegro, Vinted, Facebook and eBay adapters were removed in the stage-focus cut (#444); Etsy and Amazon never existed)
 - Analytics API for third-party integrations
 - Bulk operation history & rollback
 

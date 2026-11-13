@@ -233,7 +233,10 @@ export class MarketplaceController {
     }
     if (typeof req.body?.connected === 'boolean') {
       if (req.body.connected) {
-        if (marketplace.key === 'olx' && !marketplace.isConnected()) {
+        if (marketplace.key !== 'olx') {
+          return next(new InvalidStateError('Only OLX can be connected'));
+        }
+        if (!marketplace.isConnected()) {
           return next(
             new InvalidStateError('Use POST /marketplaces/:id/connect to authorize with OAuth'),
           );
