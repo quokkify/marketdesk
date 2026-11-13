@@ -70,6 +70,7 @@ import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyCont
 import type { PublicationJourneyState } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyEvent } from '../workflows/publicationJourneyGraph.js';
 import { runCreationJourney } from '../workflows/creationJourney.js';
+import { usePendingPublicationPolling } from './usePendingPublicationPolling.js';
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
@@ -677,8 +678,8 @@ const ListingDetailsPage: React.FC = () => {
   const [analysisState, setAnalysisState] = useState<ProductHermesAnalysisState>({ status: 'idle' });
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
-  // Set when the creation journey queued the advert; the status polling hooks in here.
-  const [, setQueuedListingId] = useState<string | null>(null);
+  // The advert queued from this page, followed until OLX answers.
+  const [queuedListingId, setQueuedListingId] = useState<string | null>(null);
   const consumedNavigationReview = useRef<string | null>(null);
   const consumedCreationJourney = useRef<string | null>(null);
   const previewInFlight = useRef(false);
@@ -696,6 +697,14 @@ const ListingDetailsPage: React.FC = () => {
         )
       : undefined;
   const primaryListing = selectPrimaryListing(listingItems, marketplaces);
+  const queuedListing = queuedListingId
+    ? listingItems.find((listing) => listing.id === queuedListingId)
+    : undefined;
+  const pendingPublication = usePendingPublicationPolling(
+    queuedListingId,
+    () => void listings.refetch(),
+    queuedListing
+  );
   const recheckListing = listingItems.find(
     (listing) => resolveMarketplaceKey(listing.marketplaceId) === 'olx'
   );
@@ -927,6 +936,7 @@ const ListingDetailsPage: React.FC = () => {
     if (!input) return;
     submissionInFlight.current = true;
     setSubmittingPublication(true);
+    setQueuedListingId(null);
     try {
       const approved = await advanceJourney(
         publishCandidate.journey,
@@ -936,6 +946,7 @@ const ListingDetailsPage: React.FC = () => {
         await relistListing(input).unwrap();
       } else {
         await publishListing(input).unwrap();
+        setQueuedListingId(publishCandidate.listing.id);
       }
       await advanceJourney(approved, { type: 'publication_queued' });
       dispatch(
@@ -1019,6 +1030,7 @@ const ListingDetailsPage: React.FC = () => {
 
     previewInFlight.current = true;
     setPreviewingPublication(true);
+    setQueuedListingId(null);
     void runCreationJourney(pending, marketplace, {
       findListing: (marketplaceId) => listingItems.find((item) => item.marketplaceId === marketplaceId),
       createListing: (input) => createListing(input).unwrap(),
@@ -1175,6 +1187,10 @@ const ListingDetailsPage: React.FC = () => {
               {creationFailure}
             </Alert>
           )}
+          {pendingPublication.timedOut && (
+            <Alert severity="info">Still waiting for OLX. Refresh this page in a minute.</Alert>
+          )}
+          {queuedListing?.syncError && <Alert severity="error">{queuedListing.syncError}</Alert>}
           <Card
             title="Marketplace listings"
             action={
