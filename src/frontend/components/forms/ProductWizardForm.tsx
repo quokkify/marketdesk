@@ -130,8 +130,11 @@ export async function verifyWizardMarketplaceReadiness(
   check: (id: string) => Promise<MarketplaceReadinessStatus>
 ): Promise<VerifiedMarketplaceResult> {
   let hadCheckError = false;
+  const offered = marketplaces.filter((marketplace) =>
+    MARKETPLACE_OPTIONS.some((option) => option.key === marketplace.key)
+  );
   const verified = await Promise.all(
-    marketplaces.map(async (marketplace) => {
+    offered.map(async (marketplace) => {
       if (!marketplace.connected) return marketplace;
       try {
         const status = await check(marketplace.id);

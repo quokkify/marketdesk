@@ -315,4 +315,32 @@ describe('ProductWizardForm authoritative marketplace readiness', () => {
     expect(result.marketplaces.every((item) => !item.connected)).toBe(true);
     expect(result.hadCheckError).toBe(true);
   });
+
+  it('ignores a stored non-OLX row when verifying readiness', async () => {
+    const olx = marketplace({ connected: false });
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', connected: true });
+    const check = jest.fn(async () => {
+      throw new Error('only OLX can be checked');
+    });
+
+    const result = await verifyWizardMarketplaceReadiness([olx, allegro], check);
+
+    expect(check).not.toHaveBeenCalled();
+    expect(result.hadCheckError).toBe(false);
+    expect(result.marketplaces).toEqual([{ ...olx, connected: false }]);
+  });
+
+  it('reports a failed OLX check even when a non-OLX row is stored as connected', async () => {
+    const olx = marketplace();
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', connected: true });
+    const check = jest.fn(async () => {
+      throw new Error('credentials cannot be decrypted');
+    });
+
+    const result = await verifyWizardMarketplaceReadiness([olx, allegro], check);
+
+    expect(result.hadCheckError).toBe(true);
+    expect(result.marketplaces.map((item) => item.key)).toEqual(['olx']);
+    expect(result.marketplaces.some((item) => item.connected)).toBe(false);
+  });
 });

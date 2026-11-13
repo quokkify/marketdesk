@@ -6,7 +6,7 @@ import { Box, Button, Stack, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Link as RouterLink, isRouteErrorResponse, useRouteError } from 'react-router-dom';
-import { APP_NAME } from '../../utils/constants.js';
+import { APP_NAME, APP_ROUTE_PATHS } from '../../utils/constants.js';
 import { Card } from './Card.js';
 
 export function describeRouteError(error: unknown): string | undefined {
@@ -96,7 +96,7 @@ export const RouteErrorView: React.FC<RouteErrorViewProps> = ({
             variant="outlined"
             color="inherit"
             component={RouterLink}
-            to="/"
+            to={APP_ROUTE_PATHS.products}
             sx={{
               borderColor: 'borderStrong',
               '&:hover': { borderColor: 'borderStrong', bgcolor: 'surface2' },

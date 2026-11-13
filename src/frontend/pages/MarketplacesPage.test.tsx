@@ -275,7 +275,9 @@ describe('MarketplacesPage', () => {
     mockSync.mockReturnValue({ unwrap: () => Promise.resolve({ marketplaceId: 'marketplace-olx', enqueued: true }) });
     renderPage();
 
-    await mockCapture.card?.onSync(olx());
+    const rendered = mockCapture.card?.marketplace;
+    expect(rendered?.key).toBe('olx');
+    await mockCapture.card?.onSync(rendered);
 
     expect(mockSync).toHaveBeenCalledTimes(1);
     expect(mockSync).toHaveBeenCalledWith('marketplace-olx');

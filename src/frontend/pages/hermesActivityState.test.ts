@@ -193,6 +193,15 @@ describe('hermesWatching', () => {
     });
   });
 
+  it('counts only OLX among the connected marketplaces', () => {
+    expect(
+      hermesWatching(ready({ liveListingCount: 2 }), ready([
+        marketplace({ id: 'a' }),
+        marketplace({ id: 'b', key: 'allegro', sandbox: true }),
+      ])),
+    ).toMatchObject({ sentence: expect.stringContaining('on 1 marketplace ·'), sandbox: false });
+  });
+
   it('uses singular and plural nouns', () => {
     expect(
       hermesWatching(ready({ liveListingCount: 1 }), ready([])),

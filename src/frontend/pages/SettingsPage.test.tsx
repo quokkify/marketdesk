@@ -314,7 +314,7 @@ describe('Marketplace Accounts panel', () => {
     expect(text).not.toContain('Connected');
   });
 
-  it('lists no roadmap channel', () => {
+  it('shows an OLX item flagged unavailable as a normal connected account', () => {
     const html = render(
       <MarketplaceAccountsList items={[marketplaceItem({ available: false })]} />
     );

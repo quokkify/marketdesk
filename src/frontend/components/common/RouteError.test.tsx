@@ -64,7 +64,7 @@ describe('RouteError', () => {
     expect(html).toContain('role="alert"');
     expect(textOf(html)).toContain('Something went wrong');
     expect(html).toMatch(/<button[^>]*>.*Reload<\/button>/);
-    expect(html).toMatch(/<a [^>]*href="\/"[^>]*>Back to Products<\/a>/);
+    expect(html).toMatch(/<a [^>]*href="\/products"[^>]*>Back to Products<\/a>/);
     expect(textOf(html)).toContain('chunk failed');
   });
 
