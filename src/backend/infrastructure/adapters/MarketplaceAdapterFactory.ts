@@ -1,8 +1,7 @@
 // Factory that resolves a marketplace key to a concrete adapter implementing the
 // domain IMarketplaceAdapter port. Keeps the application/domain layers agnostic
-// to which concrete adapter backs a given marketplace. Per ARCHITECTURE.md §9,
-// OLX/Allegro/Vinted/Facebook are implemented, eBay is a registered stub, and
-// Etsy/Amazon are not yet available.
+// to which concrete adapter backs a given marketplace. Only OLX is operational;
+// every other key fails closed with MarketplaceNotImplementedError.
 
 import type { IMarketplaceAdapter } from '../../domain/services/MarketplaceAdapter';
 import type { MarketplaceKey } from '../../../shared/types';
@@ -10,15 +9,7 @@ import type { MarketplaceHttpClient } from './MarketplaceHttpClient';
 import type { MarketplaceAdapterOptions } from './BaseMarketplaceAdapter';
 import { MarketplaceNotImplementedError } from './MarketplaceError';
 import { OLXAdapter, type OlxAdapterConfig } from './OLXAdapter';
-import { AllegroAdapter } from './AllegroAdapter';
-import { VintedAdapter } from './VintedAdapter';
-import { FacebookAdapter } from './FacebookAdapter';
-import { EbayAdapter } from './EbayAdapter';
 
-type AdapterConstructor = new (
-  http?: MarketplaceHttpClient,
-  options?: MarketplaceAdapterOptions,
-) => IMarketplaceAdapter;
 type AdapterFactory = (
   http?: MarketplaceHttpClient,
   options?: MarketplaceAdapterOptions,
@@ -38,15 +29,6 @@ export class MarketplaceAdapterFactory {
       'olx',
       (http, options) => new OLXAdapter(http, options, this.config.olx),
     );
-    this.register('allegro', AllegroAdapter);
-    this.register('vinted', VintedAdapter);
-    this.register('facebook', FacebookAdapter);
-    this.register('ebay', EbayAdapter);
-    // 'etsy' and 'amazon' are intentionally unregistered (not yet available).
-  }
-
-  register(key: MarketplaceKey, ctor: AdapterConstructor): void {
-    this.registry.set(key, (http, options) => new ctor(http, options));
   }
 
   isSupported(key: MarketplaceKey): boolean {

@@ -1246,6 +1246,29 @@ describe('Presentation API', () => {
       expect(res.body.data.state).toBe('oauth-state');
     });
 
+    it('refuses to connect a marketplace other than OLX', async () => {
+      const { app, marketplaceRepo } = await buildTestApp();
+      const allegro = Marketplace.create({
+        id: 'marketplace-allegro',
+        workspaceId: 'ws-1',
+        key: 'allegro',
+        name: 'Allegro',
+        connected: false,
+        syncMode: 'manual',
+      });
+      if (allegro.isErr()) throw allegro.error;
+      await marketplaceRepo.save(allegro.value);
+
+      const res = await auth(request(app).patch('/api/marketplaces/marketplace-allegro')).send({
+        connected: true,
+      });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe('INVALID_STATE');
+      expect(res.body.error.message).toBe('Only OLX can be connected');
+      expect((await marketplaceRepo.findById('marketplace-allegro'))?.isConnected()).toBe(false);
+    });
+
     it('accepts the provider callback without a bearer token and returns the API envelope', async () => {
       const { app } = await buildTestApp();
       const res = await request(app)
