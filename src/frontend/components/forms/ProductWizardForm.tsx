@@ -97,12 +97,6 @@ export function firstWizardStepWithErrors(errors: ProductFieldErrors): number | 
 
 const MARKETPLACE_OPTIONS: ReadonlyArray<{ key: MarketplaceKey; name: string }> = [
   { key: 'olx', name: 'OLX' },
-  { key: 'allegro', name: 'Allegro' },
-  { key: 'vinted', name: 'Vinted' },
-  { key: 'facebook', name: 'Facebook Marketplace' },
-  { key: 'ebay', name: 'eBay' },
-  { key: 'etsy', name: 'Etsy' },
-  { key: 'amazon', name: 'Amazon' },
 ];
 
 export interface WizardMarketplaceOption {
@@ -859,13 +853,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                               <Chip
                                 size="small"
                                 color={marketplace.connected ? 'success' : 'default'}
-                                label={
-                                  marketplace.connected
-                                    ? 'Connected'
-                                    : marketplace.integrated
-                                      ? 'Not connected'
-                                      : 'Not available yet'
-                                }
+                                label={marketplace.connected ? 'Connected' : 'Not connected'}
                               />
                             )}
                           </Stack>
@@ -873,11 +861,9 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
                         <Typography variant="caption" color="text.secondary">
                           {marketplace.connected
                             ? 'Connected to this workspace and available for publishing.'
-                            : !marketplace.integrated
-                              ? 'Roadmap channel. MarketDesk currently integrates OLX only.'
-                              : marketplace.configured
-                                ? 'Reconnect OLX from Marketplaces to publish.'
-                                : 'Connect OLX from Marketplaces to publish.'}
+                            : marketplace.configured
+                              ? 'Reconnect OLX from Marketplaces to publish.'
+                              : 'Connect OLX from Marketplaces to publish.'}
                         </Typography>
                       </Box>
                     }

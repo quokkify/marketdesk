@@ -119,31 +119,14 @@ describe('ProductWizardForm required-step validation', () => {
 });
 
 describe('ProductWizardForm marketplace options', () => {
-  it('enables only connections reported as connected by the API', () => {
+  it('offers OLX only and ignores other stored marketplaces', () => {
     const options = buildWizardMarketplaceOptions([
       marketplace(),
-      marketplace({
-        id: 'marketplace-allegro',
-        key: 'allegro',
-        name: 'Allegro',
-        connected: false,
-      }),
+      marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro', connected: true }),
     ]);
 
-    expect(options).toHaveLength(7);
-    expect(options.find((option) => option.key === 'olx')).toMatchObject({
-      configured: true,
-      connected: true,
-    });
-    expect(options.find((option) => option.key === 'allegro')).toMatchObject({
-      configured: true,
-      connected: false,
-    });
-    expect(options.find((option) => option.key === 'ebay')).toMatchObject({
-      configured: false,
-      connected: false,
-      integrated: false,
-    });
+    expect(options.map((option) => option.key)).toEqual(['olx']);
+    expect(options[0]).toMatchObject({ configured: true, connected: true, integrated: true });
   });
 
   it('marks OLX as the integrated channel and carries the sandbox flag', () => {
