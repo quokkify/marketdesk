@@ -61,7 +61,7 @@ describe('canonical MarketDesk shell contract', () => {
     });
   });
 
-  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  // Guard: nothing schedules Hermes in this build.
   it('never claims background Hermes work in any route subtitle', () => {
     const paths = [
       '/',

@@ -58,13 +58,13 @@ function findElement(
 }
 
 describe('RouteError', () => {
-  it('renders reload action and a way back to the dashboard', async () => {
+  it('renders reload action and a way back to Products', async () => {
     const html = await renderRouteFailure(new Error('chunk failed'));
 
     expect(html).toContain('role="alert"');
     expect(textOf(html)).toContain('Something went wrong');
     expect(html).toMatch(/<button[^>]*>.*Reload<\/button>/);
-    expect(html).toMatch(/<a [^>]*href="\/"[^>]*>Back to dashboard<\/a>/);
+    expect(html).toMatch(/<a [^>]*href="\/"[^>]*>Back to Products<\/a>/);
     expect(textOf(html)).toContain('chunk failed');
   });
 

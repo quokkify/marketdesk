@@ -201,7 +201,7 @@ describe('hermesWatching', () => {
     });
   });
 
-  // Same guard as the Dashboard card (8b011fae2b): nothing schedules Hermes in this build.
+  // Guard: nothing schedules Hermes in this build.
   it('never claims background Hermes work, which this build does not run', () => {
     const ready = hermesWatching(
       { data: { liveListingCount: 12 }, isLoading: false, isError: false },

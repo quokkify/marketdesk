@@ -330,7 +330,7 @@ export interface AnalyticsQueryParams {
   marketplaceId?: string;
 }
 
-// GET /analytics/overview → dashboard aggregates. `previous` is always present
+// GET /analytics/overview → workspace-wide aggregates. `previous` is always present
 // (null until a historical analytics source is wired) and carries the same shape
 // minus its own `previous`, so delta tiles can compare period-over-period.
 export interface AnalyticsOverview {

@@ -14,7 +14,7 @@ const NotFoundPage: React.FC = () => {
         The page you are looking for does not exist.
       </Typography>
       <Button variant="contained" onClick={() => navigate('/')}>
-        Back to dashboard
+        Back to Products
       </Button>
     </Stack>
   );

@@ -1,5 +1,5 @@
 // Login page: minimal email/password form. On success stores credentials and
-// seeds the workspace context, then navigates to the dashboard.
+// seeds the workspace context, then navigates to the index route, which redirects to Products.
 import React, { useState } from 'react';
 import { Box, Button, Card, Stack, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
