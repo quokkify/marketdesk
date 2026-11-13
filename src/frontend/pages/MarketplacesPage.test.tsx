@@ -276,7 +276,8 @@ describe('MarketplacesPage', () => {
     renderPage();
 
     const rendered = mockCapture.card?.marketplace;
-    expect(rendered?.key).toBe('olx');
+    if (!rendered) throw new Error('The marketplace card was not rendered');
+    expect(rendered.key).toBe('olx');
     await mockCapture.card?.onSync(rendered);
 
     expect(mockSync).toHaveBeenCalledTimes(1);
