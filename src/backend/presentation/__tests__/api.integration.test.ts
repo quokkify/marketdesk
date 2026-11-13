@@ -1877,10 +1877,10 @@ describe('Presentation API', () => {
     });
 
     it('runs product-scoped Hermes from the explicit route product only', async () => {
-      const calls: Array<{ workspaceId: string; productId?: string; trigger?: string }> = [];
+      const calls: Array<{ workspaceId: string; productId: string; trigger?: string }> = [];
       const hermesService = {
         ...stubHermesService(),
-        async runHermes(dto: { workspaceId: string; productId?: string; trigger?: string }) {
+        async runHermes(dto: { workspaceId: string; productId: string; trigger?: string }) {
           calls.push(dto);
           return Ok([{ ...appliedEvent, productId: dto.productId }]);
         },

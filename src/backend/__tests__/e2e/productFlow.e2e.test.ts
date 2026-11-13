@@ -536,7 +536,7 @@ describe('E2E product/listing/Hermes flow (in-memory, no DB)', () => {
     expect(relist.body.error.code).toBe('INVALID_STATE');
   });
 
-  it('runs Hermes for the workspace (endpoint returns 202)', async () => {
+  it('no longer serves the catalogue-wide Hermes run', async () => {
     const { app } = await buildE2E();
     const token = await login(app);
 
@@ -545,9 +545,38 @@ describe('E2E product/listing/Hermes flow (in-memory, no DB)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ trigger: 'manual' });
 
-    expect(run.status).toBe(202);
-    expect(run.body.success).toBe(true);
-    expect(Array.isArray(run.body.data)).toBe(true);
+    expect(run.status).toBe(404);
+    expect(run.body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('still lists and dismisses a stored event that only the removed run produced', async () => {
+    const { app, eventRepo } = await buildE2E();
+    const token = await login(app);
+    const event = unwrap(
+      HermesEvent.create({
+        id: 'evt-e2e-price',
+        workspaceId: WORKSPACE_ID,
+        productId: null,
+        type: 'suggested_lower_price',
+        severity: 'info',
+        title: 'Lower the price',
+        proposedChange: { kind: 'price', field: 'price', from: 20, to: 18 },
+      })
+    );
+    await eventRepo.save(event);
+
+    const list = await request(app)
+      .get('/api/hermes/events')
+      .set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.map((item: { id: string }) => item.id)).toContain('evt-e2e-price');
+
+    const dismiss = await request(app)
+      .post('/api/hermes/events/evt-e2e-price/dismiss')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(dismiss.status).toBe(200);
+    expect(dismiss.body.data.status).toBe('dismissed');
   });
 
   it('approves a pending Hermes event and applies the change (verify applied)', async () => {

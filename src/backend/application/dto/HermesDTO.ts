@@ -5,7 +5,7 @@ import type { HermesEventStatus, HermesSeverity } from '../../../shared/types';
 export interface RunHermesDTO {
   workspaceId: string;
   trigger?: 'scheduled' | 'manual' | 'event';
-  productId?: string;
+  productId: string;
 }
 
 export interface SyncMarketplaceDTO {

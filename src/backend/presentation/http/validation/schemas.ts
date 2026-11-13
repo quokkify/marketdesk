@@ -244,11 +244,6 @@ export const registerSchema = z.object({
     .transform((name) => name || undefined),
 });
 
-export const runHermesSchema = z.object({
-  trigger: z.enum(['scheduled', 'manual', 'event']).optional(),
-  productId: z.string().uuid().optional(),
-}).strict();
-
 export const runProductHermesSchema = z.object({
   trigger: z.enum(['scheduled', 'manual', 'event']).optional(),
 }).strict();

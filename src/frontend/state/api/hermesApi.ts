@@ -126,8 +126,8 @@ export const hermesApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // Product-scoped analysis only. The legacy POST /hermes/run endpoint remains backend-compatible,
-    // but frontend callers must choose one explicit product.
+    // Product-scoped analysis only: the backend has no catalogue-wide run, so callers
+    // must choose one explicit product.
     runHermes: builder.mutation<HermesEvent[], HermesRunInput>({
       query: buildProductHermesRunRequest,
       transformResponse: (res: ApiResponse<HermesEvent[]>) => unwrap(res),

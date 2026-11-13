@@ -1,7 +1,6 @@
-// Use case: run the Hermes decision engine for a workspace. Loads the workspace
-// context and delegates to HermesDecisionEngine.run, which analyzes products,
-// creates events, applies auto-approved changes, persists the events and emits a
-// run-completed domain event.
+// Use case: run the Hermes listing-seo analysis for one product. Loads the workspace
+// context and delegates to HermesDecisionEngine.runProductSeo. The catalogue-wide
+// HermesDecisionEngine.run is not reachable from here or from any route.
 
 import { Result, Ok, Err } from '../../domain/shared/Result';
 import {
@@ -27,9 +26,7 @@ export class RunHermesUseCase {
     }
 
     try {
-      const events = input.productId
-        ? await this.engine.runProductSeo(workspace, input.productId)
-        : await this.engine.run(workspace);
+      const events = await this.engine.runProductSeo(workspace, input.productId);
       return Ok(events);
     } catch (error) {
       return Err(
