@@ -2,25 +2,44 @@
 
 ## [0.22.0](https://github.com/quokkify/marketdesk/compare/backend-v0.21.1...backend-v0.22.0) (2026-11-13)
 
+<!-- project-toolkit:release-notes v2 -->
+**At a glance:** ⚠️ 1 breaking · 1 new · 1 fixed · 2 internal
 
-### ⚠ BREAKING CHANGES
+### ⚠️ Breaking changes
 
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
+> [!WARNING]
+> remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/pull/448))
+>
+> These endpoints no longer exist and answer 404 with the error code `NOT_FOUND`: `GET` and `PATCH /api/settings/notifications`, `GET /api/analytics/revenue`, `GET /api/analytics/listings`, `POST /api/hermes/run`, `POST /api/marketplaces/:id/import-preview`, `POST /api/marketplaces/:id/import`. `GET /api/settings/integrations` no longer returns the `telegram` and `api_keys` items.
+>
+> An API client that analysed the whole catalogue with `POST /api/hermes/run` calls `POST /api/hermes/products/:productId/run` once per product instead. The other removed endpoints have no replacement at this stage.
 
-### ✨ Features
+### ✨ New
 
-* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+- reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/pull/434))
 
+  > **Migration**
+  >
+  > - Migrations 042 (`hermes_events.source`) and 043 (`category_correction_operations.listing_id` nullable, `ON DELETE SET NULL`) run through the Compose `migrate` service or `npm run db:migrate`; both are idempotent.
+  > - Run `npm run env:init` (or set `JWT_SECRET` ≥ 32 chars and a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`) before the first boot.
+  > - For a real OLX deployment set `OLX_ADAPTER_MODE=real` and a publicly reachable `PUBLIC_BASE_URL`; the default `stub` mode labels everything Sandbox.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+  >
+  > https://claude.ai/code/session_01G7RDWHiEDE7j584o2tQQSL
 
-### 🐛 Bug Fixes
+### 🐛 Fixed
 
-* evaluate the category guard after taxonomy verification in product recheck ([#449](https://github.com/quokkify/marketdesk/issues/449)) ([00b4b82](https://github.com/quokkify/marketdesk/commit/00b4b828783f4ef74184dbfea23cc61859b9fa89))
+- evaluate the category guard after taxonomy verification in product recheck ([#449](https://github.com/quokkify/marketdesk/pull/449))
 
+<details><summary>Internal changes (2 PRs)</summary>
 
-### ♻️ Refactoring
+**Maintenance**
 
-* remove dead wiring and unused dependencies ([#446](https://github.com/quokkify/marketdesk/issues/446)) ([4ba2d02](https://github.com/quokkify/marketdesk/commit/4ba2d023c01b700d4dbcffc9f745f54ce465cce1))
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+- make the publish handler update test independent of the wall clock ([#450](https://github.com/quokkify/marketdesk/pull/450))
+- remove dead wiring and unused dependencies ([#446](https://github.com/quokkify/marketdesk/pull/446))
+
+</details>
 
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/backend-v0.21.0...backend-v0.21.1) (2026-10-03)
 

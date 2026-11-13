@@ -2,21 +2,36 @@
 
 ## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-11-13)
 
+<!-- project-toolkit:release-notes v2 -->
+**At a glance:** ⚠️ 2 breaking · 1 new
 
-### ⚠ BREAKING CHANGES
+### ⚠️ Breaking changes
 
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
-* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447))
+> [!WARNING]
+> cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/pull/447))
+>
+> The Dashboard, Analytics and Listings pages, the notifications control, the bulk-action placeholders, the Notifications, API Keys, Telegram, Security and Hermes AI settings sections, the roadmap marketplace cards and the import panel are no longer part of the interface. The listing SEO agent and its creativity preset keep their stored values and can still be changed through `PATCH /api/settings/hermes`; no screen edits them.
 
-### ✨ Features
+> [!WARNING]
+> remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/pull/448))
+>
+> These endpoints no longer exist and answer 404 with the error code `NOT_FOUND`: `GET` and `PATCH /api/settings/notifications`, `GET /api/analytics/revenue`, `GET /api/analytics/listings`, `POST /api/hermes/run`, `POST /api/marketplaces/:id/import-preview`, `POST /api/marketplaces/:id/import`. `GET /api/settings/integrations` no longer returns the `telegram` and `api_keys` items.
+>
+> An API client that analysed the whole catalogue with `POST /api/hermes/run` calls `POST /api/hermes/products/:productId/run` once per product instead. The other removed endpoints have no replacement at this stage.
 
-* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+### ✨ New
 
+- reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/pull/434))
 
-### ♻️ Refactoring
-
-* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447)) ([2112b0a](https://github.com/quokkify/marketdesk/commit/2112b0aad98f52a9d26d9d928e0f23c2416e6996))
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+  > **Migration**
+  >
+  > - Migrations 042 (`hermes_events.source`) and 043 (`category_correction_operations.listing_id` nullable, `ON DELETE SET NULL`) run through the Compose `migrate` service or `npm run db:migrate`; both are idempotent.
+  > - Run `npm run env:init` (or set `JWT_SECRET` ≥ 32 chars and a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`) before the first boot.
+  > - For a real OLX deployment set `OLX_ADAPTER_MODE=real` and a publicly reachable `PUBLIC_BASE_URL`; the default `stub` mode labels everything Sandbox.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+  >
+  > https://claude.ai/code/session_01G7RDWHiEDE7j584o2tQQSL
 
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
