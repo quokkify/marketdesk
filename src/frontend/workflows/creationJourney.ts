@@ -95,6 +95,21 @@ export interface WizardProductContext {
 // `unknown` means the check itself failed; it is never reported as a disconnect.
 export type TargetConnection = 'connected' | 'disconnected' | 'unknown';
 
+// A hung check must not leave "Publish to OLX" waiting forever.
+export const CONNECTION_CHECK_TIMEOUT_MS = 5000;
+
+function checkTargetWithTimeout(
+  check: Promise<TargetConnection>,
+): Promise<TargetConnection> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<TargetConnection>((resolve) => {
+    timer = setTimeout(() => resolve('unknown'), CONNECTION_CHECK_TIMEOUT_MS);
+  });
+  return Promise.race([check.catch((): TargetConnection => 'unknown'), timeout]).finally(() =>
+    clearTimeout(timer),
+  );
+}
+
 export interface WizardProductDeps {
   createProduct: (values: ProductSubmissionValues) => Promise<{ id: string }>;
   // False only when the server says the product is gone.
@@ -138,7 +153,7 @@ export async function submitWizardProduct(
   }
   const target = submission.targetMarketplace;
   const connection: TargetConnection = target
-    ? await deps.checkTarget(target).catch((): TargetConnection => 'unknown')
+    ? await checkTargetWithTimeout(Promise.resolve().then(() => deps.checkTarget(target)))
     : 'disconnected';
   if (!target || connection === 'disconnected') {
     deps.clearDraft();

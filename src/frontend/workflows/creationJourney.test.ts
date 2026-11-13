@@ -3,7 +3,7 @@ import type { PublishListingPreview } from '../state/api/dto';
 import type { WizardSubmission } from '../components/forms/ProductWizardForm';
 import type { PublicationJourneyState } from './publicationJourneyContract';
 import { advancePublicationJourney } from './publicationJourneyGraph';
-import { runCreationJourney, submitWizardProduct } from './creationJourney';
+import { CONNECTION_CHECK_TIMEOUT_MS, runCreationJourney, submitWizardProduct } from './creationJourney';
 import type { CreationJourneyDeps, TargetConnection, WizardProductDeps } from './creationJourney';
 
 const marketplace = { id: 'marketplace-1', key: 'olx' as const };
@@ -450,6 +450,52 @@ describe('submitWizardProduct connection check and resume', () => {
       expect(outcome.kind).toBe('publish_started');
       if (outcome.kind !== 'publish_started') return;
       expect(outcome.journey.marketplaceKey).toBe('olx');
+    }
+  });
+
+  it('treats a connection check that hangs for 5000 ms as inconclusive', async () => {
+    jest.useFakeTimers();
+    try {
+      const deps = productDeps([], {
+        checkTarget: jest.fn(() => new Promise<TargetConnection>(() => undefined)),
+      });
+      let settled = false;
+      const result = submitWizardProduct(
+        submission(),
+        { createdProductId: null, marketplaces: connected },
+        deps,
+      ).finally(() => {
+        settled = true;
+      });
+
+      await jest.advanceTimersByTimeAsync(CONNECTION_CHECK_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+
+      const outcome = await result;
+      expect(CONNECTION_CHECK_TIMEOUT_MS).toBe(5000);
+      expect(outcome.kind).toBe('publish_started');
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('clears the connection check timer when the check answers in time', async () => {
+    jest.useFakeTimers();
+    try {
+      const deps = productDeps();
+
+      const outcome = await submitWizardProduct(
+        submission(),
+        { createdProductId: null, marketplaces: connected },
+        deps,
+      );
+
+      expect(outcome.kind).toBe('publish_started');
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
     }
   });
 
