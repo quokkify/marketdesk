@@ -74,4 +74,25 @@ describe('SyncMarketplaceUseCase', () => {
     expect(result.isErr()).toBe(true);
     expect(queue.jobs).toHaveLength(0);
   });
+
+  it('refuses to sync a marketplace other than OLX without enqueueing', async () => {
+    const marketplaces = new InMemoryMarketplaceRepository();
+    const listings = new InMemoryListingRepository();
+    const queue = new RecordingJobQueue<SyncMarketplaceJob>();
+    const useCase = new SyncMarketplaceUseCase(marketplaces, listings, queue);
+    const marketplace = unwrap(
+      Marketplace.create({ id: 'marketplace-3', workspaceId: 'workspace-1', key: 'allegro', name: 'Allegro' })
+    );
+    await marketplaces.save(marketplace);
+
+    const result = await useCase.execute({
+      marketplaceId: marketplace.id,
+      workspaceId: 'workspace-1',
+      actorId: 'user-1',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.message).toBe('Only OLX can be synced');
+    expect(queue.jobs).toHaveLength(0);
+  });
 });

@@ -55,6 +55,11 @@ export class MarketplaceSyncScheduler {
   async reconcile(marketplace: Marketplace): Promise<MarketplaceSyncScheduleContract> {
     const jobId = MarketplaceSyncScheduler.jobId(marketplace.id);
 
+    if (marketplace.key !== 'olx') {
+      await this.queue.removeRepeat(jobId);
+      return this.contract(marketplace);
+    }
+
     if (marketplace.syncMode === 'realtime') {
       await this.queue.removeRepeat(jobId);
       throw new InvalidStateError(
