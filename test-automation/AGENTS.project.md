@@ -17,3 +17,15 @@ starter names (`StarterConfig`, `starter.properties`, `TEST_MESSAGE`), which thi
   `@SingleThread`.
 - `verifyArchitecture` runs `HttpStatusConstantRule`: tests in `test.api` pass statuses as `HttpStatus` constants, and
   the build fails on a number literal such as `200`.
+- Browser tests live in the `test.ui` package and run only in `./gradlew uiTest`; `./gradlew test` excludes that
+  package. Page objects live in the package `page`.
+- UI base URI: Owner key `MARKETDESK_UI_BASE_URI`, read through `config.MarketDeskUiConfig.BASE_URI`, default in
+  `src/main/resources/marketdesk-ui.properties` (`http://127.0.0.1:3000`); `gradle/tests.gradle` forwards the system
+  property too.
+- With `BROWSER_REMOTE_URL` set (for example `http://127.0.0.1:4444/wd/hub`) the browser runs in the Selenium Grid,
+  and `MARKETDESK_UI_BASE_URI` must be an address the Grid container reaches. With `BROWSER_REMOTE_URL` unset,
+  `uiTest` uses a local browser against the default address.
+- In the script's stack the Grid container shares the application's network namespace
+  (`docker/selenium-grid/docker-compose.yml`, `network_mode: "service:app"`), so the script uses
+  `MARKETDESK_UI_BASE_URI=http://localhost:3000`. The application sends `upgrade-insecure-requests` and HSTS, which
+  browsers apply to every host except localhost, so a plain `http://app:3000` fails with `ERR_SSL_PROTOCOL_ERROR`.

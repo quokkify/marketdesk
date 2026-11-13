@@ -1,0 +1,10 @@
+services:
+  app:
+    ports:
+      - "127.0.0.1:${SELENIUM_PORT:-4444}:4444"
+  selenium:
+    image: selenium/standalone-chromium:4.52.0-20261101@sha256:b211549a4c35f11826bc1a7559b9f23ff055198517f8cb7d49ef74df01c5e38d
+    shm_size: 2g
+    network_mode: "service:app"
+    depends_on:
+      - app

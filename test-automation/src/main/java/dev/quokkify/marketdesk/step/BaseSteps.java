@@ -4,5 +4,6 @@ public abstract class BaseSteps {
 
   protected final HealthSteps healthSteps = new HealthSteps();
   protected final AuthSteps authSteps = new AuthSteps();
+  protected final LoginPageSteps loginPageSteps = new LoginPageSteps();
   protected final ProductSteps productSteps = new ProductSteps();
 }
