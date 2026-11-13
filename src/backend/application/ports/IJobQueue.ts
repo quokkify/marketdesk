@@ -80,8 +80,3 @@ export interface SyncMarketplaceJob {
   trigger?: 'manual' | 'scheduled';
   actorId?: string;
 }
-
-export interface HermesRunJob {
-  workspaceId: string;
-  trigger: 'scheduled' | 'manual' | 'event';
-}

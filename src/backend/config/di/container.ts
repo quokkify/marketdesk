@@ -85,10 +85,6 @@ import { OfflineHeuristicAIProvider } from '../../infrastructure/external/Offlin
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
-import {
-  HermesRunHandler,
-  type HermesEngine,
-} from '../../infrastructure/jobQueue/JobHandlers/HermesRunHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
@@ -134,7 +130,6 @@ import type {
   JobEnqueueOptions,
   PublishListingJob,
   SyncMarketplaceJob,
-  HermesRunJob,
 } from '../../application/ports/IJobQueue';
 
 // --- Presentation ---
@@ -367,7 +362,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   //    once the services they depend on exist.
   const publishQueue = createQueue<PublishListingJob>('publish-listing');
   const syncQueue = createQueue<SyncMarketplaceJob>('sync-marketplace');
-  const hermesQueue = createQueue<HermesRunJob>('hermes-run');
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
 
   // 6. Domain services.
@@ -695,27 +689,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   syncQueue.registerHandler((data) => syncHandler.handle(data));
 
-  // Adapt the Hermes application service to the handler's minimal HermesEngine port.
-  const hermesEnginePort: HermesEngine = {
-    run: async (data) => {
-      const result = await hermesService.runHermes({
-        workspaceId: data.workspaceId,
-        trigger: data.trigger,
-      });
-      // Throw on failure so the Bull job records a failure (and retries) instead
-      // of reporting eventsGenerated:0 as a success and swallowing the error (C2).
-      if (result.isErr()) {
-        throw result.error;
-      }
-      return {
-        workspaceId: data.workspaceId,
-        eventsGenerated: result.value.length,
-      };
-    },
-  };
-  const hermesHandler = new HermesRunHandler(hermesEnginePort, eventPublisher);
-  hermesQueue.registerHandler((data) => hermesHandler.handle(data));
-
   // 10. Assemble AppDeps.
   const deps: AppDeps = {
     productService,
@@ -753,7 +726,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const queues: ManagedQueue<unknown>[] = [
     publishQueue as ManagedQueue<unknown>,
     syncQueue as ManagedQueue<unknown>,
-    hermesQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

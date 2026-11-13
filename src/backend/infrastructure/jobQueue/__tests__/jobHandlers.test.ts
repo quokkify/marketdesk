@@ -8,7 +8,6 @@ import {
   type PublishAttemptCheckpoint,
   type PublishAttemptStore,
 } from '../JobHandlers/PublishListingHandler';
-import { HermesRunHandler, HermesEngine } from '../JobHandlers/HermesRunHandler';
 import type {
   IMarketplaceAdapter,
   PublishResult,
@@ -2207,27 +2206,5 @@ describe('PublishListingHandler', () => {
       expect((await listingRepo.findById('l-lifecycle'))?.status).toBe('live');
       expect((await productRepo.findById('p-lifecycle'))?.status).toBe(to);
     });
-  });
-});
-
-describe('HermesRunHandler', () => {
-  it('runs the injected engine and emits a completion event', async () => {
-    const engine: HermesEngine = {
-      run: jest.fn(async () => ({ workspaceId: 'w-1', eventsGenerated: 3 })),
-    };
-    const published: DomainEvent[] = [];
-    const events: IEventPublisher = {
-      publish: async (e) => {
-        published.push(e);
-      },
-    };
-    const handler = new HermesRunHandler(engine, events);
-
-    const result = await handler.handle({ workspaceId: 'w-1', trigger: 'manual' });
-
-    expect(engine.run).toHaveBeenCalledWith({ workspaceId: 'w-1', trigger: 'manual' });
-    expect(result.eventsGenerated).toBe(3);
-    expect(published[0].type).toBe('hermes.run.completed');
-    expect(published[0].payload).toMatchObject({ eventsGenerated: 3, trigger: 'manual' });
   });
 });
