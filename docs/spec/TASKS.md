@@ -9,10 +9,10 @@ The live implementation is tracked against the original PRD in [`TRACEABILITY.md
 
 ## Screen parity
 
-- #137 — Dashboard.
+- #137 — Dashboard (removed for the stage focus, #444).
 - #172 — Products catalogue.
 - #138 — guided product wizard.
-- #173 — Analytics.
+- #173 — Analytics (screen removed for the stage focus, #444).
 - #139 — Hermes overview and activity feed.
 - #174 — Marketplaces and brand assets.
 - #140–#149 — Settings shell, persistence and functional sections.

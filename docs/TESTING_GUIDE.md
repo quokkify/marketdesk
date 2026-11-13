@@ -1,6 +1,6 @@
 # MarketDesk tester guide
 
-This guide takes you from a fresh clone to a tested seller journey: create an account, connect the sandbox OLX account, add a product with photos, publish it, review AI suggestions, and look at the dashboard and analytics. It assumes you did not build the project.
+This guide takes you from a fresh clone to a tested seller journey: create an account, connect the sandbox OLX account, add a product with photos, publish it, review AI suggestions. It assumes you did not build the project.
 
 MarketDesk is a prototype and is not production-certified (see the [project status](../.github/project-status.yml)). Report anything that looks broken, and anything that looks real but should not be.
 
@@ -66,7 +66,7 @@ The app logs its active modes once at startup. Look for `Runtime modes` in `dock
 
 1. Open <http://localhost:3000>. You are sent to the sign-in page.
 2. Choose **Create an account**, enter your e-mail, a workspace name and a password of at least 8 characters, then choose **Create account**.
-3. You land on the dashboard.
+3. You land on **Products**.
 
 A workspace is created automatically; you can name it during sign-up. It also gets a disconnected OLX entry, which you connect in the first step below. All data is scoped to your workspace.
 
@@ -85,7 +85,8 @@ Follow the steps in order. Each step lists what you should see. If reality diffe
 What to check:
 
 - A **Sandbox** label is shown wherever OLX state appears: the Marketplaces page, Settings (Marketplace accounts), the product wizard, the product page and the publication review. OLX state that looks real without that label is a bug.
-- OLX is the only channel you can connect. Every other marketplace is a roadmap card with no connect action.
+- OLX is the only marketplace MarketDesk shows. There is no other channel to connect.
+- While OLX is connected, the OLX card has a **Sync now** button. It refreshes the listing state from the sandbox; views and watchers are simulated and grow on every sync.
 
 Connect first, so that the product you create next can be published.
 
@@ -117,22 +118,15 @@ What to check:
 ### 4. Review Hermes suggestions
 
 1. On the product page, choose **Suggest improvements**. You get proposed title and description wording and a price suggestion, each with its reason. They are for review only. To use one, edit the product or listing yourself.
-2. Choose **Analyze with Hermes**. This asks the listing SEO agent, which is on by default under Settings (Hermes), for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
+2. Choose **Analyze with Hermes**. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
 
 What to check:
 
 - **Which provider answered.** With no Hermes server, which is the default for testers, suggestions come from the built-in offline heuristics. Their text ends with "Heuristic offline suggestion; Hermes was not consulted.", price suggestions carry low confidence, and the Hermes AI page shows which provider is active.
-- **Review only.** Offline suggestions never apply themselves, whatever autonomy level you set in Settings.
+- **Review only.** Offline suggestions never apply themselves, whatever autonomy level is stored for the workspace.
 - **Modest results.** Offline heuristics are simple rules: capitalisation and a condition suffix in titles, whitespace tidying in descriptions, and a price change only when the price is zero or a listing has many real views and no sales. Simulated sandbox views are not counted. "No suggestion" is a normal answer.
 
 To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a native Hermes Agent API Server that the app can reach, then run `docker compose up -d --force-recreate app`. See the [Hermes integration boundary](development.md#hermes-integration-boundary). `HERMES_PROVIDER_MODE` chooses the routing: `auto` (the default) uses Hermes while it is configured and reachable and the heuristics otherwise, `hermes` never falls back, and `offline` never calls Hermes.
-
-### 5. Look at the dashboard and analytics
-
-1. Open **Dashboard**. Your sandbox listing counts as an active listing. Items that need attention and recent activity are listed there.
-2. Open **Analytics**. The sandbox has no buyers, so sales, revenue and profit stay empty. Views and watchers are simulated by the OLX sandbox and grow on every sync; a notice at the top of the page says so. Run a sync from **Marketplaces** to refresh listing numbers.
-
-What to check: empty states say what is missing, and no chart or tile shows invented numbers.
 
 ## What works and known limitations
 
@@ -142,21 +136,14 @@ What works in this setup:
 - Product creation with photo upload, editing and below-cost confirmation.
 - Connecting the sandbox OLX account, the publication review and publishing to the sandbox.
 - Review-only AI suggestions from Hermes or the offline heuristics.
-- Dashboard and analytics over what exists in your workspace.
 
 Known limitations:
 
 | Area | What you will see | Status |
 | --- | --- | --- |
 | Sandbox only | No real OLX call is ever made. The OLX connection, its category list and its publication quota are built-in stand-ins. Sandbox adverts have no OLX page and show a **Sandbox advert** label instead of a link. A real OLX connection needs approved OLX Partner API credentials and is not part of this setup. | Approved deviation: Sandbox mode |
-| Importing OLX adverts | Unavailable in sandbox mode. An import action, if shown, reports that import is not available in sandbox mode. | Approved deviation: Sandbox mode |
-| Other marketplaces | Roadmap cards with no connect action. | Approved deviation: Marketplace availability |
 | Offline AI | Without a reachable Hermes Agent API server, suggestions come from simple built-in heuristics. They are labelled as offline and always wait for review. | Approved deviation: Sandbox mode |
 | Hermes runs | Whole-catalogue and scheduled runs are not started from the UI. Analyze one product at a time. Every analysis is review-only. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
-| Security, API keys, Telegram | Settings shows them as roadmap panels or disabled rows labelled "Not available in this release". | Approved deviation: Settings |
-| Bulk actions | After selecting products, Add tag, Edit price and Delete are disabled. Export CSV works for the selection. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
-| Notifications | The notifications button is disabled. | Open gap, see [TRACEABILITY.md](spec/TRACEABILITY.md) |
-| Analytics | No sales in sandbox, because there are no buyers. Views and watchers are simulated by the OLX sandbox, grow on every sync and are labelled as sandbox data. | Consequence of the sandbox |
 | Price edits | Editing the price of a live listing by hand changes MarketDesk only. OLX is updated only when the listing is published again. Approving a Hermes price suggestion applies the price and queues an update for live listings. | By design |
 | Accounts | No e-mail confirmation, password reset or password change. | Not built yet |
 
