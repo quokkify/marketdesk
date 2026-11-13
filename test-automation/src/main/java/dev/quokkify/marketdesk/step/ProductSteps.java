@@ -19,4 +19,9 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
   public ValidatableResponse getProductsUnauthenticated() {
     return service.getProducts();
   }
+
+  @Step("Get products as an authenticated user")
+  public ValidatableResponse getProducts(String token) {
+    return service.getProducts(token);
+  }
 }

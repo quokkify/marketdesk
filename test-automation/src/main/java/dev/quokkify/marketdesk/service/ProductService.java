@@ -11,6 +11,14 @@ public class ProductService extends ApiService {
 
   private static final String PRODUCTS = "/api/products";
 
+  private static final String AUTHORIZATION = "Authorization";
+  private static final String BEARER = "Bearer ";
+
+  public ValidatableResponse getProducts(String token) {
+    return get(RestAssured.given().spec(getRequestSpecification(MarketDeskApiConfig.BASE_URI, ContentType.JSON))
+        .header(AUTHORIZATION, BEARER + token), PRODUCTS);
+  }
+
   public ValidatableResponse getProducts() {
     return get(RestAssured.given().spec(getRequestSpecification(MarketDeskApiConfig.BASE_URI, ContentType.JSON)), PRODUCTS);
   }
