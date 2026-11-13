@@ -1,1 +1,1 @@
-{"id":"93f2851c660183029344567599556698.d41d8cd98f00b204e9800998ecf8427e","fullName":"dev.quokkify.marketdesk.test.api.HealthTest.reportsDatabaseAndRedisReadiness","name":"reportsDatabaseAndRedisReadiness","status":"passed","testResultsByEnv":{"default":"9a547f74fbc436aef9a22fa9c98f9cb8"}}
+{"id":"93f2851c660183029344567599556698.d41d8cd98f00b204e9800998ecf8427e","fullName":"dev.quokkify.marketdesk.test.api.HealthTest.reportsDatabaseAndRedisReadiness","name":"reportsDatabaseAndRedisReadiness","status":"passed","testResultsByEnv":{"default":"efd4d3c83323a8edf0f4c6bbe27cba53"}}
