@@ -10,7 +10,14 @@ import type { MarketplaceOAuthService } from '../../../application/services/Mark
 import type { MarketplaceSyncScheduler } from '../../../application/services/MarketplaceSyncScheduler';
 import type { OlxPublicationQuotaService } from '../../../application/services/OlxPublicationQuotaService';
 import type { SyncMode } from '../../../../shared/types';
-import { DomainError, InvalidStateError, NotFoundError } from '../../../domain/shared/DomainError';
+import type { OlxTaxonomyResolverFactory } from '../../../application/services/ProductRecheckService';
+import {
+  DomainError,
+  InvalidStateError,
+  NotFoundError,
+  ServiceUnavailableError,
+  ValidationError,
+} from '../../../domain/shared/DomainError';
 import { presentMarketplace } from '../../../application/dto/presenters';
 import { ok } from '../formatters/ResponseFormatter';
 import type { ErrorLogger } from '../middleware/ErrorHandlingMiddleware';
@@ -30,6 +37,7 @@ export class MarketplaceController {
     private readonly olxQuotas: OlxPublicationQuotaService | undefined,
     private readonly oauthReturnUrl: string,
     private readonly olxAdapterMode: OlxAdapterMode,
+    private readonly olxTaxonomyResolver: OlxTaxonomyResolverFactory | undefined,
     private readonly logger?: ErrorLogger,
   ) {}
 
@@ -68,6 +76,25 @@ export class MarketplaceController {
       actorId: req.user!.userId,
     });
     ok(res, result);
+  };
+
+  searchCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+      routeParam(req.params.id),
+      req.user!.workspaceId!,
+    );
+    if (!marketplace || marketplace.key !== 'olx' || !marketplace.isConnected() || !this.olxTaxonomyResolver) {
+      return next(new NotFoundError('OLX taxonomy is unavailable for this marketplace'));
+    }
+    const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    if (query.length < 2 || query.length > 80) return next(new ValidationError('Category search must contain 2–80 characters'));
+    try {
+      const resolver = await this.olxTaxonomyResolver(marketplace.id);
+      if (!resolver.search) return next(new ServiceUnavailableError('OLX category search is unavailable'));
+      ok(res, await resolver.search(query));
+    } catch {
+      next(new ServiceUnavailableError('OLX category search is temporarily unavailable'));
+    }
   };
 
   list = async (req: Request, res: Response): Promise<void> => {
