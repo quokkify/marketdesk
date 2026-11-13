@@ -2091,7 +2091,7 @@ describe('Presentation API', () => {
   });
 
   describe('persistent settings contracts', () => {
-    it('round-trips principal-scoped workspace, preferences, notifications, and Hermes settings', async () => {
+    it('round-trips principal-scoped workspace, preferences, and Hermes settings', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
 
       const workspace = await auth(request(app).patch('/api/settings/workspace')).send({
@@ -2115,15 +2115,6 @@ describe('Presentation API', () => {
         themeMode: 'dark',
         density: 'compact',
         revision: 1,
-      });
-
-      const notifications = await auth(request(app).patch('/api/settings/notifications')).send({
-        events: { new_sale: { telegram: true, email: false } },
-      });
-      expect(notifications.body.data.events.new_sale).toEqual({
-        email: false,
-        inApp: true,
-        telegram: true,
       });
 
       const hermes = await auth(request(app).patch('/api/settings/hermes')).send({
@@ -2230,7 +2221,7 @@ describe('Presentation API', () => {
       expect(legacy.body.data).toMatchObject({ name: 'Legacy rename', currency: 'EUR' });
     });
 
-    it('returns marketplace connection state and unavailable surfaces without credential fields', async () => {
+    it('returns marketplace connection state without credential fields', async () => {
       const { app } = await buildTestApp({ seedWorkspace: true });
       const response = await auth(request(app).get('/api/settings/integrations'));
       expect(response.status).toBe(200);
@@ -2247,29 +2238,33 @@ describe('Presentation API', () => {
             account: { handle: 'OLX account', status: 'connected' },
             sandbox: true,
           },
-          {
-            category: 'telegram',
-            id: 'telegram',
-            name: 'Telegram',
-            available: false,
-            configured: false,
-          },
-          {
-            category: 'api_keys',
-            id: 'api_keys',
-            name: 'API keys',
-            available: false,
-            configured: false,
-            apiKeySummary: { total: 0, active: 0, revoked: 0 },
-          },
         ])
       );
       expect(
         response.body.data.items.map((item: { category: string }) => item.category).sort()
-      ).toEqual(['api_keys', 'marketplace', 'telegram']);
+      ).toEqual(['marketplace']);
       expect(JSON.stringify(response.body)).not.toMatch(
         /token|secret|hash|credentials|scopes|access[_-]?key|private[_-]?key/i
       );
+    });
+
+    it.each([
+      ['get', '/api/settings/notifications'],
+      ['patch', '/api/settings/notifications'],
+    ] as const)('no longer serves %s %s', async (method, path) => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app)[method](path)).send({});
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('lists only marketplace integrations', async () => {
+      const { app } = await buildTestApp();
+      const res = await auth(request(app).get('/api/settings/integrations'));
+      expect(res.status).toBe(200);
+      expect(res.body.data.items.map((item: { category: string }) => item.category)).toEqual([
+        'marketplace',
+      ]);
     });
   });
 

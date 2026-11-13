@@ -4,11 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import type {
-  IntegrationsSettings,
-  UserPreferences,
-  WorkspaceSettings,
-} from '@shared/types';
+import type { IntegrationsSettings, UserPreferences, WorkspaceSettings } from '@shared/types';
 import { baseApi } from '../state/api/baseApi';
 import { settingsApi, type SettingsPrincipal } from '../state/api/settingsApi';
 import authReducer, { setCredentials } from '../state/slices/authSlice';
@@ -49,15 +45,6 @@ const integrations: IntegrationsSettings = {
       connected: true,
       account: { handle: 'seller@example.test', status: 'connected' },
       sandbox: true,
-    },
-    { category: 'telegram', id: 'telegram', name: 'Telegram', available: false, configured: false },
-    {
-      category: 'api_keys',
-      id: 'api_keys',
-      name: 'API keys',
-      available: false,
-      configured: false,
-      apiKeySummary: { total: 0, active: 0, revoked: 0 },
     },
   ],
 };

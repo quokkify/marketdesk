@@ -49,9 +49,7 @@ function oauthStatus(overrides: Partial<MarketplaceOAuthStatus> = {}): Marketpla
 function fixtures(check: jest.Mock = jest.fn().mockResolvedValue(oauthStatus())) {
   const getAppCredentialStatus = jest.fn();
   const oauth = { check, getAppCredentialStatus } as unknown as MarketplaceOAuthService;
-  const settings = {
-    getApiKeySummary: jest.fn().mockResolvedValue({ total: 0, active: 0, revoked: 0 }),
-  } as unknown as ISettingsRepository;
+  const settings = {} as unknown as ISettingsRepository;
   return { check, getAppCredentialStatus, oauth, settings };
 }
 
@@ -281,38 +279,5 @@ describe('SettingsController.getIntegrations sandbox flag', () => {
     );
 
     expect(item.sandbox).toBe(false);
-  });
-});
-
-describe('SettingsController.getIntegrations unavailable surfaces', () => {
-  it.each(['telegram', 'api_keys'] as const)(
-    'marks %s as unavailable in this release',
-    async (id) => {
-      const { oauth, settings } = fixtures();
-      const repo = await seedMarketplaces();
-
-      const items = await readIntegrations(repo, settings, oauth);
-
-      expect(items.find((item) => item.id === id)).toMatchObject({
-        category: id,
-        available: false,
-      });
-    }
-  );
-
-  it('keeps the redacted API key summary', async () => {
-    const { oauth } = fixtures();
-    const settings = {
-      getApiKeySummary: jest.fn().mockResolvedValue({ total: 3, active: 2, revoked: 1 }),
-    } as unknown as ISettingsRepository;
-    const repo = await seedMarketplaces();
-
-    const items = await readIntegrations(repo, settings, oauth);
-
-    expect(items.find((item) => item.id === 'api_keys')).toMatchObject({
-      available: false,
-      configured: true,
-      apiKeySummary: { total: 3, active: 2, revoked: 1 },
-    });
   });
 });

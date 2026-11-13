@@ -60,9 +60,9 @@ function visibleText(html: string): string {
     .trim();
 }
 
-type MarketplaceItem = Extract<IntegrationSettingsStatus, { category: 'marketplace' }>;
-
-function marketplaceItem(overrides: Partial<MarketplaceItem> = {}): MarketplaceItem {
+function marketplaceItem(
+  overrides: Partial<IntegrationSettingsStatus> = {}
+): IntegrationSettingsStatus {
   return {
     category: 'marketplace',
     id: 'marketplace-olx',

@@ -86,24 +86,6 @@ export class SettingsController {
     );
   };
 
-  getNotifications = async (req: Request, res: Response): Promise<void> => {
-    ok(
-      res,
-      await this.settings.getNotificationPreferences(req.user!.workspaceId!, req.user!.userId)
-    );
-  };
-
-  updateNotifications = async (req: Request, res: Response): Promise<void> => {
-    ok(
-      res,
-      await this.settings.updateNotificationPreferences(
-        req.user!.workspaceId!,
-        req.user!.userId,
-        req.body
-      )
-    );
-  };
-
   getHermes = async (req: Request, res: Response): Promise<void> => {
     const workspace = await this.workspace(req.user!.workspaceId!);
     ok(res, {
@@ -154,7 +136,7 @@ export class SettingsController {
   getIntegrations = async (req: Request, res: Response): Promise<void> => {
     const workspaceId = req.user!.workspaceId!;
     const marketplaces = await this.marketplaces.findByWorkspace(workspaceId);
-    const marketplaceItems: IntegrationSettingsStatus[] = await Promise.all(
+    const items: IntegrationSettingsStatus[] = await Promise.all(
       marketplaces.map(async (marketplace) => {
         const isOlx = marketplace.key === 'olx';
         const status: MarketplaceOAuthStatus | null = isOlx
@@ -180,25 +162,6 @@ export class SettingsController {
         };
       })
     );
-    const apiKeySummary = await this.settings.getApiKeySummary(workspaceId);
-    const items: IntegrationSettingsStatus[] = [
-      ...marketplaceItems,
-      {
-        category: 'telegram',
-        id: 'telegram',
-        name: 'Telegram',
-        available: false,
-        configured: false,
-      },
-      {
-        category: 'api_keys',
-        id: 'api_keys',
-        name: 'API keys',
-        available: false,
-        configured: apiKeySummary.active > 0,
-        apiKeySummary,
-      },
-    ];
     ok(res, { items });
   };
 }

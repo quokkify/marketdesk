@@ -194,30 +194,6 @@ export const updateUserPreferencesSchema = z
   .strict()
   .refine(nonEmptyPatch, { message: 'At least one field must be provided' });
 
-const notificationChannelsSchema = z
-  .object({
-    email: z.boolean().optional(),
-    inApp: z.boolean().optional(),
-    telegram: z.boolean().optional(),
-  })
-  .strict()
-  .refine(nonEmptyPatch, { message: 'At least one channel must be provided' });
-
-export const updateNotificationPreferencesSchema = z
-  .object({
-    events: z
-      .object({
-        new_sale: notificationChannelsSchema.optional(),
-        competitor_price_change: notificationChannelsSchema.optional(),
-        listing_needs_attention: notificationChannelsSchema.optional(),
-        sync_error: notificationChannelsSchema.optional(),
-        weekly_performance_report: notificationChannelsSchema.optional(),
-      })
-      .strict()
-      .refine(nonEmptyPatch, { message: 'At least one event must be provided' }),
-  })
-  .strict();
-
 export const updateHermesSettingsSchema = z
   .object({
     autonomyLevel: z.enum(AUTONOMY_LEVEL_LIST as [string, ...string[]]).optional(),
