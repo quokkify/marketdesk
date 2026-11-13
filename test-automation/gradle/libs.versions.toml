@@ -5,9 +5,6 @@ checkstyle = "14.3.0"
 spotbugs-plugin = "6.5.13"
 log4j = "2.26.1"
 aspectj = "1.9.27"
-# q4j selenide publishes Selenide at runtime scope only, and page objects in src/main compile against it;
-# keep this version equal to the one the pinned q4j release uses.
-selenide = "7.19.0"
 
 [libraries]
 q4j-config = { module = "dev.quokkify:config", version.ref = "q4j" }
@@ -16,7 +13,6 @@ aspectj-weaver = { module = "org.aspectj:aspectjweaver", version.ref = "aspectj"
 q4j-sql = { module = "dev.quokkify:sql", version.ref = "q4j" }
 q4j-tyrus = { module = "dev.quokkify:tyrus", version.ref = "q4j" }
 q4j-selenide = { module = "dev.quokkify:selenide", version.ref = "q4j" }
-selenide = { module = "com.codeborne:selenide", version.ref = "selenide" }
 q4j-rest-assured = { module = "dev.quokkify:rest-assured", version.ref = "q4j" }
 q4j-jackson-json = { module = "dev.quokkify:jackson-json", version.ref = "q4j" }
 q4j-architecture = { module = "dev.quokkify:architecture", version.ref = "q4j" }

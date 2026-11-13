@@ -7,8 +7,13 @@ dependencies {
     implementation libs.q4j.testng
     implementation libs.q4j.sql
     implementation libs.q4j.tyrus
-    implementation libs.q4j.selenide
-    implementation libs.selenide
+    implementation(libs.q4j.selenide) {
+        // q4j publishes Selenide at runtime scope, but page objects under src/main compile
+        // against its types; ask for the runtime variant on the compile classpath too.
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
+        }
+    }
     implementation libs.q4j.rest.assured
     implementation libs.q4j.jackson.json
     testImplementation libs.testng
