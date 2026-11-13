@@ -21,7 +21,7 @@ public class ProductAuthorizationTest extends BaseTest {
   @Test
   public void listsNoProductsForNewWorkspace() {
     AccountPojo account = authSteps.registerNewAccount();
-    ValidatableResponse response = productSteps.getProducts(account.token());
+    ValidatableResponse response = productSteps.getProducts(account);
     productSteps.verify()
         .verifyResponseStatusCode(response, HttpStatus.SC_OK)
         .hasSucceeded(response)

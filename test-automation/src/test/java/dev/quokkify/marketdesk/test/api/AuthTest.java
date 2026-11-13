@@ -12,7 +12,7 @@ public class AuthTest extends BaseTest {
   @Test
   public void registersAccountAndReadsCurrentUser() {
     AccountPojo account = authSteps.registerNewAccount();
-    ValidatableResponse response = authSteps.getCurrentUser(account.token());
+    ValidatableResponse response = authSteps.getCurrentUser(account);
     authSteps.verify()
         .verifyResponseStatusCode(response, HttpStatus.SC_OK)
         .hasSucceeded(response)

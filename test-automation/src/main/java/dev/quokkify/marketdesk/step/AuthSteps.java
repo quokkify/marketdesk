@@ -29,8 +29,9 @@ public class AuthSteps extends ApiSteps<AuthVerification> {
     return service.login(new CredentialsPojo(email, password));
   }
 
+  // Takes the account, not its token: Allure stores every step parameter in the published report.
   @Step("Get the current user")
-  public ValidatableResponse getCurrentUser(String token) {
-    return service.getCurrentUser(token);
+  public ValidatableResponse getCurrentUser(AccountPojo account) {
+    return service.getCurrentUser(account.token());
   }
 }
