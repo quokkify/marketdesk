@@ -165,6 +165,25 @@ export function buildWizardMarketplaceOptions(
   });
 }
 
+function connectedWizardKeys(marketplaces: Marketplace[] | undefined): Set<MarketplaceKey> {
+  return new Set(
+    buildWizardMarketplaceOptions(marketplaces)
+      .filter((option) => option.connected)
+      .map((option) => option.key)
+  );
+}
+
+export function shouldClearWizardTarget(
+  targetMarketplace: MarketplaceKey | null,
+  marketplaces: Marketplace[] | undefined
+): boolean {
+  return (
+    targetMarketplace !== null &&
+    marketplaces !== undefined &&
+    !connectedWizardKeys(marketplaces).has(targetMarketplace)
+  );
+}
+
 export function validateWizardStep(
   step: number,
   values: ProductFormValues,
@@ -200,11 +219,7 @@ export function validateWizardStep(
     };
   }
 
-  const connectedKeys = new Set(
-    (marketplaces ?? [])
-      .filter((marketplace) => marketplace.connected)
-      .map((marketplace) => marketplace.key)
-  );
+  const connectedKeys = connectedWizardKeys(marketplaces);
   // Without a connected marketplace the product is created as a draft.
   if (connectedKeys.size === 0) return { fieldErrors };
   if (!targetMarketplace || !connectedKeys.has(targetMarketplace)) {
@@ -450,13 +465,7 @@ export const ProductWizardForm: React.FC<ProductWizardFormProps> = ({
   }, [activeStep, onDraftChange, targetMarketplace, values]);
 
   useEffect(() => {
-    if (
-      targetMarketplace &&
-      marketplaces &&
-      !marketplaces.some(
-        (marketplace) => marketplace.key === targetMarketplace && marketplace.connected
-      )
-    ) {
+    if (shouldClearWizardTarget(targetMarketplace, marketplaces)) {
       setTargetMarketplace(null);
     }
   }, [marketplaces, targetMarketplace]);

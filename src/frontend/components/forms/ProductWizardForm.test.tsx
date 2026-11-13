@@ -10,6 +10,7 @@ import {
   firstWizardStepWithErrors,
   NoMarketplaceConnectedCard,
   ProductWizardForm,
+  shouldClearWizardTarget,
   validateWizardStep,
   verifyWizardMarketplaceReadiness,
   WizardReviewSummary,
@@ -115,6 +116,30 @@ describe('ProductWizardForm required-step validation', () => {
       'Select a connected marketplace.'
     );
     expect(validateWizardStep(4, validValues(), 'olx', [connected])).toEqual({ fieldErrors: {} });
+  });
+
+  it('ignores a connected marketplace that is not OLX when validating the Marketplace step', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(validateWizardStep(4, validValues(), null, [allegro])).toEqual({ fieldErrors: {} });
+  });
+
+  it('rejects a non-OLX target even when such a row is connected', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(
+      validateWizardStep(4, validValues(), 'allegro', [marketplace(), allegro]).marketplaceError
+    ).toBe('Select a connected marketplace.');
+  });
+
+  it('clears a restored target that is not a connected wizard option', () => {
+    const allegro = marketplace({ id: 'marketplace-allegro', key: 'allegro', name: 'Allegro' });
+
+    expect(shouldClearWizardTarget('allegro', [marketplace(), allegro])).toBe(true);
+    expect(shouldClearWizardTarget('olx', [marketplace({ connected: false })])).toBe(true);
+    expect(shouldClearWizardTarget('olx', [marketplace()])).toBe(false);
+    expect(shouldClearWizardTarget('olx', undefined)).toBe(false);
+    expect(shouldClearWizardTarget(null, [marketplace()])).toBe(false);
   });
 });
 
