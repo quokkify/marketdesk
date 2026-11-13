@@ -28,6 +28,19 @@ assert SPEC is not None and SPEC.loader is not None
 ENRICH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ENRICH)
 NATIVE_DIRECTORY = None
+REPOSITORY = 'quokkify/marketdesk'
+
+
+def source_pr(note: str) -> dict[str, str]:
+    return {'title': 'feat(release): scoped fixture', 'body': '## Release note\n' + note}
+
+
+def release_notes(number: int, note: str) -> str:
+    return ENRICH.render_notes([ENRICH.make_entry(number, source_pr(note))], [], ENRICH.pull_link(REPOSITORY))
+
+
+def release_heading(component: str) -> str:
+    return f'## [0.22.0](https://github.com/{REPOSITORY}/compare/{component}-v0.21.0...{component}-v0.22.0) (2026-10-04)'
 
 
 def git(*args: str) -> str:
@@ -254,42 +267,71 @@ class HistoryChecks(unittest.TestCase):
         self.assertEqual({c: p.as_posix() for c, p in targets}, AUDIT['targets'])
         for component, text in read_histories().items():
             text = '# Changelog\n\n' + text[text.index('## [0.21.0]'):]
-            self.assertEqual(ENRICH.source_pr_numbers(text, 'quokkify/marketdesk'), [339] if component == 'backend' else [341])
+            number = 339 if component == 'backend' else 341
+            self.assertEqual(ENRICH.source_pr_numbers(text, REPOSITORY), [number])
             legacy = text[text.index('## Inherited legacy history'):]
-            prs = [{'number': 311, 'body': '## Highlight\nDo not resurrect inherited highlights.'}] if component in AUDIT['rich_assignments'] else []
-            prs.append({'number': 341, 'body': '## Highlight\nCurrent stream only.'})
-            updated = ENRICH.enrich_changelog(text, prs)
+            sources = {number: source_pr('Current stream only.')}
+            if component in AUDIT['rich_assignments']:
+                sources[311] = source_pr('Do not resurrect inherited highlights.')
+            updated, notes = ENRICH.render_changelog(text, REPOSITORY, sources)
+            self.assertIn('Current stream only.', notes)
+            self.assertIn(notes, updated)
             self.assertTrue(updated.endswith(legacy))
-            self.assertEqual(updated, ENRICH.enrich_changelog(updated, prs))
+            # A rendered top section is a fixed point that no longer consults source PRs.
+            self.assertEqual((updated, notes), ENRICH.render_changelog(updated, REPOSITORY, {}))
             self.assertNotIn('Do not resurrect', updated)
 
     def test_multi_component_lifecycle_and_inactive_stream(self):
-        prs = {c: [{'number': n, 'body': '## Highlight\n' + c + ' only.'}] for c, n in [('backend', 901), ('frontend', 902), ('assets', 903)]}
-        body = 'Release Please generated header\n\n' + '\n'.join(f'<details><summary>{c}: 0.22.0</summary>\n\n### Features\n\nGenerated {c} notes.\n</details>' for c in prs)
-        rich = {c: ENRICH._render_entries(p, set()) for c, p in prs.items()}
-        updated = ENRICH.enrich_component_release_body(body, rich)
-        self.assertEqual(updated, ENRICH.enrich_component_release_body(updated, rich))
-        for c in prs:
-            notes = updated.split(f'<details><summary>{c}:', 1)[1].split('</details>', 1)[0]
-            self.assertIn(c + ' only.', notes)
-            for other in set(prs) - {c}:
-                self.assertNotIn(other + ' only.', notes)
-        self.assertEqual(ENRICH.release_body_components('<details><summary>backend: 0.22.0</summary>\n</details>'), {'backend'})
+        numbers = {'backend': 901, 'frontend': 902, 'assets': 903}
+        header = 'Release Please generated header\n\n'
+        body = header + '\n'.join(f'<details><summary>{c}: 0.22.0</summary>\n\n{release_heading(c)}\n\n### Features\n\nGenerated {c} notes.\n</details>' for c in numbers)
+        notes = {c: (release_heading(c), release_notes(n, c + ' only.')) for c, n in numbers.items()}
+        updated = ENRICH.replace_component_notes(body, notes)
+        self.assertEqual(updated, ENRICH.replace_component_notes(updated, notes))
+        self.assertTrue(updated.startswith(header))
+        for c in numbers:
+            block = updated.split(f'<details><summary>{c}:', 1)[1].split('</details>', 1)[0]
+            self.assertIn(release_heading(c), block)
+            self.assertIn(c + ' only.', block)
+            self.assertNotIn(f'Generated {c} notes.', block)
+            for other in set(numbers) - {c}:
+                self.assertNotIn(other + ' only.', block)
+        # A stream without rendered notes keeps what Release Please generated for it.
+        partial = ENRICH.replace_component_notes(body, {'backend': notes['backend']})
+        self.assertIn('backend only.', partial)
+        for inactive in ['frontend', 'assets']:
+            self.assertIn(f'Generated {inactive} notes.', partial)
+        backend_only = f'<details><summary>backend: 0.22.0</summary>\n\n{release_heading("backend")}\n</details>'
+        self.assertEqual(ENRICH.release_body_components(backend_only), {'backend'})
+        with self.assertRaises(ENRICH.EnrichmentError):
+            ENRICH.replace_component_notes(backend_only, notes)
+        with self.assertRaises(ENRICH.EnrichmentError):
+            ENRICH.replace_component_notes(backend_only, {'backend': (release_heading('frontend'), notes['backend'][1])})
 
     def test_separator_and_plain_notes_are_idempotent(self):
-        """Retain generated separators/footer content through repeated enrichments."""
-        rich = ENRICH._render_entries([{'number': 901, 'body': '## Highlight\nBackend context.'}], set())
-        for notes in ['\nGenerated notes.\n\n---\nFooter.\n', '\nGenerated notes.\n---\nFooter.\n', '\nGenerated notes without headings or separators.\n']:
-            with self.subTest(notes=notes):
-                body = '<details><summary>backend: 0.22.0</summary>\n' + notes + '</details>'
-                first = ENRICH.enrich_component_release_body(body, {'backend': rich})
+        """Retain the Release Please header and footer through repeated enrichments."""
+        heading = release_heading('backend')
+        notes = release_notes(901, 'Backend context.')
+        for generated in ['### Features\n\n* Generated notes.\n', '* Generated notes.', 'Generated notes without headings.\n', '']:
+            with self.subTest(generated=generated):
+                single = f'Header.\n---\n\n\n{heading}\n\n{generated}\n---\nFooter.\n'
+                first = ENRICH.replace_body_notes(single, heading, notes)
                 for _ in range(3):
-                    self.assertEqual(first, ENRICH.enrich_component_release_body(first, {'backend': rich}))
-                self.assertIn('Generated notes', first)
-                if 'Footer.' in notes:
-                    self.assertIn('\n---\nFooter.', first)
-                single = ENRICH.enrich_release_body(notes, rich)
-                self.assertEqual(single, ENRICH.enrich_release_body(single, rich))
+                    self.assertEqual(first, ENRICH.replace_body_notes(first, heading, notes))
+                component = f'Header.\n---\n<details><summary>backend: 0.22.0</summary>\n\n{heading}\n\n{generated}\n</details>\n\n---\nFooter.\n'
+                first_component = ENRICH.replace_component_notes(component, {'backend': (heading, notes)})
+                for _ in range(3):
+                    self.assertEqual(first_component, ENRICH.replace_component_notes(first_component, {'backend': (heading, notes)}))
+                for body in [first, first_component]:
+                    self.assertTrue(body.startswith('Header.\n---\n'))
+                    self.assertTrue(body.endswith('\n---\nFooter.\n'))
+                    self.assertEqual(body.count(heading), 1)
+                    self.assertIn('Backend context.', body)
+                    self.assertNotIn('Generated notes', body)
+        for broken in [f'{heading}\n\nNo delimiter.\n', f'Header.\n---\n{heading}\n\nNo footer.\n',
+                       f'Header.\n---\n{release_heading("frontend")}\n\n---\nFooter.\n']:
+            with self.subTest(broken=broken), self.assertRaises(ENRICH.EnrichmentError):
+                ENRICH.replace_body_notes(broken, heading, notes)
 
     def test_native_next_release_preserves_inherited_history(self):
         if NATIVE_DIRECTORY is None:
@@ -310,16 +352,19 @@ class HistoryChecks(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     verify_baseline(candidate.replace(bullet, '', 1), corrected)
             self.assertIn(original[original.index('## [0.21.0]'):].rstrip(), next_release)
-            self.assertEqual(ENRICH.source_pr_numbers(next_release, 'quokkify/marketdesk'), [901])
-            updated = ENRICH.enrich_changelog(next_release, [{'number': 901, 'body': '## Highlight\nNext native release.'}])
-            self.assertIn('Next native release.', updated)
-            self.assertEqual(updated, ENRICH.enrich_changelog(updated, [{'number': 901, 'body': '## Highlight\nNext native release.'}]))
+            self.assertEqual(ENRICH.source_pr_numbers(next_release, REPOSITORY), [901])
+            sources = {901: source_pr('Next native release.')}
+            updated, notes = ENRICH.render_changelog(next_release, REPOSITORY, sources)
+            self.assertIn('Next native release.', notes)
+            self.assertIn(notes, updated)
+            # A rendered top section is a fixed point that no longer consults source PRs.
+            self.assertEqual((updated, notes), ENRICH.render_changelog(updated, REPOSITORY, {}))
             self.assertTrue(updated.endswith(original[original.index('## [0.21.0]'):]))
 
     def test_prepare_workflow_respects_active_component_paths(self):
         # Unit-level GitHub transport mock; execute the real workflow preparer
         # against complete migrated files, not a second implementation.
-        repository = 'quokkify/marketdesk'
+        repository = REPOSITORY
         repo_payload = {'repo': {'full_name': repository}}
         for active in [set(AUDIT['targets']), {'backend'}]:
             with self.subTest(active=active), tempfile.TemporaryDirectory() as directory:
@@ -335,8 +380,10 @@ class HistoryChecks(unittest.TestCase):
                     target.write_text((ROOT / path).read_text())
                 prs_file = checkout / 'prs.json'
                 prs_file.write_text('[{"number": 900}]')
-                body = '\n'.join(f'<details><summary>{c}: 0.21.0</summary>\n\n### Features\nGenerated notes.\n</details>' for c in sorted(active))
-                release = {'number': 900, 'head': repo_payload, 'base': repo_payload, 'body': body}
+                before = {c: (checkout / p).read_text() for c, p in AUDIT['targets'].items()}
+                headings = {c: ENRICH.top_section(text)[2].split('\n', 1)[0] for c, text in before.items()}
+                body = '\n'.join(f'<details><summary>{c}: 0.21.0</summary>\n\n{headings[c]}\n\n### Features\nGenerated notes.\n</details>' for c in sorted(active))
+                release = {'number': 900, 'state': 'open', 'head': {**repo_payload, 'ref': 'release-please--branches--main'}, 'base': {**repo_payload, 'ref': 'main', 'sha': 'b' * 40}, 'body': body}
                 requested = []
 
                 def gh_json(arguments):
@@ -344,23 +391,42 @@ class HistoryChecks(unittest.TestCase):
                     requested.append(number)
                     if number == 900:
                         return release
-                    return {'number': number, 'head': repo_payload, 'base': repo_payload, 'state': 'closed', 'merged_at': '2026-10-03T00:00:00Z', 'body': '## Highlight\nSource-specific release context.', 'merge_commit_sha': 'a' * 40}
+                    return {'number': number, 'head': repo_payload, 'base': repo_payload, 'state': 'closed', 'merged_at': '2026-10-03T00:00:00Z', 'title': 'feat(release): split streams', 'labels': [], 'body': '## Release note\nSource-specific release context.', 'merge_commit_sha': 'a' * 40}
 
-                before = {c: (checkout / p).read_text() for c, p in AUDIT['targets'].items()}
-                with contextlib.chdir(checkout), mock.patch.object(ENRICH, '_gh_json', side_effect=gh_json), mock.patch.object(ENRICH, '_run_gh'):
+                def run_git(arguments):
+                    # The scratch checkout has no Git history: resolve the previous tag
+                    # and report no hidden-type commits after it.
+                    return 'c' * 40 + '\n' if arguments[0] == 'rev-parse' else ''
+
+                with contextlib.chdir(checkout), mock.patch.object(ENRICH, '_gh_json', side_effect=gh_json), mock.patch.object(ENRICH, '_run_gh'), mock.patch.object(ENRICH, '_run_git', side_effect=run_git) as git_calls:
                     kwargs = dict(repository=repository, release_prs_file=prs_file, mode='manifest', package_path='.', config_file=Path('.github/release-please/config.json'), manifest_file=Path('.github/release-please/manifest.json'), config_backed_single=False, output_directory=checkout / 'output')
                     first = ENRICH.prepare_release_enrichment(**kwargs)
                     first_files = {c: (checkout / p).read_text() for c, p in AUDIT['targets'].items()}
-                    release['body'] = json.loads((checkout / 'output/release-body.json').read_text())['body']
+                    first_requested, requested[:] = set(requested), []
+                    first_body = json.loads((checkout / 'output/release-body.json').read_text())['body']
+                    release['body'] = first_body
                     second = ENRICH.prepare_release_enrichment(**kwargs)
-                self.assertEqual(first, second)
-                self.assertEqual(first['changelogs'], sorted(AUDIT['targets'][c] for c in active))
-                self.assertEqual(set(requested), {900, 339, 341} if len(active) == 3 else {900, 339})
+                    second_body = json.loads((checkout / 'output/release-body.json').read_text())['body']
+                sources = [339, 341] if len(active) == 3 else [339]
+                self.assertEqual(first, {'skipped': False, 'release_pr': 900, 'changelogs': sorted(AUDIT['targets'][c] for c in active), 'source_prs': sources, 'hidden_prs': [], 'body_changed': True})
+                # Rendered changelogs are a fixed point: the rerun reads no source PR and changes nothing.
+                self.assertEqual(second, {**first, 'source_prs': [], 'body_changed': False})
+                self.assertEqual(first_body, second_body)
+                self.assertEqual(first_requested, {900, *sources})
+                self.assertEqual(set(requested), {900})
+                # Hidden commits are looked up per package path, never across streams.
+                scopes = sorted(call.args[0][-1] for call in git_calls.call_args_list if call.args[0][0] == 'log')
+                self.assertEqual(scopes, sorted(str(Path(AUDIT['targets'][c]).parent) for c in active))
                 self.assertFalse((checkout / 'CHANGELOG.md').exists())
                 for c, path in AUDIT['targets'].items():
                     self.assertEqual((checkout / path).read_text(), first_files[c])
                     if c not in active:
                         self.assertEqual(first_files[c], before[c])
+                    else:
+                        self.assertIn('Source-specific release context.', first_files[c])
+                        block = first_body.split(f'<details><summary>{c}:', 1)[1].split('</details>', 1)[0]
+                        self.assertIn('Source-specific release context.', block)
+                        self.assertNotIn('Generated notes.', block)
                     legacy = before[c][before[c].index('## Inherited legacy history'):]
                     self.assertTrue(first_files[c].endswith(legacy))
 
