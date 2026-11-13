@@ -94,7 +94,7 @@ Connect first, so that the product you create next can be published.
 
 1. Choose **New product** in the top bar. The wizard has two screens: **Photos**, then **Review and publish**.
 2. **Photos:** add 1 to 12 photos in JPEG, PNG or WebP format. The first photo is the cover. You can reorder photos or mark another one as the cover. Choose **Continue**.
-3. **Review and publish:** fill in the name, a description of 20 to 2000 characters, the condition and the selling price. The cost price is optional; selling below cost needs an explicit confirmation. There is no SKU field: the server generates one.
+3. **Review and publish:** fill in the name, a description of 20 to 2000 characters, the condition and the selling price. The cost price is optional; selling below cost needs an explicit confirmation. There is no SKU field: the server generates one, and the product page shows it read-only.
 4. **OLX category:** type a word such as "camera" into **OLX category** and pick a result from the list. In sandbox mode the category list is a small built-in one (Cameras, Phones, Headphones, Computers, Clothing, Furniture, Equipment and Other), not the real OLX category tree. If a search finds nothing, try one of those words. **Change** replaces the chosen category; **Publish to OLX** stays disabled until a new one is picked.
 5. Choose **Publish to OLX**. It stays disabled, with the reason shown above the buttons, until the photos, name, description, a price above 0 and a category are in place. Without a connected OLX account, **Save as draft** is the only way to finish.
 
