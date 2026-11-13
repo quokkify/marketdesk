@@ -72,4 +72,17 @@ export BROWSER_REMOTE_URL="http://127.0.0.1:${selenium_port}/wd/hub"
 export MARKETDESK_UI_BASE_URI=http://localhost:3000
 
 cd "$repo_root/test-automation"
-./gradlew test apiTest uiTest --console=plain
+gradle_status=0
+./gradlew test apiTest uiTest --console=plain || gradle_status=$?
+
+# Regression guard: the Allure results are published with the report even when tests fail, and a
+# published access token fails the secret scan of every branch.
+if [[ ! -d build/allure-results ]]; then
+  echo "No Allure results to check for access tokens" >&2
+  exit 1
+fi
+if grep -rlE 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' build/allure-results; then
+  echo "The Allure results above carry an access token; keep it out of the report" >&2
+  exit 1
+fi
+exit "$gradle_status"

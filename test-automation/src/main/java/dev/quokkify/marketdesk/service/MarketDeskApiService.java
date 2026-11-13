@@ -1,5 +1,8 @@
 package dev.quokkify.marketdesk.service;
 
+import java.util.List;
+
+import dev.quokkify.filter.CustomApiTestLogFilter;
 import dev.quokkify.marketdesk.config.MarketDeskApiConfig;
 import dev.quokkify.service.ApiService;
 
@@ -13,7 +16,8 @@ public abstract class MarketDeskApiService extends ApiService {
   private static final String BEARER = "Bearer ";
 
   protected RequestSpecification anonymous() {
-    return RestAssured.given().spec(getRequestSpecification(MarketDeskApiConfig.BASE_URI, ContentType.JSON));
+    return RestAssured.given().spec(getRequestSpecification(MarketDeskApiConfig.BASE_URI, ContentType.JSON,
+        List.of(new CustomApiTestLogFilter(), new TokenRedactingAllureFilter())));
   }
 
   protected RequestSpecification authorized(String token) {
