@@ -104,7 +104,7 @@ What to check: the product appears under **Products** with its photos, and the p
 
 1. After **Publish to OLX** in the wizard, MarketDesk saves the product, opens its page, creates the OLX listing draft with the chosen category and checks it. When the check passes with the same category, the advert is queued without a second dialog and you see "Publication was accepted and queued."
 2. When the check needs a decision (a quota or fee warning, a blocker, or a category that differs from the one you chose), the publication review opens instead. Review the price, the category path and any warnings, then choose **Confirm category and queue publish**. The same review opens from **Publish to OLX** on the product page and from the **Publish** action in its listings table.
-3. Publication runs in the background. The product page checks the listing every 5 seconds for up to 2 minutes. The listing should change from Draft to Live and carry a **Sandbox** label. If OLX reports a failure, the page shows it in full in an alert; if nothing changes in 2 minutes, the page says "Still waiting for OLX. Refresh this page in a minute."
+3. Publication runs in the background. After a publish (not a relist), the product page shows "Waiting for OLX…" and checks the listing every 5 seconds for up to 2 minutes. The listing should change from Draft to Live and carry a **Sandbox** label. If OLX reports a failure, the page shows it in full in an alert; if nothing changes in 2 minutes, the page says "Still waiting for OLX. Refresh this page in a minute."
 
 What to check:
 
