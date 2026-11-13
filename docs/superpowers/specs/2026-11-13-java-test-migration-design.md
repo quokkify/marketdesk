@@ -96,6 +96,8 @@ instead of through Jest with supertest and through Playwright.
   code) stays in Jest as a unit test of the handler or controller it concerns.
 - The Playwright test moves to Java as the UI end-to-end test.
 - The work lands as the four staged pull requests above.
+- UI tests run their browser in a Selenium Grid, connected the way q4j already supports. The browser installed on
+  the CI runner is not used.
 
 ## Calls made in this design (not yet confirmed by the owner)
 
@@ -126,12 +128,19 @@ instead of through Jest with supertest and through Playwright.
 - **Gradle tasks.** `apiTest` keeps the package `test.api` and gains the journeys. A new task `uiTest` runs the
   package `test.ui`, declared the same way as `apiTest`. `test` excludes both. The CI script runs
   `./gradlew test apiTest uiTest`.
-- **UI test.** Selenide, headless Chrome, a new Owner key `MARKETDESK_UI_BASE_URI` with the default
-  `http://127.0.0.1:3000`. The test logs in through the login form and creates its product through the API. It
+- **UI test.** Selenide through q4j, with the browser in a Selenium Grid container (see "Decided by the owner").
+  A new Owner key `MARKETDESK_UI_BASE_URI` holds the address the browser opens. The browser runs inside the Grid
+  container, so in the test stack that address is the Compose service name, `http://app:3000`, while the API tests
+  keep calling `http://127.0.0.1:3000` from the host. The test logs in through the login form and creates its product through the API. It
   asserts what a user sees: the product creation entry point, and that assistance suggestions are shown for review
   and are not applied on their own. It asserts structure, not the exact suggestion text.
 - **CI.** No new workflow and no `ci-kit` change. The existing Java component keeps calling the script; the script
-  gains `uiTest`. The browser comes from the runner image.
+  gains `uiTest` and starts the Grid next to the application.
+- **Grid shape.** One `selenium/standalone-chromium` container, pinned by tag and digest, declared in a separate
+  Compose file that joins the application's network and is used only by the test script. It publishes port 4444 on
+  `127.0.0.1`. A hub with dynamic nodes is not needed for one UI test. The q4j `selenide-grid` module is added only
+  if its README at the project's q4j version says a plain remote session needs it; the remote URL itself is read by
+  the q4j `selenide` module (`BROWSER_REMOTE_URL`).
 - **Coverage.** After each deletion run `npm run test:coverage`. If it falls under 70%, add unit tests for the
   uncovered module in the same pull request.
 
@@ -165,9 +174,10 @@ green.
 - **Frontend origin.** `main.ts` serves `dist/frontend` with an SPA fallback when `index.html` exists, and Compose
   publishes the `app` service on port 3000. Confirm in pull request 1 that the image built by `Dockerfile` contains
   the frontend; the UI test depends on it.
-- **Chrome on the runner.** The `ci-kit` Java job runs on `ubuntu-latest`, whose image ships Chrome. The browser
-  login test in pull request 1 proves it. If it fails for lack of a browser, stop and report to the owner, because
-  the fix belongs in `ci-kit`.
+- **The browser sees a different origin.** Through the Grid the page is opened as `http://app:3000`, which is not
+  `localhost` and so is not a secure context. Confirm in pull request 1 that login works from that origin (CORS,
+  security headers, any browser API that needs a secure context). If it does not, report it; do not weaken the
+  application's headers for the test.
 - **Forwarding the UI base URI.** `gradle/tests.gradle` forwards only `MARKETDESK_API_BASE_URI` to the test JVM;
   the new UI key needs the same forwarding.
 - **Run time.** The CI job now builds the stack and runs three Gradle tasks. Record the job duration in pull
