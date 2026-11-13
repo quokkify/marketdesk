@@ -1,5 +1,7 @@
 // Follows a queued advert until OLX answers: refetch on an interval and stop when the listing
-// leaves draft, carries the failure text the listings table shows, or the wait runs out.
+// leaves draft, fails, or the wait runs out. A failure is an `error` status or a sync error
+// that differs from the one the listing carried when polling started: a draft can carry a
+// note, such as a delist for category correction, that is not a publication failure.
 // Free of React so the timing is tested with fake timers; the hook only wires it to a page.
 import type { Listing } from '@shared/types';
 
@@ -12,7 +14,8 @@ export type PendingPublicationStop =
   | { kind: 'timed_out' };
 
 export interface PendingPublicationPoller {
-  start: () => void;
+  // `initialSyncError` is the note the listing carried when the advert was queued.
+  start: (initialSyncError?: string | null) => void;
   observe: (listing: Pick<Listing, 'status' | 'syncError'>) => void;
   dispose: () => void;
 }
@@ -31,6 +34,7 @@ export function createPendingPublicationPoller({
   let interval: ReturnType<typeof setInterval> | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let running = false;
+  let baselineSyncError: string | null = null;
 
   const clearTimers = () => {
     clearInterval(interval);
@@ -47,16 +51,21 @@ export function createPendingPublicationPoller({
   };
 
   return {
-    start() {
+    start(initialSyncError = null) {
       if (running) return;
       running = true;
+      baselineSyncError = initialSyncError || null;
       interval = setInterval(refetch, intervalMs);
       timeout = setTimeout(() => stop({ kind: 'timed_out' }), timeoutMs);
     },
     observe(listing) {
       if (!running) return;
-      if (listing.syncError) stop({ kind: 'failed', message: listing.syncError });
-      else if (listing.status !== 'draft') stop({ kind: 'settled' });
+      const newNote = Boolean(listing.syncError) && listing.syncError !== baselineSyncError;
+      if (listing.status === 'error' || newNote) {
+        stop({ kind: 'failed', message: listing.syncError ?? '' });
+      } else if (listing.status !== 'draft') {
+        stop({ kind: 'settled' });
+      }
     },
     dispose() {
       running = false;

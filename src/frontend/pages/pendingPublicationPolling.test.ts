@@ -84,6 +84,40 @@ describe('createPendingPublicationPoller', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  it('keeps polling a draft whose note is unchanged since it was queued', () => {
+    const note = 'Remote advert delisted for category correction';
+    const { refetch, stops, instance } = poller();
+
+    instance.start(note);
+    instance.observe(listing({ syncError: note }));
+    jest.advanceTimersByTime(10000);
+    instance.observe(listing({ syncError: note }));
+
+    expect(refetch).toHaveBeenCalledTimes(2);
+    expect(stops).toEqual([]);
+    instance.observe(listing({ status: 'live', syncError: note }));
+    expect(stops).toEqual([{ kind: 'settled' }]);
+  });
+
+  it('reports a new sync error on a draft as a failure', () => {
+    const { stops, instance } = poller();
+
+    instance.start('Remote advert delisted for category correction');
+    instance.observe(listing({ syncError: 'OLX refused the advert: duplicate.' }));
+
+    expect(stops).toEqual([{ kind: 'failed', message: 'OLX refused the advert: duplicate.' }]);
+  });
+
+  it('reports an error status as a failure even when the text is unchanged', () => {
+    const note = 'OLX refused the advert: duplicate.';
+    const { stops, instance } = poller();
+
+    instance.start(note);
+    instance.observe(listing({ status: 'error', syncError: note }));
+
+    expect(stops).toEqual([{ kind: 'failed', message: note }]);
+  });
+
   it('reports a timeout after 120 seconds and stops refetching', () => {
     const { refetch, stops, instance } = poller();
 

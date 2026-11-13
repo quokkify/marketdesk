@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { Marketplace } from '../../../../domain/entities/Marketplace';
 import { InMemoryMarketplaceRepository, unwrap } from '../../../../domain/testkit/support';
 import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../../../domain/shared/DomainError';
-import type { OlxTrustedTaxonomyResolver } from '../../../../application/services/ProductRecheckService';
+import type { OlxTrustedTaxonomyResolver } from '../../../../infrastructure/adapters/OlxTaxonomyResolver';
 import { MarketplaceController } from '../MarketplaceController';
 
 const WORKSPACE_ID = 'ws-1';

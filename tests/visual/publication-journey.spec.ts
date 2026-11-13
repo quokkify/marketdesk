@@ -41,6 +41,8 @@ interface MockOptions {
   // The product's OLX listings before the journey runs.
   listings?: unknown[];
   preview?: PreviewKind;
+  // What the listing becomes once the publication is queued.
+  afterPublish?: Record<string, unknown>;
 }
 
 interface ApiLog {
@@ -107,7 +109,7 @@ async function mockApi(page: Page, options: MockOptions = {}): Promise<ApiLog> {
     };
     else if (path === '/api/listings/l1/publish-preview') data = previewFor(options.preview ?? 'ready');
     else if (path === '/api/listings/l1/publish' && method === 'POST') {
-      listings = [{ ...categorisedListing, isRemotePending: true }];
+      listings = [{ ...categorisedListing, ...(options.afterPublish ?? { isRemotePending: true }) }];
       data = listings[0];
     } else if (path === '/api/marketplaces') data = [marketplace];
     else if (path === '/api/marketplaces/m1/check') data = {
@@ -182,6 +184,7 @@ test('creates and queues an advert from photos and review without a second dialo
 
   await expect(page).toHaveURL(/\/products\/p1$/);
   await expect(page.getByText('Publication was accepted and queued.')).toBeVisible();
+  await expect(page.getByText('Waiting for OLX…')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(log.writes).toEqual([
     'POST /api/uploads/images',
@@ -207,6 +210,19 @@ test('opens the publication review when the preview needs a quota confirmation',
   await expect(page).toHaveURL(/\/products\/p1$/);
   await expect(page.getByRole('dialog').getByText('Confirm possible OLX fee')).toBeVisible();
   expect(log.writes).not.toContain('POST /api/listings/l1/publish');
+});
+
+test('shows the full failure text when OLX rejects the queued advert', async ({ page }) => {
+  const failure = 'OLX rejected the advert: the city is missing from the account profile.';
+  await mockApi(page, { afterPublish: { status: 'error', syncError: failure } });
+  await seedReviewDraft(page);
+
+  await page.goto('/products?newProduct=1');
+  await publishButton(page).click();
+
+  await expect(page).toHaveURL(/\/products\/p1$/);
+  await expect(page.getByRole('alert').filter({ hasText: failure })).toHaveText(failure);
+  await expect(page.getByText('Waiting for OLX…')).toHaveCount(0);
 });
 
 test('sends one product when Publish to OLX is pressed twice quickly', async ({ page }) => {

@@ -1187,10 +1187,13 @@ const ListingDetailsPage: React.FC = () => {
               {creationFailure}
             </Alert>
           )}
+          {pendingPublication.polling && <Alert severity="info">Waiting for OLX…</Alert>}
           {pendingPublication.timedOut && (
             <Alert severity="info">Still waiting for OLX. Refresh this page in a minute.</Alert>
           )}
-          {queuedListing?.syncError && <Alert severity="error">{queuedListing.syncError}</Alert>}
+          {pendingPublication.failure && (
+            <Alert severity="error">{pendingPublication.failure}</Alert>
+          )}
           <Card
             title="Marketplace listings"
             action={
