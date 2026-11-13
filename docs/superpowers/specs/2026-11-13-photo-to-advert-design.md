@@ -308,6 +308,8 @@ Rollback is a revert of the step's commit. Step 1 removes UI only; no stored dat
 - Step 1 updates the visual test and its tracked screenshots if they show the removed steps.
 - Step 1 alone reaches about 10 seller actions, not the 8 of G2: typing a category word and
   picking the leaf are two actions, and "Continue" is one. Step 3 removes the category pair.
+- Measured for step 1 in `tests/visual/publication-journey.spec.ts`: 10 seller actions from
+  "New product" to "Publish to OLX".
 - The misleading AI draft panel leaves the wizard in step 1; the photo draft of step 2
   replaces it. The `title`-mode endpoint stays.
 - Step 1 ships before the AI steps so the flow improves even if step 0 goes badly.
