@@ -119,7 +119,7 @@ the wave that deletes the adapters closes that path.
 | Analytics | The page, its charts and table, `GET /api/analytics/revenue`, `GET /api/analytics/listings`, and `recharts` once no chart remains. |
 | Dashboard | The page and its presentation module. `/` redirects to `/products`. |
 | Listings page | The route and page. The listings table on the product page stays. |
-| Roadmap channels on kept screens | The roadmap grid and summary bar on Marketplaces, and the six disabled channels in the wizard's Marketplaces step (`src/frontend/components/forms/ProductWizardForm.tsx:98-106`), which then lists OLX only. The OLX card, configure drawer, connect, check and sync stay. |
+| Roadmap channels on kept screens | The roadmap grid and summary bar on Marketplaces, the six disabled channels in the wizard's Marketplaces step (`src/frontend/components/forms/ProductWizardForm.tsx:98-106`), which then lists OLX only, and the roadmap channels listed in the Marketplace Accounts panel of Settings. The OLX card, configure drawer, connect, check and sync stay. |
 
 The `MarketplaceKey` union and its name map stay. They are the vocabulary of stored rows, and
 narrowing them could break the mapping of a stored row with another key.
