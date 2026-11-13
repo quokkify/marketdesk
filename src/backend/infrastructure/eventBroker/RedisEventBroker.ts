@@ -16,22 +16,12 @@ export interface EventBroker {
   publish(event: DomainEvent): Promise<string>;
 }
 
-// In-process fan-out port. The WebSocket layer (HermesLiveUpdates) needs to
-// observe every published domain event to push it to subscribed clients. Redis
-// Streams durably records events (publish/XADD), but the live push is served by
-// this lightweight in-process subscription so a single node fans events out to
-// its own WS clients without an extra consumer-group round-trip.
-export interface EventSubscriber {
-  subscribe(handler: (event: DomainEvent) => void): () => void;
-}
-
 export interface RedisEventBrokerOptions {
   streamPrefix?: string;
 }
 
-export class RedisEventBroker implements EventBroker, EventSubscriber {
+export class RedisEventBroker implements EventBroker {
   private readonly streamPrefix: string;
-  private readonly subscribers = new Set<(event: DomainEvent) => void>();
 
   constructor(
     private readonly redis: RedisStreamClient,
@@ -57,29 +47,7 @@ export class RedisEventBroker implements EventBroker, EventSubscriber {
       'occurredAt',
       event.occurredAt.toISOString(),
     );
-    this.notify(event);
     return id ?? '';
-  }
-
-  // Register an in-process handler for published events; returns an unsubscribe
-  // function. Additive to the durable XADD path above — existing publishers are
-  // unaffected when there are no subscribers.
-  subscribe(handler: (event: DomainEvent) => void): () => void {
-    this.subscribers.add(handler);
-    return () => {
-      this.subscribers.delete(handler);
-    };
-  }
-
-  private notify(event: DomainEvent): void {
-    for (const handler of this.subscribers) {
-      // A misbehaving subscriber must never break the publish path.
-      try {
-        handler(event);
-      } catch {
-        // Swallow: live fan-out is best-effort.
-      }
-    }
   }
 }
 

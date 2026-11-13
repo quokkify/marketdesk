@@ -66,10 +66,7 @@ import {
   createRedisEventBroker,
   createEventPublisher,
 } from '../../infrastructure/eventBroker/RedisWiring';
-import type {
-  EventBroker,
-  EventSubscriber,
-} from '../../infrastructure/eventBroker/RedisEventBroker';
+import type { EventBroker } from '../../infrastructure/eventBroker/RedisEventBroker';
 import { BullJobQueue } from '../../infrastructure/jobQueue/BullJobQueue';
 import { MarketplaceAdapterFactory } from '../../infrastructure/adapters/MarketplaceAdapterFactory';
 import { FetchMarketplaceHttpClient } from '../../infrastructure/adapters/FetchMarketplaceHttpClient';
@@ -142,7 +139,6 @@ import type {
 
 // --- Presentation ---
 import type { AppDeps } from '../../presentation/http/app';
-import type { IEventSubscriber } from '../../presentation/websocket/HermesLiveUpdates';
 import type { ErrorLogger } from '../../presentation/http/middleware/ErrorHandlingMiddleware';
 
 // A queue the container owns end-to-end: enqueue (the application IJobQueue port),
@@ -218,7 +214,7 @@ class BullManagedQueue<T> implements ManagedQueue<T> {
 export interface ContainerOverrides {
   pool?: Pool;
   redis?: Redis;
-  eventBroker?: EventBroker & EventSubscriber;
+  eventBroker?: EventBroker;
   aiProvider?: IAIProvider;
   idGenerator?: IdGenerator;
   logger?: ErrorLogger & ProductDraftLogger;
@@ -229,8 +225,6 @@ export interface ContainerOverrides {
 
 export interface AppContainer {
   deps: AppDeps;
-  // Injected into HermesLiveUpdates so the WS fans domain events out to clients.
-  subscriber: IEventSubscriber;
   // Lifecycle handles for graceful shutdown / health checks.
   pool: Pool;
   redis: Redis;
@@ -244,8 +238,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const pool = overrides.pool ?? createPool();
   const redis = overrides.redis ?? createRedisClient();
 
-  // 2. Event broker (publish + in-process fan-out) and publisher.
-  const broker: EventBroker & EventSubscriber =
+  // 2. Event broker and publisher.
+  const broker: EventBroker =
     overrides.eventBroker ?? createRedisEventBroker(redis);
   const eventPublisher = createEventPublisher(broker);
 
@@ -776,7 +770,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
 
   return {
     deps,
-    subscriber: broker,
     pool,
     redis,
     queues,

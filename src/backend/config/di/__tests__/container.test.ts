@@ -4,8 +4,7 @@
 //   1. every required AppDeps field is populated,
 //   2. the optional ports (price history, id generator) are wired,
 //   3. buildApp(deps) returns a working Express app without throwing,
-//   4. the WS subscriber is a functioning EventSubscriber,
-//   5. shutdown() resolves.
+//   4. shutdown() resolves.
 
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
@@ -178,13 +177,8 @@ describe('buildContainer (composition root)', () => {
     expect(typeof app.use).toBe('function');
   });
 
-  it('exposes a functioning WS event subscriber fed by the broker', () => {
-    const { subscriber } = build();
-    expect(typeof subscriber.subscribe).toBe('function');
-    const received: unknown[] = [];
-    const unsubscribe = subscriber.subscribe((e) => received.push(e));
-    expect(typeof unsubscribe).toBe('function');
-    unsubscribe();
+  it('exposes no in-process event subscriber', () => {
+    expect('subscriber' in build()).toBe(false);
   });
 
   it('propagates a Hermes-run failure through the job handler (C2)', async () => {
