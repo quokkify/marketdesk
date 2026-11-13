@@ -20,7 +20,7 @@ starter names (`StarterConfig`, `starter.properties`, `TEST_MESSAGE`), which thi
 - Browser tests live in the `test.ui` package and run only in `./gradlew uiTest`; `./gradlew test` excludes that
   package. Page objects live in the package `page`.
 - UI base URI: Owner key `MARKETDESK_UI_BASE_URI`, read through `config.MarketDeskUiConfig.BASE_URI`, default in
-  `src/main/resources/marketdesk-ui.properties` (`http://127.0.0.1:3000`); `gradle/tests.gradle` forwards the system
+  `src/main/resources/marketdesk-ui.properties` (`http://localhost:3000`); `gradle/tests.gradle` forwards the system
   property too.
 - With `BROWSER_REMOTE_URL` set (for example `http://127.0.0.1:4444/wd/hub`) the browser runs in the Selenium Grid,
   and `MARKETDESK_UI_BASE_URI` must be an address the Grid container reaches. With `BROWSER_REMOTE_URL` unset,

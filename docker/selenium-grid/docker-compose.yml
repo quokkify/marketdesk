@@ -1,3 +1,5 @@
+# Overlay for the test stack: works only together with the root docker-compose.yml (it extends the app service and
+# shares its network namespace). scripts/ci-java-api-tests.sh combines them through COMPOSE_FILE.
 services:
   app:
     ports:

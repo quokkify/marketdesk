@@ -5,6 +5,8 @@ checkstyle = "14.3.0"
 spotbugs-plugin = "6.5.13"
 log4j = "2.26.1"
 aspectj = "1.9.26"
+# q4j selenide publishes Selenide at runtime scope only, and page objects in src/main compile against it;
+# keep this version equal to the one the pinned q4j release uses.
 selenide = "7.19.0"
 
 [libraries]

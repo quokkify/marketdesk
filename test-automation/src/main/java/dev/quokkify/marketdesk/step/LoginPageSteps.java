@@ -9,11 +9,7 @@ import io.qameta.allure.Step;
 public class LoginPageSteps extends PageSteps<LoginPageSteps, LoginVerification, LoginPage> {
 
   public LoginPageSteps() {
-    this(new LoginPage());
-  }
-
-  public LoginPageSteps(LoginPage page) {
-    this.page = page;
+    this.page = new LoginPage();
     this.verification = new LoginVerification(this, page);
   }
 

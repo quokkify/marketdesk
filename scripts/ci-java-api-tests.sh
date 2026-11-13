@@ -45,8 +45,8 @@ for attempt in {1..90}; do
 done
 
 if [[ "$ready" != true ]]; then
-  docker compose ps
-  docker compose logs --no-color app migrate postgres redis selenium
+  docker compose ps || true
+  docker compose logs --no-color app migrate postgres redis selenium || true
   echo "MarketDesk API did not become ready" >&2
   exit 1
 fi
@@ -62,8 +62,8 @@ for attempt in {1..60}; do
 done
 
 if [[ "$grid_ready" != true ]]; then
-  docker compose ps
-  docker compose logs --no-color app migrate postgres redis selenium
+  docker compose ps || true
+  docker compose logs --no-color app migrate postgres redis selenium || true
   echo "Selenium Grid did not become ready" >&2
   exit 1
 fi

@@ -15,13 +15,23 @@ public final class BrowserSession {
   private BrowserSession() {
   }
 
+  private static boolean configured;
+
   public static void open() {
+    configureOnce();
+  }
+
+  private static synchronized void configureOnce() {
+    if (configured) {
+      return;
+    }
     Browser.setDefaultConfigurations();
     if (BROWSER_CONFIG.remoteUrl() != null) {
       Browser.setRemoteDefaultConfiguration();
     }
     Configuration.headless = true;
     Configuration.baseUrl = MarketDeskUiConfig.BASE_URI;
+    configured = true;
   }
 
   public static void close() {
