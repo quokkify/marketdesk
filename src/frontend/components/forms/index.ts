@@ -8,6 +8,8 @@ export {
   emptyProductValues,
   productToValues,
   validateProductValues,
+  validateForPublish,
+  deriveProductCategory,
   marginWarning,
   productFieldErrorsFromApi,
   toProductSubmissionValues,
@@ -17,6 +19,7 @@ export type {
   ProductFormValues,
   ProductSubmissionValues,
   ProductFieldErrors,
+  WizardOlxCategory,
 } from './productFormModel.js';
 export {
   hasMeaningfulProductWizardDraft,

@@ -1,11 +1,13 @@
 import {
   belowCostConfirmationRequired,
+  deriveProductCategory,
   emptyProductValues,
   marginWarning,
   productFieldErrorsFromApi,
   productToValues,
   profitSummary,
   toProductSubmissionValues,
+  validateForPublish,
   validateProductValues,
 } from './productFormModel';
 
@@ -172,5 +174,28 @@ describe('productFormModel API validation errors', () => {
       fieldErrors: {},
       message: 'Request failed',
     });
+  });
+});
+
+describe('productFormModel photo-to-advert rules', () => {
+  it('lets a draft through without a SKU', () => {
+    expect(validateProductValues({ ...validValues(), sku: '' }).sku).toBeUndefined();
+  });
+
+  it('blocks publishing at price 0', () => {
+    expect(validateForPublish({ ...validValues(), sellingPrice: 0 }).sellingPrice).toBe(
+      'Enter a price above 0 to publish.'
+    );
+    expect(validateForPublish(validValues())).toEqual({});
+  });
+
+  it('keeps the draft errors when validating for publish', () => {
+    expect(validateForPublish({ ...validValues(), name: '' }).name).toBe('Name is required.');
+  });
+
+  it('derives the product category from the OLX path', () => {
+    expect(deriveProductCategory(['Dom i Ogród', 'Meble', 'Fotele'])).toBe('Dom i Ogród');
+    expect(deriveProductCategory(null)).toBe('uncategorised');
+    expect(deriveProductCategory([])).toBe('uncategorised');
   });
 });
