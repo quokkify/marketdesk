@@ -1387,7 +1387,21 @@ describe('PublishListingHandler', () => {
     expect(result.result.externalListingId).toBe('olx-123');
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('abandons a deterministic OLX update failure so a later update can use the real ListingService category snapshot', async () => {
+    // Only Date is faked: the update generation is a millisecond timestamp, so the two updates
+    // below need explicit, distinct times instead of depending on the wall clock advancing.
+    jest.useFakeTimers({
+      now: new Date('2026-07-14T00:00:00.000Z'),
+      doNotFake: [
+        'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+        'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+        'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+      ],
+    });
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const marketplaceRepo = new InMemoryMarketplaceRepository();
@@ -1474,6 +1488,7 @@ describe('PublishListingHandler', () => {
       taxonomyVerifiedAt: '2026-07-15T00:00:00.000Z',
       taxonomyStaleAt: '2026-08-15T00:00:00.000Z',
     };
+    jest.setSystemTime(new Date('2026-07-14T00:00:01.000Z'));
     listing.recordMarketplaceCategory(exactCategory);
     await listingRepo.save(listing);
     unwrap(product.rename('Second approved title'));
