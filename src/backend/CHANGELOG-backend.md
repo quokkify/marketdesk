@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/backend-v0.21.1...backend-v0.22.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
+
+### ✨ Features
+
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+
+
+### 🐛 Bug Fixes
+
+* evaluate the category guard after taxonomy verification in product recheck ([#449](https://github.com/quokkify/marketdesk/issues/449)) ([00b4b82](https://github.com/quokkify/marketdesk/commit/00b4b828783f4ef74184dbfea23cc61859b9fa89))
+
+
+### ♻️ Refactoring
+
+* remove dead wiring and unused dependencies ([#446](https://github.com/quokkify/marketdesk/issues/446)) ([4ba2d02](https://github.com/quokkify/marketdesk/commit/4ba2d023c01b700d4dbcffc9f745f54ce465cce1))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/backend-v0.21.0...backend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->

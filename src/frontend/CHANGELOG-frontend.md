@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
+* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447))
+
+### ✨ Features
+
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+
+
+### ♻️ Refactoring
+
+* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447)) ([2112b0a](https://github.com/quokkify/marketdesk/commit/2112b0aad98f52a9d26d9d928e0f23c2416e6996))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
