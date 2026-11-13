@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Button } from '@mui/material';
 import type { HermesEvent, HermesStatusView, Marketplace } from '@shared/types';
 import HermesActivityPage, {
-  HERMES_SETTINGS_PATH,
   HermesFeedFooter,
   HermesHero,
   HermesMetrics,
@@ -164,13 +163,12 @@ function textContent(node: React.ReactNode): string {
 }
 
 describe('Hermes banner', () => {
-  it('renders the Hermes AI identity on the companion gradient with a real Configure target', () => {
+  it('renders the Hermes AI identity on the companion gradient', () => {
     const html = render();
 
-    expect(HERMES_SETTINGS_PATH).toBe('/settings?section=hermes');
     expect(html).toContain('>Hermes AI<');
     expect(html).toContain('linear-gradient(135deg, #5B5BD6, #A24BD6)');
-    expect(html).toContain('Configure');
+    expect(html).not.toContain('Configure');
     expect(html).toContain('Select product to analyze');
     expect(html).toContain('Whole-catalogue runs are not started from the UI');
     expect(html).toContain('Choose a product and use Analyze for review-only recommendations.');
@@ -239,22 +237,18 @@ describe('Hermes banner', () => {
     expect(html).not.toContain('live listings on');
   });
 
-  it('wires Configure and product selection to the callbacks it is given', () => {
-    const onConfigure = jest.fn();
+  it('wires product selection to the callback it is given', () => {
     const onSelectProduct = jest.fn();
     const hero = HermesHero({
       provider: { label: 'Offline heuristics', color: 'warning' },
       watching: { kind: 'loading' },
-      onConfigure,
       onSelectProduct,
     }) as ElementLike;
     const buttons = findByType(hero, Button);
     const byLabel = (label: string) => buttons.find((button) => textContent(button).includes(label));
 
-    (byLabel('Configure')?.props.onClick as () => void)();
     (byLabel('Select product to analyze')?.props.onClick as () => void)();
 
-    expect(onConfigure).toHaveBeenCalledTimes(1);
     expect(onSelectProduct).toHaveBeenCalledTimes(1);
   });
 });

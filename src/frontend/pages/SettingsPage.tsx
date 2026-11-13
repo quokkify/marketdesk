@@ -1,5 +1,5 @@
-// Workspace settings: visual settings shell with section navigation for general
-// preferences, Hermes autonomy, notifications, integrations, appearance, and security.
+// Workspace settings: section navigation for general preferences, marketplace accounts,
+// appearance and application information.
 import React, { useEffect, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
@@ -8,78 +8,45 @@ import {
   Box,
   Alert,
   Button,
-  ButtonBase,
   Chip,
   CircularProgress,
   Divider,
-  FormControlLabel,
   MenuItem,
   Select,
   Stack,
-  Switch,
   TextField,
   Typography,
 } from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import NotificationsIcon from '@mui/icons-material/NotificationsNone';
 import StorefrontIcon from '@mui/icons-material/StorefrontOutlined';
-import KeyIcon from '@mui/icons-material/KeyOutlined';
 import PaletteIcon from '@mui/icons-material/PaletteOutlined';
-import TelegramIcon from '@mui/icons-material/Telegram';
-import SecurityIcon from '@mui/icons-material/SecurityOutlined';
 import TuneIcon from '@mui/icons-material/TuneOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import type {
-  AutonomyLevel,
-  HermesCreativityPreset,
   IntegrationSettingsStatus,
   MarketplaceAccountStatus,
-  MarketplaceKey,
-  NotificationChannels,
-  NotificationEventKey,
   SettingsDensity,
   WorkspaceLanguage,
   WorkspaceSettingsPatch,
 } from '@shared/types';
-import { AUTONOMY_LEVEL_LIST } from '@shared/constants';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
-import { setWorkspace, setAutonomyLevel } from '../state/slices/workspaceSlice.js';
+import { setWorkspace } from '../state/slices/workspaceSlice.js';
 import { setThemeMode, enqueueToast, type ThemeMode } from '../state/slices/uiSlice.js';
 import { useApplicationInfo } from '../services/hooks/index.js';
 import {
-  useGetHermesSettingsQuery,
   useGetIntegrationSettingsQuery,
-  useGetNotificationPreferencesQuery,
   useGetUserPreferencesQuery,
   useGetWorkspaceSettingsQuery,
-  hermesCreativityPatch,
-  hermesListingSeoEnabledPatch,
-  hermesAutomationPatch,
-  notificationChannelPatch,
   settingsPrincipalKey,
-  useUpdateHermesSettingsMutation,
-  useUpdateNotificationPreferencesMutation,
   useUpdateUserPreferencesMutation,
   useUpdateWorkspaceSettingsMutation,
 } from '../state/api/settingsApi.js';
-import { AUTONOMY_LABELS, AUTONOMY_DESCRIPTIONS } from '../utils/labels.js';
 import { APP_ROUTE_PATHS, TOPBAR_HEIGHT } from '../utils/constants.js';
 import { Card } from '../components/common/Card.js';
 import { ConnectionBadge } from '../components/common/Badge.js';
 
 const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CZK', 'UAH'];
 
-export type SettingsSection =
-  | 'general'
-  | 'hermes'
-  | 'notifications'
-  | 'marketplaces'
-  | 'apiKeys'
-  | 'appearance'
-  | 'telegram'
-  | 'security'
-  | 'about';
+export type SettingsSection = 'general' | 'marketplaces' | 'appearance' | 'about';
 
 export const settingsSections: Array<{
   id: SettingsSection;
@@ -94,46 +61,16 @@ export const settingsSections: Array<{
     icon: <TuneIcon fontSize="small" />,
   },
   {
-    id: 'hermes',
-    label: 'Hermes AI',
-    description: 'Control how autonomous Hermes is.',
-    icon: <AutoAwesomeIcon fontSize="small" />,
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    description: 'Preferences are saved now; delivery is not active in this release.',
-    icon: <NotificationsIcon fontSize="small" />,
-  },
-  {
     id: 'marketplaces',
     label: 'Marketplace Accounts',
     description: 'Linked seller accounts and their connection status.',
     icon: <StorefrontIcon fontSize="small" />,
   },
   {
-    id: 'apiKeys',
-    label: 'API Keys',
-    description: 'Programmatic access is planned.',
-    icon: <KeyIcon fontSize="small" />,
-  },
-  {
     id: 'appearance',
     label: 'Appearance',
     description: 'Personalize how MarketDesk looks.',
     icon: <PaletteIcon fontSize="small" />,
-  },
-  {
-    id: 'telegram',
-    label: 'Telegram',
-    description: 'Telegram alerts are planned.',
-    icon: <TelegramIcon fontSize="small" />,
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    description: 'Password, two-factor authentication and sessions.',
-    icon: <SecurityIcon fontSize="small" />,
   },
   {
     id: 'about',
@@ -163,14 +100,6 @@ export const settingsSectionPath = (section: SettingsSection) =>
 
 const NOT_AVAILABLE_LABEL = 'Not available in this release';
 
-const HERMES_REVIEW_ONLY_NOTE =
-  'Autonomy applies to scheduled catalogue runs, which are disabled in this build; all analyses stay review-only';
-
-const API_KEYS_ROADMAP_NOTE =
-  'API key management is on the roadmap and is not available in this release.';
-const TELEGRAM_ROADMAP_NOTE =
-  'Telegram notifications are on the roadmap and are not available in this release.';
-
 export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -180,24 +109,6 @@ export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
 export const densityOptions: Array<{ value: SettingsDensity; label: string }> = [
   { value: 'comfortable', label: 'Comfortable' },
   { value: 'compact', label: 'Compact' },
-];
-
-const notificationRows: Array<[NotificationEventKey, string]> = [
-  ['new_sale', 'New sale'],
-  ['competitor_price_change', 'Competitor price change'],
-  ['listing_needs_attention', 'Listing needs attention'],
-  ['sync_error', 'Sync errors'],
-  ['weekly_performance_report', 'Weekly performance report'],
-];
-
-const notificationChannels: Array<{
-  key: keyof NotificationChannels;
-  label: string;
-  unavailable?: boolean;
-}> = [
-  { key: 'email', label: 'Email' },
-  { key: 'inApp', label: 'In-app' },
-  { key: 'telegram', label: 'Telegram', unavailable: true },
 ];
 
 function errorMessage(err: unknown): string {
@@ -337,22 +248,17 @@ const isMarketplaceIntegration = (
   item: IntegrationSettingsStatus
 ): item is MarketplaceIntegration => item.category === 'marketplace';
 
-const MARKETPLACE_BRANDS: Record<MarketplaceKey, { code: string; color: string }> = {
-  olx: { code: 'OL', color: '#12B6AB' },
-  allegro: { code: 'AL', color: '#FF5A00' },
-  vinted: { code: 'VI', color: '#09B1BA' },
-  facebook: { code: 'FB', color: '#1877F2' },
-  ebay: { code: 'EB', color: '#E53238' },
-  etsy: { code: 'ET', color: '#F56400' },
-  amazon: { code: 'AM', color: '#FF9900' },
-};
+const OLX_BRAND = { code: 'OL', color: '#12B6AB' };
+
+const isOlxIntegration = (item: MarketplaceIntegration): boolean => item.providerKey === 'olx';
 
 export function marketplaceAccountStatus(item: MarketplaceIntegration): MarketplaceAccountStatus {
   if (item.account?.status === 'error') return 'error';
   return item.connected ? 'connected' : 'disconnected';
 }
 
-export function MarketplaceAccountsList({ items }: { items: MarketplaceIntegration[] }) {
+export function MarketplaceAccountsList({ items: stored }: { items: MarketplaceIntegration[] }) {
+  const items = stored.filter(isOlxIntegration);
   if (items.length === 0) {
     return (
       <Alert
@@ -375,7 +281,6 @@ export function MarketplaceAccountsList({ items }: { items: MarketplaceIntegrati
   return (
     <Stack divider={<Divider flexItem />}>
       {items.map((item) => {
-        const brand = MARKETPLACE_BRANDS[item.providerKey];
         return (
           <Stack
             key={item.id}
@@ -395,11 +300,11 @@ export function MarketplaceAccountsList({ items }: { items: MarketplaceIntegrati
                 flexShrink: 0,
                 fontSize: 13,
                 fontWeight: 800,
-                color: brand.color,
-                bgcolor: alpha(brand.color, 0.14),
+                color: OLX_BRAND.color,
+                bgcolor: alpha(OLX_BRAND.color, 0.14),
               }}
             >
-              {brand.code}
+              {OLX_BRAND.code}
             </Box>
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
               <Typography sx={{ fontWeight: 700 }} noWrap>
@@ -439,71 +344,6 @@ export function MarketplaceAccountsList({ items }: { items: MarketplaceIntegrati
   );
 }
 
-const SECURITY_ROWS: Array<{
-  id: string;
-  title: string;
-  action: string;
-  actionLabel: string;
-  destructive?: boolean;
-}> = [
-  { id: 'password', title: 'Password', action: 'Change', actionLabel: 'Change password' },
-  {
-    id: 'two-factor',
-    title: 'Two-factor authentication',
-    action: 'Set up',
-    actionLabel: 'Set up two-factor authentication',
-  },
-  {
-    id: 'sessions',
-    title: 'Active sessions',
-    action: 'Sign out all',
-    actionLabel: 'Sign out all sessions',
-    destructive: true,
-  },
-];
-
-export function SecurityPanel() {
-  return (
-    <Stack divider={<Divider flexItem />}>
-      {SECURITY_ROWS.map((row) => (
-        <Stack
-          key={row.id}
-          direction="row"
-          spacing={2}
-          sx={{ py: 2, alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700 }}>{row.title}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {NOT_AVAILABLE_LABEL}
-            </Typography>
-          </Box>
-          <Button
-            size="small"
-            variant="outlined"
-            color={row.destructive ? 'error' : 'inherit'}
-            aria-label={row.actionLabel}
-            disabled
-          >
-            {row.action}
-          </Button>
-        </Stack>
-      ))}
-    </Stack>
-  );
-}
-
-export function RoadmapPanel({ detail }: { detail: string }) {
-  return (
-    <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-      <Chip size="small" variant="outlined" label="Roadmap" />
-      <Typography variant="body2" color="text.secondary">
-        {detail}
-      </Typography>
-    </Stack>
-  );
-}
-
 const SettingsPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const location = useLocation();
@@ -522,8 +362,6 @@ const SettingsPage: React.FC = () => {
   } = useApplicationInfo();
   const workspaceSettings = useGetWorkspaceSettingsQuery(queryArg);
   const preferences = useGetUserPreferencesQuery(queryArg);
-  const notifications = useGetNotificationPreferencesQuery(queryArg);
-  const hermesSettings = useGetHermesSettingsQuery(queryArg);
   const integrations = useGetIntegrationSettingsQuery(queryArg, {
     refetchOnMountOrArgChange: true,
   });
@@ -538,10 +376,7 @@ const SettingsPage: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<GeneralFieldErrors>({});
 
   const [updateWorkspace, { isLoading: saving }] = useUpdateWorkspaceSettingsMutation();
-  const [updateHermes, { isLoading: savingHermes }] = useUpdateHermesSettingsMutation();
   const [updatePreferences, { isLoading: savingPreferences }] = useUpdateUserPreferencesMutation();
-  const [updateNotifications, { isLoading: savingNotifications }] =
-    useUpdateNotificationPreferencesMutation();
 
   const draft = { name, currency, timezone, language };
   const baselineSnapshot = baseline ? workspaceDraftSnapshot(baseline) : null;
@@ -604,69 +439,6 @@ const SettingsPage: React.FC = () => {
       dispatch(enqueueToast({ message: 'Workspace settings saved.', severity: 'success' }));
     } catch (err) {
       setFieldErrors(mapSettingsFieldErrors(err));
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleAutonomy = async (level: AutonomyLevel) => {
-    if (!principal) return;
-    try {
-      await updateHermes({ principal, patch: { autonomyLevel: level } }).unwrap();
-      dispatch(setAutonomyLevel(level));
-      dispatch(
-        enqueueToast({ message: `Autonomy set to ${AUTONOMY_LABELS[level]}.`, severity: 'success' })
-      );
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleCreativity = async (creativityPreset: HermesCreativityPreset) => {
-    if (!principal) return;
-    try {
-      await updateHermes({ principal, patch: hermesCreativityPatch(creativityPreset) }).unwrap();
-      dispatch(enqueueToast({ message: 'Hermes creativity saved.', severity: 'success' }));
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleListingSeo = async (enabled: boolean) => {
-    if (!principal) return;
-    try {
-      await updateHermes({ principal, patch: hermesListingSeoEnabledPatch(enabled) }).unwrap();
-      dispatch(enqueueToast({ message: 'Listing SEO agent saved.', severity: 'success' }));
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleAutomation = async (
-    field: 'autoCreateListings' | 'autoAdjustPricing' | 'autoRelist' | 'smartTitleAndSEO',
-    enabled: boolean
-  ) => {
-    if (!principal) return;
-    try {
-      await updateHermes({ principal, patch: hermesAutomationPatch(field, enabled) }).unwrap();
-      dispatch(enqueueToast({ message: 'Hermes automation saved.', severity: 'success' }));
-    } catch (err) {
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleNotification = async (
-    event: NotificationEventKey,
-    channel: keyof NotificationChannels,
-    enabled: boolean
-  ) => {
-    if (!principal) return;
-    try {
-      await updateNotifications({
-        principal,
-        patch: notificationChannelPatch(event, channel, enabled),
-      }).unwrap();
-      dispatch(enqueueToast({ message: 'Notification preference saved.', severity: 'success' }));
-    } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -795,156 +567,6 @@ const SettingsPage: React.FC = () => {
             </Stack>
           </SettingsQueryState>
         );
-      case 'hermes':
-        return (
-          <SettingsQueryState
-            isLoading={hermesSettings.isFetching && !hermesSettings.currentData}
-            isError={hermesSettings.isError}
-            retry={hermesSettings.refetch}
-          >
-            <Stack spacing={1.5}>
-              <Typography variant="caption" color="text.secondary">
-                {HERMES_REVIEW_ONLY_NOTE}
-              </Typography>
-              {AUTONOMY_LEVEL_LIST.map((level) => {
-                const selected = hermesSettings.currentData?.autonomyLevel === level;
-                return (
-                  <ButtonBase
-                    key={level}
-                    onClick={() => handleAutonomy(level)}
-                    disabled={savingHermes || !hermesSettings.currentData}
-                    aria-pressed={selected}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2.5,
-                      width: '100%',
-                      display: 'block',
-                      textAlign: 'left',
-                      border: (t) =>
-                        `2px solid ${selected ? t.palette.primary.main : t.palette.divider}`,
-                      bgcolor: selected ? 'action.selected' : 'background.paper',
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}
-                    >
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        {AUTONOMY_LABELS[level]}
-                      </Typography>
-                      {selected && <CheckCircleIcon sx={{ fontSize: 18, color: 'primary.main' }} />}
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      {AUTONOMY_DESCRIPTIONS[level]}
-                    </Typography>
-                  </ButtonBase>
-                );
-              })}
-              <Divider />
-              <Typography variant="subtitle2">Listing agent creativity</Typography>
-              <Select
-                value={hermesSettings.currentData?.creativityPreset ?? 'balanced'}
-                disabled={savingHermes || !hermesSettings.currentData}
-                onChange={(event) => handleCreativity(event.target.value as HermesCreativityPreset)}
-                aria-label="Listing agent creativity"
-              >
-                <MenuItem value="precise">Precise</MenuItem>
-                <MenuItem value="balanced">Balanced</MenuItem>
-                <MenuItem value="creative">Creative</MenuItem>
-              </Select>
-              <FormControlLabel
-                control={
-                  <Switch
-                    disabled={savingHermes || !hermesSettings.currentData}
-                    checked={hermesSettings.currentData?.agents.listingSeo.enabled ?? true}
-                    onChange={(event) => handleListingSeo(event.target.checked)}
-                  />
-                }
-                label="Enable listing SEO agent (review-only)"
-              />
-              <Divider />
-              <Typography variant="subtitle2">Automation controls</Typography>
-              {(
-                [
-                  ['autoCreateListings', 'Automatically create listings'],
-                  ['autoAdjustPricing', 'Automatically adjust pricing'],
-                  ['autoRelist', 'Automatically relist'],
-                  ['smartTitleAndSEO', 'Smart title and SEO'],
-                ] as const
-              ).map(([field, label]) => (
-                <FormControlLabel
-                  key={field}
-                  control={
-                    <Switch
-                      disabled={savingHermes || !hermesSettings.currentData}
-                      checked={hermesSettings.currentData?.guardrails[field] ?? false}
-                      onChange={(event) => handleAutomation(field, event.target.checked)}
-                    />
-                  }
-                  label={label}
-                />
-              ))}
-            </Stack>
-          </SettingsQueryState>
-        );
-      case 'notifications':
-        return (
-          <SettingsQueryState
-            isLoading={notifications.isFetching && !notifications.currentData}
-            isError={notifications.isError}
-            retry={notifications.refetch}
-          >
-            <Stack spacing={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                Choose channels independently for each event. Changes are saved immediately.
-              </Typography>
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr repeat(3, auto)' },
-                  gap: 1,
-                  alignItems: 'center',
-                }}
-              >
-                <Typography variant="caption">Event</Typography>
-                {notificationChannels.map((channel) => (
-                  <Box key={channel.key}>
-                    <Typography variant="caption">{channel.label}</Typography>
-                    {channel.unavailable && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', maxWidth: 120 }}
-                      >
-                        {NOT_AVAILABLE_LABEL}
-                      </Typography>
-                    )}
-                  </Box>
-                ))}
-                {notificationRows.map(([event, label]) => (
-                  <React.Fragment key={event}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {label}
-                    </Typography>
-                    {notificationChannels.map((channel) => (
-                      <Switch
-                        key={channel.key}
-                        size="small"
-                        disabled={
-                          !notifications.currentData || savingNotifications || channel.unavailable
-                        }
-                        checked={notifications.currentData?.events[event][channel.key] ?? false}
-                        onChange={(e) => handleNotification(event, channel.key, e.target.checked)}
-                        slotProps={{ input: { 'aria-label': `${label} ${channel.key}` } }}
-                      />
-                    ))}
-                  </React.Fragment>
-                ))}
-              </Box>
-            </Stack>
-          </SettingsQueryState>
-        );
       case 'appearance':
         return (
           <SettingsQueryState
@@ -999,12 +621,6 @@ const SettingsPage: React.FC = () => {
             <MarketplaceAccountsList items={marketplaceItems} />
           </SettingsQueryState>
         );
-      case 'apiKeys':
-        return <RoadmapPanel detail={API_KEYS_ROADMAP_NOTE} />;
-      case 'telegram':
-        return <RoadmapPanel detail={TELEGRAM_ROADMAP_NOTE} />;
-      case 'security':
-        return <SecurityPanel />;
       case 'about':
         return (
           <ApplicationInfoBlock

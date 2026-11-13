@@ -1,18 +1,10 @@
 import { defaultSerializeQueryArgs } from '@reduxjs/toolkit/query';
-import {
-  hermesAutomationPatch,
-  hermesCreativityPatch,
-  hermesListingSeoEnabledPatch,
-  notificationChannelPatch,
-  settingsPrincipalKey,
-  settingsRequest,
-} from './settingsApi';
+import { settingsPrincipalKey, settingsRequest } from './settingsApi';
 
 describe('settings API contract', () => {
   it('uses principal-scoped routes without caller supplied workspace or user ids', () => {
     expect(settingsRequest.workspace()).toBe('/settings/workspace');
     expect(settingsRequest.preferences()).toBe('/settings/preferences');
-    expect(settingsRequest.notifications()).toBe('/settings/notifications');
     expect(settingsRequest.hermes()).toBe('/settings/hermes');
     expect(settingsRequest.integrations()).toBe('/settings/integrations');
 
@@ -35,18 +27,5 @@ describe('settings API contract', () => {
 
     expect(settingsPrincipalKey(principalA)).not.toBe(settingsPrincipalKey(principalB));
     expect(serialize(principalA)).not.toBe(serialize(principalB));
-  });
-
-  it('builds minimal normalized notification and Hermes automation mutations', () => {
-    expect(notificationChannelPatch('sync_error', 'telegram', true)).toEqual({
-      events: { sync_error: { telegram: true } },
-    });
-    expect(hermesAutomationPatch('autoRelist', true)).toEqual({
-      guardrails: { autoRelist: true },
-    });
-    expect(hermesCreativityPatch('creative')).toEqual({ creativityPreset: 'creative' });
-    expect(hermesListingSeoEnabledPatch(false)).toEqual({
-      agents: { listingSeo: { enabled: false } },
-    });
   });
 });
