@@ -28,9 +28,7 @@ jest.mock('./CommandPalette.js', () => ({
 
 describe('canonical MarketDesk shell contract', () => {
   it.each([
-    ['/', 'Dashboard'],
     ['/products', 'Products'],
-    ['/analytics', 'Analytics'],
     ['/hermes', 'Hermes AI'],
     ['/marketplaces', 'Marketplaces'],
     ['/settings', 'Settings'],
@@ -45,16 +43,15 @@ describe('canonical MarketDesk shell contract', () => {
     });
   });
 
-  it('keeps Listings routable but out of primary PRD navigation', () => {
-    expect(APP_ROUTE_PATHS.listings).toBe('/listings');
+  it('lists the four stage-focus destinations', () => {
     expect(NAV_ITEMS.map(({ path }) => path)).toEqual([
-      '/',
       '/products',
-      '/analytics',
       '/hermes',
       '/marketplaces',
       '/settings',
     ]);
+    expect(Object.values(APP_ROUTE_PATHS)).not.toContain('/analytics');
+    expect(Object.values(APP_ROUTE_PATHS)).not.toContain('/listings');
   });
 
   it('falls back to the product brand for unknown routes', () => {

@@ -2,5 +2,3 @@ export { CatalogueFooter, ProductsTable, ProductsCards } from './ProductsTable.j
 export type { ProductsTableProps } from './ProductsTable.js';
 export { ListingsTable } from './ListingsTable.js';
 export type { ListingsTableProps } from './ListingsTable.js';
-export { AnalyticsTable } from './AnalyticsTable.js';
-export type { AnalyticsTableProps } from './AnalyticsTable.js';

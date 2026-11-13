@@ -41,11 +41,6 @@ describe('MarketDesk sidebar shell contract', () => {
     expect(isPrimaryNavActive('/products/new', '/products')).toBe(true);
     expect(isPrimaryNavActive('/products/product-123', '/products')).toBe(true);
   });
-
-  it('does not mark Dashboard active for unrelated routes', () => {
-    expect(isPrimaryNavActive('/', '/')).toBe(true);
-    expect(isPrimaryNavActive('/products', '/')).toBe(false);
-  });
 });
 
 describe('expanded desktop sidebar (PRD shell)', () => {
@@ -53,7 +48,7 @@ describe('expanded desktop sidebar (PRD shell)', () => {
   // the same first render.
   const html = renderToStaticMarkup(
     <ThemeProvider theme={lightTheme}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={['/products']}>
         <Sidebar />
       </MemoryRouter>
     </ThemeProvider>
@@ -73,13 +68,13 @@ describe('expanded desktop sidebar (PRD shell)', () => {
 
   it('labels the primary navigation with a Menu eyebrow', () => {
     expect(text.indexOf('Menu')).toBeGreaterThan(text.indexOf('Marketplace OS'));
-    expect(text.indexOf('Menu')).toBeLessThan(text.indexOf('Dashboard'));
+    expect(text.indexOf('Menu')).toBeLessThan(text.indexOf('Products'));
   });
 
   it('marks the active route on the primary-weak tint', () => {
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
     expect(html).toMatch(
-      /aria-current="page"[^>]*aria-label="Dashboard"|aria-label="Dashboard"[^>]*aria-current="page"/
+      /aria-current="page"[^>]*aria-label="Products"|aria-label="Products"[^>]*aria-current="page"/
     );
     expect(html).toContain('background-color:#EEEEFB');
     expect(html).toContain('color:#5B5BD6');

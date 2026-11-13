@@ -12,8 +12,6 @@ export {
   ConnectionBadge,
 } from './Badge.js';
 export type { BadgeProps } from './Badge.js';
-export { StatCard } from './StatCard.js';
-export type { StatCardProps } from './StatCard.js';
 export { Modal } from './Modal.js';
 export type { ModalProps } from './Modal.js';
 export { ConfirmDialog } from './ConfirmDialog.js';
@@ -28,4 +26,3 @@ export { LoadingSkeleton, PageSkeleton } from './Skeleton.js';
 export { Toast } from './Toast.js';
 export { PageStub } from './PageStub.js';
 export { SandboxAdvertChip } from './SandboxAdvertChip.js';
-export { SandboxDataNotice, SANDBOX_DATA_NOTICE } from './SandboxDataNotice.js';

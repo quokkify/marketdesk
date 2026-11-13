@@ -354,38 +354,3 @@ export interface AnalyticsOverview {
     'currency' | 'revenue' | 'profit' | 'totalViews' | 'sales' | 'conversion'
   > | null;
 }
-
-export interface RevenuePoint {
-  date: string; // ISO date bucket
-  revenue: number | null;
-  profit: number | null;
-  previous: number | null;
-}
-
-// GET /analytics/revenue → { series, currency }. `series` is always an array
-// (empty until historical data is wired); `currency` is null when unknown.
-export interface AnalyticsRevenue {
-  series: RevenuePoint[];
-  currency: string | null;
-}
-
-// GET /analytics/listings → per-listing performance rows.
-export interface ListingPerformance {
-  listingId: string;
-  productId: string;
-  productName: string | null;
-  productSku: string | null;
-  marketplaceId: string;
-  marketplaceName: string | null;
-  marketplaceListingId: string | null;
-  status: ListingStatus;
-  price: number;
-  revenue: number | null;
-  profit: number | null;
-  currency: string | null;
-  sales: number;
-  views: number;
-  conversion: number;
-  watchers: number;
-  messages: number;
-}

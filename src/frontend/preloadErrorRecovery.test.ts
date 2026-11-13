@@ -91,7 +91,7 @@ describe('installPreloadErrorRecovery', () => {
     expect(reload).toHaveBeenCalledTimes(2);
 
     uninstall();
-    target.dispatchEvent(preloadError('Failed to fetch: /assets/AnalyticsPage-newest.js'));
+    target.dispatchEvent(preloadError('Failed to fetch: /assets/ProductsPage-newest.js'));
     expect(reload).toHaveBeenCalledTimes(2);
   });
 });
