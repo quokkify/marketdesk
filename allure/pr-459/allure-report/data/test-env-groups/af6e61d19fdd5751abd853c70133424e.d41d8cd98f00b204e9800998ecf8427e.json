@@ -1,0 +1,1 @@
+{"id":"af6e61d19fdd5751abd853c70133424e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/runStore.test.ts#summarize treats a missing maxAttempts as a single attempt","name":"treats a missing maxAttempts as a single attempt","status":"passed","testResultsByEnv":{"default":"584e409694130d99cd449679516db9ac"}}
