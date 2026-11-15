@@ -1,4 +1,5 @@
 import { AesGcmCredentialVault } from '../AesGcmCredentialVault';
+import { secretRegistry } from '../../runRecorder/SecretRegistry';
 import type { OlxOAuthTokens } from '../../../application/services/MarketplaceOAuthService';
 
 describe('AesGcmCredentialVault', () => {
@@ -20,6 +21,27 @@ describe('AesGcmCredentialVault', () => {
     expect(serialized).not.toContain(tokens.accessToken);
     expect(serialized).not.toContain(tokens.refreshToken);
     expect(vault.decrypt(encrypted)).toEqual(tokens);
+  });
+
+  it('registers decrypted tokens so they cannot be recorded', () => {
+    const vault = new AesGcmCredentialVault(key);
+    const unique = {
+      ...tokens,
+      accessToken: 'vault-test-access-token-9f3a',
+      refreshToken: 'vault-test-refresh-token-9f3a',
+    };
+    const decrypted = vault.decrypt(vault.encrypt(unique));
+    expect(secretRegistry.scrub(`a ${decrypted.accessToken} b ${decrypted.refreshToken}`)).toBe(
+      'a [SECRET:olx-token] b [SECRET:olx-token]',
+    );
+  });
+
+  it('registers the decrypted app client secret', () => {
+    const vault = new AesGcmCredentialVault(key);
+    const decrypted = vault.decryptAppCredentials(
+      vault.encryptAppCredentials({ clientId: 'cid', clientSecret: 'vault-test-client-secret-9f3a' }),
+    );
+    expect(secretRegistry.scrub(`x ${decrypted.clientSecret} y`)).toBe('x [SECRET:olx-client-secret] y');
   });
 
   it('fails closed when the configured key is missing or malformed', () => {

@@ -125,6 +125,8 @@ import {
 import { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { IdGenerator } from '../../application/ports/IdGenerator';
+import { noopRunRecorder, type IRunRecorder } from '../../application/ports/IRunRecorder';
+import { recordedProcessor, stampRun } from './recordedQueue';
 import type {
   IJobQueue,
   JobEnqueueOptions,
@@ -162,19 +164,25 @@ export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) 
 class BullManagedQueue<T> implements ManagedQueue<T> {
   private readonly queue: BullJobQueue<T>;
 
-  constructor(private readonly name: string) {
+  constructor(
+    private readonly name: string,
+    private readonly recorder: IRunRecorder
+  ) {
     this.queue = new BullJobQueue<T>(name);
   }
 
   async enqueue(data: T, options?: JobEnqueueOptions): Promise<void> {
-    await this.queue.add(data, buildBullAddOptions(this.name, options));
+    await this.queue.add(
+      stampRun(data, this.name, options?.jobId, this.recorder),
+      buildBullAddOptions(this.name, options)
+    );
   }
 
   async enqueueAll(items: Array<{ data: T; options?: JobEnqueueOptions }>): Promise<void> {
     if (items.length === 0) return;
     await this.queue.addBulk(
       items.map((item) => ({
-        data: item.data,
+        data: stampRun(item.data, this.name, item.options?.jobId, this.recorder),
         opts: buildBullAddOptions(this.name, item.options),
       }))
     );
@@ -197,7 +205,7 @@ class BullManagedQueue<T> implements ManagedQueue<T> {
   }
 
   registerHandler(handler: (data: T) => Promise<unknown>): void {
-    this.queue.processAsync((job) => handler(job.data));
+    this.queue.processAsync(recordedProcessor(this.name, this.recorder, handler));
   }
 
   close(): Promise<void> {
@@ -213,6 +221,7 @@ export interface ContainerOverrides {
   idGenerator?: IdGenerator;
   logger?: ErrorLogger & ProductDraftLogger;
   marketplaceCredentialsKey?: string;
+  runRecorder?: IRunRecorder;
   // Factory for background job queues. Overridable so tests avoid a live Bull/Redis.
   createQueue?: <T>(name: string) => ManagedQueue<T>;
 }
@@ -279,7 +288,9 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       deliveryOptionCode: env.marketplaces.olx.deliveryOptionCode,
     },
   });
-  const createQueue = overrides.createQueue ?? (<T>(name: string) => new BullManagedQueue<T>(name));
+  const createQueue =
+    overrides.createQueue ??
+    (<T>(name: string) => new BullManagedQueue<T>(name, overrides.runRecorder ?? noopRunRecorder));
 
   // 4. Repositories. They use the injected pool (or the module-level default if
   //    not overridden). An optional PoolClient can enlist them in an outer transaction.
@@ -719,6 +730,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceHistoryRecorder: priceHistoryRepo,
     idGenerator,
     logger: overrides.logger,
+    runRecorder: overrides.runRecorder ?? noopRunRecorder,
   };
 
   const queues: ManagedQueue<unknown>[] = [

@@ -1,4 +1,5 @@
 import { OlxOAuthClient } from '../OlxOAuthClient';
+import { secretRegistry } from '../../runRecorder/SecretRegistry';
 
 describe('OlxOAuthClient', () => {
   const config = {
@@ -69,6 +70,26 @@ describe('OlxOAuthClient', () => {
     expect(body.get('code')).toBe('authorization-code');
     expect(body.get('client_secret')).toBe(config.clientSecret);
     expect(body.get('redirect_uri')).toBe(config.redirectUri);
+  });
+
+  it('registers the tokens of a parsed response so they cannot be recorded', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          access_token: 'oauth-test-access-token-5c1d',
+          refresh_token: 'oauth-test-refresh-token-5c1d',
+          expires_in: 3600,
+        }),
+    }));
+    const client = new OlxOAuthClient(config, fetchMock as unknown as typeof fetch);
+
+    await client.exchangeAuthorizationCode('authorization-code');
+
+    expect(
+      secretRegistry.scrub('a oauth-test-access-token-5c1d b oauth-test-refresh-token-5c1d'),
+    ).toBe('a [SECRET:olx-token] b [SECRET:olx-token]');
   });
 
   it('does not expose provider bodies or client secrets in token errors', async () => {

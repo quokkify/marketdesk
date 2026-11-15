@@ -8,6 +8,7 @@ import type {
   OlxOAuthAppCredentials,
   OlxOAuthTokens,
 } from '../../application/services/MarketplaceOAuthService';
+import { secretRegistry } from '../runRecorder/SecretRegistry';
 
 interface CredentialEnvelope {
   version: 1;
@@ -42,6 +43,8 @@ export class AesGcmCredentialVault implements MarketplaceCredentialVault {
     const decoded = this.decryptPayload(credentials) as Omit<OlxOAuthTokens, 'expiresAt'> & {
       expiresAt: string;
     };
+    secretRegistry.register(decoded.accessToken, 'SECRET:olx-token');
+    secretRegistry.register(decoded.refreshToken, 'SECRET:olx-token');
     return { ...decoded, expiresAt: new Date(decoded.expiresAt) };
   }
 
@@ -54,6 +57,7 @@ export class AesGcmCredentialVault implements MarketplaceCredentialVault {
     if (typeof decoded.clientId !== 'string' || typeof decoded.clientSecret !== 'string') {
       throw new Error('Unsupported marketplace app credential payload');
     }
+    secretRegistry.register(decoded.clientSecret, 'SECRET:olx-client-secret');
     return { clientId: decoded.clientId, clientSecret: decoded.clientSecret };
   }
 

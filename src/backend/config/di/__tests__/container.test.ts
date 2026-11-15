@@ -12,6 +12,7 @@ import { buildBullAddOptions, buildContainer, type ManagedQueue } from '../conta
 import { buildApp } from '../../../presentation/http/app';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
 import { env } from '../../env';
+import { noopRunRecorder, type IRunRecorder } from '../../../application/ports/IRunRecorder';
 import { StubOlxTaxonomyResolver } from '../../../infrastructure/adapters/StubOlxTaxonomyResolver';
 import { MarketplaceAdapterFactory } from '../../../infrastructure/adapters/MarketplaceAdapterFactory';
 
@@ -75,6 +76,20 @@ function build() {
 // --- Tests -------------------------------------------------------------------
 
 describe('buildContainer (composition root)', () => {
+  it('exposes the injected run recorder on deps and defaults to the no-op', () => {
+    const recorder: IRunRecorder = { enabled: true, record: jest.fn(), discard: jest.fn() };
+    const withRecorder = buildContainer({
+      pool: fakePool,
+      redis: fakeRedis,
+      aiProvider: fakeAi,
+      marketplaceCredentialsKey: validCredentialsKey,
+      createQueue: <T>(_name: string) => makeQueue<T>(),
+      runRecorder: recorder,
+    });
+    expect(withRecorder.deps.runRecorder).toBe(recorder);
+    expect(build().deps.runRecorder).toBe(noopRunRecorder);
+  });
+
   it('fails during container construction for an invalid credential-vault key', () => {
     expect(() =>
       buildContainer({

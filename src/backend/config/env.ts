@@ -162,6 +162,10 @@ export const env = {
   applicationVersion: readEmbeddedApplicationVersion(),
   appPort: parseInt(process.env.APP_PORT || '3000', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
+  runRecorder: {
+    mode: process.env.RUN_RECORDER || '',
+    dir: process.env.RUN_RECORDER_DIR || './.local/runs',
+  },
   trustProxy: process.env.TRUST_PROXY === 'true',
   // Local development only: tolerate a placeholder JWT_SECRET. Read once here, so the boot gate
   // and the boot warning decide from the same value (see insecureDevJwtAllowed).
