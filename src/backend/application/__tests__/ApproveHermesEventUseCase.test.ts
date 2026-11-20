@@ -1504,4 +1504,134 @@ describe('ApproveHermesEventUseCase', () => {
     const reloaded = await eventRepo.findById('evt-x');
     expect(reloaded!.status).toBe('pending_review');
   });
+
+  // Regression guards (2026-11-20 audit, defence in depth): ids inside an event are resolved in
+  // the event's workspace, so one that points at another workspace reads as not found.
+  describe('with ids that belong to another workspace', () => {
+    function relistEvent(listingIds: string[]) {
+      return unwrap(
+        HermesEvent.create({
+          id: 'evt-relist-foreign',
+          workspaceId: 'ws-1',
+          productId: 'prod-1',
+          type: 'needs_relisting',
+          severity: 'warning',
+          title: 'Relist product',
+          proposedChange: { kind: 'relist', listingIds },
+        })
+      );
+    }
+
+    async function foreignProduct(productRepo: InMemoryProductRepository, id: string) {
+      const product = unwrap(
+        Product.create({
+          id,
+          workspaceId: 'ws-other',
+          sku: `SKU-${id}`,
+          name: 'Foreign lamp',
+          description: 'A lamp that belongs to another workspace entirely.',
+          costPrice: money(50),
+          sellingPrice: money(100),
+          condition: 'good',
+          category: 'home',
+        })
+      );
+      productRepo.items.set(product.id, product);
+      return product;
+    }
+
+    it('skips a relist listing owned by another workspace', async () => {
+      const { useCase, eventRepo, listingRepo, publishQueue } = setup();
+      listingRepo.listingWorkspaces.set('lst-1', 'ws-other');
+      await eventRepo.save(relistEvent(['lst-1']));
+
+      const result = await useCase.execute({ eventId: 'evt-relist-foreign', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.code).toBe('INVALID_STATE');
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
+
+    it('skips a relist listing whose product belongs to another workspace', async () => {
+      const { useCase, eventRepo, productRepo, listingRepo, publishQueue } = setup();
+      await foreignProduct(productRepo, 'prod-foreign');
+      listingRepo.items.set(
+        'lst-foreign',
+        unwrap(
+          Listing.create({
+            id: 'lst-foreign',
+            productId: 'prod-foreign',
+            marketplaceId: 'mp-1',
+            price: money(100),
+          })
+        )
+      );
+      await eventRepo.save(relistEvent(['lst-foreign']));
+
+      const result = await useCase.execute({ eventId: 'evt-relist-foreign', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.code).toBe('INVALID_STATE');
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
+
+    it('skips a relist listing whose marketplace belongs to another workspace', async () => {
+      const { useCase, eventRepo, listingRepo, marketplaceRepo, accountStatuses, publishQueue } =
+        setup();
+      const foreignMarketplace = unwrap(
+        Marketplace.create({
+          id: 'mp-foreign',
+          workspaceId: 'ws-other',
+          key: 'olx',
+          name: 'OLX',
+          connected: true,
+        })
+      );
+      marketplaceRepo.items.set(foreignMarketplace.id, foreignMarketplace);
+      accountStatuses.set(foreignMarketplace.id, 'connected');
+      listingRepo.items.set(
+        'lst-foreign-mp',
+        unwrap(
+          Listing.create({
+            id: 'lst-foreign-mp',
+            productId: 'prod-1',
+            marketplaceId: 'mp-foreign',
+            price: money(100),
+          })
+        )
+      );
+      await eventRepo.save(relistEvent(['lst-foreign-mp']));
+
+      const result = await useCase.execute({ eventId: 'evt-relist-foreign', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.code).toBe('INVALID_STATE');
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
+
+    it('treats an event product from another workspace as not found', async () => {
+      const { useCase, eventRepo, productRepo, priceHistory } = setup();
+      const foreign = await foreignProduct(productRepo, 'prod-foreign');
+      await eventRepo.save(
+        unwrap(
+          HermesEvent.create({
+            id: 'evt-foreign-product',
+            workspaceId: 'ws-1',
+            productId: 'prod-foreign',
+            type: 'suggested_lower_price',
+            severity: 'warning',
+            title: 'Lower the price',
+            proposedChange: { kind: 'price', field: 'price', from: 100, to: 90 },
+          })
+        )
+      );
+
+      const result = await useCase.execute({ eventId: 'evt-foreign-product', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.code).toBe('NOT_FOUND');
+      expect(foreign.sellingPrice.amount).toBe(100);
+      expect(priceHistory.records).toHaveLength(0);
+    });
+  });
 });

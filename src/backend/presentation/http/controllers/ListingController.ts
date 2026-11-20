@@ -227,6 +227,7 @@ export class ListingController {
     if (!listing) return next(new NotFoundError(`Listing not found: ${listingId}`));
     const result = await this.listings.publishListing({
       listingId: listing.id,
+      workspaceId: req.user!.workspaceId!,
       actorId: req.user!.userId,
       quotaOverride: req.body?.quotaOverride,
     });
@@ -301,6 +302,7 @@ export class ListingController {
     if (!listing) return next(new NotFoundError(`Listing not found: ${listingId}`));
     const result = await this.listings.relistListing({
       listingId: listing.id,
+      workspaceId: req.user!.workspaceId!,
       actorId: req.user!.userId,
       quotaOverride: req.body?.quotaOverride,
     });

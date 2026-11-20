@@ -4,6 +4,8 @@
 
 export interface PublishListingDTO {
   listingId: string;
+  // Workspace the listing, its product and its marketplace are loaded in; a foreign id is not found.
+  workspaceId: string;
   mode?: 'publish' | 'relist';
   // Actor requesting the publish (for the activity log). Optional for system flows.
   actorId?: string;

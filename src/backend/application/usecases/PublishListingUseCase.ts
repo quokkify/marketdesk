@@ -95,7 +95,8 @@ export class PublishListingUseCase {
   private preflightGraph() {
     return new StateGraph(PreflightState)
       .addNode('load', async (state: PreflightGraphState) => {
-        const listing = await this.listingRepo.findById(state.input.listingId);
+        const { listingId, workspaceId } = state.input;
+        const listing = await this.listingRepo.findByIdForWorkspace(listingId, workspaceId);
         if (!listing) throw new NotFoundError(`Listing not found: ${state.input.listingId}`);
         const mode = state.input.mode ?? 'publish';
         const relistable = listing.status === 'expired'
@@ -105,9 +106,12 @@ export class PublishListingUseCase {
             `Cannot relist a listing in ${listing.status} status while it may still reference an existing marketplace advert`,
           );
         }
-        const product = await this.productRepo.findById(listing.productId);
+        const product = await this.productRepo.findByIdForWorkspace(listing.productId, workspaceId);
         if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);
-        const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+        const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+          listing.marketplaceId,
+          workspaceId,
+        );
         if (!marketplace) throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
         return { listing, product, marketplace };
       })
