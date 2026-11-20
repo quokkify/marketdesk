@@ -6,6 +6,7 @@ import express, { type RequestHandler } from 'express';
 import request from 'supertest';
 import {
   aiRateLimiter,
+  loginFailureKey,
   loginFailureRateLimiter,
 } from '../middleware/RateLimitMiddleware';
 import { createProductRoutes } from '../routes/products';
@@ -192,6 +193,41 @@ describe('login failure limiter (regression guard)', () => {
     expect(statuses).toEqual([200, 200, 200, 200, 200, 401]);
   });
 
+  // Regression guard (review of #462): an e-mail of megabytes passed validation and became a
+  // limiter key held in memory for the whole window.
+  it('rejects an over-long e-mail with 400 before the limiter sees it', async () => {
+    const limiterHits = jest.fn();
+    const spyLimiter: RequestHandler = (_req, _res, next) => {
+      limiterHits();
+      next();
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/auth',
+      createAuthRoutes({ login } as unknown as AuthController, undefined, {
+        loginLimiter: spyLimiter,
+      })
+    );
+    const tooLong = `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(58)}.com`;
+
+    const res = await request(app).post('/auth/login').send({ email: tooLong, password: 'x' });
+
+    expect(res.status).toBe(400);
+    expect(limiterHits).not.toHaveBeenCalled();
+  });
+
+  it('keys the limiter by a fixed-size digest of the normalised e-mail', () => {
+    const keyOf = (email: string) => loginFailureKey({ body: { email } } as express.Request);
+    const short = keyOf('a@b.co');
+    const long = keyOf(`${'a'.repeat(100_000)}@b.co`);
+
+    expect(long).toHaveLength(short.length);
+    expect(short).toMatch(/^login:[0-9a-f]{64}$/);
+    expect(keyOf(' A@B.CO ')).toBe(short);
+    expect(short).not.toContain('a@b.co');
+  });
+
   it('lets the account sign in again once the window has passed', async () => {
     const start = Date.now();
     const now = jest.spyOn(Date, 'now').mockReturnValue(start);
@@ -241,7 +277,10 @@ describe('registration switch (regression guard)', () => {
 });
 
 describe('readiness (regression guard)', () => {
-  const driverError = new Error('password authentication failed for user "marketdesk" at 10.0.0.5:5432');
+  const driverError = Object.assign(
+    new Error('password authentication failed for user "marketdesk" at 10.0.0.5:5432'),
+    { code: '28P01' }
+  );
 
   function appWith(checks: { database: () => Promise<unknown>; redis: () => Promise<unknown> }) {
     const logged: unknown[] = [];
@@ -268,7 +307,9 @@ describe('readiness (regression guard)', () => {
       redis: 'connected',
     });
     expect(JSON.stringify(res.body)).not.toMatch(/password|10\.0\.0\.5|marketdesk/);
-    expect(JSON.stringify(logged)).toContain('password authentication failed');
+    // The log names the component, error class and code, never the driver message, which can
+    // carry the database user or host (review of #462).
+    expect(logged).toEqual([{ component: 'database', errorName: 'Error', errorCode: '28P01' }]);
   });
 
   it('answers ready when every component is connected', async () => {

@@ -1,9 +1,8 @@
 // GET /ready handler. It is unauthenticated, so the answer names only each component and whether
-// it is reachable; the driver error, which can carry hosts, users or SQL state, goes to the log
-// with configured secrets redacted.
+// it is reachable. The driver message can carry hosts or the database user, so even the log gets
+// only the component, the error class and its code.
 
 import type { RequestHandler } from 'express';
-import { safeErrorDetails } from '../../config/safeErrorDetails';
 
 type ComponentCheck = () => Promise<unknown>;
 type ComponentStatus = 'connected' | 'unavailable';
@@ -14,8 +13,7 @@ export interface ReadinessLogger {
 
 export function createReadinessHandler(
   checks: Record<string, ComponentCheck>,
-  logger: ReadinessLogger,
-  sensitiveValues: readonly (string | undefined)[] = []
+  logger: ReadinessLogger
 ): RequestHandler {
   return async (_req, res) => {
     const components: Record<string, ComponentStatus> = {};
@@ -24,8 +22,13 @@ export function createReadinessHandler(
         await check();
         components[component] = 'connected';
       } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code;
         logger.error(
-          { component, error: safeErrorDetails(error, sensitiveValues) },
+          {
+            component,
+            errorName: error instanceof Error ? error.name : 'Unknown',
+            errorCode: typeof code === 'string' ? code : undefined,
+          },
           'Readiness check failed'
         );
         components[component] = 'unavailable';

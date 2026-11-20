@@ -125,7 +125,6 @@ const startServer = async () => {
           redis: () => createRedisClient().ping(),
         },
         logger,
-        startupSensitiveValues,
       ),
     );
 

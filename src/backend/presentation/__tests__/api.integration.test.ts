@@ -924,6 +924,37 @@ describe('Presentation API', () => {
         expect(JSON.stringify(res.body)).not.toContain('demo@example.com');
       });
 
+      // A valid-shaped address (64-character local part, 63-character labels) of a given length,
+      // so only the length cap decides.
+      const emailOfLength = (length: number) =>
+        `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(length - 197)}.com`;
+
+      it.each(['/api/auth/login', '/api/auth/register'])(
+        'rejects an e-mail longer than 254 characters on %s',
+        async (path) => {
+          const { app } = await buildTestApp();
+          const email = emailOfLength(255);
+
+          const res = await request(app)
+            .post(path)
+            .send({ email, password: 'secret123', workspaceName: 'Long' });
+
+          expect(email).toHaveLength(255);
+          expect(res.status).toBe(400);
+          expect(res.body.error.code).toBe('VALIDATION_ERROR');
+        }
+      );
+
+      it('still accepts a 254-character e-mail at sign-in', async () => {
+        const { app } = await buildTestApp();
+        const email = emailOfLength(254);
+
+        const res = await request(app).post('/api/auth/login').send({ email, password: 'wrong' });
+
+        expect(email).toHaveLength(254);
+        expect(res.status).toBe(401);
+      });
+
       it('refuses registration with 403 when it is switched off', async () => {
         const { app, authUserStore } = await buildTestApp({ registrationEnabled: false });
 

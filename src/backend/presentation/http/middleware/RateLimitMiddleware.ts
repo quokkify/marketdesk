@@ -9,6 +9,7 @@
 //   - failed logins:               10 per 15 min keyed by normalised e-mail, any IP
 // All limiters emit the §18 error envelope (429, RATE_LIMITED) on rejection.
 
+import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from 'express-rate-limit';
 
@@ -25,11 +26,13 @@ function keyByUser(req: Request): string {
   return req.user?.userId ?? ipKeyGenerator(req.ip ?? 'unknown');
 }
 
-function keyByLoginEmail(req: Request): string {
+// A digest keeps every key the same small size whatever the body holds, so stored keys cannot be
+// used to fill memory, and the store holds no addresses.
+export function loginFailureKey(req: Request): string {
   const email: unknown = req.body?.email;
-  return typeof email === 'string'
-    ? `login:${email.trim().toLowerCase()}`
-    : ipKeyGenerator(req.ip ?? 'unknown');
+  if (typeof email !== 'string') return ipKeyGenerator(req.ip ?? 'unknown');
+  const digest = createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+  return `login:${digest}`;
 }
 
 function rejection(_req: Request, res: Response): void {
@@ -101,7 +104,7 @@ export function loginFailureRateLimiter(
     standardHeaders: false,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    keyGenerator: keyByLoginEmail,
+    keyGenerator: loginFailureKey,
     handler: rejection,
   });
 }

@@ -66,9 +66,18 @@ not the per-account one. The routes that call the AI provider share a per-worksp
 `AI_RATE_LIMIT_PER_MINUTE` requests per minute (10 when unset), also independent of the client
 address. All limits are counted in the memory of each app process, so they apply per instance.
 
+The per-account limit can be triggered on purpose: anyone who knows an address, for example the
+administrator's, can send 10 wrong passwords for it and block its sign-in for up to 15 minutes. The
+block ends on its own. To narrow who can do this, switch registration off (below) so that strangers
+have no reason to reach the sign-in page, or allow only known addresses to `/api/auth` at Caddy or
+Cloudflare (an IP allowlist) when the instance is private.
+
 `REGISTRATION_ENABLED=false` makes `POST /api/auth/register` answer `403` with a message that the
 login page shows. Leave it unset, or `true`, only while people are meant to create their own
 accounts; it defaults to open so existing installations keep working after an update.
+While registration is open, registering with an address that already has an account answers
+`409`. The message no longer repeats the address, but the status still confirms that the account
+exists; that is accepted for as long as anyone may register.
 
 `DB_SSL_MODE` is mandatory in production. Keep `disable` for the internal Compose
 PostgreSQL service shown in this runbook. For an external managed PostgreSQL endpoint,
