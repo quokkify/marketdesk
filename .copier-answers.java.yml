@@ -7,7 +7,7 @@ java_components:
     path: test-automation
     java_version: "21"
     build_tool: gradle
-    lint_command: "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain"
+    lint_command: "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest archgateCheck --console=plain"
     test_command: bash ../scripts/ci-java-api-tests.sh
     run_build: false
     upload_test_artifacts: true

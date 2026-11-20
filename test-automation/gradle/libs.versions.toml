@@ -1,13 +1,13 @@
 [versions]
-q4j = "0.12.2"
+q4j = "0.15.0"
 testng = "7.12.0"
 checkstyle = "14.3.0"
 spotbugs-plugin = "6.5.13"
-log4j = "2.26.1"
 aspectj = "1.9.27"
 # q4j selenide publishes Selenide at runtime scope only, and page objects in src/main compile against it;
 # keep this version equal to the one the pinned q4j release uses.
 selenide = "7.19.0"
+archgate = "0.2.1"
 
 [libraries]
 q4j-config = { module = "dev.quokkify:config", version.ref = "q4j" }
@@ -19,12 +19,12 @@ q4j-selenide = { module = "dev.quokkify:selenide", version.ref = "q4j" }
 selenide = { module = "com.codeborne:selenide", version.ref = "selenide" }
 q4j-rest-assured = { module = "dev.quokkify:rest-assured", version.ref = "q4j" }
 q4j-jackson-json = { module = "dev.quokkify:jackson-json", version.ref = "q4j" }
-q4j-architecture = { module = "dev.quokkify:architecture", version.ref = "q4j" }
-log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
-log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.14" }
 testng = { module = "org.testng:testng", version.ref = "testng" }
 checkstyle = { module = "com.puppycrawl.tools:checkstyle", version.ref = "checkstyle" }
+archgate-bom = { module = "dev.quokkify.archgate:archgate-bom", version.ref = "archgate" }
+q4j-archgate-rules = { module = "dev.quokkify:archgate-rules", version.ref = "q4j" }
 
 [plugins]
 spotbugs = { id = "com.github.spotbugs", version.ref = "spotbugs-plugin" }
+archgate = { id = "dev.quokkify.archgate", version.ref = "archgate" }

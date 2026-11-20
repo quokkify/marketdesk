@@ -12,6 +12,9 @@ dependencies {
     implementation libs.q4j.rest.assured
     implementation libs.q4j.jackson.json
     testImplementation libs.testng
+    testImplementation platform(libs.archgate.bom)
+    testImplementation 'dev.quokkify.archgate:archgate-rules-archunit'
+    testImplementation libs.q4j.archgate.rules
     testRuntimeOnly libs.postgresql
     checkstyle libs.checkstyle
 }

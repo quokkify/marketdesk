@@ -25,7 +25,7 @@ A class in the "Use or compose" column goes into your own steps class as a field
 
 For a module that is not listed here, look up its path in the [module catalog](https://github.com/quokkify/q4j#-module-catalog) and the `settings.gradle` of q4j.
 
-Architecture verification has its own spec: [docs/agents/architecture-verification.md](docs/agents/architecture-verification.md). Read it when `build.gradle` does not apply `gradle/architecture.gradle`, because the gate is then not wired yet and the spec tells you how to add it. Read it also when `verifyArchitecture` reports a finding.
+Architecture verification has its own spec: [docs/agents/architecture-verification.md](docs/agents/architecture-verification.md). Read it when `build.gradle` does not apply `libs.plugins.archgate`, because the gate is then not wired yet and the spec tells you how to add it. Read it also when `archgateCheck` reports a finding.
 
 ## 2. Where code goes
 
@@ -48,7 +48,7 @@ src/test/resources/   META-INF/services listener registration, optional testng.p
 
 Declare a q4j module that `src/main` uses as `implementation` in `gradle/dependencies.gradle`. Use `testImplementation` only for test-only libraries such as TestNG. Why: `testImplementation` hides the module from `src/main`, and that pushes framework code into `src/test`.
 
-Some q4j modules do not pass their own base types on to your build. `rest-assured` needs `dev.quokkify:testng` (for `AbstractSteps`) and `dev.quokkify:config` (for `ConfigRegistry`) declared as `implementation` too. If `src/main` fails to compile on a q4j type, add the module that contains that type.
+Steps modules such as `rest-assured` bring `dev.quokkify:testng` (for `AbstractSteps`) with them. Declare `dev.quokkify:config` (for `ConfigRegistry`) as `implementation` yourself: the project calls it directly. If `src/main` fails to compile on a q4j type, add the module that contains that type.
 
 If this project was generated before this file existed, it may still have `testImplementation libs.q4j.config` and config classes under `src/test`. Move them to `src/main` and switch the dependency to `implementation` before you add new code.
 
@@ -147,7 +147,7 @@ UI and database tests follow the same layers. For UI, write a `<Name>Page`, a `<
 
 ## 5. Done checklist
 
-- [ ] `./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture` passes.
+- [ ] `./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest archgateCheck` passes.
 - [ ] `grep -rnE 'RestAssured|System\.(getProperty|getenv)' src/test/java` prints nothing.
 - [ ] `grep -rniE 'status[a-z]*\(.*\b[1-5][0-9]{2}\b' src` prints nothing (rule 10).
 - [ ] `grep -rnE '@Test\([^)]*groups *=|includeGroups|excludeGroups' src/test gradle` prints nothing, and test output names show `Concurrency` or `Sequential` (rule 9).
