@@ -89,6 +89,8 @@ export interface AppOptions {
   corsOrigin?: string;
   maxUploadFileSize?: number;
   applicationVersion?: string;
+  aiRateLimit?: number;
+  registrationEnabled?: boolean;
 }
 
 const DEFAULT_CORS_ORIGIN = 'http://localhost:5173';
@@ -241,6 +243,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       maxUploadFileSize,
       applicationVersion: options.applicationVersion ?? env.applicationVersion,
       currentUserStore: deps.authUserStore,
+      aiRateLimit: options.aiRateLimit ?? env.rateLimit.aiRequestsPerMinute,
+      registrationEnabled: options.registrationEnabled ?? env.auth.registrationEnabled,
     })
   );
 

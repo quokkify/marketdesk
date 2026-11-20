@@ -3,7 +3,9 @@
 // front of the auth router so the token check on /auth/me is behind it too) and
 // /auth/me is additionally limited per user after authentication; every other resource
 // is authenticated (1000/min keyed by workspaceId) and workspace-scoped; listing
-// price operations additionally get the sensitive limiter (10/min).
+// price operations additionally get the sensitive limiter (10/min); the routes that call the AI
+// share one tighter per-workspace allowance (aiRateLimit per minute); failed logins are limited
+// per account.
 
 import { Router, type RequestHandler } from 'express';
 import type { AuthController } from '../controllers/AuthController';
@@ -22,6 +24,8 @@ import {
   authenticatedRateLimiter,
   sensitiveRateLimiter,
   uploadRateLimiter,
+  aiRateLimiter,
+  loginFailureRateLimiter,
 } from '../middleware/RateLimitMiddleware';
 import { createAuthRoutes } from './auth';
 import { createProductRoutes } from './products';
@@ -55,7 +59,13 @@ export interface ApiRouterOptions {
   enableRateLimit?: boolean;
   maxUploadFileSize?: number;
   applicationVersion?: string;
+  // Requests per minute per workspace across all AI-invoking routes.
+  aiRateLimit?: number;
+  // Off: POST /auth/register answers 403.
+  registrationEnabled?: boolean;
 }
+
+const DEFAULT_AI_RATE_LIMIT = 10;
 
 export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): Router {
   const api = Router();
@@ -70,6 +80,12 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
     ? sensitiveRateLimiter()
     : undefined;
   const uploadsLimiter: RequestHandler | undefined = rateLimit ? uploadRateLimiter() : undefined;
+  const aiLimiter: RequestHandler | undefined = rateLimit
+    ? aiRateLimiter(options.aiRateLimit ?? DEFAULT_AI_RATE_LIMIT)
+    : undefined;
+  const loginLimiter: RequestHandler | undefined = rateLimit
+    ? loginFailureRateLimiter()
+    : undefined;
 
   // Public
   api.get('/application-info', ...(publicLimiter ? [publicLimiter] : []), (_req, res) =>
@@ -80,7 +96,13 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   // (js/missing-rate-limiting) does not follow a limiter passed in as a parameter and would
   // report the token check as unlimited again.
   if (publicLimiter) api.use('/auth', publicLimiter);
-  api.use('/auth', createAuthRoutes(c.auth, meLimiter));
+  api.use(
+    '/auth',
+    createAuthRoutes(c.auth, meLimiter, {
+      loginLimiter,
+      registrationEnabled: options.registrationEnabled,
+    })
+  );
   api.get(
     '/marketplaces/:provider/oauth/callback',
     ...(publicLimiter ? [publicLimiter] : []),
@@ -93,10 +115,10 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const currentPrincipalGuard = requireCurrentWorkspacePrincipal(options.currentUserStore);
   guard.push(requireWorkspace, currentPrincipalGuard);
 
-  api.use('/products', ...guard, createProductRoutes(c.products));
+  api.use('/products', ...guard, createProductRoutes(c.products, aiLimiter));
   api.use('/listings', ...guard, createListingRoutes(c.listings, sensitiveLimiter));
   api.use('/marketplaces', ...guard, createMarketplaceRoutes(c.marketplaces));
-  api.use('/hermes', ...guard, createHermesRoutes(c.hermes));
+  api.use('/hermes', ...guard, createHermesRoutes(c.hermes, aiLimiter));
   api.use('/analytics', ...guard, createAnalyticsRoutes(c.analytics));
   api.use('/workspaces', ...guard, createWorkspaceRoutes(c.workspaces));
   api.use('/settings', ...guard, createSettingsRoutes(c.settings));

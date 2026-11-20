@@ -492,6 +492,8 @@ async function buildTestApp(
     hermesStatus?: AppDeps['hermesStatus'];
     productAssistanceGraph?: AppDeps['productAssistanceGraph'];
     enableRateLimit?: boolean;
+    aiRateLimit?: number;
+    registrationEnabled?: boolean;
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
@@ -577,6 +579,8 @@ async function buildTestApp(
     app: buildApp(deps, {
       enableRateLimit: options.enableRateLimit ?? false,
       applicationVersion: options.applicationVersion,
+      aiRateLimit: options.aiRateLimit,
+      registrationEnabled: options.registrationEnabled,
     }),
     authUserStore,
     marketplaceRepo,
@@ -901,6 +905,65 @@ describe('Presentation API', () => {
           error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' },
         });
         expect(other.status).toBe(200);
+      });
+    });
+
+    describe('audit hardening (regression guards)', () => {
+      it('does not echo the e-mail back when it is already registered', async () => {
+        const { app } = await buildTestApp();
+
+        const res = await request(app)
+          .post('/api/auth/register')
+          .send({ email: 'demo@example.com', password: 'secret123', workspaceName: 'Again' });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('CONFLICT');
+        expect(res.body.error.message).toBe(
+          'An account with this e-mail already exists. Sign in instead.'
+        );
+        expect(JSON.stringify(res.body)).not.toContain('demo@example.com');
+      });
+
+      it('refuses registration with 403 when it is switched off', async () => {
+        const { app, authUserStore } = await buildTestApp({ registrationEnabled: false });
+
+        const res = await request(app)
+          .post('/api/auth/register')
+          .send({ email: 'new@example.com', password: 'secret123', workspaceName: 'New' });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
+        expect(authUserStore.users.map((user) => user.email)).toEqual(['demo@example.com']);
+      });
+
+      it('limits failed logins per account on the mounted API', async () => {
+        const { app } = await buildTestApp({ enableRateLimit: true });
+        const statuses: number[] = [];
+        for (let i = 0; i < 11; i += 1) {
+          const res = await request(app)
+            .post('/api/auth/login')
+            .send({ email: 'demo@example.com', password: 'wrong' });
+          statuses.push(res.status);
+        }
+
+        expect(statuses.slice(0, 10).every((status) => status === 401)).toBe(true);
+        expect(statuses[10]).toBe(429);
+      });
+
+      it('applies the configured AI limit per workspace on the mounted API', async () => {
+        const { app } = await buildTestApp({ enableRateLimit: true, aiRateLimit: 1 });
+        const token = `Bearer ${signToken({ userId: 'u-1', workspaceId: 'ws-1' })}`;
+        const draft = () =>
+          request(app)
+            .post('/api/products/ai-draft')
+            .set('Authorization', token)
+            .send({ imageUrls: ['/uploads/a.jpg'] });
+
+        const first = await draft();
+        const second = await draft();
+
+        expect(first.status).not.toBe(429);
+        expect(second.status).toBe(429);
       });
     });
   });
