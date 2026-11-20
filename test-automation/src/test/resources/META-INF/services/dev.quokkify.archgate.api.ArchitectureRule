@@ -8,3 +8,7 @@ dev.quokkify.archgate.rules.archunit.ServiceRegistrationRule
 dev.quokkify.archgate.rules.archunit.TestClassNamingRule
 # Project rule from dev.quokkify:archgate-rules (q4j): API tests in test.api pass HttpStatus constants.
 dev.quokkify.arch.HttpStatusConstantRule
+# Rules from dev.quokkify:archgate-rules that keep what the old q4j JavaConventionsRule enforced.
+dev.quokkify.arch.SerialVersionUidRule
+dev.quokkify.arch.PackageNamingRule
+dev.quokkify.arch.NoInterfaceIPrefixRule
