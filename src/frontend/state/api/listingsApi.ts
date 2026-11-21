@@ -21,7 +21,7 @@ export interface OlxCategorySearchResult {
 // OLX `activate` result: live, waiting for moderation, limited (needs a paid packet) or unchanged.
 export interface ListingReactivationResult {
   listing: Listing;
-  outcome: 'live' | 'pending_moderation' | 'limited' | 'unchanged';
+  outcome: 'live' | 'pending_moderation' | 'limited' | 'unchanged' | 'unconfirmed';
   remoteStatus: string | null;
 }
 

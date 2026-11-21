@@ -117,7 +117,7 @@ export abstract class BaseMarketplaceAdapter implements IMarketplaceAdapter {
   }
 
   // Not retried: a lost response after a successful command would repeat the activation.
-  reactivate(externalListingId: string): Promise<SyncedListing | null> {
+  reactivate(externalListingId: string): Promise<void> {
     return this.execute('reactivate', () => this.doReactivate(externalListingId), { retry: false });
   }
 
@@ -149,7 +149,7 @@ export abstract class BaseMarketplaceAdapter implements IMarketplaceAdapter {
   protected abstract doFetchListing(
     externalListingId: string,
   ): Promise<SyncedListing | null>;
-  protected async doReactivate(_externalListingId: string): Promise<SyncedListing | null> {
+  protected async doReactivate(_externalListingId: string): Promise<void> {
     throw new Error(`Reactivation is not supported for marketplace ${this.key}`);
   }
   protected async doListOwnedListings(

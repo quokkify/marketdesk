@@ -85,8 +85,9 @@ export interface IMarketplaceAdapter {
   // Remove/unpublish a listing.
   delist(externalListingId: string): Promise<void>;
 
-  // Bring an expired or user-removed advert back under its existing id, then read it again.
-  reactivate?(externalListingId: string): Promise<SyncedListing | null>;
+  // Bring an expired or user-removed advert back under its existing id. Sends the command only;
+  // the caller reads the advert back with fetchListing, which may be retried.
+  reactivate?(externalListingId: string): Promise<void>;
 
   // Pull current stats/status for the given external listing ids.
   sync(externalListingIds: string[]): Promise<SyncedListing[]>;

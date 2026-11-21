@@ -23,6 +23,15 @@ public class ListingReactivationTest extends BaseTest {
   }
 
   @Test
+  public void hidesAnotherWorkspaceListing() {
+    AccountPojo owner = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(owner);
+    String listingId = listingSteps.createOlxListing(owner);
+    AccountPojo stranger = authSteps.registerNewAccount();
+    listingSteps.verify().isNotFound(listingSteps.reactivate(stranger, listingId));
+  }
+
+  @Test
   public void refusesReactivationInSandboxMode() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);

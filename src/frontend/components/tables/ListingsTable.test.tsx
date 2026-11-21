@@ -153,7 +153,7 @@ describe('ListingsTable publication actions', () => {
       <ListingsTable
         listings={[
           listing({ id: 'draft', status: 'draft' }),
-          listing({ id: 'expired', status: 'expired' }),
+          listing({ id: 'expired', status: 'expired', marketplaceListingId: null }),
         ]}
         onPublish={() => undefined}
         onRelist={() => undefined}
@@ -332,4 +332,17 @@ describe('ListingsTable destructive delist action', () => {
       expect(failed.operationId).toBeNull();
     },
   );
+
+  it('offers no relist for an expired listing that still has an OLX advert, so no duplicate is published', () => {
+    const render = (marketplaceListingId: string | null) =>
+      renderToStaticMarkup(
+        <ListingsTable
+          listings={[listing({ status: 'expired', marketplaceListingId })]}
+          onRelist={() => undefined}
+        />,
+      );
+
+    expect(render('olx-1')).not.toContain('aria-label="Relist"');
+    expect(render(null)).toContain('aria-label="Relist"');
+  });
 });

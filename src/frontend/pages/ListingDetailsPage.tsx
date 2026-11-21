@@ -155,6 +155,11 @@ export function reactivationToast(
         message: "OLX's free limit for this category is used up; the advert needs a paid packet on OLX. Nothing was bought.",
         severity: 'warning',
       };
+    case 'unconfirmed':
+      return {
+        message: 'OLX accepted the reactivation but its status could not be read yet; the next sync shows it.',
+        severity: 'info',
+      };
     default:
       return { message: `OLX reports the advert as ${remoteStatus ?? 'unknown'}; nothing changed here.`, severity: 'warning' };
   }

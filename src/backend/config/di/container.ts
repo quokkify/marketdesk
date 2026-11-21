@@ -539,6 +539,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     activityLog: activityLogRepo,
     idGenerator,
     sandboxMode: env.marketplaces.olx.adapterMode !== 'real',
+    logger: overrides.logger,
     adapters: {
       resolve: async (marketplace) => {
         const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);

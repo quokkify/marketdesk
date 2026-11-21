@@ -291,15 +291,14 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     });
   }
 
-  // OLX Partner API: POST /adverts/{id}/commands { command: 'activate' } answers 204; the advert's
-  // status (active, new for moderation, limited when a paid packet is needed) is read back after.
-  protected async doReactivate(externalListingId: string): Promise<SyncedListing | null> {
+  // OLX Partner API: POST /adverts/{id}/commands { command: 'activate' } answers 204. The advert's
+  // status (active, new for moderation, limited when a paid packet is needed) is read separately.
+  protected async doReactivate(externalListingId: string): Promise<void> {
     await this.http.request({
       method: 'POST',
       url: `${this.baseUrl}/adverts/${externalListingId}/commands`,
       body: { command: 'activate' },
     });
-    return this.doFetchListing(externalListingId);
   }
 
   protected async doSync(externalListingIds: string[]): Promise<SyncedListing[]> {
