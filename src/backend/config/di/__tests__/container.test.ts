@@ -199,8 +199,9 @@ describe('buildContainer (composition root)', () => {
     expect('subscriber' in build()).toBe(false);
   });
 
-  it('creates exactly the publish and sync queues', () => {
+  it('creates exactly the publish, sync, conversation-retention and conversation-reply queues', () => {
     const names: string[] = [];
+    const scheduled: Array<{ name: string; options: unknown }> = [];
     buildContainer({
       pool: fakePool,
       redis: fakeRedis,
@@ -212,14 +213,22 @@ describe('buildContainer (composition root)', () => {
         return {
           enqueue: jest.fn(async () => undefined),
           enqueueAll: jest.fn(async () => undefined),
-          scheduleRepeat: jest.fn(async () => undefined),
+          scheduleRepeat: jest.fn(async (_data: T, options: unknown) => {
+            scheduled.push({ name, options });
+          }),
           removeRepeat: jest.fn(async () => undefined),
           registerHandler: jest.fn(),
           close: jest.fn(async () => undefined),
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply']);
+    expect(scheduled).toEqual([
+      {
+        name: 'conversation-retention',
+        options: { jobId: 'conversation-retention', everyMs: 24 * 60 * 60 * 1000 },
+      },
+    ]);
   });
 
   it('exposes lifecycle handles and a resolving shutdown()', async () => {
@@ -227,7 +236,7 @@ describe('buildContainer (composition root)', () => {
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
     expect('cache' in container).toBe(false);
-    expect(container.queues).toHaveLength(2);
+    expect(container.queues).toHaveLength(4);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

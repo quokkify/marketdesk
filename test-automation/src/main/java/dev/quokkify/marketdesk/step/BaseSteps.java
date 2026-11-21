@@ -11,6 +11,7 @@ public abstract class BaseSteps {
   protected final HermesLimitsSteps hermesLimitsSteps = new HermesLimitsSteps();
   protected final ListingSteps listingSteps = new ListingSteps();
   protected final MarketplaceSteps marketplaceSteps = new MarketplaceSteps();
+  protected final ConversationSteps conversationSteps = new ConversationSteps();
   protected final MarketplacesPageSteps marketplacesPageSteps = new MarketplacesPageSteps();
   protected final HermesActivityPageSteps hermesActivityPageSteps = new HermesActivityPageSteps();
   protected final ProductDetailPageSteps productDetailPageSteps = new ProductDetailPageSteps();

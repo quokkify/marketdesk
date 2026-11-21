@@ -80,3 +80,11 @@ export interface SyncMarketplaceJob {
   trigger?: 'manual' | 'scheduled';
   actorId?: string;
 }
+
+// One reply-draft graph run for the newest buyer message of a thread. Ids only: message text
+// stays in the database and never travels through the queue.
+export interface ConversationReplyJob {
+  workspaceId: string;
+  threadId: string;
+  messageId: string;
+}

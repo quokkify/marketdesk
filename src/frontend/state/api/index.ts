@@ -5,6 +5,7 @@ export { baseApi } from './baseApi.js';
 export * from './productsApi.js';
 export * from './listingsApi.js';
 export * from './marketplacesApi.js';
+export * from './conversationsApi.js';
 export * from './hermesApi.js';
 export * from './analyticsApi.js';
 export * from './workspacesApi.js';

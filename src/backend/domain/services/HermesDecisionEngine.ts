@@ -526,8 +526,18 @@ export class HermesDecisionEngine {
     const validated = validatePriceEstimate(rawEstimate, researchAnchor);
     if (validated.isErr()) return unavailablePriceEstimate(validated.error.message);
 
-    const estimate = labelEstimateFigures(validated.value, researchAnchor, research?.comparables ?? []);
+    const labelled = labelEstimateFigures(validated.value, researchAnchor, research?.comparables ?? []);
     const currentPrice = product.sellingPrice.amount;
+    // A drop never goes below the seller's lowest acceptable price, and a drop the floor cancels
+    // is not turned into a raise. Without an explicit floor, the estimate stands as it was.
+    const sellerFloor = product.minAcceptablePrice?.amount;
+    let estimate = labelled;
+    if (sellerFloor !== undefined) {
+      const startPrice =
+        labelled.startPrice < currentPrice ? Math.max(labelled.startPrice, sellerFloor) : labelled.startPrice;
+      if (labelled.startPrice < currentPrice && startPrice >= currentPrice) return null;
+      estimate = { ...labelled, startPrice };
+    }
     if (!shouldSurfacePriceEstimate(estimate, currentPrice)) return null;
     const isLower = estimate.startPrice < currentPrice;
     return {

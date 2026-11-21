@@ -8,11 +8,13 @@ import type {
   Listing as ListingView,
   HermesEvent as HermesEventView,
   Marketplace as MarketplaceView,
+  ConversationThreadView,
 } from '../../../shared/types';
 import type { Product } from '../../domain/entities/Product';
 import type { Listing } from '../../domain/entities/Listing';
 import type { HermesEvent } from '../../domain/entities/HermesEvent';
 import type { Marketplace } from '../../domain/entities/Marketplace';
+import type { ConversationMessage, ConversationThread, ReplyDraft } from '../../domain/conversations/types';
 
 function iso(date: Date | null | undefined): string | undefined {
   return date ? date.toISOString() : undefined;
@@ -69,6 +71,7 @@ export function presentProduct(product: Product): ProductView {
     description: product.description,
     costPrice: product.costPrice?.amount ?? null,
     sellingPrice: product.sellingPrice.amount,
+    minAcceptablePrice: product.minAcceptablePrice?.amount ?? null,
     condition: product.condition,
     category: product.category,
     categoryProvenance: product.categoryProvenance,
@@ -162,6 +165,34 @@ export function presentMarketplace(
     errorCount: marketplace.errorCount,
     capacity: marketplace.capacity,
     createdAt: marketplace.createdAt.toISOString(),
+  };
+}
+
+// messages oldest first. Text deleted by retention stays null.
+export function presentConversationThread(
+  thread: ConversationThread,
+  messages: ConversationMessage[],
+  draft: ReplyDraft | null,
+): ConversationThreadView {
+  return {
+    id: thread.id,
+    status: thread.status,
+    suspiciousReasons: thread.suspiciousReasons,
+    messages: messages.map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      text: m.text,
+      sentAt: m.sentAt.toISOString(),
+    })),
+    draft: draft && {
+      id: draft.id,
+      status: draft.status,
+      intent: draft.intent,
+      text: draft.sentText ?? draft.proposedText,
+      filledPrice: draft.filledPrice,
+      failureReason: draft.failureReason,
+      offline: draft.source === 'offline',
+    },
   };
 }
 

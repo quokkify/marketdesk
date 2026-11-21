@@ -15,6 +15,13 @@ import type { Marketplace } from '../../../domain/entities/Marketplace';
 import type { MarketplaceHttpClient } from '../../adapters/MarketplaceHttpClient';
 import { InvalidStateError } from '../../../domain/shared/DomainError';
 import type { DomainEvent, IEventPublisher } from '../../../domain/ports/IEventPublisher';
+import type {
+  ConversationSyncListing,
+  ConversationThreadReader,
+} from '../../../application/services/ConversationSyncService';
+
+// The only detail recorded for a failed conversation sync: buyer text must never reach a log.
+export const CONVERSATION_SYNC_FAILED = 'conversation_sync_failed';
 
 // Structural port for resolving an adapter by marketplace key. Satisfied by the
 // MarketplaceAdapterFactory without importing it here.
@@ -54,6 +61,10 @@ export interface PendingAnalyticsEvent {
 
 export interface SyncMarketplaceHandlerDeps {
   listingStore?: SyncListingStore;
+  conversationSync?: {
+    syncListing(listing: ConversationSyncListing, adapter: ConversationThreadReader): Promise<unknown>;
+  };
+  onConversationSyncFailure?: (failure: { listingId?: string; code: typeof CONVERSATION_SYNC_FAILED }) => void;
   marketplaceStore?: MarketplaceSyncStore;
   accessTokens?: SyncMarketplaceAccessTokenProvider;
   authenticatedHttpClient?: (accessToken: string) => MarketplaceHttpClient;
@@ -115,10 +126,11 @@ export class SyncMarketplaceHandler {
 
   async handle(data: SyncMarketplaceJobData): Promise<SyncMarketplaceResult> {
     let synced: SyncedListing[];
+    let adapter: IMarketplaceAdapter;
     let marketplaceAccount: { id: string; revision: number } | null = null;
     try {
       const resolved = await this.createAdapter(data);
-      const adapter = resolved.adapter;
+      adapter = resolved.adapter;
       marketplaceAccount = resolved.marketplaceAccount;
       const externalListingIds = await this.resolveExternalListingIds(data);
       synced = await adapter.sync(externalListingIds);
@@ -130,6 +142,7 @@ export class SyncMarketplaceHandler {
     }
 
     const persisted = await this.persistStats(data, synced, marketplaceAccount);
+    await this.syncConversations(data, adapter);
     const marketplaceUpdated = await this.recordMarketplaceSuccess(data.marketplaceId);
 
     return {
@@ -165,6 +178,39 @@ export class SyncMarketplaceHandler {
       };
     }
     return { adapter: this.adapters.create(data.marketplaceKey), marketplaceAccount: null };
+  }
+
+  // Every listing, best effort: retention needs no OLX read, and a failed listing must not fail
+  // the stats sync or the other listings.
+  private async syncConversations(data: SyncMarketplaceJobData, adapter: IMarketplaceAdapter): Promise<void> {
+    const conversations = this.deps.conversationSync;
+    const store = this.deps.listingStore;
+    if (!conversations || !store) return;
+    const report = this.deps.onConversationSyncFailure;
+    let workspaceId: string;
+    let listings: Listing[];
+    try {
+      const marketplace = await this.deps.marketplaceStore?.findById(data.marketplaceId);
+      if (!marketplace) return;
+      workspaceId = marketplace.workspaceId;
+      listings = await store.findByMarketplace(data.marketplaceId);
+    } catch {
+      report?.({ code: CONVERSATION_SYNC_FAILED });
+      return;
+    }
+    for (const listing of listings) {
+      try {
+        await conversations.syncListing({
+          id: listing.id,
+          productId: listing.productId,
+          workspaceId,
+          marketplaceListingId: listing.marketplaceListingId,
+          status: listing.status,
+        }, adapter);
+      } catch {
+        report?.({ listingId: listing.id, code: CONVERSATION_SYNC_FAILED });
+      }
+    }
   }
 
   private async resolveExternalListingIds(data: SyncMarketplaceJobData): Promise<string[]> {

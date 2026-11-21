@@ -8,7 +8,7 @@ MarketDesk syncs OLX engagement counters only when the connected Partner API res
 | --- | --- | --- |
 | `metrics.views`, `statistics.views`, `statistics.advert_views`, compatible `stats/counters` view aliases | `listing.views` | Numeric advert view count. |
 | `metrics.favorites`, `metrics.favourites`, `metrics.watchers`, compatible favourite/watcher aliases | `listing.watchers` | Numeric favourite/watcher count when exposed by OLX. |
-| `metrics.messages`, `statistics.messages`, `message_count`, `messages_count` | `listing.messages` | Numeric buyer-message count only when OLX exposes an explicit message counter. Message bodies are never ingested. |
+| `metrics.messages`, `statistics.messages`, `message_count`, `messages_count` | `listing.messages` | Numeric buyer-message count only when OLX exposes an explicit message counter. Message text is not read for this counter; thread text follows the retention rule under Sync safety. |
 
 `phone_views`, phone/contact reveals, and generic lead counters are not buyer-message counters and must not populate `listing.messages`.
 
@@ -24,7 +24,8 @@ MarketDesk syncs OLX engagement counters only when the connected Partner API res
 
 - `lastSyncAt` on a listing is updated after a successful provider read for that listing.
 - Authentication, rate-limit, timeout, and provider failures still fail the sync job and preserve prior listing counters.
-- Message content is out of scope and must not be requested, stored, logged, or exposed.
+- Message and draft text is stored only for threads of MarketDesk listings. It is never written to logs, run records, experiment bundles, error details, `ai_usage` or activity payloads.
+- Text is deleted 30 days after the product is sold or the listing leaves `live`; the thread keeps its counters.
 
 ## Live validation
 

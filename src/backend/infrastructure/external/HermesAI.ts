@@ -32,6 +32,7 @@ import {
   type ListingSeoOutput,
 } from '../../domain/agents/MarketDeskAgentCatalog';
 import { withAiOperation } from '../../application/ai/aiUsageScope';
+import { parseJsonObject } from './jsonText';
 
 export const DEFAULT_HERMES_MODEL = 'hermes-agent';
 export const DEFAULT_HERMES_API_URL = 'http://127.0.0.1:8642/v1';
@@ -256,18 +257,7 @@ export class HermesAI implements IAIProvider {
   }
 
   private parseJson(raw: string): Record<string, unknown> | null {
-    const text = raw.trim();
-    // Tolerate fenced code blocks the agent/model may wrap JSON in.
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    const candidate = fenced ? fenced[1].trim() : text;
-    try {
-      const value = JSON.parse(candidate);
-      return typeof value === 'object' && value !== null
-        ? (value as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
+    return parseJsonObject(raw);
   }
 
   private asFiniteNumber(value: unknown, fallback: number): number {

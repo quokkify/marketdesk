@@ -3,6 +3,7 @@
 
 import { Router, type RequestHandler } from 'express';
 import type { ProductController } from '../controllers/ProductController';
+import type { ConversationController } from '../controllers/ConversationController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
 import {
@@ -20,7 +21,8 @@ const passthrough: RequestHandler = (_req, _res, next) => next();
 // aiLimiter guards the routes that call the AI provider (see aiRateLimiter).
 export function createProductRoutes(
   controller: ProductController,
-  aiLimiter: RequestHandler = passthrough
+  aiLimiter: RequestHandler = passthrough,
+  conversations?: ConversationController
 ): Router {
   const router = Router();
   router.get('/', asyncHandler(controller.list));
@@ -35,5 +37,6 @@ export function createProductRoutes(
   router.put('/:id/price-research', validateBody(priceResearchSchema), asyncHandler(controller.putPriceResearch));
   router.get('/:id/listings', asyncHandler(controller.getListings));
   router.post('/:id/listings', validateBody(createListingSchema), asyncHandler(controller.createListing));
+  if (conversations) router.get('/:id/conversations', asyncHandler(conversations.listForProduct));
   return router;
 }

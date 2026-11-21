@@ -36,6 +36,7 @@ import { env, isProduction, type OlxAdapterMode } from '../../config/env';
 import { ProductImageUploadService as DefaultProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { ProductController } from './controllers/ProductController';
+import { ConversationController } from './controllers/ConversationController';
 import { ListingController } from './controllers/ListingController';
 import { MarketplaceController } from './controllers/MarketplaceController';
 import { HermesController } from './controllers/HermesController';
@@ -58,6 +59,10 @@ import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandling
 import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
 import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
+import type { IReplyDraftAI } from '../../domain/ports/IReplyDraftAI';
+import type { IConversationRepository } from '../../domain/repositories/interfaces/IConversationRepository';
+import type { ReplySendService } from '../../application/services/ReplySendService';
+import { appendOwnedSandboxBuyerMessage } from '../../infrastructure/adapters/olxSandboxConversations';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
 export interface AppDeps {
@@ -70,6 +75,12 @@ export interface AppDeps {
   hermesService: HermesApplicationService;
   // Which AI provider serves calls right now (GET /api/hermes/status).
   hermesStatus?: () => Promise<HermesStatusView>;
+  // Buyer-reply drafting AI; consumed by the conversation graph.
+  replyDraftAI?: IReplyDraftAI;
+  // Buyer conversations read by GET /api/products/:id/conversations.
+  conversationRepo?: IConversationRepository;
+  // Sends, dismisses and regenerates reply drafts (/api/conversations).
+  replySendService?: ReplySendService;
   // Stored AI usage of one workspace (GET /api/hermes/usage).
   aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>;
   // Account-wide limits of the AI provider, read from the Hermes usage file (GET /api/hermes/limits).
@@ -265,6 +276,20 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.olxAdapterMode
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
+    conversations: deps.conversationRepo
+      ? new ConversationController(deps.productRepo, deps.conversationRepo, {
+          replies: deps.replySendService,
+          sandboxBuyerMessage:
+            deps.olxAdapterMode !== 'real'
+              ? (workspaceId, externalThreadId, text) =>
+                  appendOwnedSandboxBuyerMessage(externalThreadId, text, async (advertId) =>
+                    (await deps.listingRepo.findByWorkspace(workspaceId)).some(
+                      (listing) => listing.marketplaceListingId === advertId
+                    )
+                  )
+              : undefined,
+        })
+      : undefined,
   };
 
   app.use(

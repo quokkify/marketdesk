@@ -17,6 +17,7 @@ export interface ProductRow {
   description: string;
   cost_price: string | number | null;
   selling_price: string | number;
+  min_acceptable_price_minor?: string | number | null;
   condition: string;
   category: string;
   category_provenance?: ProductCategoryProvenance | null;

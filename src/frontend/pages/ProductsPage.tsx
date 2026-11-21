@@ -40,7 +40,11 @@ import {
   useMarketplaces,
   useProducts,
 } from '../services/hooks/index.js';
-import { useLazyGetProductQuery, useLazySearchMarketplaceCategoriesQuery } from '../state/api/index.js';
+import {
+  useGetAwaitingCountsQuery,
+  useLazyGetProductQuery,
+  useLazySearchMarketplaceCategoriesQuery,
+} from '../state/api/index.js';
 import type { ProductListParams } from '../state/api/index.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
@@ -265,6 +269,7 @@ const ProductsPage: React.FC = () => {
 
   const { currentData, isLoading, isFetching, isError, error, refetch } = useProducts(params);
   const allCount = useProducts({ limit: 1, offset: 0 });
+  const { currentData: awaitingByProductId } = useGetAwaitingCountsQuery();
   const activeCount = useProducts({ status: ['active'], limit: 1, offset: 0 });
   const attentionCount = useProducts({ status: ['attention'], limit: 1, offset: 0 });
   const draftCount = useProducts({ status: ['draft'], limit: 1, offset: 0 });
@@ -868,6 +873,7 @@ const ProductsPage: React.FC = () => {
             onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            awaitingByProductId={awaitingByProductId}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
             clearFiltersAction={<Button onClick={clearFilters}>Clear filters</Button>}
             emptyAction={
@@ -888,6 +894,7 @@ const ProductsPage: React.FC = () => {
             onDelete={requestDelete}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            awaitingByProductId={awaitingByProductId}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
             clearFiltersAction={<Button onClick={clearFilters}>Clear filters</Button>}
             emptyAction={

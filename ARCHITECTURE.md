@@ -1391,6 +1391,13 @@ The scheduling layer only enqueues durable work. Job handlers perform provider s
 
 Evidence: `src/backend/application/services/MarketplaceSyncScheduler.ts`, `src/backend/infrastructure/jobQueue/BullJobQueue.ts`, DI wiring, and `MarketplaceSyncScheduler.test.ts`.
 
+## 13a. Buyer conversations
+
+- Data: `conversation_threads`, `conversation_messages` and `reply_drafts` (migrations 048-050), accessed through `IConversationRepository`. Threads are workspace-scoped and tied to a MarketDesk listing and product.
+- Graph: `ConversationReplyGraph` (`application/services`) classifies the buyer message and proposes a reply draft through the `IReplyDraftAI` port (Hermes or offline). The seller approves each draft; sending is a separate step with a `sending` state and an attempt key.
+- Retention: message and draft text is deleted 30 days after `retention_starts_at` (product sold or listing leaves `live`). `ConversationRetentionService.purge` runs from the daily `conversation-retention` repeat job and clears the text columns; counters stay. Text never goes to logs, run records, experiment bundles, error details, `ai_usage` or activity payloads.
+- Design: `docs/superpowers/specs/2026-11-21-buyer-reply-drafts-design.md`; tracking issue #482.
+
 ## 14. Notification System
 
 Removed in the stage-focus cut (#444). `EmailProvider` and `TelegramBot` had no caller, and no `NotificationService` consumes domain events. MarketDesk sends no email or Telegram notifications.

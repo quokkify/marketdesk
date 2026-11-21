@@ -30,6 +30,13 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Replace the draft reply to the buyer message {buyerText} with {reply} and send it")
+  public ProductDetailPageSteps editAndSendDraft(String buyerText, String reply) {
+    page.replaceReplyText(buyerText, reply);
+    page.sendButton(buyerText).shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Open the revival dialog")
   public ProductDetailPageSteps openRevivalDialog() {
     page.reviveButton().shouldBe(Condition.enabled).click();

@@ -42,6 +42,13 @@ export class CreateProductUseCase {
     const sellingPrice = Money.of(dto.sellingPrice, currency);
     if (sellingPrice.isErr()) return sellingPrice;
 
+    let minAcceptablePrice: Money | null = null;
+    if (dto.minAcceptablePrice != null) {
+      const floor = Money.of(dto.minAcceptablePrice, currency);
+      if (floor.isErr()) return floor;
+      minAcceptablePrice = floor.value;
+    }
+
     const id = this.idGenerator();
     return this.productService.createProduct({
       id,
@@ -51,6 +58,7 @@ export class CreateProductUseCase {
       description: dto.description,
       costPrice,
       sellingPrice: sellingPrice.value,
+      minAcceptablePrice,
       condition: dto.condition,
       category: dto.category,
       tags: dto.tags,

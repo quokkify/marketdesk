@@ -27,6 +27,8 @@ export interface CreateProductProps {
   description: string;
   costPrice: Money | null;
   sellingPrice: Money;
+  // Lowest price the seller accepts in negotiation; null means no discount.
+  minAcceptablePrice?: Money | null;
   condition: ProductCondition;
   category: string;
   status?: ProductStatus;
@@ -47,6 +49,7 @@ export class Product {
     private _description: string,
     private _costPrice: Money | null,
     private _sellingPrice: Money,
+    private _minAcceptablePrice: Money | null,
     private _condition: ProductCondition,
     private _category: string,
     private _categoryProvenance: ProductCategoryProvenance | null,
@@ -90,6 +93,8 @@ export class Product {
     if (props.costPrice?.isGreaterThan(props.sellingPrice) && props.allowBelowCost !== true) {
       return Err(new ValidationError('sellingPrice below costPrice requires allowBelowCost: true'));
     }
+    const floorCheck = Product.validateFloor(props.minAcceptablePrice ?? null, props.sellingPrice);
+    if (floorCheck.isErr()) return floorCheck;
     const now = new Date();
     return Ok(
       new Product(
@@ -100,6 +105,7 @@ export class Product {
         props.description,
         props.costPrice,
         props.sellingPrice,
+        props.minAcceptablePrice ?? null,
         props.condition,
         props.category,
         null,
@@ -115,8 +121,8 @@ export class Product {
 
   // Rehydrate from persistence without re-running invariants (data is trusted).
   static reconstitute(
-    props: Required<Omit<CreateProductProps, 'allowBelowCost'>>
-      & { categoryProvenance?: ProductCategoryProvenance | null }
+    props: Required<Omit<CreateProductProps, 'allowBelowCost' | 'minAcceptablePrice'>>
+      & { minAcceptablePrice?: Money | null; categoryProvenance?: ProductCategoryProvenance | null }
   ): Product {
     return new Product(
       props.id,
@@ -126,6 +132,7 @@ export class Product {
       props.description,
       props.costPrice,
       props.sellingPrice,
+      props.minAcceptablePrice ?? null,
       props.condition,
       props.category,
       props.categoryProvenance ?? null,
@@ -136,6 +143,20 @@ export class Product {
       props.updatedAt,
       false,
     );
+  }
+
+  private static validateFloor(floor: Money | null, sellingPrice: Money): Result<true> {
+    if (!floor) return Ok(true);
+    if (floor.isNegative()) {
+      return Err(new InvalidStateError('minAcceptablePrice must be >= 0'));
+    }
+    if (floor.currency !== sellingPrice.currency) {
+      return Err(new InvalidStateError('minAcceptablePrice and sellingPrice must share a currency'));
+    }
+    if (floor.isGreaterThan(sellingPrice)) {
+      return Err(new InvalidStateError('minAcceptablePrice must not exceed sellingPrice'));
+    }
+    return Ok(true);
   }
 
   private static validateDescription(description: string): Result<true> {
@@ -162,6 +183,13 @@ export class Product {
   }
   get sellingPrice(): Money {
     return this._sellingPrice;
+  }
+  get minAcceptablePrice(): Money | null {
+    return this._minAcceptablePrice;
+  }
+  // The price Hermes never goes below: the floor, or the selling price when no floor is set.
+  priceFloor(): Money {
+    return this._minAcceptablePrice ?? this._sellingPrice;
   }
   get condition(): ProductCondition {
     return this._condition;
@@ -246,6 +274,8 @@ export class Product {
     if (this._costPrice?.isGreaterThan(price) && !allowBelowCost) {
       return Err(new ValidationError('sellingPrice below costPrice requires allowBelowCost: true'));
     }
+    const floorCheck = Product.validateFloor(this._minAcceptablePrice, price);
+    if (floorCheck.isErr()) return floorCheck;
     this._sellingPrice = price;
     this.touch();
     return Ok(undefined);
@@ -271,16 +301,37 @@ export class Product {
     this.touch();
   }
 
+  // A marketplace import is the source of truth for the price: it lowers the floor
+  // instead of failing when the imported price falls below it.
+  syncSellingPriceFromMarketplace(price: Money): Result<void> {
+    if (this._minAcceptablePrice?.isGreaterThan(price) && this._minAcceptablePrice.currency === price.currency) {
+      this._minAcceptablePrice = price;
+    } else if (this._minAcceptablePrice && this._minAcceptablePrice.currency !== price.currency) {
+      this._minAcceptablePrice = null;
+    }
+    return this.updateSellingPrice(price);
+  }
+
+  updateMinAcceptablePrice(price: Money | null): Result<void> {
+    const check = Product.validateFloor(price, this._sellingPrice);
+    if (check.isErr()) return check;
+    this._minAcceptablePrice = price;
+    this.touch();
+    return Ok(undefined);
+  }
+
   // Applies coordinated price changes atomically so callers do not need to know
   // which update order avoids transient cost/selling invariant failures.
   updatePrices(
     costPrice: Money | null,
     sellingPrice: Money | null,
-    allowBelowCost = false
+    allowBelowCost = false,
+    minAcceptablePrice: Money | null | undefined = undefined
   ): Result<void> {
-    if (!costPrice && !sellingPrice) return Ok(undefined);
+    if (!costPrice && !sellingPrice && minAcceptablePrice === undefined) return Ok(undefined);
     const nextCost = costPrice ?? this._costPrice;
     const nextSelling = sellingPrice ?? this._sellingPrice;
+    const nextFloor = minAcceptablePrice === undefined ? this._minAcceptablePrice : minAcceptablePrice;
 
     if (nextCost && nextCost.isNegative()) {
       return Err(new ValidationError('costPrice must be >= 0'));
@@ -295,9 +346,13 @@ export class Product {
       return Err(new ValidationError('sellingPrice below costPrice requires allowBelowCost: true'));
     }
 
+    const floorCheck = Product.validateFloor(nextFloor, nextSelling);
+    if (floorCheck.isErr()) return floorCheck;
+
     if (costPrice) this._costPrice = costPrice;
     if (sellingPrice) this._sellingPrice = sellingPrice;
-    if (costPrice || sellingPrice) this.touch();
+    this._minAcceptablePrice = nextFloor;
+    this.touch();
     return Ok(undefined);
   }
 

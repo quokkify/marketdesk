@@ -10,6 +10,7 @@ export interface ProductFormValues {
   description: string;
   costPrice: number | null;
   sellingPrice: number;
+  minAcceptablePrice: number | null;
   condition: ProductCondition;
   category: string;
   status: ProductStatus;
@@ -34,6 +35,7 @@ export function emptyProductValues(): ProductFormValues {
     description: '',
     costPrice: null,
     sellingPrice: 0,
+    minAcceptablePrice: null,
     condition: 'good',
     category: '',
     status: 'draft',
@@ -49,6 +51,7 @@ export function productToValues(product: Product): ProductFormValues {
     description: product.description,
     costPrice: product.costPrice,
     sellingPrice: product.sellingPrice,
+    minAcceptablePrice: product.minAcceptablePrice ?? null,
     condition: product.condition,
     category: product.category,
     status: product.status,
@@ -73,6 +76,13 @@ export function validateProductValues(values: ProductFormValues): ProductFieldEr
   }
   if (!(values.sellingPrice >= 0) || Number.isNaN(values.sellingPrice)) {
     errors.sellingPrice = 'Price must be a non-negative number.';
+  }
+  if (values.minAcceptablePrice !== null) {
+    if (!(values.minAcceptablePrice >= 0) || Number.isNaN(values.minAcceptablePrice)) {
+      errors.minAcceptablePrice = 'Lowest price must be a non-negative number.';
+    } else if (values.minAcceptablePrice > values.sellingPrice) {
+      errors.minAcceptablePrice = 'Lowest price cannot exceed the selling price.';
+    }
   }
   return errors;
 }
@@ -163,6 +173,7 @@ const FORM_FIELDS = new Set<string>([
   'description',
   'costPrice',
   'sellingPrice',
+  'minAcceptablePrice',
   'condition',
   'category',
   'status',

@@ -136,6 +136,40 @@ describe('Product price / description updates', () => {
   });
 });
 
+describe('Product price floor', () => {
+  it('uses the selling price as the floor when no minimum is set', () => {
+    const product = unwrap(Product.create(baseProps()));
+    expect(product.minAcceptablePrice).toBeNull();
+    expect(product.priceFloor().amount).toBeCloseTo(80);
+  });
+
+  it('uses the minimum acceptable price as the floor when set', () => {
+    const product = unwrap(Product.create(baseProps({ minAcceptablePrice: money(65) })));
+    expect(product.priceFloor().amount).toBeCloseTo(65);
+  });
+
+  it('rejects a floor above the selling price, a negative floor and a currency mismatch', () => {
+    expect(Product.create(baseProps({ minAcceptablePrice: money(81) })).isErr()).toBe(true);
+    expect(Product.create(baseProps({ minAcceptablePrice: money(-1) })).isErr()).toBe(true);
+    expect(Product.create(baseProps({ minAcceptablePrice: money(60, 'USD') })).isErr()).toBe(true);
+  });
+
+  it('rejects lowering the selling price below an existing floor', () => {
+    const product = unwrap(Product.create(baseProps({ minAcceptablePrice: money(70) })));
+    expect(product.updatePrices(null, money(60), true).isErr()).toBe(true);
+    expect(product.updateSellingPrice(money(60), true).isErr()).toBe(true);
+    expect(product.sellingPrice.amount).toBeCloseTo(80);
+  });
+
+  it('updates and clears the floor together with the selling price', () => {
+    const product = unwrap(Product.create(baseProps({ minAcceptablePrice: money(70) })));
+    unwrap(product.updatePrices(null, money(60), true, money(55)));
+    expect(product.priceFloor().amount).toBeCloseTo(55);
+    unwrap(product.updatePrices(null, null, false, null));
+    expect(product.minAcceptablePrice).toBeNull();
+  });
+});
+
 describe('Product category provenance', () => {
   const source = (overrides: Partial<ProductCategorySource> = {}): ProductCategorySource => ({
     marketplaceKey: 'olx', marketplaceId: 'm1', listingId: 'l1',

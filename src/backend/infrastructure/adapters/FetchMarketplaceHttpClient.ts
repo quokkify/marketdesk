@@ -39,6 +39,11 @@ function withQuery(url: string, query?: HttpRequestConfig['query']): string {
   return next.toString();
 }
 
+// Thread calls carry buyer and seller message text, which must never reach a log.
+function isThreadRequest(config: HttpRequestConfig): boolean {
+  return new URL(config.url).pathname.includes('/threads');
+}
+
 function isCreateListingRequest(config: HttpRequestConfig): boolean {
   if (config.method !== 'POST') return false;
   const pathname = new URL(config.url).pathname.replace(/\/$/, '');
@@ -113,7 +118,7 @@ export class FetchMarketplaceHttpClient implements MarketplaceHttpClient {
 
   private logFailure(config: HttpRequestConfig, status: number | undefined, data: unknown): void {
     this.options.logger?.warn(
-      { method: config.method, url: urlWithoutQuery(config.url), status, body: bodyExcerpt(data) },
+      { method: config.method, url: urlWithoutQuery(config.url), status, body: isThreadRequest(config) ? undefined : bodyExcerpt(data) },
       MARKETPLACE_ERROR_LOG_MESSAGE,
     );
   }

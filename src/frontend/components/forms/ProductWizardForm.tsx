@@ -195,6 +195,7 @@ const REVIEW_FIELD_ORDER: Array<keyof ProductFormValues> = [
   'condition',
   'sellingPrice',
   'costPrice',
+  'minAcceptablePrice',
 ];
 
 function firstFieldError(errors: ProductFieldErrors): string | null {

@@ -64,9 +64,7 @@ export interface IAIProvider {
 // Message of the plain error a provider throws when its price estimate answer cannot be used.
 export const PRICE_ESTIMATE_UNUSABLE_MESSAGE = 'Hermes price estimate was not usable';
 
-// Marks every result of the built-in offline heuristics wherever it is shown, so a
-// heuristic is never presented as Hermes output.
-export const OFFLINE_AI_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
+export { OFFLINE_AI_NOTICE } from '../../../shared/constants';
 
 // Optional capability of a provider that may answer from built-in offline heuristics
 // instead of Hermes. HermesDecisionEngine keeps changes made while offline review-only.
