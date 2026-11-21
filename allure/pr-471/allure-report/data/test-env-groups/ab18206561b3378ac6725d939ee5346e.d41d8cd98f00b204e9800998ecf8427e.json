@@ -1,0 +1,1 @@
+{"id":"ab18206561b3378ac6725d939ee5346e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/OlxTaxonomyResolver.test.ts#OlxTaxonomyResolver rejects a client-supplied noncanonical id","name":"rejects a client-supplied noncanonical id","status":"passed","testResultsByEnv":{"default":"92a1167a9ac4674aed6dda7c7b686d84"}}

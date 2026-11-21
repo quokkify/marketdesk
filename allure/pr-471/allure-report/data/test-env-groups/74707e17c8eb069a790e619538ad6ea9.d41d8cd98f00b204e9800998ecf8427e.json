@@ -1,0 +1,1 @@
+{"id":"74707e17c8eb069a790e619538ad6ea9.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/slices/authSlice.test.ts#authSlice setToken is a no-op when nobody is signed in","name":"is a no-op when nobody is signed in","status":"passed","testResultsByEnv":{"default":"f8f23a293853cde3d661c4affee274be"}}

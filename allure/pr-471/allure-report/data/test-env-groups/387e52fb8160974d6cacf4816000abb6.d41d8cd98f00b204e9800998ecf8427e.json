@@ -1,0 +1,1 @@
+{"id":"387e52fb8160974d6cacf4816000abb6.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API token renewal never renews a revoked token on /api/auth/me","name":"never renews a revoked token on /api/auth/me","status":"passed","testResultsByEnv":{"default":"a82f9eab5b69f4f6d7c6dd0298222f8a"}}
