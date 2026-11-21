@@ -1,5 +1,12 @@
 // Hermes (autonomous agent) endpoints, injected into the shared baseApi (Group 8).
-import type { HermesEvent, HermesStatusView, PaginatedResponse, ApiResponse } from '@shared/types';
+import type {
+  AiUsageReport,
+  HermesEvent,
+  HermesLimits,
+  HermesStatusView,
+  PaginatedResponse,
+  ApiResponse,
+} from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
 import { unwrap, unwrapPaginated } from './envelope.js';
@@ -82,6 +89,19 @@ export const hermesApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<HermesStatusView>) => unwrap(res),
     }),
 
+    // AI calls of this workspace, today and over the last 7 days.
+    getHermesUsage: builder.query<AiUsageReport, void>({
+      query: () => '/hermes/usage',
+      transformResponse: (res: ApiResponse<AiUsageReport>) => unwrap(res),
+      providesTags: ['AiUsage'],
+    }),
+
+    // The AI provider account's limits: the same for every workspace.
+    getHermesLimits: builder.query<HermesLimits, void>({
+      query: () => '/hermes/limits',
+      transformResponse: (res: ApiResponse<HermesLimits>) => unwrap(res),
+    }),
+
     getHermesEvent: builder.query<HermesEvent, string>({
       query: (id) => `/hermes/events/${id}`,
       transformResponse: (res: ApiResponse<HermesEvent>) => unwrap(res),
@@ -140,6 +160,8 @@ export const {
   useGetHermesEventsQuery,
   useGetHermesEventsFeedInfiniteQuery,
   useGetHermesStatusQuery,
+  useGetHermesUsageQuery,
+  useGetHermesLimitsQuery,
   useGetHermesEventQuery,
   useApproveHermesEventMutation,
   useDismissHermesEventMutation,

@@ -77,6 +77,7 @@ import { usePendingPublicationPolling } from './usePendingPublicationPolling.js'
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
+import { aiUsageLine } from '../components/hermes/aiUsageText.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
@@ -1466,6 +1467,11 @@ const ListingDetailsPage: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       Suggestions are for review only. Edit the product or listing to apply them.
                     </Typography>
+                    {aiUsageLine(improvements.aiUsage) && (
+                      <Typography data-testid="ai-usage-line" variant="caption" color="text.secondary">
+                        {aiUsageLine(improvements.aiUsage)}
+                      </Typography>
+                    )}
                   </Stack>
                 )}
               </Box>

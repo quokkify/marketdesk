@@ -2,7 +2,7 @@ tasks.withType(Test).configureEach {
     useTestNG()
     systemProperty 'file.encoding', 'UTF-8'
     // Forward these explicit overrides to the separate test JVM.
-    ['MARKETDESK_API_BASE_URI', 'MARKETDESK_UI_BASE_URI'].each { key ->
+    ['MARKETDESK_API_BASE_URI', 'MARKETDESK_UI_BASE_URI', 'MARKETDESK_HERMES_USAGE_DIR'].each { key ->
         def value = System.getProperty(key)
         if (value != null) {
             systemProperty key, value

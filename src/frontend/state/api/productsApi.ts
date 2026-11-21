@@ -87,6 +87,7 @@ export const productsApi = baseApi.injectEndpoints({
         body: listingId ? { listingId } : {},
       }),
       transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
+      invalidatesTags: ['AiUsage'],
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
@@ -98,6 +99,7 @@ export const productsApi = baseApi.injectEndpoints({
     generateProductAIDraft: builder.mutation<ProductAIDraft, ProductAIDraftRequest>({
       query: (body) => ({ url: '/products/ai-draft', method: 'POST', body }),
       transformResponse: (res: ApiResponse<ProductAIDraft>) => unwrap(res),
+      invalidatesTags: ['AiUsage'],
     }),
 
     uploadProductImage: builder.mutation<ProductImageUpload, File>({

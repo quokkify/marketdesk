@@ -12,6 +12,7 @@ import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine
 import type { HermesEvent } from '../../domain/entities/HermesEvent';
 import type { IWorkspaceRepository } from '../../domain/repositories/interfaces/IWorkspaceRepository';
 import type { RunHermesDTO } from '../dto/HermesDTO';
+import { withAiUsageScope } from '../ai/aiUsageScope';
 
 export class RunHermesUseCase {
   constructor(
@@ -26,7 +27,11 @@ export class RunHermesUseCase {
     }
 
     try {
-      const events = await this.engine.runProductSeo(workspace, input.productId);
+      // One run is one analysis; its calls are named seo, price or title by operation.
+      const { value: events } = await withAiUsageScope(
+        { workspaceId: workspace.id, feature: 'autopilot', productId: input.productId },
+        () => this.engine.runProductSeo(workspace, input.productId),
+      );
       return Ok(events);
     } catch (error) {
       return Err(

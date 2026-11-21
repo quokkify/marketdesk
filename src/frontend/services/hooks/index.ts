@@ -42,6 +42,8 @@ import {
   useGetHermesEventsQuery,
   useGetHermesEventsFeedInfiniteQuery,
   useGetHermesStatusQuery,
+  useGetHermesUsageQuery,
+  useGetHermesLimitsQuery,
   useGetHermesEventQuery,
   useApproveHermesEventMutation,
   useDismissHermesEventMutation,
@@ -147,6 +149,8 @@ export function useHermesEventFeed(
   );
 }
 export const useHermesStatus = useGetHermesStatusQuery;
+export const useHermesUsage = useGetHermesUsageQuery;
+export const useHermesLimits = useGetHermesLimitsQuery;
 export const useHermesEvent = useGetHermesEventQuery;
 export const useApproveHermesEvent = useApproveHermesEventMutation;
 export const useDismissHermesEvent = useDismissHermesEventMutation;

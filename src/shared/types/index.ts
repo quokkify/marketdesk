@@ -303,6 +303,60 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
+export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';
+
+export type AiUsageReportCostStatus = AiCostStatus | 'mixed';
+
+export interface AiUsageTotals {
+  analyses: number;
+  hermesAnalyses: number;
+  offlineAnalyses: number;
+  failedAnalyses: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+}
+
+/** GET /api/hermes/usage. Day boundaries follow the workspace timezone; token sums skip calls that reported none. */
+export interface AiUsageReport {
+  timezone: string;
+  today: AiUsageTotals;
+  last7Days: AiUsageTotals;
+  byFeature: Array<{ feature: string; analyses: number; totalTokens: number | null }>;
+  costStatus: AiUsageReportCostStatus;
+}
+
+export type HermesLimitsState = 'fresh' | 'stale' | 'unknown' | 'not_configured';
+
+export interface HermesLimitWindow {
+  label: string;
+  usedPercent: number | null;
+  resetsAt: string | null;
+}
+
+/** GET /api/hermes/limits. Limits belong to the AI provider account, so every workspace sees the same. */
+export interface HermesLimits {
+  state: HermesLimitsState;
+  scope: 'account';
+  provider: string | null;
+  plan: string | null;
+  fetchedAt: string | null;
+  ageSeconds: number | null;
+  windows: HermesLimitWindow[];
+  details: string[];
+  reason: string | null;
+}
+
+/** AI calls of one analysis. Token sums are null when any Hermes call did not report them. */
+export interface AiUsageSummary {
+  provider: 'hermes' | 'offline' | 'none';
+  calls: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  costStatus: AiCostStatus;
+}
+
 export interface ProductImprovementSuggestions {
   graphVersion: 'product-assistance@1';
   productId: string;
@@ -311,6 +365,7 @@ export interface ProductImprovementSuggestions {
   reviewOnly: true;
   copy: Array<{ field: 'title' | 'description'; proposedValue: string; rationale: string }>;
   price?: { suggestedPrice: number; reasoning: string; confidence: 'high' | 'medium' | 'low' };
+  aiUsage?: AiUsageSummary;
 }
 
 export type ProductAIDraftMode = 'photos' | 'title';
@@ -348,6 +403,7 @@ export interface ProductAIDraft {
   uncertainFields: Array<keyof ProductAIDraftFields>;
   missingInfoQuestions: string[];
   notes: string[];
+  aiUsage?: AiUsageSummary;
 }
 
 export interface Marketplace {
