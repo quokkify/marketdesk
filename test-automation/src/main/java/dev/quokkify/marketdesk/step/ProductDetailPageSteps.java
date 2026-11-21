@@ -27,4 +27,11 @@ public class ProductDetailPageSteps
     page.suggestImprovementsButton().shouldBe(Condition.enabled).click();
     return this;
   }
+
+  @Step("Replace the draft reply to the buyer message {buyerText} with {reply} and send it")
+  public ProductDetailPageSteps editAndSendDraft(String buyerText, String reply) {
+    page.replaceReplyText(buyerText, reply);
+    page.sendButton(buyerText).shouldBe(Condition.enabled).click();
+    return this;
+  }
 }

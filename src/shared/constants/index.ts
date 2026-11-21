@@ -240,3 +240,7 @@ export const CACHE_TTL = {
   MEDIUM: 30 * 60,
   LONG: 24 * 60 * 60,
 } as const;
+
+// Marks every result of the built-in offline heuristics wherever it is shown, so a
+// heuristic is never presented as Hermes output.
+export const OFFLINE_AI_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';

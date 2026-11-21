@@ -32,6 +32,7 @@ import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import type { Product } from '@shared/types';
 import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
+import { awaitingReplyLabel } from '../product-detail/conversationsState.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { EmptyState } from '../common/EmptyState.js';
 import {
@@ -85,6 +86,11 @@ function ProductThumbnail({ product }: { product: Product }) {
       {productInitials(product.name)}
     </Avatar>
   );
+}
+
+function AwaitingReplyBadge({ count }: { count: number | undefined }) {
+  const label = awaitingReplyLabel(count);
+  return label ? <Chip size="small" color="warning" label={label} sx={{ ml: 1 }} /> : null;
 }
 
 function ProductIdentity({
@@ -291,6 +297,7 @@ export interface ProductsCollectionProps {
   clearFiltersAction?: React.ReactNode;
   selectedIds?: ReadonlySet<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+  awaitingByProductId?: Record<string, number>;
 }
 
 export type ProductsTableProps = ProductsCollectionProps;
@@ -398,6 +405,7 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                   </TableCell>
                   <TableCell>
                     <ProductStatusBadge status={product.status} />
+                    <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
                   </TableCell>
                   <TableCell>
                     <Tooltip title="Marketplace count is not included in the products catalogue API">
@@ -501,6 +509,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 <ProductIdentity product={product} onOpen={props.onOpen} />
               </Box>
               <ProductStatusBadge status={product.status} />
+              <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
               <ProductRowActions
                 product={product}
                 handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}

@@ -104,6 +104,7 @@ import {
   ProductTimelineCard,
   PublicationReadinessSection,
 } from '../components/product-detail/ProductDetailSections.js';
+import { ConversationsSection } from '../components/product-detail/ConversationsSection.js';
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 
 export { mainPreviewImageSx };
@@ -1339,6 +1340,7 @@ const ListingDetailsPage: React.FC = () => {
               actionsDisabled={publicationActionsLocked}
             />
           </Card>
+          <ConversationsSection productId={productId} />
           <PriceHistoryCard
             listing={primaryListing}
             history={priceHistory.data}

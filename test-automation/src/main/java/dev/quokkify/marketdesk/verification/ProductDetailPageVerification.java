@@ -10,6 +10,7 @@ import io.qameta.allure.Step;
 public class ProductDetailPageVerification
     extends Verification<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
 
+  private static final String SENT = "Sent";
   private static final String OFFLINE_USAGE_LINE = "Offline heuristics · no AI usage";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
@@ -19,6 +20,22 @@ public class ProductDetailPageVerification
   @Step("The suggestions say they used offline heuristics and no AI usage")
   public ProductDetailPageVerification showsOfflineUsageLine() {
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
+    return this;
+  }
+
+  @Step("The conversation of {buyerText} shows the sent reply {reply} and offers no draft to send")
+  public ProductDetailPageVerification conversationShowsSentReply(String buyerText, String reply) {
+    page.conversationThread(buyerText)
+        .shouldHave(Condition.text(reply), getTimeout())
+        .shouldHave(Condition.text(SENT), getTimeout());
+    page.sendButton(buyerText).shouldNot(Condition.exist, getTimeout());
+    return this;
+  }
+
+  @Step("The conversation of {buyerText} warns about {reason} and offers no Send button")
+  public ProductDetailPageVerification conversationWarnsWithoutSend(String buyerText, String reason) {
+    page.conversationThread(buyerText).shouldHave(Condition.text(reason), getTimeout());
+    page.sendButton(buyerText).shouldNot(Condition.exist, getTimeout());
     return this;
   }
 }
