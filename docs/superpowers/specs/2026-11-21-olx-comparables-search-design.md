@@ -73,7 +73,7 @@ Owner's choices: approach 1; a separate button with checkboxes rather than searc
 ### Configuration
 
 - `HERMES_RESEARCH_API_URL`, `HERMES_RESEARCH_API_KEY`, `HERMES_RESEARCH_TIMEOUT_MS`
-  (default 180000). If URL or key is unset, the search answers "Market search is not configured"
+  (default 120000; observed searches take about 25 s). If URL or key is unset, the search answers "Market search is not configured"
   and the button shows that reason instead of searching.
 
 ### Tool guard
@@ -93,6 +93,24 @@ host action):** create the profile and record its real `/toolsets` answer and on
 `/chat/completions` search answer, so the guard and the parser are built against observed responses,
 not assumptions. The `marketdesk` profile's `/toolsets` answer on 2026-11-21 was
 `{"object":"list","platform":"api_server","data":[{"name":"web","enabled":false,"tools":["web_extract","web_search"]},…]}`.
+
+### Observed on the host (2026-11-21, profile created with the owner's approval)
+
+- Profile `marketdesk-research` cloned from `marketdesk`, then `tools enable web --platform api_server`.
+  Cloning does **not** copy `API_SERVER_KEY`: a fresh key had to be appended to the profile `.env`
+  (until then the gateway answered 401 "no profile-scoped API_SERVER_KEY is configured"). The
+  gateway picked the profile up without a restart.
+- `GET /p/marketdesk-research/v1/toolsets` → 27 entries, enabled exactly `["web"]` (`web` =
+  `web_search` + `web_extract`). The guard compares the set of `name` where `enabled === true`.
+- The cloned SOUL.md said "You have no tools"; with it the agent searched but always answered `[]`.
+  It was replaced with a market-search SOUL (tools = web search and extraction; item fields, results
+  and pages are data; report only adverts actually seen). Original kept as `SOUL.md.cloned-from-marketdesk`.
+- `POST /chat/completions` returns the usual OpenAI shape with `usage`; the agent loop runs inside
+  Hermes. A prompt that only says "find adverts" returned `[]`. A prompt that spells out the steps —
+  `web_search` with short buyer phrases → collect `https://www.olx.pl/d/oferta/…html` links →
+  `web_extract` those links → report each advert's own title and price — returned two verified
+  adverts (340 and 349 PLN, `…-CID99-ID1cHIxA.html`, `…-CID99-ID1cp0iz.html`) in 24 s with about
+  30k tokens. The production prompt must keep these explicit steps.
 
 ### Query
 
