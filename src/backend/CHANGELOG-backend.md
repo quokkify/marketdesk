@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/backend-v0.21.1...backend-v0.22.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467))
+* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
+
+### ✨ Features
+
+* **ai:** show tokens per analysis, AI usage and Hermes limits ([#479](https://github.com/quokkify/marketdesk/issues/479)) ([2faac88](https://github.com/quokkify/marketdesk/commit/2faac88e7e68190f7f05063233ea6fd517abab15))
+* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458)) ([ca0eb69](https://github.com/quokkify/marketdesk/commit/ca0eb697cf0b34feaba4317bc82b5638b7f06f25))
+* **logs:** log failed requests and OLX errors on the server ([#473](https://github.com/quokkify/marketdesk/issues/473)) ([f563fa9](https://github.com/quokkify/marketdesk/commit/f563fa9835c6a39ca89ae7a20e72efd9866d7e9e))
+* **olx:** import adverts already live on OLX ([#469](https://github.com/quokkify/marketdesk/issues/469)) ([81194c0](https://github.com/quokkify/marketdesk/commit/81194c0d09f1406420833df50db50b046e3bcc7b))
+* **olx:** reactivate expired OLX adverts instead of duplicating them ([#478](https://github.com/quokkify/marketdesk/issues/478)) ([a43bcaf](https://github.com/quokkify/marketdesk/commit/a43bcaf39d3cfa054b1e8f4bb128a4199bdac930))
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+* **runs:** record local runs and add the runs command ([#459](https://github.com/quokkify/marketdesk/issues/459)) ([7f8b8ad](https://github.com/quokkify/marketdesk/commit/7f8b8ade9ff5629b07a9d1e97d8f3eea64c6ed43))
+
+
+### 🐛 Bug Fixes
+
+* evaluate the category guard after taxonomy verification in product recheck ([#449](https://github.com/quokkify/marketdesk/issues/449)) ([00b4b82](https://github.com/quokkify/marketdesk/commit/00b4b828783f4ef74184dbfea23cc61859b9fa89))
+* **olx:** give imported OLX adverts their category and status ([#475](https://github.com/quokkify/marketdesk/issues/475)) ([f57264c](https://github.com/quokkify/marketdesk/commit/f57264c255a3b8414d8e42a521368865a6eb6323))
+* **olx:** treat adverts waiting for OLX verification as pending ([#480](https://github.com/quokkify/marketdesk/issues/480)) ([8566572](https://github.com/quokkify/marketdesk/commit/856657287b9cf0d249165b837c6fb1122aa49aea))
+* **products:** show a product as on sale when its OLX advert goes live ([#481](https://github.com/quokkify/marketdesk/issues/481)) ([6fee969](https://github.com/quokkify/marketdesk/commit/6fee96942ff556d64376f1ce65bb351a33d72bea))
+* **security:** check the workspace when publishing and approving suggestions ([#463](https://github.com/quokkify/marketdesk/issues/463)) ([c3d78ca](https://github.com/quokkify/marketdesk/commit/c3d78ca6d8362b36dcd5d185cc558a054dfc235e))
+* **security:** limit AI calls and failed sign-ins, allow closing sign-up ([#462](https://github.com/quokkify/marketdesk/issues/462)) ([1a11460](https://github.com/quokkify/marketdesk/commit/1a11460af414dae00c0fedef2e7a7029ea3be18c))
+* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467)) ([5a9157d](https://github.com/quokkify/marketdesk/commit/5a9157dba98d9307b3d6054397452a9d663b78af))
+* **security:** sign out every device and expire idle sessions ([#468](https://github.com/quokkify/marketdesk/issues/468)) ([217e377](https://github.com/quokkify/marketdesk/commit/217e377dd5a493a466a543c2e6c296342da53c11))
+
+
+### ♻️ Refactoring
+
+* remove dead wiring and unused dependencies ([#446](https://github.com/quokkify/marketdesk/issues/446)) ([4ba2d02](https://github.com/quokkify/marketdesk/commit/4ba2d023c01b700d4dbcffc9f745f54ce465cce1))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/backend-v0.21.0...backend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
