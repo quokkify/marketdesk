@@ -1,0 +1,1 @@
+{"id":"380a7ad117db059d17ff88afd35f282c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/RunContextMiddleware.test.ts#createRunContextMiddleware does not open a run outside /api","name":"does not open a run outside /api","status":"passed","testResultsByEnv":{"default":"a763e081c152e22e9295766f7d661f34"}}
