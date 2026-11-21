@@ -127,18 +127,17 @@ export function editRequestedByNavigation(state: unknown): boolean {
 // advert under its own id (plain reactivation stays a second action), relist an ended listing without one, ask for an OLX
 // connection first, or edit a live or sold product. The server refuses to
 // relist a failed listing that still references an OLX advert, so that case
-// falls back to editing. A sandbox advert cannot be revived on OLX.
+// falls back to editing. In sandbox the dialog's apply is refused by the API.
 export function productPrimaryAction(input: {
   productStatus: Product['status'];
   olxListing: Listing | undefined;
   olxConnected: boolean;
-  olxSandbox?: boolean;
 }): ProductPrimaryAction {
   const listing = input.olxListing;
   if (input.productStatus === 'sold' || listing?.status === 'live') return 'edit';
   if (listing?.status === 'error' && listing.marketplaceListingId) return 'edit';
   if (!input.olxConnected) return 'connect';
-  if (listing?.status === 'expired' && listing.marketplaceListingId && !input.olxSandbox) return 'revive';
+  if (listing?.status === 'expired' && listing.marketplaceListingId) return 'revive';
   if (listing?.status === 'expired' || listing?.status === 'error') return 'relist';
   return 'publish';
 }
@@ -1243,7 +1242,6 @@ const ListingDetailsPage: React.FC = () => {
     productStatus: p.status,
     olxListing: recheckListing,
     olxConnected: Boolean(olxMarketplace?.connected),
-    olxSandbox: recheckListing ? resolveMarketplaceSandbox(recheckListing.marketplaceId) : false,
   });
   const hermesNote = analyzing
     ? productHermesAnalyzingNote(activeProvider, hermesStatus.data?.hermesToolsSafe)
@@ -1379,6 +1377,7 @@ const ListingDetailsPage: React.FC = () => {
             onEdit={() => setEditOpen(true)}
             onPublish={() => void handlePublishToOlx()}
             onRelist={recheckListing ? () => handleRelist(recheckListing) : undefined}
+            sandboxRevival={recheckListing ? resolveMarketplaceSandbox(recheckListing.marketplaceId) : false}
             onRevive={recheckListing ? () => setReviveOpen(true) : undefined}
             onReactivate={recheckListing ? () => setReactivateOpen(true) : undefined}
             onConnect={() => navigate('/marketplaces')}

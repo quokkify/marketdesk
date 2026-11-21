@@ -555,13 +555,17 @@ describe('product detail primary action', () => {
     ).toBe('connect');
   });
 
-  it('revives an expired OLX advert under its own id, but never a sandbox advert', () => {
+  it('revives an expired OLX advert that has its own id, sandbox or not, and relists one without', () => {
     const expired: Listing = { ...listing, status: 'expired', marketplaceListingId: 'olx-1085784120' };
     expect(
       productPrimaryAction({ productStatus: 'draft', olxListing: expired, olxConnected: true })
     ).toBe('revive');
     expect(
-      productPrimaryAction({ productStatus: 'draft', olxListing: expired, olxConnected: true, olxSandbox: true })
+      productPrimaryAction({
+        productStatus: 'draft',
+        olxListing: { ...expired, marketplaceListingId: undefined },
+        olxConnected: true,
+      })
     ).toBe('relist');
   });
 

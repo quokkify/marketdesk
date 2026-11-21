@@ -263,11 +263,13 @@ export const PricingSummaryCard: React.FC<{
   onEdit: () => void;
   onPublish?: () => void;
   onRelist?: () => void;
+  // An expired sandbox advert cannot be reactivated, so its second action is a relist.
+  sandboxRevival?: boolean;
   onRevive?: () => void;
   // Plain reactivation, kept beside the revival for an expired advert.
   onReactivate?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect }) => {
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
   const primaryHandler = { publish: onPublish, relist: onRelist, revive: onRevive, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
@@ -311,8 +313,10 @@ export const PricingSummaryCard: React.FC<{
           </>
         )}
       </Stack>
-      {primaryAction === 'revive' && onReactivate && (
-        <Button fullWidth variant="text" disabled={busy} onClick={onReactivate} sx={{ mt: 1 }}>Reactivate on OLX</Button>
+      {primaryAction === 'revive' && (sandboxRevival ? onRelist : onReactivate) && (
+        <Button fullWidth variant="text" disabled={busy} onClick={sandboxRevival ? onRelist : onReactivate} sx={{ mt: 1 }}>
+          {sandboxRevival ? 'Relist on OLX' : 'Reactivate on OLX'}
+        </Button>
       )}
       {primaryAction === 'connect' && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

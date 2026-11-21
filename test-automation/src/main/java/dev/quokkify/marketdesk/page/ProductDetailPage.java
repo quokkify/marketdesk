@@ -15,6 +15,10 @@ public class ProductDetailPage implements Page {
   private static final String AI_USAGE_LINE = "[data-testid=\"ai-usage-line\"]";
   private static final String RELIST_ON_OLX = "Relist on OLX";
   private static final String REVIVE_ON_OLX = "Revive on OLX";
+  private static final String APPLY_REVIVAL = "Apply and bring back on OLX";
+  private static final String REVIVAL_DIALOG = "[data-testid=\"revival-dialog\"]";
+  private static final String REVIVAL_CONDITION = "[data-testid=\"revival-condition\"] [role=\"combobox\"]";
+  private static final String OPTION = "[role=\"option\"]";
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
@@ -34,5 +38,21 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement reviveButton() {
     return Selenide.$$(BUTTON).findBy(Condition.text(REVIVE_ON_OLX));
+  }
+
+  public SelenideElement revivalDialog() {
+    return Selenide.$(REVIVAL_DIALOG);
+  }
+
+  public SelenideElement revivalConditionSelect() {
+    return Selenide.$(REVIVAL_CONDITION);
+  }
+
+  public SelenideElement conditionOption(String label) {
+    return Selenide.$$(OPTION).findBy(Condition.exactText(label));
+  }
+
+  public SelenideElement applyRevivalButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.text(APPLY_REVIVAL));
   }
 }

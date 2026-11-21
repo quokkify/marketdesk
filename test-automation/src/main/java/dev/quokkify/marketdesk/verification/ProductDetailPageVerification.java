@@ -22,10 +22,24 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The page offers to relist the expired sandbox advert, not to revive it")
-  public ProductDetailPageVerification offersRelistNotRevive() {
-    page.relistButton().shouldBe(Condition.visible, getTimeout());
-    page.reviveButton().shouldNot(Condition.exist);
+  @Step("The page offers to revive the expired advert, with relist as the second action on the sandbox stack")
+  public ProductDetailPageVerification offersReviveAndRelist() {
+    page.reviveButton().shouldBe(Condition.visible, getTimeout());
+    page.relistButton().shouldBe(Condition.exist, getTimeout());
+    return this;
+  }
+
+  @Step("The revival dialog asks for the condition and the apply button is disabled")
+  public ProductDetailPageVerification revivalNeedsACondition() {
+    page.revivalDialog().shouldBe(Condition.visible, getTimeout());
+    page.revivalConditionSelect().shouldBe(Condition.visible, getTimeout());
+    page.applyRevivalButton().shouldBe(Condition.disabled, getTimeout());
+    return this;
+  }
+
+  @Step("The apply button is enabled")
+  public ProductDetailPageVerification revivalCanBeApplied() {
+    page.applyRevivalButton().shouldBe(Condition.enabled, getTimeout());
     return this;
   }
 }
