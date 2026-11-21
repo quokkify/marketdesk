@@ -77,4 +77,47 @@ describe('validateDraft', () => {
   it('rejectsEmpty', () => {
     expect(rule('  ')).toBe('empty');
   });
+
+  // Fix round 1 regression guards
+  it('parsesThousandsSeparators', () => {
+    expect(rule('Cena 1 000 zł')).toBe('ok');
+    expect(rule('Cena 1.000 zł')).toBe('ok');
+    expect(rule('Cena 1 000,50 zł')).toBe('ok');
+    expect(rule('Cena 1 000 zł')).toBe('ok');
+    expect(rule('Cena 1 000 zł')).toBe('ok');
+    expect(rule('Cena 1 000')).toBe('ok');
+  });
+  it('recognisesCurrencyWords', () => {
+    expect(rule('Dam za 50 złotych')).toBe('below_floor');
+    expect(rule('Dam za 50 zlotych')).toBe('below_floor');
+    expect(rule('Dam za 50 euro')).toBe('below_floor');
+    expect(rule('Dam 60 $')).toBe('below_floor');
+    expect(rule('Дам 50 гривень')).toBe('below_floor');
+    expect(rule('Дам 50 руб')).toBe('below_floor');
+  });
+  it('skipsDeliveryAmounts', () => {
+    expect(rule('Dostawa 15 zł')).toBe('ok');
+    expect(rule('dostawa 15 zł, produkt 80 zł')).toBe('ok');
+    expect(rule('dostawa 15 zł, produkt 50 zł')).toBe('below_floor');
+    expect(rule('dostawa 15 zł, cena 50 zł')).toBe('below_floor');
+  });
+  it('checksBothEndsOfRanges', () => {
+    expect(rule('od 50 do 90 zł')).toBe('below_floor');
+    expect(rule('50-60 zł')).toBe('below_floor');
+    expect(rule('od 80 do 90 zł')).toBe('ok');
+  });
+  it('treatsNonFiniteProposalAsNull', () => {
+    expect(fillPrice(`Za ${PRICE_PLACEHOLDER}`, Number.NaN, 70, 100)).toEqual({ text: `Za ${PRICE_PLACEHOLDER}`, price: null });
+    expect(fillPrice(`Za ${PRICE_PLACEHOLDER}`, Number.POSITIVE_INFINITY, 70, 100).price).toBeNull();
+  });
+  it('allowsInPersonPaymentWording', () => {
+    expect(rule('BLIK przy odbiorze')).toBe('ok');
+    expect(rule('Płatność przy odbiorze')).toBe('ok');
+    expect(rule('Zapłacisz przelewem OLX')).toBe('ok');
+    expect(rule('Gotówka osobiście lub blik przy spotkaniu in person')).toBe('ok');
+    expect(rule('przelew na konto 1234')).toBe('off_platform_payment');
+    expect(rule('Wyślij kod blik')).toBe('off_platform_payment');
+    expect(rule('Zapłać przez link')).toBe('off_platform_payment');
+    expect(rule('переказ на карту')).toBe('off_platform_payment');
+  });
 });
