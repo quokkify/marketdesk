@@ -74,6 +74,19 @@ describe('HermesLimitsReader', () => {
     expect((await new HermesLimitsReader(file).read(now)).reason).toBe('fetch failed');
   });
 
+  it('trims, flattens and caps a long failure reason at 200 characters', async () => {
+    write({ unavailable_reason: `  first\n\tsecond ${'x'.repeat(500)}  `, fetched_at: at(0) });
+    const reason = (await new HermesLimitsReader(file).read(now)).reason!;
+    expect(reason).toHaveLength(200);
+    expect(reason.startsWith('first second x')).toBe(true);
+    expect(reason.endsWith('…')).toBe(true);
+  });
+
+  it('falls back to a fixed reason when the failure text is only whitespace', async () => {
+    write({ unavailable_reason: '   ', fetched_at: at(0) });
+    expect((await new HermesLimitsReader(file).read(now)).reason).toBeTruthy();
+  });
+
   it('is unknown when the file is missing', async () => {
     expect((await new HermesLimitsReader(join(dir, 'nope.json')).read(now)).state).toBe('unknown');
   });

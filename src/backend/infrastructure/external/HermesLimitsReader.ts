@@ -10,6 +10,7 @@ export const LIMITS_STALE_AFTER_MS = 15 * 60_000;
 // A fetch time slightly ahead of this clock is ordinary skew between the host and the container.
 export const LIMITS_CLOCK_SKEW_MS = 60_000;
 const RESET_HINT = '/usage reset';
+const MAX_REASON_LENGTH = 200;
 
 const text = z.string().nullable().catch(null);
 
@@ -43,6 +44,12 @@ function limits(overrides: Partial<HermesLimits>): HermesLimits {
     reason: null,
     ...overrides,
   };
+}
+
+// The failure text comes from a file the host writes and reaches every signed-in user.
+function cleanReason(reason: string): string {
+  const flat = reason.replace(/\s+/g, ' ').trim();
+  return flat.length > MAX_REASON_LENGTH ? `${flat.slice(0, MAX_REASON_LENGTH - 1)}…` : flat;
 }
 
 function unknown(reason: string): HermesLimits {
@@ -87,7 +94,9 @@ export class HermesLimitsReader {
     if (!parsed.success) return unknown('Limits file has an unexpected shape');
     const file = parsed.data;
 
-    if (file.unavailable_reason) return unknown(file.unavailable_reason);
+    if (file.unavailable_reason) {
+      return unknown(cleanReason(file.unavailable_reason) || 'Limits are unavailable');
+    }
 
     const fetchedMs = file.fetched_at ? Date.parse(file.fetched_at) : NaN;
     if (Number.isNaN(fetchedMs)) return unknown('Limits file has no valid fetch time');
