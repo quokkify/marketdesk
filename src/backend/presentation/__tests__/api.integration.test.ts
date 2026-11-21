@@ -1080,6 +1080,52 @@ describe('Presentation API', () => {
     });
   });
 
+  describe('token renewal', () => {
+    const tokenAged = (hours: number, tv = 0) =>
+      jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv, iat: Math.floor(Date.now() / 1000) - hours * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' },
+      );
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    it.each(['/api/products', '/api/auth/me'])(
+      'hands an active session on %s a fresh token once the old one is past the renewal age',
+      async (path) => {
+        const { app, authUserStore } = await buildTestApp();
+        await authUserStore.bumpTokenVersion('u-1');
+
+        const res = await request(app).get(path).set(bearerOf(tokenAged(13, 1)));
+
+        expect(res.status).toBe(200);
+        const renewed = res.headers['x-renewed-token'];
+        expect(jwt.decode(renewed)).toMatchObject({ userId: 'u-1', workspaceId: 'ws-1', tv: 1 });
+        const followUp = await request(app).get(path).set(bearerOf(renewed));
+        expect(followUp.status).toBe(200);
+        expect(followUp.headers['x-renewed-token']).toBeUndefined();
+      },
+    );
+
+    it.each(['/api/products', '/api/auth/me'])('keeps a young token on %s as it is', async (path) => {
+      const { app } = await buildTestApp();
+
+      const res = await request(app).get(path).set(bearerOf(tokenAged(1)));
+
+      expect(res.status).toBe(200);
+      expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+
+    it.each(['/api/products', '/api/auth/me'])('never renews a revoked token on %s', async (path) => {
+      const { app, authUserStore } = await buildTestApp();
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const res = await request(app).get(path).set(bearerOf(tokenAged(13, 0)));
+
+      expect(res.status).toBe(401);
+      expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+  });
+
   describe('products', () => {
     it('returns 401 when unauthenticated', async () => {
       const { app } = await buildTestApp();

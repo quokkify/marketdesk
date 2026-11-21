@@ -51,6 +51,7 @@ import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/O
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
+import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
@@ -157,7 +158,7 @@ export function createCorsOptions(
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 3600,
-    exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+    exposedHeaders: ['X-Total-Count', 'X-Page-Count', RENEWED_TOKEN_HEADER],
   };
 }
 
