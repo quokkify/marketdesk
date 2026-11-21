@@ -5,6 +5,7 @@
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
+import type { PriceResearch } from '../../../shared/types';
 import type {
   CreativityPreset,
   ListingSeoInput,
@@ -18,6 +19,13 @@ export interface PriceSuggestionContext {
   competitorPrice?: number;
   // Product cost in the listing currency, when known.
   costPrice?: number;
+}
+
+export interface PriceEstimateContext {
+  product: Product;
+  listing: Listing;
+  daysLive: number | null;
+  research: PriceResearch | null;
 }
 
 export interface PriceSuggestion {
