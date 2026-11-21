@@ -18,7 +18,7 @@ import {
   toPriceResearchForm,
   type PriceResearchForm,
 } from './priceResearchModel.js';
-import { formatDateTime } from '../../utils/formatters.js';
+import { formatDateTime, formatMoney } from '../../utils/formatters.js';
 import { requestErrorMessage } from './revivalView.js';
 
 interface PriceResearchFormProps {
@@ -185,5 +185,21 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps> = ({ prod
         </Stack>
       )}
     </Card>
+  );
+};
+
+// The product price with its discount against a new one, shown in the product's header.
+export const ProductPriceDiscount: React.FC<PriceResearchSectionProps> = ({ productId, currentPrice, currency }) => {
+  const research = useGetPriceResearchQuery(productId).currentData;
+  const discount = research ? discountLine(currentPrice, research, currency) : null;
+  return (
+    <Box sx={{ mt: 0.75 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{formatMoney(currentPrice, currency)}</Typography>
+      {discount && (
+        <Typography variant="body2" color="text.secondary" data-testid="product-price-discount">
+          {discount}
+        </Typography>
+      )}
+    </Box>
   );
 };

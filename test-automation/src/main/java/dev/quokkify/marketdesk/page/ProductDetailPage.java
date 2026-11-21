@@ -24,7 +24,7 @@ public class ProductDetailPage implements Page {
   private static final String RETAIL_SOURCE = "[data-testid=\"price-research-source\"] input";
   private static final String SAVE_PRICE_RESEARCH = "[data-testid=\"price-research-save\"]";
   private static final String PRICE_RESEARCH_SAVED = "[data-testid=\"price-research-saved\"]";
-  private static final String DISCOUNT_LINE = "[data-testid=\"price-research-discount\"]";
+  private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);

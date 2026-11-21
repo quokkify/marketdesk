@@ -8,6 +8,7 @@ import org.testng.annotations.Test;
 public class PriceResearchUiTest extends BaseUiTest {
 
   private static final String RETAIL_PRICE = "469.99";
+  private static final String RETAIL_PRICE_SHOWN = "469,99 zł";
   private static final String CURRENCY = "PLN";
   private static final String SOURCE = "MediaMarkt";
 
@@ -26,6 +27,7 @@ public class PriceResearchUiTest extends BaseUiTest {
         .saveRetailAnchor(RETAIL_PRICE, CURRENCY, SOURCE)
         .reloadPage()
         .verify()
-        .showsRetailAnchor(RETAIL_PRICE, CURRENCY, SOURCE);
+        .showsRetailAnchor(RETAIL_PRICE, CURRENCY, SOURCE)
+        .showsDiscountAgainstNew(RETAIL_PRICE_SHOWN, SOURCE);
   }
 }

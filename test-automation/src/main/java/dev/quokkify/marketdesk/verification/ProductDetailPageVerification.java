@@ -50,4 +50,11 @@ public class ProductDetailPageVerification
     page.retailSourceInput().shouldHave(Condition.value(source), getTimeout());
     return this;
   }
+
+  @Step("The discount against new {retailPrice} from {source} is shown under the product price")
+  public ProductDetailPageVerification showsDiscountAgainstNew(String retailPrice, String source) {
+    page.discountLine().shouldHave(Condition.text("% vs new · " + retailPrice), getTimeout());
+    page.discountLine().shouldHave(Condition.text("(" + source), getTimeout());
+    return this;
+  }
 }
