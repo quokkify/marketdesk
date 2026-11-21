@@ -97,6 +97,10 @@ function parseValues(value: unknown): ProductFormValues | null {
     description: value.description,
     costPrice: value.costPrice as number | null,
     sellingPrice: value.sellingPrice,
+    minAcceptablePrice:
+      typeof value.minAcceptablePrice === 'number' && Number.isFinite(value.minAcceptablePrice)
+        ? value.minAcceptablePrice
+        : null,
     condition: value.condition as ProductCondition,
     category: value.category,
     status: value.status as ProductStatus,

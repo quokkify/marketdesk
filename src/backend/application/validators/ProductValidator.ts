@@ -29,6 +29,7 @@ const createProductSchema = z
     description: z.string().min(PRODUCT_DESCRIPTION_MIN_LENGTH).max(PRODUCT_DESCRIPTION_MAX_LENGTH),
     costPrice: z.number().finite().nonnegative().nullable(),
     sellingPrice: z.number().finite().nonnegative(),
+    minAcceptablePrice: z.number().finite().nullable().optional(),
     currency: currencySchema.optional(),
     condition: conditionSchema,
     category: z.string().trim().min(1, 'category is required'),
@@ -51,6 +52,7 @@ const updateProductSchema = z
       .optional(),
     costPrice: z.number().finite().nonnegative().nullable().optional(),
     sellingPrice: z.number().finite().nonnegative().optional(),
+    minAcceptablePrice: z.number().finite().nullable().optional(),
     currency: currencySchema.optional(),
     condition: conditionSchema.optional(),
     category: z.string().trim().min(1, 'category is required').optional(),
@@ -68,6 +70,7 @@ const updateProductSchema = z
       dto.description !== undefined ||
       dto.costPrice !== undefined ||
       dto.sellingPrice !== undefined ||
+      dto.minAcceptablePrice !== undefined ||
       dto.currency !== undefined ||
       dto.condition !== undefined ||
       dto.category !== undefined ||

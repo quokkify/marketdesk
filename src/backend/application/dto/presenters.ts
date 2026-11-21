@@ -69,6 +69,7 @@ export function presentProduct(product: Product): ProductView {
     description: product.description,
     costPrice: product.costPrice?.amount ?? null,
     sellingPrice: product.sellingPrice.amount,
+    minAcceptablePrice: product.minAcceptablePrice?.amount ?? null,
     condition: product.condition,
     category: product.category,
     categoryProvenance: product.categoryProvenance,

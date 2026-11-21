@@ -3,6 +3,7 @@ package dev.quokkify.marketdesk.step;
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ImprovementRequestPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
+import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.ProductVerification;
 import dev.quokkify.step.ApiSteps;
@@ -27,6 +28,16 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
   @Step("Get products as an authenticated user")
   public ValidatableResponse getProducts(AccountPojo account) {
     return service.getProducts(account.token());
+  }
+
+  @Step("Create a product")
+  public ValidatableResponse createProduct(AccountPojo account, ProductRequestPojo product) {
+    return service.createProduct(account.token(), product);
+  }
+
+  @Step("Get product {productId}")
+  public ValidatableResponse getProduct(AccountPojo account, String productId) {
+    return service.getProduct(account.token(), productId);
   }
 
   @Step("Ask for improvements of the product and its listing")

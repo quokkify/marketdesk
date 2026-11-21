@@ -160,25 +160,41 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
 }) => {
   const adornment = <InputAdornment position="end">{currencySymbol(currency)}</InputAdornment>;
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+    <Stack spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField
+          label="Cost price"
+          type="number"
+          fullWidth
+          value={values.costPrice === null || Number.isNaN(values.costPrice) ? '' : values.costPrice}
+          onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
+          error={Boolean(errors.costPrice)}
+          helperText={errors.costPrice ?? 'Optional. Leave empty if the cost is unknown.'}
+          slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+        />
+        <TextField
+          label="Selling price"
+          type="number"
+          fullWidth
+          value={Number.isNaN(values.sellingPrice) ? '' : values.sellingPrice}
+          onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
+          error={Boolean(errors.sellingPrice)}
+          helperText={errors.sellingPrice}
+          slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+        />
+      </Stack>
       <TextField
-        label="Cost price"
+        label="Lowest price you accept"
         type="number"
         fullWidth
-        value={values.costPrice === null || Number.isNaN(values.costPrice) ? '' : values.costPrice}
-        onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
-        error={Boolean(errors.costPrice)}
-        helperText={errors.costPrice ?? 'Optional. Leave empty if the cost is unknown.'}
-        slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
-      />
-      <TextField
-        label="Selling price"
-        type="number"
-        fullWidth
-        value={Number.isNaN(values.sellingPrice) ? '' : values.sellingPrice}
-        onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
-        error={Boolean(errors.sellingPrice)}
-        helperText={errors.sellingPrice}
+        value={
+          values.minAcceptablePrice === null || Number.isNaN(values.minAcceptablePrice)
+            ? ''
+            : values.minAcceptablePrice
+        }
+        onChange={(e) => onChange('minAcceptablePrice', parseOptionalNumber(e.target.value))}
+        error={Boolean(errors.minAcceptablePrice)}
+        helperText={errors.minAcceptablePrice ?? 'Hermes never offers less. Empty means no discount.'}
         slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
       />
     </Stack>

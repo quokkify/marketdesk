@@ -256,6 +256,8 @@ export interface Product {
   description: string;
   costPrice: number | null;
   sellingPrice: number;
+  // Lowest price the seller accepts in negotiation (major units); null means none.
+  minAcceptablePrice?: number | null;
   condition: ProductCondition;
   category: string;
   categoryProvenance?: ProductCategoryProvenance | null;
