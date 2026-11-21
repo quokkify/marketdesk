@@ -74,6 +74,16 @@ public class RevivalTest extends BaseTest {
     listingSteps.verify().isRevivalSandboxRefusal(listingSteps.revive(account, listingId, revival));
   }
 
+  // The photo refusal comes before the sandbox refusal, so the stub stack reaches it with fresh timestamps.
+  @Test
+  public void reviveRefusesAProductWithoutPhotos() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    String listingId = listingSteps.createExpiredOlxProductListingWithoutPhotos(account).listingId();
+    RevivalRequestPojo revival = listingSteps.freshRevival(account, listingId, "good");
+    listingSteps.verify().isNoPhotosRevivalRefusal(listingSteps.revive(account, listingId, revival));
+  }
+
   // The sample product is "good" with cost price 50; the refused apply must leave both untouched.
   @Test
   public void reviveRefusesBelowCostWithoutConfirmation() {

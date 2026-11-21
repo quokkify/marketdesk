@@ -26,6 +26,7 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String BELOW_COST_MESSAGE =
       "The advert price is below the cost price; confirm selling below cost to apply it";
   private static final String REQUEST_VALIDATION_MESSAGE = "Request validation failed";
+  private static final String NO_PHOTOS_MESSAGE = "Add at least one photo before reviving the advert on OLX";
 
   @Override
   protected ListingVerification self() {
@@ -98,6 +99,13 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   public ListingVerification isRevivalSandboxRefusal(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
     response.body("error.message", Matchers.equalTo(REVIVAL_SANDBOX_MESSAGE));
+    return self();
+  }
+
+  @Step("Revival is refused because the product has no photos")
+  public ListingVerification isNoPhotosRevivalRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
+    response.body("error.message", Matchers.equalTo(NO_PHOTOS_MESSAGE));
     return self();
   }
 

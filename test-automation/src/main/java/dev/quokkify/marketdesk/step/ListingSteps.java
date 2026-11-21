@@ -40,9 +40,16 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     return createOlxProductListing(account, ProductRequestPojo.sample());
   }
 
-  @Step("Create a product with an OLX listing that expired on OLX and keep both ids")
+  @Step("Create a product with a photo and an OLX listing that expired on OLX, keep both ids")
   public ProductListingPojo createExpiredOlxProductListing(AccountPojo account) {
-    ProductListingPojo productListing = createOlxProductListing(account);
+    ProductListingPojo productListing = createOlxProductListing(account, ProductRequestPojo.sample().withPhoto());
+    markExpiredOnOlx(productListing.listingId());
+    return productListing;
+  }
+
+  @Step("Create a product without photos and an OLX listing that expired on OLX, keep both ids")
+  public ProductListingPojo createExpiredOlxProductListingWithoutPhotos(AccountPojo account) {
+    ProductListingPojo productListing = createOlxProductListing(account, ProductRequestPojo.sample());
     markExpiredOnOlx(productListing.listingId());
     return productListing;
   }

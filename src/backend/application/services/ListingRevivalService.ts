@@ -41,6 +41,7 @@ export const REVIVAL_APPLY_ORDER: RevivalApplyOrder = 'update-then-activate';
 export const REVIVAL_STALE_MESSAGE =
   'The product or listing changed since the proposal; open the revival again';
 export const REVIVAL_SANDBOX_MESSAGE = 'Revival is not available in sandbox mode';
+export const REVIVAL_NO_PHOTOS_MESSAGE = 'Add at least one photo before reviving the advert on OLX';
 export const REVIVAL_ADVERT_BELOW_COST_MESSAGE =
   'The advert price is below the cost price; confirm selling below cost to apply it';
 export const REVIVAL_PRODUCT_BELOW_COST_MESSAGE =
@@ -162,6 +163,8 @@ export class ListingRevivalService {
     if (marketplace.key !== 'olx' || listing.status !== 'expired' || !externalListingId) {
       throw new InvalidStateError(REVIVAL_REFUSAL_MESSAGE);
     }
+    // The update PUTs the whole advert, so a product without photos would strip them from OLX.
+    if (product.images.length === 0) throw new InvalidStateError(REVIVAL_NO_PHOTOS_MESSAGE);
     assertNotBelowCost(product, listing, changes);
     if (this.deps.sandboxMode) throw new InvalidStateError(REVIVAL_SANDBOX_MESSAGE);
 
