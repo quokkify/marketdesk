@@ -175,12 +175,14 @@ export function productHermesDisabledReason(input: {
 }
 
 // Names the provider that answers the run: offline heuristics stand in while Hermes is
-// unavailable. Neutral while the provider status is still unknown.
+// unavailable. Neutral while the provider status is still unknown, and never credits Hermes
+// while its API server is refused for having tools enabled.
 export function productHermesAnalyzingNote(
-  activeProvider: HermesStatusView['activeProvider'] | undefined
+  activeProvider: HermesStatusView['activeProvider'] | undefined,
+  hermesToolsSafe?: HermesStatusView['hermesToolsSafe']
 ): string {
   const subject =
-    activeProvider === 'hermes'
+    activeProvider === 'hermes' && hermesToolsSafe !== false
       ? 'Hermes is analyzing'
       : activeProvider === 'offline'
         ? 'Offline heuristics are analyzing'
@@ -1197,7 +1199,7 @@ const ListingDetailsPage: React.FC = () => {
     olxConnected: Boolean(olxMarketplace?.connected),
   });
   const hermesNote = analyzing
-    ? productHermesAnalyzingNote(activeProvider)
+    ? productHermesAnalyzingNote(activeProvider, hermesStatus.data?.hermesToolsSafe)
     : analysisState.status === 'idle'
       ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
       : analysisState.message;
