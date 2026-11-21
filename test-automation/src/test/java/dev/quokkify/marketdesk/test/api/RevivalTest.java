@@ -87,6 +87,29 @@ public class RevivalTest extends BaseTest {
         .hasConditionAndCostPrice(productSteps.getProduct(account, productListing.productId()), "good", 50);
   }
 
+  // The sample listing sells at 120; a cost price of 150 without a new price puts the advert below cost.
+  @Test
+  public void reviveRefusesACostPriceAboveTheAdvertPrice() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createExpiredOlxProductListing(account);
+    RevivalRequestPojo revival = listingSteps.freshRevival(account, productListing.listingId(), "new")
+        .withPrices(150.0, null);
+    listingSteps.verify().isBelowCostRefusal(listingSteps.revive(account, productListing.listingId(), revival));
+    productSteps.verify()
+        .hasConditionAndCostPrice(productSteps.getProduct(account, productListing.productId()), "good", 50);
+  }
+
+  @Test
+  public void reviveRefusesADescriptionShorterThanTheProductAllows() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    String listingId = listingSteps.createExpiredOlxProductListing(account).listingId();
+    RevivalRequestPojo revival = listingSteps.freshRevival(account, listingId, "good")
+        .withDescription("Nineteen characters");
+    listingSteps.verify().isFieldValidationRefusal(listingSteps.revive(account, listingId, revival), "description");
+  }
+
   @Test
   public void reviveHidesAnotherWorkspaceListing() {
     AccountPojo owner = authSteps.registerNewAccount();

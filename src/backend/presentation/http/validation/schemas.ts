@@ -15,6 +15,8 @@ import {
   SYNC_MODE_LIST,
   MARKETPLACE_KEY_LIST,
   REGISTRATION_WORKSPACE_NAME_MAX_LENGTH,
+  PRODUCT_DESCRIPTION_MIN_LENGTH,
+  PRODUCT_DESCRIPTION_MAX_LENGTH,
 } from '../../../../shared/constants';
 
 const conditionEnum = z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'refurbished', 'unknown']);
@@ -151,7 +153,7 @@ export const reviveListingSchema = z
     condition: conditionEnum,
     costPrice: z.number().nonnegative().optional(),
     title: z.string().min(1).max(200).optional(),
-    description: z.string().min(1).max(9000).optional(),
+    description: z.string().min(PRODUCT_DESCRIPTION_MIN_LENGTH).max(PRODUCT_DESCRIPTION_MAX_LENGTH).optional(),
     price: z.number().positive().optional(),
     allowBelowCost: z.boolean().optional(),
     productUpdatedAt: z.iso.datetime(),

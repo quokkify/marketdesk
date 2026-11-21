@@ -24,7 +24,8 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String STALE_REVIVAL_MESSAGE =
       "The product or listing changed since the proposal; open the revival again";
   private static final String BELOW_COST_MESSAGE =
-      "The price is below the cost price; confirm selling below cost to apply it";
+      "The advert price is below the cost price; confirm selling below cost to apply it";
+  private static final String REQUEST_VALIDATION_MESSAGE = "Request validation failed";
 
   @Override
   protected ListingVerification self() {
@@ -100,7 +101,15 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     return self();
   }
 
-  @Step("Revival is refused because the price is below the cost price without confirmation")
+  @Step("Revival is refused at field {field} by the body validation")
+  public ListingVerification isFieldValidationRefusal(ValidatableResponse response, String field) {
+    failsWith(response, HttpStatus.SC_BAD_REQUEST, VALIDATION_ERROR);
+    response.body("error.message", Matchers.equalTo(REQUEST_VALIDATION_MESSAGE));
+    response.body("error.details.field", Matchers.hasItem(field));
+    return self();
+  }
+
+  @Step("Revival is refused because the advert price is below the cost price without confirmation")
   public ListingVerification isBelowCostRefusal(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, GUARDRAIL_VIOLATION);
     response.body("error.message", Matchers.equalTo(BELOW_COST_MESSAGE));

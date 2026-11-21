@@ -41,8 +41,10 @@ export const REVIVAL_APPLY_ORDER: RevivalApplyOrder = 'update-then-activate';
 export const REVIVAL_STALE_MESSAGE =
   'The product or listing changed since the proposal; open the revival again';
 export const REVIVAL_SANDBOX_MESSAGE = 'Revival is not available in sandbox mode';
-export const REVIVAL_BELOW_COST_MESSAGE =
-  'The price is below the cost price; confirm selling below cost to apply it';
+export const REVIVAL_ADVERT_BELOW_COST_MESSAGE =
+  'The advert price is below the cost price; confirm selling below cost to apply it';
+export const REVIVAL_PRODUCT_BELOW_COST_MESSAGE =
+  "The product's selling price is below the new cost price; confirm selling below cost to apply it";
 const ACTIVITY_ACTION = 'olx.advert_revived';
 
 export interface RevivalChanges {
@@ -57,8 +59,6 @@ export interface RevivalChanges {
 }
 
 type RevivalField = 'condition' | 'costPrice' | 'title' | 'description' | 'price';
-// Cost price stays in MarketDesk; every other field is part of the OLX advert.
-const ADVERT_FIELDS: readonly RevivalField[] = ['condition', 'title', 'description', 'price'];
 
 // `step` names the OLX step that failed, or `done`. `outcome` is the reactivation outcome, or
 // `update_refused` when the update failed first and nothing was reactivated.
@@ -103,22 +103,32 @@ function assertUnchanged(product: Product, listing: Listing, changes: RevivalCha
   }
 }
 
-// The shared below-cost rule, checked for the new advert price and for a new cost price against
-// the product's selling price (the one Product.updateCostPrice guards).
-function assertNotBelowCost(product: Product, changes: RevivalChanges): void {
-  const currentCostPrice = product.costPrice?.amount ?? null;
-  const candidates = [{ costPrice: changes.costPrice ?? currentCostPrice, sellingPrice: changes.price }];
-  if (changes.costPrice !== undefined && changes.costPrice !== currentCostPrice) {
-    candidates.push({ costPrice: changes.costPrice, sellingPrice: product.sellingPrice.amount });
-  }
+function isBelowCost(costPrice: number | null | undefined, sellingPrice: number, allowBelowCost?: boolean): boolean {
   let belowCost = false;
-  for (const candidate of candidates) {
-    requireBelowCostConfirmation(
-      { ...candidate, allowBelowCost: changes.allowBelowCost },
-      { addIssue: () => { belowCost = true; } }
-    );
+  requireBelowCostConfirmation(
+    { costPrice, sellingPrice, allowBelowCost },
+    { addIssue: () => { belowCost = true; } }
+  );
+  return belowCost;
+}
+
+// The shared below-cost rule. The advert price (new or current) must not fall below the cost price
+// (new or known). A new cost price is also checked against the product's selling price, because
+// Product.updateCostPrice enforces that pair.
+function assertNotBelowCost(product: Product, listing: Listing, changes: RevivalChanges): void {
+  const currentCostPrice = product.costPrice?.amount ?? null;
+  const costPrice = changes.costPrice ?? currentCostPrice;
+  const advertPrice = changes.price ?? listing.price.amount;
+  if (isBelowCost(costPrice, advertPrice, changes.allowBelowCost)) {
+    throw new GuardrailViolationError(REVIVAL_ADVERT_BELOW_COST_MESSAGE);
   }
-  if (belowCost) throw new GuardrailViolationError(REVIVAL_BELOW_COST_MESSAGE);
+  if (
+    changes.costPrice !== undefined &&
+    changes.costPrice !== currentCostPrice &&
+    isBelowCost(changes.costPrice, product.sellingPrice.amount, changes.allowBelowCost)
+  ) {
+    throw new GuardrailViolationError(REVIVAL_PRODUCT_BELOW_COST_MESSAGE);
+  }
 }
 
 function unwrap<T>(result: Result<T>): T {
@@ -152,7 +162,7 @@ export class ListingRevivalService {
     if (marketplace.key !== 'olx' || listing.status !== 'expired' || !externalListingId) {
       throw new InvalidStateError(REVIVAL_REFUSAL_MESSAGE);
     }
-    assertNotBelowCost(product, changes);
+    assertNotBelowCost(product, listing, changes);
     if (this.deps.sandboxMode) throw new InvalidStateError(REVIVAL_SANDBOX_MESSAGE);
 
     // Resolved before saving: a missing or refused OLX authorization then leaves nothing changed.
@@ -160,11 +170,12 @@ export class ListingRevivalService {
     const saved = await this.saveChanges(product.id, listing.id, input);
     const changedFields = saved.changedFields;
     const current = buildListingPublishInput(saved.product, saved.listing);
-    const needsUpdate = changedFields.some((field) => ADVERT_FIELDS.includes(field));
 
-    const update = (): Promise<StepResult<void>> => needsUpdate
-      ? this.updateAdvert(adapter, externalListingId, changedFields, current)
-      : Promise.resolve({ ok: true, value: undefined });
+    // The update is always sent, even when nothing differs from what MarketDesk stores: after a
+    // refused update the changes are already saved, and a retry must still put them on OLX before
+    // (or after) reactivating. The PUT carries the whole advert anyway.
+    const update = (): Promise<StepResult<void>> =>
+      this.updateAdvert(adapter, externalListingId, changedFields, current);
     let report: Pick<RevivalResult, 'outcome' | 'step' | 'reason'>;
     if (REVIVAL_APPLY_ORDER === 'update-then-activate') {
       // A refused update reactivates nothing: the advert stays expired with its old text.
@@ -172,14 +183,14 @@ export class ListingRevivalService {
       if (!updated.ok) {
         report = { outcome: 'update_refused', step: 'update', reason: updated.reason };
       } else {
-        const activated = await this.activate(input);
+        const activated = await this.activate(input, externalListingId);
         report = activated.ok
           ? { outcome: activated.value, step: 'done', reason: null }
           : { outcome: 'unchanged', step: 'activate', reason: activated.reason };
       }
     } else {
       // A refused update after a reactivation leaves the advert back on OLX with its old text.
-      const activated = await this.activate(input);
+      const activated = await this.activate(input, externalListingId);
       if (!activated.ok) {
         report = { outcome: 'unchanged', step: 'activate', reason: activated.reason };
       } else {
@@ -242,7 +253,7 @@ export class ListingRevivalService {
         unwrap(product.updateCostPrice(costPrice, changes.allowBelowCost === true));
         changedFields.push('costPrice');
       }
-      if (changes.title !== undefined && changes.title !== product.name) {
+      if (changes.title !== undefined && changes.title.trim() !== product.name) {
         unwrap(product.rename(changes.title));
         changedFields.push('title');
       }
@@ -295,15 +306,14 @@ export class ListingRevivalService {
       await adapter.updateListing(externalListingId, changes, current);
       return { ok: true, value: undefined };
     } catch (error) {
-      return this.reported(providerFailure(error, 'update'));
+      return this.reported('update', externalListingId, providerFailure(error, 'update'));
     }
   }
 
-  private async activate(input: {
-    listingId: string;
-    workspaceId: string;
-    actorId?: string;
-  }): Promise<StepResult<ReactivationOutcome>> {
+  private async activate(
+    input: { listingId: string; workspaceId: string; actorId?: string },
+    externalListingId: string
+  ): Promise<StepResult<ReactivationOutcome>> {
     try {
       const result = await this.deps.reactivation.reactivate({
         listingId: input.listingId,
@@ -312,15 +322,27 @@ export class ListingRevivalService {
       });
       return { ok: true, value: result.outcome };
     } catch (error) {
-      return this.reported(error);
+      return this.reported('activate', externalListingId, error);
     }
   }
 
-  // A mapped refusal (OLX's reason, an unavailable OLX, a local guard) is reported as the failed
-  // step; anything else is a defect and surfaces as a server error.
-  private reported(error: unknown): { ok: false; reason: string } {
-    if (error instanceof DomainError) return { ok: false, reason: error.message };
-    throw error;
+  // The changes are already saved, so every failure of an OLX step is reported, never thrown: the
+  // owner gets the step, the reason and fresh timestamps, and the activity row is written. A
+  // failure that maps to no known OLX answer (adapter guard, network error, UNKNOWN code) is also
+  // logged as a possible defect.
+  private reported(
+    step: 'update' | 'activate',
+    externalListingId: string,
+    error: unknown
+  ): { ok: false; reason: string } {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (!(error instanceof DomainError)) {
+      this.deps.logger?.warn(
+        { step, externalListingId, error: reason },
+        'Revival step failed without a known OLX answer; possible defect'
+      );
+    }
+    return { ok: false, reason };
   }
 
   // The changes are saved and OLX may have acted; a failed audit write is logged, not reported.
