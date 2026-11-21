@@ -104,12 +104,18 @@ public class ConversationSteps extends ApiSteps<ConversationVerification> {
 
   @Step("The sandbox buyer of the availability thread on listing {listing} writes {text}")
   public void sandboxBuyerWrites(AccountPojo account, ProductListingPojo listing, String text) {
-    String advertId = listingService.getListing(account.token(), listing.listingId())
+    addSandboxBuyerMessage(account, account, listing, text).statusCode(HttpStatus.SC_CREATED);
+  }
+
+  @Step("Add a sandbox buyer message to the availability thread of {owner}'s listing {listing} as {caller}")
+  public ValidatableResponse addSandboxBuyerMessage(AccountPojo caller, AccountPojo owner, ProductListingPojo listing,
+      String text) {
+    String advertId = listingService.getListing(owner.token(), listing.listingId())
         .statusCode(HttpStatus.SC_OK)
         .extract()
         .path(MARKETPLACE_LISTING_ID);
-    service.addSandboxBuyerMessage(account.token(), SANDBOX_AVAILABILITY_THREAD_ID.formatted(advertId),
-        new ReplyTextPojo(text)).statusCode(HttpStatus.SC_CREATED);
+    return service.addSandboxBuyerMessage(caller.token(), SANDBOX_AVAILABILITY_THREAD_ID.formatted(advertId),
+        new ReplyTextPojo(text));
   }
 
   // Regeneration is queued, so the new draft arrives a little later.

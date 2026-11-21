@@ -11,11 +11,21 @@ import type { MarketplaceMessage } from '../../../domain/services/MarketplaceAda
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { InMemoryProductRepository, money, unwrap } from '../../../domain/testkit/support';
 import type { ConversationReplyJob, IJobQueue, JobEnqueueOptions } from '../../ports/IJobQueue';
-import { ReplySendService, type ThreadMessenger } from '../ReplySendService';
+import { ReplySendService, sendingInFlightWindowMs, type ThreadMessenger } from '../ReplySendService';
 
 const NOW = new Date('2026-11-21T12:00:00Z');
 const WORKSPACE = 'w1';
 const REPLY = 'Yes, it is still available.';
+const OLX_REQUEST_TIMEOUT_MS = 30_000;
+// Derived the way the container derives it from the configured OLX request timeout.
+const IN_FLIGHT_MS = sendingInFlightWindowMs(OLX_REQUEST_TIMEOUT_MS);
+
+describe('sendingInFlightWindowMs', () => {
+  it('is the OLX request timeout plus one minute', () => {
+    expect(sendingInFlightWindowMs(OLX_REQUEST_TIMEOUT_MS)).toBe(90_000);
+    expect(sendingInFlightWindowMs(120_000)).toBe(180_000);
+  });
+});
 
 class FakeConversations {
   readonly threads = new Map<string, ConversationThread>();
@@ -37,9 +47,15 @@ class FakeConversations {
     return [...this.drafts.values()].filter((d) => d.threadId === threadId && d.status !== 'superseded').pop() ?? null;
   }
 
-  async updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean> {
+  async updateDraft(
+    id: string,
+    patch: ReplyDraftPatch,
+    expectedStatus: ReplyDraft['status'],
+    expectedAttemptKey?: string | null,
+  ): Promise<boolean> {
     const draft = this.drafts.get(id);
     if (draft?.status !== expectedStatus) return false;
+    if (expectedAttemptKey !== undefined && draft.attemptKey !== expectedAttemptKey) return false;
     this.drafts.set(id, { ...draft, ...patch });
     return true;
   }
@@ -132,6 +148,7 @@ async function setup(options: { draftStatus?: ReplyDraft['status'] } = {}) {
   });
   const activity: ActivityLogEntry[] = [];
   const queue = new FakeQueue();
+  const queueFailures: unknown[] = [];
   let clock = NOW;
   let ids = 0;
   const service = new ReplySendService({
@@ -145,13 +162,15 @@ async function setup(options: { draftStatus?: ReplyDraft['status'] } = {}) {
     adapters: { resolve: async () => messenger },
     replyQueue: queue,
     dailyRunCap: 3,
+    sendingInFlightMs: IN_FLIGHT_MS,
+    onReplyQueueFailure: (failure) => queueFailures.push(failure),
     idGenerator: () => `id-${++ids}`,
     now: () => clock,
   });
   const send = (text = REPLY, draftId = 'd1') =>
     service.send({ workspaceId: WORKSPACE, threadId: 't1', draftId, text, actorId: 'u1' });
   return {
-    conversations, messenger, activity, queue, service, send,
+    conversations, messenger, activity, queue, queueFailures, service, send,
     advance: (ms: number) => { clock = new Date(clock.getTime() + ms); },
   };
 }
@@ -281,11 +300,25 @@ describe('ReplySendService.send', () => {
       expect(ctx.activity).toHaveLength(1);
     });
 
-    it('is sent when OLX does not have the message', async () => {
+    it('staleSendNotFoundDoesNotResend', async () => {
       const ctx = await stale();
-      expect(await ctx.send()).toEqual({ kind: 'sent' });
-      expect(ctx.messenger.sent).toEqual([REPLY]);
-      expect(ctx.conversations.draft()).toMatchObject({ status: 'sent', failureReason: null });
+      expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'unclear_send' });
+      expect(ctx.messenger.sent).toEqual([]);
+      expect(ctx.conversations.draft()).toMatchObject({ status: 'failed', failureReason: 'unclear_send' });
+      expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'not_pending' });
+      expect(ctx.messenger.sent).toEqual([]);
+    });
+
+    it('stays in flight until the configured window has passed', async () => {
+      const ctx = await setup({ draftStatus: 'sending' });
+      await ctx.conversations.updateDraft('d1', {
+        attemptKey: 'old', attemptStartedAt: new Date(NOW.getTime() - IN_FLIGHT_MS + 1_000), sentText: REPLY,
+      }, 'sending');
+      expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'already_sending' });
+      expect(ctx.conversations.draft().status).toBe('sending');
+      ctx.advance(1_000);
+      expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'unclear_send' });
+      expect(ctx.messenger.sent).toEqual([]);
     });
 
     it('fails as unclear_send when the thread cannot be read', async () => {
@@ -304,6 +337,53 @@ describe('ReplySendService.send', () => {
       .rejects.toBeInstanceOf(NotFoundError);
     await expect(send(REPLY, 'nope')).rejects.toBeInstanceOf(NotFoundError);
     expect(conversations.draft().status).toBe('dismissed');
+  });
+});
+
+describe('ReplySendService attempt ownership', () => {
+  it('re-stamps the attempt start right before the POST', async () => {
+    const ctx = await setup();
+    const read = ctx.messenger.listThreadMessages.bind(ctx.messenger);
+    ctx.messenger.listThreadMessages = async () => {
+      ctx.advance(80_000);
+      return read();
+    };
+    expect(await ctx.send()).toEqual({ kind: 'sent' });
+    expect(ctx.conversations.draft().attemptStartedAt).toEqual(new Date(NOW.getTime() + 80_000));
+  });
+
+  it('does not send when another request took the attempt over during the pre-send read', async () => {
+    const ctx = await setup();
+    const read = ctx.messenger.listThreadMessages.bind(ctx.messenger);
+    ctx.messenger.listThreadMessages = async () => {
+      await ctx.conversations.updateDraft('d1', { status: 'failed', failureReason: 'unclear_send' }, 'sending');
+      return read();
+    };
+    expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'already_sending' });
+    expect(ctx.messenger.sent).toEqual([]);
+    expect(ctx.conversations.draft()).toMatchObject({ status: 'failed', failureReason: 'unclear_send' });
+  });
+
+  it('lateFirstRequestCannotOverwriteSecondAttempt', async () => {
+    const ctx = await setup();
+    const sendMessage = ctx.messenger.sendThreadMessage.bind(ctx.messenger);
+    ctx.messenger.sendThreadMessage = async (thread, text) => {
+      const result = await sendMessage(thread, text);
+      // While the first POST hangs, a second attempt with its own key owns the row.
+      ctx.conversations.drafts.set('d1', { ...ctx.conversations.draft(), status: 'sending', attemptKey: 'second' });
+      return result;
+    };
+    await ctx.send();
+    expect(ctx.conversations.draft()).toMatchObject({ status: 'sending', attemptKey: 'second', externalMessageId: null });
+    expect(ctx.activity).toEqual([]);
+  });
+
+  it('reports a failed reply enqueue by code only', async () => {
+    const ctx = await setup();
+    ctx.messenger.remote.push({ externalMessageId: 'b2', direction: 'buyer', text: 'Hello?', sentAt: NOW });
+    ctx.queue.enqueue = async () => { throw new Error('redis down'); };
+    expect(await ctx.send()).toEqual({ kind: 'rejected', code: 'superseded' });
+    expect(ctx.queueFailures).toEqual([{ threadId: 't1', code: 'reply_enqueue_failed' }]);
   });
 });
 

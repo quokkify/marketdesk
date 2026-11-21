@@ -129,7 +129,7 @@ import { MarketplaceOAuthService } from '../../application/services/MarketplaceO
 import { ConversationRetentionService } from '../../application/services/ConversationRetentionService';
 import { ConversationSyncService } from '../../application/services/ConversationSyncService';
 import { ConversationReplyGraph } from '../../application/services/ConversationReplyGraph';
-import { ReplySendService } from '../../application/services/ReplySendService';
+import { ReplySendService, sendingInFlightWindowMs } from '../../application/services/ReplySendService';
 import { MarketplaceSyncScheduler } from '../../application/services/MarketplaceSyncScheduler';
 import { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import {
@@ -190,6 +190,7 @@ class ReplyGraphConversationRepository extends ConversationRepository {
 
 const CONVERSATION_SYNC_FAILURE_MESSAGE = 'Conversation sync failed';
 const CONVERSATION_REPLY_DROPPED_MESSAGE = 'Conversation reply run dropped';
+const CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE = 'Conversation reply run not queued';
 
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -874,8 +875,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     },
     replyQueue: conversationReplyQueue,
     dailyRunCap: env.replies.dailyRunCap,
+    sendingInFlightMs: sendingInFlightWindowMs(env.marketplaces.olx.requestTimeoutMs),
     idGenerator,
     now: () => new Date(),
+    onReplyQueueFailure: (failure) => warnByCode(CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE, failure),
   });
 
   const hermesLimitsReader = new HermesLimitsReader(env.hermes.usageFile);

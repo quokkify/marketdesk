@@ -17,8 +17,6 @@ import type { ConversationReplyJob, IJobQueue } from '../ports/IJobQueue';
 
 // OLX and MarketDesk clocks differ; a matching seller message this much older still counts.
 const RECONCILE_CLOCK_SKEW_MS = 5_000;
-// A `sending` draft younger than this belongs to a request still waiting for OLX.
-const SENDING_IN_FLIGHT_MS = 2 * 60_000;
 // Newest stored messages searched for a buyer message newer than the one a draft answers.
 const SUPERSEDE_WINDOW = 50;
 const UNCLEAR_SEND = 'unclear_send';
@@ -77,8 +75,22 @@ export interface ReplySendDeps {
   adapters: { resolve(marketplace: Marketplace): Promise<Partial<ThreadMessenger>> };
   replyQueue: IJobQueue<ConversationReplyJob>;
   dailyRunCap: number;
+  // A `sending` draft whose attempt started less than this ago belongs to a request still waiting
+  // for OLX; derived from the OLX request timeout.
+  sendingInFlightMs: number;
   idGenerator: () => string;
   now: () => Date;
+  // Called with ids and a fixed code only: message text never reaches a log.
+  onReplyQueueFailure?: (failure: { threadId: string; code: typeof REPLY_ENQUEUE_FAILED }) => void;
+}
+
+export const REPLY_ENQUEUE_FAILED = 'reply_enqueue_failed';
+
+// Beyond the OLX request timeout, room for the CAS writes and the stored-thread reads around it.
+const IN_FLIGHT_MARGIN_MS = 60_000;
+
+export function sendingInFlightWindowMs(requestTimeoutMs: number): number {
+  return requestTimeoutMs + IN_FLIGHT_MARGIN_MS;
 }
 
 // The newest seller message with the attempt's normalised text sent after the attempt began.
@@ -130,46 +142,50 @@ export class ReplySendService {
     // Resolved before any state change, so a missing OLX connection leaves the draft untouched.
     const messenger = await this.messenger(thread);
 
-    let from: ReplyDraft['status'] = 'pending';
-    let remote: MarketplaceMessage[] | null = null;
     if (draft.status === 'sending') {
       if (this.inFlight(draft)) return { kind: 'rejected', code: 'already_sending' };
-      const settled = await this.reconcileStale(thread, draft, messenger, input.actorId);
-      if (settled.kind !== 'not_sent') return settled.outcome;
-      from = 'failed';
-      remote = settled.remote;
-    } else if (draft.status !== 'pending') {
+      return this.reconcileStale(thread, draft, messenger, input.actorId);
+    }
+    if (draft.status !== 'pending') {
       return { kind: 'rejected', code: draft.status === 'superseded' ? 'superseded' : 'not_pending' };
     }
 
-    const startedAt = this.deps.now();
+    // Every transition out of `sending` below compares this key, so a request that lost the draft
+    // to another one can never write over it.
+    const attemptKey = this.deps.idGenerator();
     const claimed = await this.write((c) => c.conversations.updateDraft(draft.id, {
-      status: 'sending', attemptKey: this.deps.idGenerator(), attemptStartedAt: startedAt, sentText: input.text,
-      failureReason: null,
-    }, from));
+      status: 'sending', attemptKey, attemptStartedAt: this.deps.now(), sentText: input.text, failureReason: null,
+    }, 'pending'));
     if (!claimed) return this.lostClaim(draft);
+    const owned = { ...draft, attemptKey };
 
-    if (!remote) {
-      try {
-        remote = await messenger.listThreadMessages(thread.externalThreadId);
-      } catch {
-        await this.release(draft.id);
-        throw new ServiceUnavailableError('OLX is not answering right now; try again shortly');
-      }
+    let remote: MarketplaceMessage[];
+    try {
+      remote = await messenger.listThreadMessages(thread.externalThreadId);
+    } catch {
+      await this.release(owned);
+      throw new ServiceUnavailableError('OLX is not answering right now; try again shortly');
     }
     await this.store(thread.id, remote);
     const newerBuyerMessage = await this.newerBuyerMessage(thread.id, draft.answersMessageId);
     if (newerBuyerMessage) {
-      await this.write((c) => c.conversations.updateDraft(draft.id, { status: 'superseded' }, 'sending'));
+      await this.write((c) => c.conversations.updateDraft(draft.id, { status: 'superseded' }, 'sending', attemptKey));
       await this.queueReply(thread, newerBuyerMessage);
       return { kind: 'rejected', code: 'superseded' };
     }
+
+    // Stamped right before the POST, so a slow pre-send read does not shorten the in-flight window.
+    const startedAt = this.deps.now();
+    const stamped = await this.write((c) => c.conversations.updateDraft(draft.id, {
+      attemptStartedAt: startedAt,
+    }, 'sending', attemptKey));
+    if (!stamped) return { kind: 'rejected', code: 'already_sending' };
 
     let externalMessageId: string | null;
     try {
       ({ externalMessageId } = await messenger.sendThreadMessage(thread.externalThreadId, input.text));
     } catch (error) {
-      return this.afterFailedSend(thread, draft, { text: input.text, startedAt }, messenger, error, input.actorId);
+      return this.afterFailedSend(thread, owned, { text: input.text, startedAt }, messenger, error, input.actorId);
     }
     if (externalMessageId) {
       await this.store(thread.id, [{ externalMessageId, direction: 'seller', text: input.text, sentAt: startedAt }]);
@@ -183,7 +199,7 @@ export class ReplySendService {
         externalMessageId = null;
       }
     }
-    await this.markSent(thread, draft, 'sending', externalMessageId, input.actorId);
+    await this.markSent(thread, owned, 'sending', externalMessageId, input.actorId);
     return { kind: 'sent' };
   }
 
@@ -230,7 +246,7 @@ export class ReplySendService {
 
   private inFlight(draft: ReplyDraft): boolean {
     const started = draft.attemptStartedAt?.getTime();
-    return started !== undefined && this.deps.now().getTime() - started < SENDING_IN_FLIGHT_MS;
+    return started !== undefined && this.deps.now().getTime() - started < this.deps.sendingInFlightMs;
   }
 
   private async messenger(thread: ConversationThread): Promise<ThreadMessenger> {
@@ -245,32 +261,32 @@ export class ReplySendService {
     return adapter as ThreadMessenger;
   }
 
-  // The lost request may or may not have reached OLX. The draft is claimed as `failed` first, so
-  // only one request reconciles it, and a crash from here on leaves the seller to decide.
+  // The lost request may or may not have reached OLX, and a message missing from the thread may
+  // still arrive, so it is reconciled once and never sent again: a match is `sent`, anything else
+  // stays `failed` and the seller checks OLX. Claiming it as `failed` first lets only one request
+  // reconcile, and a crash from here on leaves the seller to decide.
   private async reconcileStale(
     thread: ConversationThread,
     draft: ReplyDraft,
     messenger: ThreadMessenger,
     actorId: string | undefined,
-  ): Promise<{ kind: 'settled'; outcome: SendOutcome } | { kind: 'not_sent'; remote: MarketplaceMessage[] }> {
+  ): Promise<SendOutcome> {
     const claimed = await this.write((c) => c.conversations.updateDraft(draft.id, {
       status: 'failed', failureReason: UNCLEAR_SEND,
-    }, 'sending'));
-    if (!claimed) return { kind: 'settled', outcome: await this.lostClaim(draft) };
-    if (!draft.sentText || !draft.attemptStartedAt) {
-      return { kind: 'settled', outcome: { kind: 'rejected', code: 'unclear_send' } };
-    }
+    }, 'sending', draft.attemptKey));
+    if (!claimed) return this.lostClaim(draft);
+    if (!draft.sentText || !draft.attemptStartedAt) return { kind: 'rejected', code: 'unclear_send' };
     let remote: MarketplaceMessage[];
     try {
       remote = await messenger.listThreadMessages(thread.externalThreadId);
     } catch {
-      return { kind: 'settled', outcome: { kind: 'rejected', code: 'unclear_send' } };
+      return { kind: 'rejected', code: 'unclear_send' };
     }
     await this.store(thread.id, remote);
     const found = reconciledMessage({ text: draft.sentText, startedAt: draft.attemptStartedAt }, remote);
-    if (!found) return { kind: 'not_sent', remote };
+    if (!found) return { kind: 'rejected', code: 'unclear_send' };
     await this.markSent(thread, draft, 'failed', found.externalMessageId, actorId);
-    return { kind: 'settled', outcome: { kind: 'sent' } };
+    return { kind: 'sent' };
   }
 
   // OLX refused the message: nothing was sent and the seller may try again. Any other failure is
@@ -284,7 +300,7 @@ export class ReplySendService {
     actorId: string | undefined,
   ): Promise<SendOutcome> {
     if (REFUSED_CODES.has(String(errorCode(error)))) {
-      await this.release(draft.id);
+      await this.release(draft);
       throw this.refusal(error);
     }
     let found: MarketplaceMessage | null = null;
@@ -301,7 +317,7 @@ export class ReplySendService {
     }
     await this.write((c) => c.conversations.updateDraft(draft.id, {
       status: 'failed', failureReason: UNCLEAR_SEND,
-    }, 'sending'));
+    }, 'sending', draft.attemptKey));
     return { kind: 'rejected', code: 'unclear_send' };
   }
 
@@ -318,10 +334,10 @@ export class ReplySendService {
     }
   }
 
-  private async release(draftId: string): Promise<void> {
-    await this.write((c) => c.conversations.updateDraft(draftId, {
+  private async release(draft: ReplyDraft): Promise<void> {
+    await this.write((c) => c.conversations.updateDraft(draft.id, {
       status: 'pending', attemptKey: null, attemptStartedAt: null, sentText: null,
-    }, 'sending'));
+    }, 'sending', draft.attemptKey));
   }
 
   private async lostClaim(draft: ReplyDraft): Promise<Rejected<'superseded' | 'already_sending' | 'not_pending'>> {
@@ -351,7 +367,7 @@ export class ReplySendService {
         { jobId: `reply:${message.id}` },
       );
     } catch {
-      return;
+      this.deps.onReplyQueueFailure?.({ threadId: thread.id, code: REPLY_ENQUEUE_FAILED });
     }
   }
 
@@ -365,7 +381,7 @@ export class ReplySendService {
     await this.write(async ({ conversations, activityLog }) => {
       const sent = await conversations.updateDraft(draft.id, {
         status: 'sent', externalMessageId, failureReason: null,
-      }, from);
+      }, from, draft.attemptKey);
       if (!sent) return;
       await activityLog.record({
         id: this.deps.idGenerator(),

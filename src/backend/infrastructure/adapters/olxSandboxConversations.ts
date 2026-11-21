@@ -81,3 +81,15 @@ export function appendSandboxBuyerMessage(threadUuid: string, text: string): str
   sentCounter += 1;
   return appendSandboxMessage(threadUuid, 'received', `sbx-buyer-msg-${sentCounter}`, text).uuid;
 }
+
+// Appends only to a stub thread whose advert the caller owns; false for any other thread.
+export async function appendOwnedSandboxBuyerMessage(
+  threadUuid: string,
+  text: string,
+  ownsAdvert: (advertId: string) => Promise<boolean>,
+): Promise<boolean> {
+  const advertId = advertByThread.get(threadUuid);
+  if (advertId === undefined || !(await ownsAdvert(advertId))) return false;
+  appendSandboxBuyerMessage(threadUuid, text);
+  return true;
+}

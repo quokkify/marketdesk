@@ -62,8 +62,14 @@ export interface IConversationRepository {
   findDraft(draftId: string, threadId: string): Promise<ReplyDraft | null>;
   // Newest draft of the thread that a newer buyer message has not superseded.
   latestDraft(threadId: string): Promise<ReplyDraft | null>;
-  // Compare-and-set on status: false when the row is not in expectedStatus.
-  updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean>;
+  // Compare-and-set on status, and on the attempt key when one is given: false when the row does
+  // not match.
+  updateDraft(
+    id: string,
+    patch: ReplyDraftPatch,
+    expectedStatus: ReplyDraft['status'],
+    expectedAttemptKey?: string | null,
+  ): Promise<boolean>;
   supersedePendingDrafts(threadId: string): Promise<number>;
   // One transaction: supersedes the thread's pending drafts and inserts this one, but only while
   // expectedNewestMessageId is still the thread's newest message. Null when it is not, or when a

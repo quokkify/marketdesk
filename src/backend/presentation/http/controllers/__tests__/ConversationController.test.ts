@@ -158,13 +158,13 @@ describe('ConversationController reply actions', () => {
     expect(json.mock.calls[0][0].data).toEqual({ byProductId: { [PRODUCT]: 2 } });
   });
 
-  it('appends a sandbox buyer message and answers 404 for an unknown sandbox thread', async () => {
+  it('appends a sandbox buyer message for the workspace and answers 404 for a thread it does not own', async () => {
     const { controller, sandboxBuyerMessage, status, res, next, req } = actions({ sandbox: true });
+    sandboxBuyerMessage.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     await controller.appendSandboxBuyerMessage(req({ externalThreadId: 'sbx-1-buyer' }, { text: 'Hello?' }), res, next);
-    expect(sandboxBuyerMessage).toHaveBeenCalledWith('sbx-1-buyer', 'Hello?');
+    expect(sandboxBuyerMessage).toHaveBeenCalledWith('ws-1', 'sbx-1-buyer', 'Hello?');
     expect(status).toHaveBeenCalledWith(201);
-    sandboxBuyerMessage.mockImplementation(() => { throw new Error('Unknown sandbox thread'); });
-    await controller.appendSandboxBuyerMessage(req({ externalThreadId: 'nope' }, { text: 'Hello?' }), res, next);
+    await controller.appendSandboxBuyerMessage(req({ externalThreadId: 'sbx-2-buyer' }, { text: 'Hello?' }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
   });
 });

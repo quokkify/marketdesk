@@ -133,6 +133,18 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     expect(await repo.findDraft(draft.id, randomUUID())).toBeNull();
   });
 
+  it('casRejectsForeignAttemptKey', async () => {
+    const thread = await newThread();
+    const [msg] = await repo.upsertMessages(thread.id, [message('m1')]);
+    const draft = await repo.insertDraft({ threadId: thread.id, answersMessageId: msg.id, proposedText: 'hi' });
+    await repo.updateDraft(draft.id, { status: 'sending', attemptKey: 'k2' }, 'pending');
+
+    expect(await repo.updateDraft(draft.id, { status: 'sent' }, 'sending', 'k1')).toBe(false);
+    expect((await repo.findDraft(draft.id, thread.id))?.status).toBe('sending');
+    expect(await repo.updateDraft(draft.id, { status: 'sent' }, 'sending', 'k2')).toBe(true);
+    expect((await repo.findDraft(draft.id, thread.id))?.status).toBe('sent');
+  });
+
   it('purgeExpiredTextKeepsCounters', async () => {
     const thread = await repo.upsertThread({
       workspaceId,

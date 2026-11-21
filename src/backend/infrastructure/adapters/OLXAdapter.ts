@@ -545,10 +545,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
 
   listThreadMessages(externalThreadId: string): Promise<MarketplaceMessage[]> {
     return this.execute('listThreadMessages', async () => {
-      const res = await this.http.request<OlxMessageListResponse>({
-        method: 'GET',
-        url: this.threadMessagesUrl(externalThreadId),
-      });
+      const res = await this.requestThreadMessages<OlxMessageListResponse>(externalThreadId, { method: 'GET' });
       const raw = Array.isArray(res.data) ? res.data : res.data?.data;
       if (!Array.isArray(raw)) throw new Error('Malformed OLX thread messages response');
       const messages: MarketplaceMessage[] = [];
@@ -567,27 +564,31 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   // OLX documents no response body and no idempotency key, so a lost response must never re-send.
   sendThreadMessage(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }> {
     return this.execute('sendThreadMessage', async () => {
-      const url = this.threadMessagesUrl(externalThreadId);
-      let res: HttpResponse<OlxSendMessageResponse>;
-      try {
-        res = await this.http.request<OlxSendMessageResponse>({ method: 'POST', url, body: { text } });
-      } catch (error) {
-        // A rejection body may echo the sent text, and the error message quotes the body.
-        if (error instanceof HttpError) throw new HttpError(error.status, error.message);
-        throw error;
-      }
+      const res = await this.requestThreadMessages<OlxSendMessageResponse>(externalThreadId, {
+        method: 'POST', body: { text },
+      });
       const body = res.data;
       const payload = body && typeof body === 'object' && 'data' in body ? body.data : body;
       return { externalMessageId: payload && typeof payload === 'object' ? this.olxId(payload as OlxIdentified) : null };
     }, { retry: false });
   }
 
-  // An empty or dot segment would address a different OLX path once the URL is resolved.
-  private threadMessagesUrl(externalThreadId: string): string {
+  // An empty or dot segment would address a different OLX path once the URL is resolved. A failure
+  // body may echo message text and the error message quotes the body, so it is dropped.
+  private async requestThreadMessages<T>(
+    externalThreadId: string,
+    config: Pick<HttpRequestConfig, 'method' | 'body'>,
+  ): Promise<HttpResponse<T>> {
     if (externalThreadId === '' || externalThreadId === '.' || externalThreadId === '..') {
       throw new Error('Invalid OLX thread id');
     }
-    return `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`;
+    const url = `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`;
+    try {
+      return await this.http.request<T>({ ...config, url });
+    } catch (error) {
+      if (error instanceof HttpError) throw new HttpError(error.status, error.message);
+      throw error;
+    }
   }
 
   // OLX prefers `uuid`; `id` is deprecated but still sent by some endpoints.

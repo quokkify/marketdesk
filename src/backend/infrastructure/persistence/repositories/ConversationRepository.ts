@@ -287,16 +287,26 @@ export class ConversationRepository implements IConversationRepository {
     return rows[0] ? toDraft(rows[0]) : null;
   }
 
-  async updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean> {
+  async updateDraft(
+    id: string,
+    patch: ReplyDraftPatch,
+    expectedStatus: ReplyDraft['status'],
+    expectedAttemptKey?: string | null,
+  ): Promise<boolean> {
     const keys = (Object.keys(patch) as (keyof ReplyDraftPatch)[]).filter((k) => patch[k] !== undefined);
     const values: unknown[] = [id, expectedStatus];
     const sets = keys.map((key) => {
       values.push(key === 'filledPrice' ? toMinor(patch.filledPrice) : patch[key]);
       return `${DRAFT_PATCH_COLUMNS[key]} = $${values.length}`;
     });
+    let attemptCondition = '';
+    if (expectedAttemptKey !== undefined) {
+      values.push(expectedAttemptKey);
+      attemptCondition = ` AND attempt_key IS NOT DISTINCT FROM $${values.length}`;
+    }
     const { rowCount } = await query(
       `UPDATE reply_drafts SET ${[...sets, 'updated_at = now()'].join(', ')}
-        WHERE id = $1 AND status = $2`,
+        WHERE id = $1 AND status = $2${attemptCondition}`,
       values,
       this.queryClient,
     );

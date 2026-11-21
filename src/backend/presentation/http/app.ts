@@ -60,7 +60,7 @@ import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 import type { IReplyDraftAI } from '../../domain/ports/IReplyDraftAI';
 import type { IConversationRepository } from '../../domain/repositories/interfaces/IConversationRepository';
 import type { ReplySendService } from '../../application/services/ReplySendService';
-import { appendSandboxBuyerMessage } from '../../infrastructure/adapters/olxSandboxConversations';
+import { appendOwnedSandboxBuyerMessage } from '../../infrastructure/adapters/olxSandboxConversations';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
 export interface AppDeps {
@@ -272,7 +272,15 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
     conversations: deps.conversationRepo
       ? new ConversationController(deps.productRepo, deps.conversationRepo, {
           replies: deps.replySendService,
-          sandboxBuyerMessage: deps.olxAdapterMode !== 'real' ? appendSandboxBuyerMessage : undefined,
+          sandboxBuyerMessage:
+            deps.olxAdapterMode !== 'real'
+              ? (workspaceId, externalThreadId, text) =>
+                  appendOwnedSandboxBuyerMessage(externalThreadId, text, async (advertId) =>
+                    (await deps.listingRepo.findByWorkspace(workspaceId)).some(
+                      (listing) => listing.marketplaceListingId === advertId
+                    )
+                  )
+              : undefined,
         })
       : undefined,
   };

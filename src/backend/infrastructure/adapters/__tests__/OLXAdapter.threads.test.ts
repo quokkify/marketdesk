@@ -10,7 +10,11 @@ import {
   MarketplaceProviderRejectionError,
   MarketplaceRateLimitError,
 } from '../MarketplaceError';
-import { appendSandboxBuyerMessage, resetSandboxConversations } from '../olxSandboxConversations';
+import {
+  appendOwnedSandboxBuyerMessage,
+  appendSandboxBuyerMessage,
+  resetSandboxConversations,
+} from '../olxSandboxConversations';
 
 const fastOptions = { sleep: async () => {}, maxRetries: 2, baseRetryDelayMs: 0 };
 
@@ -89,6 +93,17 @@ describe('OLXAdapter thread reading', () => {
     const { client } = fakeClient(async () => { throw new HttpError(401, 'nope'); });
     await expect(new OLXAdapter(client, fastOptions).listThreadMessages('t'))
       .rejects.toBeInstanceOf(MarketplaceAuthenticationError);
+  });
+
+  it('keeps message text out of the error when a 4xx body of the message list echoes it', async () => {
+    const { client } = fakeClient(async () => {
+      throw new HttpError(422, 'Unprocessable', { messages: [{ text: 'private buyer question' }] });
+    });
+    const error = await new OLXAdapter(client, fastOptions).listThreadMessages('t').catch((e) => e);
+    expect(error).toBeInstanceOf(MarketplaceProviderRejectionError);
+    expect(error.message).toContain('HTTP 422');
+    expect(error.message).not.toContain('private buyer question');
+    expect(JSON.stringify(error.cause ?? null)).not.toContain('private buyer question');
   });
 });
 
@@ -185,5 +200,16 @@ describe('OLXAdapter sandbox stub conversations', () => {
     expect(messages.map((m) => [m.direction, m.text])).toEqual([
       ['buyer', 'Would you take 50 zł?'], ['seller', 'Sure, 60 zł'], ['buyer', 'Deal'],
     ]);
+  });
+
+  it('appends a test buyer message only to a stub thread of an advert the caller owns', async () => {
+    const adapter = new OLXAdapter(undefined, fastOptions);
+    await adapter.listThreads('adv-3');
+    const owns = async (advertId: string) => advertId === 'adv-3';
+    expect(await appendOwnedSandboxBuyerMessage('sbx-adv-3-buyer', 'Hello?', owns)).toBe(true);
+    expect(await appendOwnedSandboxBuyerMessage('sbx-adv-3-buyer', 'Hello?', async () => false)).toBe(false);
+    expect(await appendOwnedSandboxBuyerMessage('sbx-unknown-buyer', 'Hello?', async () => true)).toBe(false);
+    expect((await adapter.listThreadMessages('sbx-adv-3-buyer')).map((m) => m.text))
+      .toEqual(['Hi, is it still available?', 'Hello?']);
   });
 });

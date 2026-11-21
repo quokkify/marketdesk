@@ -34,8 +34,9 @@ function conflict(res: Response, code: ReplyConflictCode): void {
 
 export interface ConversationActions {
   replies?: Pick<ReplySendService, 'send' | 'dismiss' | 'regenerate'>;
-  // Present only while OLX runs in stub mode.
-  sandboxBuyerMessage?: (externalThreadId: string, text: string) => void;
+  // Present only while OLX runs in stub mode. False when the stub thread is not one of the
+  // workspace's own listings.
+  sandboxBuyerMessage?: (workspaceId: string, externalThreadId: string, text: string) => Promise<boolean>;
 }
 
 export class ConversationController {
@@ -107,11 +108,8 @@ export class ConversationController {
     const append = this.actions.sandboxBuyerMessage;
     const externalThreadId = routeParam(req.params.externalThreadId);
     if (!append) return next(new NotFoundError('Route not found'));
-    try {
-      append(externalThreadId, (req.body as { text: string }).text);
-    } catch {
-      return next(new NotFoundError(`Sandbox thread not found: ${externalThreadId}`));
-    }
+    const appended = await append(req.user!.workspaceId!, externalThreadId, (req.body as { text: string }).text);
+    if (!appended) return next(new NotFoundError(`Sandbox thread not found: ${externalThreadId}`));
     ok(res, { appended: true }, 201);
   };
 

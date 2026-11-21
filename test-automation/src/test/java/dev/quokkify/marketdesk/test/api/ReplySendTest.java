@@ -69,6 +69,19 @@ public class ReplySendTest extends BaseTest {
   }
 
   @Test
+  public void sandboxBuyerMessageIsWorkspaceScoped() {
+    AccountPojo owner = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(owner);
+    ProductListingPojo listing = listingSteps.publishSandboxOlxListing(owner, ProductRequestPojo.conversationSample());
+    marketplaceSteps.syncOlx(owner);
+    conversationSteps.awaitSettledThreads(owner, listing.productId(), SANDBOX_THREADS);
+    AccountPojo stranger = authSteps.registerNewAccount();
+
+    conversationSteps.verify().isNotFound(
+        conversationSteps.addSandboxBuyerMessage(stranger, owner, listing, BUYER_FOLLOW_UP));
+  }
+
+  @Test
   public void sendRejectsEditedTextBelowFloor() {
     AccountPojo owner = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(owner);

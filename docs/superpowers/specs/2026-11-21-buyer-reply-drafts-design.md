@@ -204,7 +204,7 @@ the owner (approach choice depended on it).
 - **Send state machine.** Draft statuses gain `sending`. Send sets `sending` with the attempt key
   before the OLX call. A draft found in `sending` (retry, worker restart) is reconciled first: re-read
   the thread and look for a seller message with the same text sent after the attempt started.
-  Found → record its id, `sent`. Not found → send. Ambiguous (OLX read fails) → `failed`; the seller
+  Found → record its id, `sent`. Not found or unreadable → `failed`; never resend automatically. Ambiguous (OLX read fails) → `failed`; the seller
   sees "may or may not have been sent, check OLX" and decides. No automatic second send.
 - **Retention trigger.** `conversation_threads.retention_starts_at` is set when the product becomes
   `sold` or the listing leaves `live` without returning within the sync. A daily job deletes message
