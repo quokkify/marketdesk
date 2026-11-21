@@ -1,0 +1,1 @@
+{"id":"42624a9248d216626d3973658c86a97f.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.threads.test.ts#OLXAdapter sendThreadMessage returns a null id for an empty response","name":"returns a null id for an empty response","status":"passed","testResultsByEnv":{"default":"4f1c59eceaf837a3bed848dd08e76620"}}
