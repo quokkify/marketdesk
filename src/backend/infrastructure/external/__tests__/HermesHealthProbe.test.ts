@@ -271,6 +271,12 @@ describe('HermesHealthProbe', () => {
       { shape: 'a string enabled flag', body: [{ name: 'terminal', enabled: 'true' }] },
       { shape: 'a null entry', body: [null] },
       { shape: 'an entry without a name', body: { data: [{ enabled: false }] } },
+      // Regression guard: the research guard reads enabledToolsets, so a malformed entry must not leave
+      // a partial list that looks like exactly {web}.
+      {
+        shape: 'a malformed entry beside an enabled one',
+        body: [{ name: 'web', enabled: true }, { name: 'terminal', enabled: 'true' }],
+      },
     ])('reports tools-unsafe on $shape', async ({ body }) => {
       globalThis.fetch = routedFetch(async () => toolsetsResponse(body)) as typeof fetch;
 

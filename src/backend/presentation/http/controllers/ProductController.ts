@@ -8,6 +8,10 @@ import type { ListingApplicationService } from '../../../application/services/Li
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
+import {
+  SEARCH_NOT_CONFIGURED,
+  type ComparableSearchService,
+} from '../../../application/services/ComparableSearchService';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -85,6 +89,7 @@ export class ProductController {
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
     private readonly priceResearchRepo?: IPriceResearchRepository,
+    private readonly comparableSearch?: ComparableSearchService,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -197,6 +202,13 @@ export class ProductController {
       const workspaceId = req.user!.workspaceId!;
       await this.requireProduct(productId, workspaceId);
       ok(res, await this.requirePriceResearchRepo().upsert(workspaceId, { ...req.body, productId }));
+    } catch (error) { next(error); }
+  };
+
+  searchComparables = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.comparableSearch) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      ok(res, await this.comparableSearch.search(req.user!.workspaceId!, routeParam(req.params.id)));
     } catch (error) { next(error); }
   };
 

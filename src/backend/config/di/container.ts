@@ -80,7 +80,7 @@ import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCrede
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
-import { HermesAI, loadHermesConfig } from '../../infrastructure/external/HermesAI';
+import { HermesAI, loadHermesConfig, loadHermesResearchConfig } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsReader';
@@ -88,6 +88,7 @@ import { OfflineHeuristicAIProvider } from '../../infrastructure/external/Offlin
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
+import { ComparableSearchService } from '../../application/services/ComparableSearchService';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
@@ -413,6 +414,19 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       )
   );
   const priceResearchRepo = new PriceResearchRepository(pool);
+  // The web-enabled research profile serves only the market search; a new probe per search keeps
+  // its toolset guard from acting on a cached answer.
+  const researchConfig = loadHermesResearchConfig();
+  const comparableSearchService = new ComparableSearchService(
+    productRepo,
+    listingRepo,
+    researchConfig
+      ? {
+          client: new HermesCompletionClient(researchConfig, aiUsageSink),
+          checkProfile: () => new HermesHealthProbe(researchConfig).reachability(),
+        }
+      : null,
+  );
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,
@@ -799,6 +813,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analyticsService,
     productRepo,
     priceResearchRepo,
+    comparableSearchService,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,

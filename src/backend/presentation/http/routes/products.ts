@@ -33,6 +33,7 @@ export function createProductRoutes(
   router.delete('/:id', asyncHandler(controller.remove));
   router.get('/:id/price-research', asyncHandler(controller.getPriceResearch));
   router.put('/:id/price-research', validateBody(priceResearchSchema), asyncHandler(controller.putPriceResearch));
+  router.post('/:id/price-research/search', aiLimiter, asyncHandler(controller.searchComparables));
   router.get('/:id/listings', asyncHandler(controller.getListings));
   router.post('/:id/listings', validateBody(createListingSchema), asyncHandler(controller.createListing));
   return router;

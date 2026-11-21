@@ -8,7 +8,8 @@ export type DomainErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'GUARDRAIL_VIOLATION'
-  | 'SERVICE_UNAVAILABLE';
+  | 'SERVICE_UNAVAILABLE'
+  | 'BAD_GATEWAY';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;
@@ -72,6 +73,16 @@ export class ServiceUnavailableError extends DomainError {
 
   constructor(message: string, cause?: unknown) {
     super(message, 'SERVICE_UNAVAILABLE');
+    this.cause = cause;
+  }
+}
+
+// An upstream service answered, but its answer was unusable.
+export class BadGatewayError extends DomainError {
+  readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message, 'BAD_GATEWAY');
     this.cause = cause;
   }
 }

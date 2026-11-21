@@ -46,6 +46,26 @@ export interface HermesAIConfig {
   billingMode?: string;
 }
 
+export const DEFAULT_HERMES_RESEARCH_TIMEOUT_MS = 120_000;
+
+// The web-enabled research profile, used only by the market search. null when its URL or key is
+// empty or the key is a your_-prefixed placeholder; it shares the model and billing mode.
+export function loadHermesResearchConfig(): HermesAIConfig | null {
+  const apiUrl = (process.env.HERMES_RESEARCH_API_URL ?? '').trim();
+  const apiKey = (process.env.HERMES_RESEARCH_API_KEY ?? '').trim();
+  if (apiUrl === '' || apiKey === '' || apiKey.startsWith('your_')) return null;
+  const timeoutMs = Number.parseInt(process.env.HERMES_RESEARCH_TIMEOUT_MS ?? '', 10);
+  const main = loadHermesConfig();
+  return {
+    apiUrl,
+    apiKey,
+    model: main.model,
+    maxTokens: main.maxTokens,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_HERMES_RESEARCH_TIMEOUT_MS,
+    billingMode: main.billingMode,
+  };
+}
+
 export function loadHermesConfig(): HermesAIConfig {
   return {
     apiUrl: process.env.HERMES_API_URL ?? DEFAULT_HERMES_API_URL,
@@ -55,6 +75,20 @@ export function loadHermesConfig(): HermesAIConfig {
     timeoutMs: Number.parseInt(process.env.HERMES_REQUEST_TIMEOUT_MS ?? '30000', 10),
     billingMode: process.env.HERMES_BILLING_MODE ?? '',
   };
+}
+
+// The JSON object or array in a Hermes answer, or null when there is none. Tolerates fenced
+// code blocks the agent/model may wrap JSON in.
+export function parseHermesJson(raw: string): object | null {
+  const text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : text;
+  try {
+    const value: unknown = JSON.parse(candidate);
+    return typeof value === 'object' && value !== null ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 // Thin completion boundary. The concrete Hermes API Server implementation lives
@@ -256,18 +290,7 @@ export class HermesAI implements IAIProvider {
   }
 
   private parseJson(raw: string): Record<string, unknown> | null {
-    const text = raw.trim();
-    // Tolerate fenced code blocks the agent/model may wrap JSON in.
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    const candidate = fenced ? fenced[1].trim() : text;
-    try {
-      const value = JSON.parse(candidate);
-      return typeof value === 'object' && value !== null
-        ? (value as Record<string, unknown>)
-        : null;
-    } catch {
-      return null;
-    }
+    return parseHermesJson(raw) as Record<string, unknown> | null;
   }
 
   private asFiniteNumber(value: unknown, fallback: number): number {

@@ -124,6 +124,14 @@ export interface PriceComparable {
   source?: PriceComparableSource | null;
 }
 
+// An OLX advert found by the market search; nothing is stored until the seller picks it.
+export interface ComparableCandidate {
+  price: number;
+  currency: string;
+  title: string;
+  url: string;
+}
+
 export interface PriceResearch {
   productId: string;
   retailPrice: number | null;

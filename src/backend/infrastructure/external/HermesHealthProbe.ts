@@ -91,11 +91,12 @@ export class HermesHealthProbe {
           typeof entry.enabled === 'boolean' &&
           typeof entry.name === 'string',
       );
+      // One malformed entry makes the whole list unreadable: a partial list could hide an enabled toolset.
+      if (wellFormed.length !== entries.length) {
+        return unsafe;
+      }
       const enabledToolsets = wellFormed.filter((entry) => entry.enabled).map((entry) => entry.name);
-      return {
-        toolsSafe: wellFormed.length === entries.length && enabledToolsets.length === 0,
-        enabledToolsets,
-      };
+      return { toolsSafe: enabledToolsets.length === 0, enabledToolsets };
     } catch {
       return unsafe;
     }

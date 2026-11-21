@@ -86,6 +86,8 @@ export function statusForError(error: unknown): number {
         return 422;
       case 'SERVICE_UNAVAILABLE':
         return 503;
+      case 'BAD_GATEWAY':
+        return 502;
       default:
         return 500;
     }
