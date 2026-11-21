@@ -1,5 +1,5 @@
 // JWT authentication middleware. Verifies the Bearer token (HS256, secret from env)
-// and attaches req.user = { userId, workspaceId }. On any failure it sends a 401
+// and attaches req.user = { userId, workspaceId, tokenVersion, issuedAt }. On any failure it sends a 401
 // error envelope directly (an unauthenticated request is not an application error to
 // route through the domain error handler).
 
@@ -12,11 +12,13 @@ import { fail } from '../formatters/ResponseFormatter';
 export interface JwtPayload {
   userId: string;
   workspaceId?: string;
+  tokenVersion: number;
 }
 
-export function signToken(payload: JwtPayload): string {
+// The version travels in the short claim `tv`; a token without it predates versions (0).
+export function signToken({ userId, workspaceId, tokenVersion }: JwtPayload): string {
   const options = { expiresIn: env.jwt.expiration } as jwt.SignOptions;
-  return jwt.sign(payload, env.jwt.secret, options);
+  return jwt.sign({ userId, workspaceId, tv: tokenVersion }, env.jwt.secret, options);
 }
 
 function unauthorized(res: Response, message: string): Response {
@@ -35,12 +37,22 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     // attacker-chosen algorithm (e.g. "none" or an RS/HS confusion). (S5)
     const decoded = jwt.verify(token, env.jwt.secret, {
       algorithms: ['HS256'],
-    }) as jwt.JwtPayload & JwtPayload;
+    }) as jwt.JwtPayload & { userId?: string; workspaceId?: string; tv?: unknown };
     if (!decoded.userId) {
       unauthorized(res, 'Invalid token payload');
       return;
     }
-    req.user = { userId: decoded.userId, workspaceId: decoded.workspaceId };
+    const tokenVersion = decoded.tv ?? 0;
+    if (typeof tokenVersion !== 'number' || !Number.isInteger(tokenVersion) || tokenVersion < 0) {
+      unauthorized(res, 'Invalid token payload');
+      return;
+    }
+    req.user = {
+      userId: decoded.userId,
+      workspaceId: decoded.workspaceId,
+      tokenVersion,
+      issuedAt: decoded.iat ?? 0,
+    };
     next();
   } catch {
     unauthorized(res, 'Invalid or expired token');

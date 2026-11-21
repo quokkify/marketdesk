@@ -60,8 +60,8 @@ function buildUploadApp(maxFileSize = 1024 * 1024) {
   return { app, storage };
 }
 
-const token = signToken({ userId: 'user-1', workspaceId: 'workspace-1' });
-const noWorkspaceToken = signToken({ userId: 'user-1' });
+const token = signToken({ userId: 'user-1', workspaceId: 'workspace-1', tokenVersion: 0 });
+const noWorkspaceToken = signToken({ userId: 'user-1', tokenVersion: 0 });
 const auth = (test: request.Test, value = token) =>
   test.set('Authorization', `Bearer ${value}`);
 

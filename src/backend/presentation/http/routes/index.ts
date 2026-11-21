@@ -99,6 +99,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   api.use(
     '/auth',
     createAuthRoutes(c.auth, meLimiter, {
+      currentUserStore: options.currentUserStore,
       loginLimiter,
       registrationEnabled: options.registrationEnabled,
     })

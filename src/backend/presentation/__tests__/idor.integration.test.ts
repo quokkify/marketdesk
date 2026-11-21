@@ -95,6 +95,7 @@ async function build(): Promise<Ctx> {
     email: 'a@example.com',
     passwordHash: await bcrypt.hash('secret123', 4),
     workspaceId: WS_A,
+    tokenVersion: 0,
     createdAt: new Date(),
   });
 
@@ -255,7 +256,7 @@ async function build(): Promise<Ctx> {
   };
 }
 
-const tokenA = signToken({ userId: 'u-a', workspaceId: WS_A });
+const tokenA = signToken({ userId: 'u-a', workspaceId: WS_A, tokenVersion: 0 });
 const authA = (req: request.Test) => req.set('Authorization', `Bearer ${tokenA}`);
 
 describe('IDOR: workspace A cannot reach workspace B resources (S2)', () => {

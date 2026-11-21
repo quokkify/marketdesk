@@ -4,6 +4,7 @@
 
 import express, { type RequestHandler } from 'express';
 import request from 'supertest';
+import { InMemoryAuthStore } from '../../testkit/support';
 import {
   aiRateLimiter,
   loginFailureKey,
@@ -17,6 +18,8 @@ import type { ProductController } from '../controllers/ProductController';
 import type { HermesController } from '../controllers/HermesController';
 import type { AuthController } from '../controllers/AuthController';
 
+const currentUserStore = new InMemoryAuthStore();
+
 const okHandler: RequestHandler = (_req, res) => {
   res.json({ success: true });
 };
@@ -26,7 +29,12 @@ const anyController = new Proxy({}, { get: () => okHandler });
 
 // Tests stand in for the auth guard: the workspace comes from a header.
 const asWorkspace: RequestHandler = (req, _res, next) => {
-  req.user = { userId: 'u-1', workspaceId: req.header('x-workspace') };
+  req.user = {
+    userId: 'u-1',
+    workspaceId: req.header('x-workspace'),
+    tokenVersion: 0,
+    issuedAt: 0,
+  };
   next();
 };
 
@@ -124,7 +132,10 @@ describe('login failure limiter (regression guard)', () => {
     const controller = { login } as unknown as AuthController;
     app.use(
       '/auth',
-      createAuthRoutes(controller, undefined, { loginLimiter: loginFailureRateLimiter(limit) })
+      createAuthRoutes(controller, undefined, {
+        currentUserStore,
+        loginLimiter: loginFailureRateLimiter(limit),
+      })
     );
     return app;
   }
@@ -206,6 +217,7 @@ describe('login failure limiter (regression guard)', () => {
     app.use(
       '/auth',
       createAuthRoutes({ login } as unknown as AuthController, undefined, {
+        currentUserStore,
         loginLimiter: spyLimiter,
       })
     );
@@ -252,7 +264,7 @@ describe('registration switch (regression guard)', () => {
   function appWith(options?: { registrationEnabled?: boolean }): express.Express {
     const app = express();
     app.use(express.json());
-    app.use('/auth', createAuthRoutes(controller, undefined, options));
+    app.use('/auth', createAuthRoutes(controller, undefined, { currentUserStore, ...options }));
     return app;
   }
 

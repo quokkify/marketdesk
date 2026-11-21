@@ -120,6 +120,7 @@ async function buildE2E(): Promise<E2EContext> {
     email: DEMO_EMAIL,
     passwordHash: await bcrypt.hash(DEMO_PASSWORD, 4),
     workspaceId: WORKSPACE_ID,
+    tokenVersion: 0,
     createdAt: new Date(),
   });
 

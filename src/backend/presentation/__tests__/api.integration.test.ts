@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
 import { signToken } from '../http/middleware/AuthMiddleware';
+import { env } from '../../config/env';
 import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createAuthRoutes } from '../http/routes/auth';
 import type { AuthController } from '../http/controllers/AuthController';
@@ -507,6 +508,7 @@ async function buildTestApp(
     email: 'demo@example.com',
     passwordHash,
     workspaceId: 'ws-1',
+    tokenVersion: 0,
     createdAt: new Date(),
   });
 
@@ -620,7 +622,7 @@ async function seedPreviewListing(
   await listingRepo.save(listing.value);
 }
 
-const token = signToken({ userId: 'u-1', workspaceId: 'ws-1' });
+const token = signToken({ userId: 'u-1', workspaceId: 'ws-1', tokenVersion: 0 });
 const auth = (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
 
 describe('Presentation API', () => {
@@ -820,7 +822,7 @@ describe('Presentation API', () => {
     // users out. The public per-IP flood guard (100/min) still fronts the whole /auth prefix
     // (routes/index.ts), but the per-user allowance is spent only after authentication.
     describe('GET /me', () => {
-      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1' })}`;
+      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1', tokenVersion: 0 })}`;
       const me = (app: express.Express, authorization?: string) => {
         const req = request(app).get('/api/auth/me');
         return authorization ? req.set('Authorization', authorization) : req;
@@ -845,6 +847,7 @@ describe('Presentation API', () => {
           email: 'second@example.com',
           passwordHash: 'unused',
           workspaceId: 'ws-1',
+          tokenVersion: 0,
           createdAt: new Date(),
         });
 
@@ -890,8 +893,21 @@ describe('Presentation API', () => {
             res.json({ userId: req.user?.userId });
           },
         } as unknown as AuthController;
+        const userStore = new InMemoryAuthStore();
+        for (const id of ['u-1', 'u-2']) {
+          userStore.users.push({
+            id,
+            email: `${id}@example.com`,
+            passwordHash: 'unused',
+            workspaceId: 'ws-1',
+            tokenVersion: 0,
+            createdAt: new Date(),
+          });
+        }
         const app = express();
-        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2)));
+        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2), {
+          currentUserStore: userStore,
+        }));
 
         const first = await me(app, bearer('u-1'));
         const second = await me(app, bearer('u-1'));
@@ -983,7 +999,7 @@ describe('Presentation API', () => {
 
       it('applies the configured AI limit per workspace on the mounted API', async () => {
         const { app } = await buildTestApp({ enableRateLimit: true, aiRateLimit: 1 });
-        const token = `Bearer ${signToken({ userId: 'u-1', workspaceId: 'ws-1' })}`;
+        const token = `Bearer ${signToken({ userId: 'u-1', workspaceId: 'ws-1', tokenVersion: 0 })}`;
         const draft = () =>
           request(app)
             .post('/api/products/ai-draft')
@@ -996,6 +1012,57 @@ describe('Presentation API', () => {
         expect(first.status).not.toBe(429);
         expect(second.status).toBe(429);
       });
+    });
+  });
+
+  describe('token revocation', () => {
+    const legacyToken = () => jwt.sign({ userId: 'u-1', workspaceId: 'ws-1' }, env.jwt.secret);
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    it('accepts a token issued before token versions existed while the user is at version 0', async () => {
+      const { app } = await buildTestApp();
+
+      const products = await request(app).get('/api/products').set(bearerOf(legacyToken()));
+      const me = await request(app).get('/api/auth/me').set(bearerOf(legacyToken()));
+
+      expect(products.status).toBe(200);
+      expect(me.status).toBe(200);
+    });
+
+    it('refuses every token of a user after the version is bumped', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      const issued = login.body.data.token as string;
+
+      await authUserStore.bumpTokenVersion('u-1');
+
+      for (const t of [issued, legacyToken()]) {
+        const products = await request(app).get('/api/products').set(bearerOf(t));
+        const me = await request(app).get('/api/auth/me').set(bearerOf(t));
+        for (const res of [products, me]) {
+          expect(res.status).toBe(401);
+          expect(res.body.error).toEqual({
+            code: 'UNAUTHORIZED',
+            message: 'Session has been revoked',
+          });
+        }
+      }
+    });
+
+    it('issues tokens that carry the current version', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      const issued = login.body.data.token as string;
+
+      expect(jwt.decode(issued)).toMatchObject({ tv: 1 });
+      const me = await request(app).get('/api/auth/me').set(bearerOf(issued));
+      expect(me.status).toBe(200);
     });
   });
 
