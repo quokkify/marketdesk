@@ -21,6 +21,7 @@ import type {
 } from '../../domain/services/MarketplaceAdapter';
 import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
 import { OlxTaxonomyResolver, type OlxTrustedTaxonomyResolver } from './OlxTaxonomyResolver';
+import type { MarketplaceCategoryMetadata } from '../../../shared/types';
 
 const OLX_PARTNER_BASE_URL = 'https://www.olx.pl/api/partner';
 const OLX_THREAD_PAGE_SIZE = 100;
@@ -66,6 +67,12 @@ const OLX_STATUS_TO_LOCAL: Record<string, SyncedListing['status']> = {
   pending: 'live',
   limited: 'live',
   expired: 'expired',
+  // Documented OLX Partner API advert statuses that are not live.
+  outdated: 'expired',
+  removed_by_user: 'expired',
+  removed_by_moderator: 'expired',
+  moderated: 'error',
+  disabled: 'error',
   removed: 'expired',
   deactivated: 'expired',
   deleted: 'expired',
@@ -98,6 +105,8 @@ interface OlxAdvertResponse {
   status: string;
   title?: string;
   description?: string | null;
+  // The OLX Partner API Advert schema carries only `category_id`; `category` is kept for older payloads.
+  category_id?: number | string | null;
   category?: { id?: string | number; name?: string; path?: string[] | string; leaf?: boolean } | string | null;
   url?: string | null;
   public_url?: string | null;
@@ -515,6 +524,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const price = this.extractPrice(data.price);
     const views = this.extractViews(data);
     const watchers = this.extractWatchers(data);
+    const marketplaceCategory = await this.extractMarketplaceCategory(data);
 
     return {
       externalListingId: String(data.id),
@@ -525,8 +535,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       currency: price.currency,
       status: OLX_STATUS_TO_LOCAL[String(data.status ?? 'unknown').toLowerCase()] ?? 'draft',
       remoteStatus: data.status,
-      category: typeof data.category === 'string' ? data.category : data.category?.name ?? null,
-      marketplaceCategory: await this.extractMarketplaceCategory(data),
+      category: this.extractCategoryName(data, marketplaceCategory),
+      marketplaceCategory,
       imageUrls: this.extractImageUrls(data),
       remoteUpdatedAt: data.updated_at ? new Date(data.updated_at) : null,
       metrics: {
@@ -662,12 +672,29 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       : this.mapCategory(input.category);
   }
 
-  private async extractMarketplaceCategory(data: OlxAdvertResponse) {
+  private extractCategoryName(
+    data: OlxAdvertResponse,
+    marketplaceCategory: MarketplaceCategoryMetadata | null | undefined,
+  ): string | null {
+    if (typeof data.category === 'string') return data.category;
+    return data.category?.name ?? marketplaceCategory?.name ?? null;
+  }
+
+  private categoryId(data: OlxAdvertResponse): string | null | undefined {
+    if (data.category_id !== undefined) {
+      return data.category_id === null || data.category_id === '' ? null : String(data.category_id);
+    }
     // An advert without a category key carries no category evidence at all.
     if (data.category === undefined) return undefined;
     if (!data.category || typeof data.category === 'string' || data.category.id === undefined) return null;
+    return String(data.category.id);
+  }
+
+  private async extractMarketplaceCategory(data: OlxAdvertResponse) {
+    const categoryId = this.categoryId(data);
+    if (categoryId === undefined || categoryId === null) return categoryId;
     try {
-      return await this.taxonomy.verify(String(data.category.id));
+      return await this.taxonomy.verify(categoryId);
     } catch {
       // Advert payloads do not attest taxonomy path, leafness, confidence, or freshness.
       // Resolver failure is transient/unknown: preserve previously verified sync metadata.

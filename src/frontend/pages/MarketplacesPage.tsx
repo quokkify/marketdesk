@@ -38,8 +38,20 @@ import { MarketplaceImportPanel } from '../components/marketplaces/MarketplaceIm
 // with any other key is ignored, whatever the API reports for it.
 const LIVE_MARKETPLACE: MarketplaceKey = 'olx';
 
-// OLX advert statuses read by the import preview: live, pending and ended adverts.
-const IMPORT_STATUSES = ['active', 'new', 'moderation', 'limited', 'expired', 'removed', 'rejected'];
+// Every advert status the OLX Partner API documents, so the preview shows live, pending and ended adverts.
+const IMPORT_STATUSES = [
+  'new',
+  'active',
+  'limited',
+  'removed_by_user',
+  'outdated',
+  'unconfirmed',
+  'unpaid',
+  'moderated',
+  'blocked',
+  'disabled',
+  'removed_by_moderator',
+];
 
 const SANDBOX_CONNECTED_TOAST = 'Sandbox OLX connected — no real marketplace calls are made';
 

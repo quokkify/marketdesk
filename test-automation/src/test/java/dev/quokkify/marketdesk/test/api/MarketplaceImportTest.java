@@ -81,6 +81,18 @@ public class MarketplaceImportTest extends BaseTest {
         MarketplaceImportRequestPojo.withStatuses(List.of("active"))));
   }
 
+  // Every advert status the OLX Partner API documents; the page sends them all with the preview.
+  private static final List<String> OLX_ADVERT_STATUSES = List.of("new", "active", "limited", "removed_by_user",
+      "outdated", "unconfirmed", "unpaid", "moderated", "blocked", "disabled", "removed_by_moderator");
+
+  @Test
+  public void acceptsEveryDocumentedOlxStatus() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
+    marketplaceSteps.verify().isSandboxRefusal(marketplaceSteps.previewImport(account, marketplaceId,
+        MarketplaceImportRequestPojo.withStatuses(OLX_ADVERT_STATUSES)));
+  }
+
   @Test
   public void refusesImportInSandboxMode() {
     AccountPojo account = authSteps.registerNewAccount();

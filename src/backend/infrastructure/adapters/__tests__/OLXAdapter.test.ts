@@ -38,6 +38,23 @@ function mockClient(
 }
 
 const fastOptions = { sleep: async () => {}, maxRetries: 2, baseRetryDelayMs: 0 };
+
+// OLX Partner API adverts carry a numeric `category_id` (Advert schema); the taxonomy resolves it.
+const OLX_CATEGORY_NAMES: Record<string, string> = { '1411': 'Projektory', '99': 'Cameras' };
+function taxonomyFor(names: Record<string, string> = OLX_CATEGORY_NAMES) {
+  return {
+    verify: jest.fn(async (id: string) => {
+      const name = names[id];
+      if (!name) throw new Error(`unknown OLX category ${id}`);
+      return {
+        providerCategoryId: id, name, path: ['Elektronika', name],
+        source: 'provider_taxonomy' as const, confidence: 1, isLeaf: true,
+        taxonomyVerifiedAt: new Date().toISOString(),
+        taxonomyStaleAt: new Date(Date.now() + 60_000).toISOString(),
+      };
+    }),
+  } as unknown as ConstructorParameters<typeof OLXAdapter>[3];
+}
 const realConfig: OlxAdapterConfig = {
   baseUrl: 'https://www.olx.pl/api/partner',
   requirePublishDetails: true,
@@ -156,6 +173,7 @@ describe('OLXAdapter', () => {
     ['an explicit null category', null, { category: null }],
     ['a free-text category', null, { category: 'Electronics' }],
     ['a category without an id', null, { category: { name: 'Electronics' } }],
+    ['an explicit null category_id', null, { category_id: null }],
   ])('reports %s in a synced advert as marketplaceCategory %p', async (_label, expected, categoryField) => {
     const http = mockClient((config) => config.url.endsWith('/threads')
       ? { status: 200, data: [] }
@@ -165,6 +183,34 @@ describe('OLXAdapter', () => {
     const [synced] = await adapter.sync(['olx-9']);
 
     expect(synced.marketplaceCategory).toBe(expected);
+  });
+
+  it.each([
+    ['outdated', 'expired'],
+    ['removed_by_user', 'expired'],
+    ['removed_by_moderator', 'expired'],
+    ['moderated', 'error'],
+    ['disabled', 'error'],
+  ])('maps the documented OLX advert status %s to %s', async (remoteStatus, expected) => {
+    const http = mockClient((config) => config.url.endsWith('/threads')
+      ? { status: 200, data: [] }
+      : { status: 200, data: { data: { id: 9, status: remoteStatus } } });
+    const adapter = new OLXAdapter(http, fastOptions);
+
+    const [synced] = await adapter.sync(['olx-9']);
+
+    expect(synced.status).toBe(expected);
+  });
+
+  it('resolves the numeric category_id of a synced OLX advert through the taxonomy', async () => {
+    const http = mockClient((config) => config.url.endsWith('/threads')
+      ? { status: 200, data: [] }
+      : { status: 200, data: { data: { id: 9, status: 'active', category_id: 1411 } } });
+    const adapter = new OLXAdapter(http, fastOptions, {}, taxonomyFor());
+
+    const [synced] = await adapter.sync(['olx-9']);
+
+    expect(synced.marketplaceCategory).toMatchObject({ providerCategoryId: '1411', name: 'Projektory' });
   });
 
   it('refuses to send a sandbox taxonomy category to real OLX', async () => {
@@ -461,7 +507,7 @@ describe('OLXAdapter', () => {
                     description: 'Remote description',
                     url: 'https://www.olx.pl/d/oferta/imported-camera',
                     price: { value: '149.50', currency: 'PLN' },
-                    category: { name: 'Electronics' },
+                    category_id: 1411,
                     photos: [{ url: 'https://img/remote.jpg' }],
                     updated_at: '2026-07-15T00:00:00.000Z',
                     metrics: { views: 7, favorites: 2, messages: 1 },
@@ -474,7 +520,7 @@ describe('OLXAdapter', () => {
                     title: 'Imported lens',
                     public_url: 'https://www.olx.pl/d/oferta/imported-lens',
                     price: { value: '75', currency: 'PLN' },
-                    category: { name: 'Photography' },
+                    category_id: 99,
                     photos: [{ url: 'https://img/lens.jpg' }],
                   },
                 ],
@@ -482,7 +528,7 @@ describe('OLXAdapter', () => {
         },
       };
     });
-    const adapter = new OLXAdapter(http, fastOptions);
+    const adapter = new OLXAdapter(http, fastOptions, {}, taxonomyFor());
 
     const adverts = await adapter.listOwnedListings({ pageSize: 50, statuses: ['active'] });
 
@@ -510,7 +556,8 @@ describe('OLXAdapter', () => {
       title: 'Imported camera',
       price: 149.5,
       currency: 'PLN',
-      category: 'Electronics',
+      category: 'Projektory',
+      marketplaceCategory: expect.objectContaining({ providerCategoryId: '1411' }),
       imageUrls: ['https://img/remote.jpg'],
       metrics: { views: 7, watchers: 2, messages: 1 },
     });
@@ -520,7 +567,7 @@ describe('OLXAdapter', () => {
       title: 'Imported lens',
       price: 75,
       currency: 'PLN',
-      category: 'Photography',
+      category: 'Cameras',
       imageUrls: ['https://img/lens.jpg'],
     });
   });
