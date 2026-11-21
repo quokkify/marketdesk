@@ -4,7 +4,7 @@ testng = "7.12.0"
 checkstyle = "14.3.0"
 spotbugs-plugin = "6.5.13"
 aspectj = "1.9.27"
-archgate = "0.2.1"
+archgate = "0.3.0"
 
 [libraries]
 q4j-config = { module = "dev.quokkify:config", version.ref = "q4j" }
