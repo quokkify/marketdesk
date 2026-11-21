@@ -5,7 +5,11 @@ import {
   HttpResponse,
   HttpError,
 } from '../MarketplaceHttpClient';
-import { MarketplaceAuthenticationError, MarketplaceRateLimitError } from '../MarketplaceError';
+import {
+  MarketplaceAuthenticationError,
+  MarketplaceProviderRejectionError,
+  MarketplaceRateLimitError,
+} from '../MarketplaceError';
 import { appendSandboxBuyerMessage, resetSandboxConversations } from '../olxSandboxConversations';
 
 const fastOptions = { sleep: async () => {}, maxRetries: 2, baseRetryDelayMs: 0 };
@@ -113,6 +117,34 @@ describe('OLXAdapter sendThreadMessage', () => {
     expect(error).toBeInstanceOf(MarketplaceRateLimitError);
     expect(error.message).not.toContain('secret buyer reply');
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the sent text out of the error when a 400 body echoes it', async () => {
+    const { client } = fakeClient(async () => {
+      throw new HttpError(400, 'Bad Request', { error: { detail: 'Rejected text: secret buyer reply' } });
+    });
+    const error = await new OLXAdapter(client, fastOptions)
+      .sendThreadMessage('t', 'secret buyer reply').catch((e) => e);
+    expect(error).toBeInstanceOf(MarketplaceProviderRejectionError);
+    expect(error.message).toContain('HTTP 400');
+    expect(error.message).not.toContain('secret buyer reply');
+    expect(JSON.stringify(error.cause ?? null)).not.toContain('secret buyer reply');
+  });
+
+  it('encodes a slash in the thread id', async () => {
+    const { client, request } = fakeClient(async () => ({ status: 200, data: {} }));
+    await new OLXAdapter(client, fastOptions).sendThreadMessage('a/b', 'x');
+    expect(request.mock.calls[0][0].url).toMatch(/\/threads\/a%2Fb\/messages$/);
+  });
+});
+
+describe('OLXAdapter thread id guard', () => {
+  it.each(['', '.', '..'])('rejects thread id %p before any request', async (threadId) => {
+    const { client, request } = fakeClient(async () => ({ status: 200, data: [] }));
+    const adapter = new OLXAdapter(client, fastOptions);
+    await expect(adapter.sendThreadMessage(threadId, 'x')).rejects.toThrow(/thread id/);
+    await expect(adapter.listThreadMessages(threadId)).rejects.toThrow(/thread id/);
+    expect(request).not.toHaveBeenCalled();
   });
 });
 

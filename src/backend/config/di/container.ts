@@ -129,6 +129,7 @@ import { MarketplaceOAuthService } from '../../application/services/MarketplaceO
 import { ConversationRetentionService } from '../../application/services/ConversationRetentionService';
 import { ConversationSyncService } from '../../application/services/ConversationSyncService';
 import { ConversationReplyGraph } from '../../application/services/ConversationReplyGraph';
+import { ReplySendService } from '../../application/services/ReplySendService';
 import { MarketplaceSyncScheduler } from '../../application/services/MarketplaceSyncScheduler';
 import { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import {
@@ -843,6 +844,40 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       );
     });
 
+  // Sending uses the workspace's OLX connection in real mode and the stub threads otherwise.
+  const replySendService = new ReplySendService({
+    conversations: new ConversationRepository(pool),
+    inTransaction: (work) =>
+      withPoolTransaction(pool, (client) =>
+        work({
+          conversations: new ConversationRepository(pool, client),
+          activityLog: new ActivityLogRepository(pool, client),
+        })
+      ),
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    adapters: {
+      resolve: async (marketplace) => {
+        if (env.marketplaces.olx.adapterMode !== 'real') return adapterFactory.create(marketplace.key);
+        const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
+        return adapterFactory.create(
+          marketplace.key,
+          new FetchMarketplaceHttpClient({
+            logger: overrides.logger,
+            defaultHeaders: buildOlxHeaders(accessToken),
+            timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+            livePublishEnabled: false,
+          })
+        );
+      },
+    },
+    replyQueue: conversationReplyQueue,
+    dailyRunCap: env.replies.dailyRunCap,
+    idGenerator,
+    now: () => new Date(),
+  });
+
   const hermesLimitsReader = new HermesLimitsReader(env.hermes.usageFile);
 
   // 10. Assemble AppDeps.
@@ -860,6 +895,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     hermesStatus: () => aiProviderSelector.status(),
     replyDraftAI,
     conversationRepo: new ConversationRepository(pool),
+    replySendService,
     aiUsageReport: async (workspaceId) => {
       const workspace = await workspaceRepo.findById(workspaceId);
       if (!workspace) throw new NotFoundError('Workspace not found');

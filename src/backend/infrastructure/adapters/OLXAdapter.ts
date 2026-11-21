@@ -547,7 +547,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     return this.execute('listThreadMessages', async () => {
       const res = await this.http.request<OlxMessageListResponse>({
         method: 'GET',
-        url: `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`,
+        url: this.threadMessagesUrl(externalThreadId),
       });
       const raw = Array.isArray(res.data) ? res.data : res.data?.data;
       if (!Array.isArray(raw)) throw new Error('Malformed OLX thread messages response');
@@ -567,15 +567,27 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   // OLX documents no response body and no idempotency key, so a lost response must never re-send.
   sendThreadMessage(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }> {
     return this.execute('sendThreadMessage', async () => {
-      const res = await this.http.request<OlxSendMessageResponse>({
-        method: 'POST',
-        url: `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`,
-        body: { text },
-      });
+      const url = this.threadMessagesUrl(externalThreadId);
+      let res: HttpResponse<OlxSendMessageResponse>;
+      try {
+        res = await this.http.request<OlxSendMessageResponse>({ method: 'POST', url, body: { text } });
+      } catch (error) {
+        // A rejection body may echo the sent text, and the error message quotes the body.
+        if (error instanceof HttpError) throw new HttpError(error.status, error.message);
+        throw error;
+      }
       const body = res.data;
       const payload = body && typeof body === 'object' && 'data' in body ? body.data : body;
       return { externalMessageId: payload && typeof payload === 'object' ? this.olxId(payload as OlxIdentified) : null };
     }, { retry: false });
+  }
+
+  // An empty or dot segment would address a different OLX path once the URL is resolved.
+  private threadMessagesUrl(externalThreadId: string): string {
+    if (externalThreadId === '' || externalThreadId === '.' || externalThreadId === '..') {
+      throw new Error('Invalid OLX thread id');
+    }
+    return `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`;
   }
 
   // OLX prefers `uuid`; `id` is deprecated but still sent by some endpoints.

@@ -60,3 +60,111 @@ describe('ConversationController.listForProduct', () => {
     expect(products.findByIdForWorkspace).not.toHaveBeenCalled();
   });
 });
+
+describe('ConversationController reply actions', () => {
+  const THREAD = '2f1c5b7a-9d3e-4c8f-a1b2-3c4d5e6f7a80';
+  const DRAFT = '8e7d6c5b-4a39-4281-9f0e-1d2c3b4a5f60';
+  const thread = {
+    id: THREAD, workspaceId: 'ws-1', listingId: 'l1', productId: PRODUCT, externalThreadId: 'x', externalBuyerId: null,
+    status: 'open' as const, suspiciousReasons: [], lastExternalMessageId: null, retentionStartsAt: null,
+    textPurgedAt: null, createdAt: at, updatedAt: at,
+  };
+
+  function actions(options: { sandbox?: boolean } = {}) {
+    const products = { findByIdForWorkspace: jest.fn(async (): Promise<Product | null> => null) };
+    const conversations = {
+      listThreadsForProduct: jest.fn(async () => []),
+      findThreadForWorkspace: jest.fn(async () => thread),
+      recentMessages: jest.fn(async () => []),
+      latestDraft: jest.fn(async () => null),
+      awaitingReplyCounts: jest.fn(async () => ({ [PRODUCT]: 2 })),
+    };
+    const replies = {
+      send: jest.fn(),
+      dismiss: jest.fn(),
+      regenerate: jest.fn(),
+    };
+    const sandboxBuyerMessage = jest.fn();
+    const controller = new ConversationController(products, conversations, {
+      replies, sandboxBuyerMessage: options.sandbox ? sandboxBuyerMessage : undefined,
+    });
+    const status = jest.fn();
+    const json = jest.fn();
+    status.mockReturnValue({ json });
+    const res = { status, locals: {} } as unknown as Response;
+    const next = jest.fn() as unknown as NextFunction & jest.Mock;
+    const req = (params: Record<string, string>, body: unknown = {}) =>
+      ({ params, body, user: { workspaceId: 'ws-1', userId: 'u1' } }) as unknown as Request;
+    return { controller, conversations, replies, sandboxBuyerMessage, status, json, res, next, req };
+  }
+
+  it('answers a sent draft with the refreshed thread view', async () => {
+    const { controller, replies, status, json, res, next, req } = actions();
+    replies.send.mockResolvedValue({ kind: 'sent' });
+    await controller.send(req({ threadId: THREAD, draftId: DRAFT }, { text: 'Yes' }), res, next);
+    expect(replies.send).toHaveBeenCalledWith({
+      workspaceId: 'ws-1', threadId: THREAD, draftId: DRAFT, text: 'Yes', actorId: 'u1',
+    });
+    expect(status).toHaveBeenCalledWith(200);
+    expect(json.mock.calls[0][0].data.thread.id).toBe(THREAD);
+  });
+
+  it.each([
+    [{ kind: 'draft_rule', rule: 'link' }, 422, { code: 'draft_rule', details: { rule: 'link' } }],
+    [{ kind: 'rejected', code: 'superseded' }, 409, { code: 'superseded' }],
+    [{ kind: 'rejected', code: 'already_sending' }, 409, { code: 'already_sending' }],
+    [{ kind: 'rejected', code: 'unclear_send' }, 409, { code: 'unclear_send' }],
+  ])('maps send outcome %p to %p', async (outcome, expectedStatus, error) => {
+    const { controller, replies, status, json, res, next, req } = actions();
+    replies.send.mockResolvedValue(outcome);
+    await controller.send(req({ threadId: THREAD, draftId: DRAFT }, { text: 'Yes' }), res, next);
+    expect(status).toHaveBeenCalledWith(expectedStatus);
+    expect(json.mock.calls[0][0]).toMatchObject({ success: false, error });
+  });
+
+  it('answers not found for ids that are not uuids without calling the service', async () => {
+    const { controller, replies, res, next, req } = actions();
+    await controller.send(req({ threadId: 'nope', draftId: DRAFT }, { text: 'Yes' }), res, next);
+    await controller.dismiss(req({ threadId: THREAD, draftId: '..' }), res, next);
+    await controller.regenerate(req({ threadId: 'x' }), res, next);
+    expect(next).toHaveBeenCalledTimes(3);
+    expect(next.mock.calls.every(([error]) => error instanceof NotFoundError)).toBe(true);
+    expect(replies.send).not.toHaveBeenCalled();
+    expect(replies.dismiss).not.toHaveBeenCalled();
+    expect(replies.regenerate).not.toHaveBeenCalled();
+  });
+
+  it('dismisses with 200 and answers not_pending with 409', async () => {
+    const { controller, replies, status, res, next, req } = actions();
+    replies.dismiss.mockResolvedValueOnce({ kind: 'dismissed' }).mockResolvedValueOnce({ kind: 'rejected', code: 'not_pending' });
+    await controller.dismiss(req({ threadId: THREAD, draftId: DRAFT }), res, next);
+    await controller.dismiss(req({ threadId: THREAD, draftId: DRAFT }), res, next);
+    expect(status.mock.calls).toEqual([[200], [409]]);
+  });
+
+  it('accepts a regeneration with 202 and answers the daily cap with 429', async () => {
+    const { controller, replies, status, json, res, next, req } = actions();
+    replies.regenerate.mockResolvedValueOnce({ kind: 'queued' }).mockResolvedValueOnce({ kind: 'rejected', code: 'daily_cap' });
+    await controller.regenerate(req({ threadId: THREAD }), res, next);
+    await controller.regenerate(req({ threadId: THREAD }), res, next);
+    expect(status.mock.calls).toEqual([[202], [429]]);
+    expect(json.mock.calls[1][0].error.code).toBe('daily_cap');
+  });
+
+  it('counts the threads awaiting an answer per product', async () => {
+    const { controller, conversations, json, res, req } = actions();
+    await controller.awaiting(req({}), res);
+    expect(conversations.awaitingReplyCounts).toHaveBeenCalledWith('ws-1');
+    expect(json.mock.calls[0][0].data).toEqual({ byProductId: { [PRODUCT]: 2 } });
+  });
+
+  it('appends a sandbox buyer message and answers 404 for an unknown sandbox thread', async () => {
+    const { controller, sandboxBuyerMessage, status, res, next, req } = actions({ sandbox: true });
+    await controller.appendSandboxBuyerMessage(req({ externalThreadId: 'sbx-1-buyer' }, { text: 'Hello?' }), res, next);
+    expect(sandboxBuyerMessage).toHaveBeenCalledWith('sbx-1-buyer', 'Hello?');
+    expect(status).toHaveBeenCalledWith(201);
+    sandboxBuyerMessage.mockImplementation(() => { throw new Error('Unknown sandbox thread'); });
+    await controller.appendSandboxBuyerMessage(req({ externalThreadId: 'nope' }, { text: 'Hello?' }), res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
+  });
+});

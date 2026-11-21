@@ -59,6 +59,8 @@ import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 import type { IReplyDraftAI } from '../../domain/ports/IReplyDraftAI';
 import type { IConversationRepository } from '../../domain/repositories/interfaces/IConversationRepository';
+import type { ReplySendService } from '../../application/services/ReplySendService';
+import { appendSandboxBuyerMessage } from '../../infrastructure/adapters/olxSandboxConversations';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
 export interface AppDeps {
@@ -75,6 +77,8 @@ export interface AppDeps {
   replyDraftAI?: IReplyDraftAI;
   // Buyer conversations read by GET /api/products/:id/conversations.
   conversationRepo?: IConversationRepository;
+  // Sends, dismisses and regenerates reply drafts (/api/conversations).
+  replySendService?: ReplySendService;
   // Stored AI usage of one workspace (GET /api/hermes/usage).
   aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>;
   // Account-wide limits of the AI provider, read from the Hermes usage file (GET /api/hermes/limits).
@@ -266,7 +270,10 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
     conversations: deps.conversationRepo
-      ? new ConversationController(deps.productRepo, deps.conversationRepo)
+      ? new ConversationController(deps.productRepo, deps.conversationRepo, {
+          replies: deps.replySendService,
+          sandboxBuyerMessage: deps.olxAdapterMode !== 'real' ? appendSandboxBuyerMessage : undefined,
+        })
       : undefined,
   };
 

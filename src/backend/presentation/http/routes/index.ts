@@ -38,6 +38,7 @@ import { createAnalyticsRoutes } from './analytics';
 import { createWorkspaceRoutes } from './workspaces';
 import { createSettingsRoutes } from './settings';
 import { createUploadRoutes } from './uploads';
+import { createConversationRoutes, createSandboxOlxRoutes } from './conversations';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { requireCurrentWorkspacePrincipal } from '../middleware/CurrentPrincipalMiddleware';
 import type { IAuthUserStore } from '../ports/IAuthUserStore';
@@ -130,6 +131,12 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   api.use('/analytics', ...guard, createAnalyticsRoutes(c.analytics));
   api.use('/workspaces', ...guard, createWorkspaceRoutes(c.workspaces));
   api.use('/settings', ...guard, createSettingsRoutes(c.settings));
+  if (c.conversations) {
+    api.use('/conversations', ...guard, createConversationRoutes(c.conversations, aiLimiter));
+    if (c.conversations.sandboxEnabled) {
+      api.use('/sandbox/olx', ...guard, createSandboxOlxRoutes(c.conversations));
+    }
+  }
   api.use(
     '/uploads',
     ...guard,

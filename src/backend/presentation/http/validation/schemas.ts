@@ -309,3 +309,8 @@ export const approveCategoryCorrectionOperationSchema = z.object({
 });
 
 export const executeCategoryCorrectionOperationSchema = z.object({});
+
+// Length and content rules are the draft validator's: they answer 422 with the rule.
+export const sendReplySchema = z.object({ text: z.string() }).strict();
+
+export const sandboxBuyerMessageSchema = z.object({ text: z.string().trim().min(1).max(1000) }).strict();
