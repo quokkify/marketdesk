@@ -10,11 +10,17 @@ export const BARE_DOMAIN_TLDS: readonly string[] = [
   'com', 'net', 'org', 'pl', 'ua', 'ru', 'by', 'kz', 'su', 'info', 'biz', 'xyz', 'top',
   'site', 'online', 'shop', 'store', 'click', 'link', 'cc', 'co', 'me', 'io', 'eu', 'de',
   'uk', 'ly', 'to', 'tk', 'ml', 'ga', 'cf', 'gq', 'app', 'live', 'club', 'vip', 'icu', 'cn',
-  'ws', 'pw', 'work', 'website', 'space', 'fun',
+  'ws', 'pw', 'work', 'website', 'space', 'fun', 'рф', 'укр', 'бел', 'онлайн', 'сайт',
 ];
 
+/** Cyrillic letters that look like Latin ones; folded to Latin for Latin phrases, hosts and hashing. */
+export const CYRILLIC_CONFUSABLES: Readonly<Record<string, string>> = {
+  'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x', 'і': 'i', 'ј': 'j',
+  'ѕ': 's', 'к': 'k', 'м': 'm', 'н': 'h', 'т': 't', 'в': 'b',
+};
+
 /** Spelled-out dot words, replaced with "." when they sit between two word characters. */
-export const DOT_WORDS: readonly string[] = ['dot', 'kropka', 'точка', 'крапка'];
+export const DOT_WORDS: readonly string[] = ['dot', 'dоt', 'kropka', 'точка', 'крапка'];
 
 /**
  * Phrase lists. Matched against text that is lowercased, diacritic-folded and whitespace-collapsed;
@@ -37,7 +43,7 @@ export const PHRASES: Readonly<Record<Exclude<ScreeningReason, 'foreign_link' | 
     'card details', 'security code', 'one-time code', 'otp code',
   ],
   messenger_move: [
-    'telegram', 'телеграм', 'телеграмм', 'whatsapp', 'whats app', 'watsapp', 'ватсап', 'вотсап', 'вацап',
+    'telegram', 'telegramie', 'telegrama', 'tg', 'тг', 'signal', 'телеграм', 'телеграме', 'телеграмі', 'телеграмм', 'whatsapp', 'whats app', 'watsapp', 'ватсап', 'вотсап', 'вацап',
     'viber', 'вайбер', 'вибер', 'wa.me', 't.me', 'messenger', 'месенджер', 'мессенджер',
   ],
   fake_payment_confirmation: [
