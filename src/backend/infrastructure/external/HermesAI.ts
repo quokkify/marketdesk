@@ -3,7 +3,8 @@
 // The application does not call a vendor LLM directly. It talks to the local
 // Hermes Agent API Server through an injectable text-completion boundary, so the
 // same native Hermes instance running on this VPS owns model/provider/tooling
-// decisions.
+// decisions. MarketDesk only uses a Hermes profile whose API server has no tools enabled
+// (checked by HermesHealthProbe) and sends seller content as a <seller_data> block.
 
 import type {
   IAIProvider,

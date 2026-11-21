@@ -366,7 +366,7 @@ Also check that the domain's authoritative nameservers at the registrar are Clou
 
 ## Hermes profile without tools
 
-MarketDesk sends seller-written text (listing descriptions, buyer messages) to Hermes. An agent with tools could be steered by that text, so MarketDesk uses a Hermes API server only when `GET /v1/toolsets` reports no enabled toolset. If any toolset is enabled, or the list cannot be read, the server is refused: in `HERMES_PROVIDER_MODE=auto` AI calls fall back to offline heuristics, and in `hermes` mode they fail with 503. The Hermes Activity status chip shows "Offline heuristics" (`auto`) or "Hermes refused" (`hermes`), with a tooltip saying the API server has tools enabled. Seller content is also wrapped in a `<seller_data>` block in every prompt.
+MarketDesk sends seller-written text (product names, descriptions, tags and other seller-entered text) to Hermes. An agent with tools could be steered by that text, so MarketDesk uses a Hermes API server only when `GET /v1/toolsets` reports no enabled toolset. If any toolset is enabled, or the list cannot be read, the server is refused: in `HERMES_PROVIDER_MODE=auto` AI calls fall back to offline heuristics, and in `hermes` mode they fail with 503. The Hermes Activity status chip shows "Offline heuristics" (`auto`) or "Hermes refused" (`hermes`), with a tooltip saying the API server has tools enabled. Seller content is also wrapped in a `<seller_data>` block in every prompt.
 
 Run MarketDesk against a dedicated profile that has no tools. A gateway with `gateway.multiplex_profiles: true` serves each named profile at `/p/<profile>/v1/...` on the same port, and picks up a new profile without a restart.
 
@@ -409,6 +409,8 @@ Run MarketDesk against a dedicated profile that has no tools. A gateway with `ga
    KEY=$(grep '^API_SERVER_KEY=' ~/.hermes/profiles/<profile>/.env | cut -d= -f2-)
    curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/p/<profile>/v1/toolsets | grep -E '"enabled" *: *true'
    ```
+
+   `KEY` assumes an unquoted value in `.env`; strip the quotes if the key is quoted, otherwise `curl` gets a 401.
 
    No output from `grep` means no toolset is enabled, but only if `curl` succeeded and returned a list. An HTTP error (`-f` makes `curl` print it and exit non-zero) or an empty response is a failure, not a pass; fix it before continuing. The response is `{ "data": [ { "name": ..., "enabled": true|false, ... } ] }`.
 
