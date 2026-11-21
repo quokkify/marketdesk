@@ -72,6 +72,13 @@ prices cannot come from OLX through the partner integration.
   and range with their labels, and the confidence. Approving applies the start price through the
   existing approval path; autonomy and guardrails (`maxAutoPriceChangePct`) are unchanged.
 
+- **Discount against new** (owner request, 2026-11-21): wherever a retail anchor exists, the
+  product page shows the current price as a percentage of it (`−41% vs new`, with source and date),
+  and the price suggestion card shows the same for the proposed start price. The anchor never
+  writes to `cost_price`: that field means the seller's own cost and drives the below-cost
+  confirmation and the `minMarginFloor` guardrail, which a retail price would trip on every used
+  item.
+
 ## Acceptance check
 
 Replay the AirPods analysis on production after deploy: expect a start near 279 PLN and a floor

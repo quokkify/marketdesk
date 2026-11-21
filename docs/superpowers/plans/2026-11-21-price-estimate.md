@@ -194,11 +194,12 @@ Behaviour:
 
 **Interfaces:**
 - `priceResearchModel.ts`: `toPriceResearchForm(r: PriceResearch | null): PriceResearchForm`, `toPriceResearchBody(f: PriceResearchForm): Result-like { ok: true; body } | { ok: false; errors: Record<string,string> }` mirroring the server rules; `estimateLines(e: PriceEstimate, currency: string): string[]` producing e.g. `Start 279 zł`, `Floor 250 zł`, `New price 469,99 zł · observed`, `Used range 200–285 zł · estimated`, `Confidence: medium`.
+- `priceResearchModel.ts` also exports `discountVsNew(price: number, retail: number | null): number | null` — whole percent, `Math.round((price / retail - 1) * 100)`, null when `retail` is null or ≤ 0; and `discountLine(price, research, currency): string | null` → e.g. `−41% vs new · 469,99 zł (MediaMarkt, 2026-11-21)`. Shown under the product price on the product page and, for the proposed start price, in the price card (`estimateLines` appends it when the estimate's anchor exists). The anchor never writes to `costPrice`.
 - Read the section with `currentData` (RTK Query), not `data`.
 
 Card: in the `price` case, when `change.estimate` exists render `estimateLines` under the from→to row. `price_estimate_unavailable` events render title + detail with Dismiss only (no Approve; confirm how `ApprovalButtons` treats `proposedChange: null` and hide Approve if it shows).
 
-- [ ] **Step 1: Write failing tests**: `priceResearchModel.test.ts` — round-trip of the AirPods values; `retailPrice` without currency → error on `retailCurrency`; `estimateLines` marks `estimated` and `observed` exactly as given and never drops the basis. q4j UI `retailAnchorIsSavedFromTheProductPage`: open the product page, enter 469.99 PLN / MediaMarkt, save, reload → values shown.
+- [ ] **Step 1: Write failing tests**: `priceResearchModel.test.ts` — round-trip of the AirPods values; `retailPrice` without currency → error on `retailCurrency`; `estimateLines` marks `estimated` and `observed` exactly as given and never drops the basis; `discountVsNew(279, 469.99) === -41`, `discountVsNew(279, null) === null`, `discountVsNew(279, 0) === null`; `discountLine` for the AirPods values equals `−41% vs new · 469,99 zł (MediaMarkt, 2026-11-21)` (match the project's existing `formatCurrency` output for PLN). q4j UI `retailAnchorIsSavedFromTheProductPage`: open the product page, enter 469.99 PLN / MediaMarkt, save, reload → values shown.
 - [ ] **Step 2: Run** `npx jest src/frontend/components/product-detail/priceResearchModel.test.ts` and the q4j UI test — expect FAIL.
 - [ ] **Step 3: Implement** the model, section, API slice, card and label.
 - [ ] **Step 4: Run** both tests — expect PASS; `npm run type-check`, `npm run lint`, `npm run build` clean.
