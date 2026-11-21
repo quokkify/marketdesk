@@ -230,7 +230,8 @@ export const updateMarketplaceSchema = z
 // OLX takes the statuses as one comma-joined query value, so an entry must be a bare token.
 const OLX_IMPORT_STATUS = z.string().regex(/^[a-z_]{1,32}$/);
 const OLX_IMPORT_MAX_PAGE_SIZE = 100;
-const OLX_IMPORT_MAX_STATUSES = 10;
+// OLX documents 11 advert statuses; leave room for new ones.
+const OLX_IMPORT_MAX_STATUSES = 16;
 const OLX_IMPORT_MAX_LISTING_IDS = 500;
 const OLX_IMPORT_LISTING_ID_MAX_LENGTH = 64;
 
