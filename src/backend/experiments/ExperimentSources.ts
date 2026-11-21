@@ -16,7 +16,8 @@ export async function collectExperimentSourceHashes(root: string): Promise<Recor
       (path.startsWith('src/') ||
         path === 'package-lock.json' ||
         path === 'package.json' ||
-        path === 'scripts/run-assistance-experiment.ts')
+        path === 'scripts/run-assistance-experiment.ts' ||
+        path === 'scripts/run-conversation-experiment.ts')
   );
   return Object.fromEntries(
     await Promise.all(

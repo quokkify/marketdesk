@@ -5,12 +5,14 @@ import dev.quokkify.verification.BaseApiVerification;
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
+import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 
 public class ProductVerification extends BaseApiVerification<ProductVerification> {
 
   private static final String OFFLINE_PROVIDER = "offline";
   private static final String COST_NOT_APPLICABLE = "not_applicable";
+  private static final double PRICE_TOLERANCE = 0.001;
 
   @Override
   protected ProductVerification self() {
@@ -48,6 +50,19 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
   @Step("Error code is {expected}")
   public ProductVerification hasErrorCode(ValidatableResponse response, String expected) {
     response.body("error.code", Matchers.equalTo(expected));
+    return self();
+  }
+
+  @Step("Product has the lowest acceptable price {expected}")
+  public ProductVerification hasMinAcceptablePrice(ValidatableResponse response, double expected) {
+    double actual = response.extract().jsonPath().getDouble("data.minAcceptablePrice");
+    MatcherAssert.assertThat(actual, Matchers.closeTo(expected, PRICE_TOLERANCE));
+    return self();
+  }
+
+  @Step("Product has no lowest acceptable price")
+  public ProductVerification hasNoMinAcceptablePrice(ValidatableResponse response) {
+    response.body("data.minAcceptablePrice", Matchers.nullValue());
     return self();
   }
 

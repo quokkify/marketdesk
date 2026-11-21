@@ -66,6 +66,27 @@ export interface ImportDiscoveryOptions {
   statuses?: string[];
 }
 
+export interface MarketplaceThread {
+  externalThreadId: string;
+  externalBuyerId: string | null;
+  // Messages the marketplace counts in the thread; null when it does not say.
+  totalCount: number | null;
+}
+
+export interface MarketplaceMessage {
+  externalMessageId: string;
+  direction: 'buyer' | 'seller';
+  text: string;
+  sentAt: Date;
+}
+
+export interface MarketplaceThreadMessages {
+  // Oldest first; only the messages with text.
+  messages: MarketplaceMessage[];
+  // Every message the marketplace returned, the skipped ones (attachments only) included.
+  fetchedCount: number;
+}
+
 export interface IMarketplaceAdapter {
   getKey(): MarketplaceKey;
 
@@ -97,4 +118,11 @@ export interface IMarketplaceAdapter {
 
   // Read-only discovery of adverts owned by the connected marketplace account.
   listOwnedListings(options?: ImportDiscoveryOptions): Promise<ImportedMarketplaceListing[]>;
+
+  // Buyer conversations. Optional: only adapters with a messaging API implement them.
+  listThreads?(externalListingId: string): Promise<MarketplaceThread[]>;
+  // Reading never marks a thread as read on the marketplace.
+  listThreadMessages?(externalThreadId: string): Promise<MarketplaceThreadMessages>;
+  // Not retried: the marketplace has no idempotency key, so a retry could double-send.
+  sendThreadMessage?(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }>;
 }

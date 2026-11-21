@@ -261,6 +261,20 @@ export const env = {
     ),
   },
 
+  // Buyer reply drafts: per-workspace daily cap on reply runs, thread messages given to the AI,
+  // the age past which a buyer message gets no automatic draft, and the spam screening thresholds.
+  replies: {
+    dailyRunCap: positiveInt(process.env.REPLY_DAILY_RUN_CAP, 200, 'REPLY_DAILY_RUN_CAP'),
+    historyMessages: positiveInt(process.env.REPLY_HISTORY_MESSAGES, 12, 'REPLY_HISTORY_MESSAGES'),
+    maxMessageAgeDays: positiveInt(process.env.REPLY_MAX_MESSAGE_AGE_DAYS, 14, 'REPLY_MAX_MESSAGE_AGE_DAYS'),
+    spamRepeatThreshold: positiveInt(
+      process.env.REPLY_SPAM_REPEAT_THRESHOLD,
+      3,
+      'REPLY_SPAM_REPEAT_THRESHOLD',
+    ),
+    floodPerHour: positiveInt(process.env.REPLY_FLOOD_PER_HOUR, 10, 'REPLY_FLOOD_PER_HOUR'),
+  },
+
   // Hermes Integration
   hermes: {
     apiUrl: process.env.HERMES_API_URL || '',

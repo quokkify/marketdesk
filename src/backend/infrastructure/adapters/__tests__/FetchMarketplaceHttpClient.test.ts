@@ -74,4 +74,22 @@ describe('FetchMarketplaceHttpClient', () => {
       client.request({ method: 'GET', url: 'https://api.olx.pl/v1/user/ads/ad-1' }),
     ).rejects.toBeInstanceOf(HttpError);
   });
+
+  it('logs no response body for a failed thread call, which may echo message text', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => JSON.stringify({ detail: 'Rejected: private reply' }),
+    }) as unknown as typeof fetch;
+    const warn = jest.fn();
+    const client = new FetchMarketplaceHttpClient({ logger: { warn } });
+
+    await expect(
+      client.request({ method: 'POST', url: 'https://www.olx.pl/api/partner/threads/t1/messages', body: { text: 'x' } }),
+    ).rejects.toBeInstanceOf(HttpError);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warn.mock.calls[0])).not.toContain('private reply');
+    expect(warn.mock.calls[0][0]).toMatchObject({ status: 400, body: undefined });
+  });
 });

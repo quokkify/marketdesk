@@ -45,6 +45,8 @@ export const createProductSchema = z
     description: z.string().min(1),
     costPrice: z.number().nonnegative().nullable(),
     sellingPrice: z.number().nonnegative(),
+    // Range is checked by the Product entity so a bad floor answers 422, like the other price-state rules.
+    minAcceptablePrice: z.number().finite().nullable().optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -63,6 +65,8 @@ export const updateProductSchema = z
     description: z.string().min(1).optional(),
     costPrice: z.number().nonnegative().nullable().optional(),
     sellingPrice: z.number().nonnegative().optional(),
+    // Range is checked by the Product entity so a bad floor answers 422, like the other price-state rules.
+    minAcceptablePrice: z.number().finite().nullable().optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -367,3 +371,8 @@ export const approveCategoryCorrectionOperationSchema = z.object({
 });
 
 export const executeCategoryCorrectionOperationSchema = z.object({});
+
+// Length and content rules are the draft validator's: they answer 422 with the rule.
+export const sendReplySchema = z.object({ text: z.string() }).strict();
+
+export const sandboxBuyerMessageSchema = z.object({ text: z.string().trim().min(1).max(1000) }).strict();

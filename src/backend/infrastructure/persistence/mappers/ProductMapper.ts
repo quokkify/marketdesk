@@ -76,6 +76,10 @@ export const ProductMapper = {
         ? null
         : unwrapPersisted(Money.of(toNumber(row.cost_price), row.currency));
     const sellingPrice = unwrapPersisted(Money.of(toNumber(row.selling_price), row.currency));
+    const minAcceptablePrice =
+      row.min_acceptable_price_minor === null || row.min_acceptable_price_minor === undefined
+        ? null
+        : unwrapPersisted(Money.fromMinor(toNumber(row.min_acceptable_price_minor), row.currency));
     const tags = tagRows.map((t) => t.tag);
     const images = [...imageRows].sort((a, b) => a.position - b.position).map((i) => i.url);
 
@@ -87,6 +91,7 @@ export const ProductMapper = {
       description: row.description,
       costPrice,
       sellingPrice,
+      minAcceptablePrice,
       condition: row.condition as ProductCondition,
       category: row.category,
       categoryProvenance: parseCategoryProvenance(row.category_provenance),

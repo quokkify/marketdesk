@@ -5,7 +5,7 @@
 
 import type { ComparableCandidate } from '../../../shared/types';
 import { normalizeOlxAdvertUrl } from '../../../shared/olxAdvertUrl';
-import { parseHermesJson } from './HermesAI';
+import { parseJsonObject } from './jsonText';
 import { sellerDataBlock } from './sellerData';
 import { ValidationError } from '../../domain/shared/DomainError';
 
@@ -95,7 +95,7 @@ export function buildComparableSearchPrompt(input: {
 
 // The array in the agent's answer, or null when the answer holds no JSON array.
 export function parseComparableCandidates(raw: string): unknown[] | null {
-  const strict = parseHermesJson(raw);
+  const strict: unknown = parseJsonObject(raw);
   if (strict !== null) return Array.isArray(strict) ? strict : null;
   const start = raw.indexOf('[');
   const end = raw.lastIndexOf(']');

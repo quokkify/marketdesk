@@ -100,10 +100,23 @@ export class UpdateProductUseCase {
       nextSellingPrice = price.value;
     }
 
+    let nextMinAcceptable: Money | null | undefined;
+    if (dto.minAcceptablePrice === null) {
+      nextMinAcceptable = null;
+    } else if (dto.minAcceptablePrice !== undefined) {
+      const price = Money.of(
+        dto.minAcceptablePrice,
+        dto.currency ?? product.sellingPrice.currency
+      );
+      if (price.isErr()) return price;
+      nextMinAcceptable = price.value;
+    }
+
     const priceUpdate = product.updatePrices(
       nextCostPrice,
       nextSellingPrice,
-      dto.allowBelowCost ?? false
+      dto.allowBelowCost ?? false,
+      nextMinAcceptable
     );
     if (priceUpdate.isErr()) return priceUpdate;
     if (clearCostPrice) product.clearCostPrice();

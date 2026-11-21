@@ -189,6 +189,55 @@ describe('HermesDecisionEngine.run', () => {
     expect(relist?.autonomyDecision).toBe('pending_review');
   });
 
+  describe('price floor', () => {
+    async function priceProposals(suggestedPrice: number, minAcceptablePrice: number | null) {
+      const ai = new StubAIProvider({ suggestedPrice, reasoning: 'stub', confidence: 'high' });
+      const { engine, productRepo, listingRepo } = makeEngine({ ai });
+      const product = unwrap(
+        Product.create({
+          id: 'p1',
+          workspaceId: 'w1',
+          sku: 'SKU-1',
+          name: 'Widget',
+          description: 'A perfectly reasonable description over twenty chars.',
+          costPrice: money(50),
+          sellingPrice: money(80),
+          minAcceptablePrice: minAcceptablePrice === null ? null : money(minAcceptablePrice),
+          condition: 'new',
+          category: 'electronics',
+          images: ['a.jpg', 'b.jpg', 'c.jpg'],
+        }),
+      );
+      productRepo.items.set(product.id, product);
+      const listing = unwrap(
+        Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(80) }),
+      );
+      listingRepo.items.set(listing.id, listing);
+      const suggestions = await engine.checkConditions(product);
+      return suggestions.filter((s) => s.change?.kind === 'price');
+    }
+
+    it('clamps a drop below the floor to exactly the floor', async () => {
+      const proposals = await priceProposals(60, 70);
+      expect(proposals).toHaveLength(1);
+      expect(proposals[0].change).toMatchObject({ kind: 'price', from: 80, to: 70 });
+    });
+
+    it('proposes no price change for a product already at its floor', async () => {
+      expect(await priceProposals(60, 80)).toHaveLength(0);
+    });
+
+    it('clamps the estimate start price but keeps the floor price Hermes reported', async () => {
+      const proposals = await priceProposals(60, 70);
+      expect(proposals[0].change).toMatchObject({ estimate: { startPrice: 70, floorPrice: 60 } });
+    });
+
+    it('does not clamp a price increase', async () => {
+      const proposals = await priceProposals(95, 70);
+      expect(proposals[0].change).toMatchObject({ kind: 'price', to: 95 });
+    });
+  });
+
   describe('price estimate', () => {
     const research = {
       productId: 'p1',

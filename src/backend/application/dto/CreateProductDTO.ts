@@ -12,6 +12,8 @@ export interface CreateProductDTO {
   // null when the purchase cost is unknown.
   costPrice: number | null;
   sellingPrice: number;
+  // Lowest price accepted in negotiation (major units); null or omitted means none.
+  minAcceptablePrice?: number | null;
   // ISO-4217 currency. When omitted, the workspace currency is used.
   currency?: string;
   condition: ProductCondition;

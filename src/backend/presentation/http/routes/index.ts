@@ -10,6 +10,7 @@
 import { Router, type RequestHandler } from 'express';
 import type { AuthController } from '../controllers/AuthController';
 import type { ProductController } from '../controllers/ProductController';
+import type { ConversationController } from '../controllers/ConversationController';
 import type { ListingController } from '../controllers/ListingController';
 import type { MarketplaceController } from '../controllers/MarketplaceController';
 import type { HermesController } from '../controllers/HermesController';
@@ -37,6 +38,7 @@ import { createAnalyticsRoutes } from './analytics';
 import { createWorkspaceRoutes } from './workspaces';
 import { createSettingsRoutes } from './settings';
 import { createUploadRoutes } from './uploads';
+import { createConversationRoutes, createSandboxOlxRoutes } from './conversations';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { requireCurrentWorkspacePrincipal } from '../middleware/CurrentPrincipalMiddleware';
 import type { IAuthUserStore } from '../ports/IAuthUserStore';
@@ -52,6 +54,7 @@ export interface ApiControllers {
   workspaces: WorkspaceController;
   settings: SettingsController;
   uploads: ProductImageUploadController;
+  conversations?: ConversationController;
 }
 
 export interface ApiRouterOptions {
@@ -121,13 +124,19 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const currentPrincipalGuard = requireCurrentWorkspacePrincipal(options.currentUserStore);
   guard.push(requireWorkspace, currentPrincipalGuard);
 
-  api.use('/products', ...guard, createProductRoutes(c.products, aiLimiter));
+  api.use('/products', ...guard, createProductRoutes(c.products, aiLimiter, c.conversations));
   api.use('/listings', ...guard, createListingRoutes(c.listings, sensitiveLimiter, aiLimiter));
   api.use('/marketplaces', ...guard, createMarketplaceRoutes(c.marketplaces));
   api.use('/hermes', ...guard, createHermesRoutes(c.hermes, aiLimiter));
   api.use('/analytics', ...guard, createAnalyticsRoutes(c.analytics));
   api.use('/workspaces', ...guard, createWorkspaceRoutes(c.workspaces));
   api.use('/settings', ...guard, createSettingsRoutes(c.settings));
+  if (c.conversations) {
+    api.use('/conversations', ...guard, createConversationRoutes(c.conversations, aiLimiter));
+    if (c.conversations.sandboxEnabled) {
+      api.use('/sandbox/olx', ...guard, createSandboxOlxRoutes(c.conversations));
+    }
+  }
   api.use(
     '/uploads',
     ...guard,

@@ -8,7 +8,8 @@ import type { ProductImageRow, ProductRow, ProductTagRow } from '../mappers/rows
 // products carry no currency column; join workspaces to reconstruct Money.
 const PRODUCT_SELECT = `
   SELECT p.id, p.workspace_id, p.sku, p.name, p.description,
-         p.cost_price, p.selling_price, p.condition, p.category, p.category_provenance, p.status,
+         p.cost_price, p.selling_price, p.min_acceptable_price_minor, p.condition, p.category,
+         p.category_provenance, p.status,
          p.created_at, p.updated_at, w.currency
   FROM products p
   JOIN workspaces w ON w.id = p.workspace_id
@@ -121,13 +122,15 @@ export class ProductRepository implements IProductRepository {
     await query(
       `INSERT INTO products
          (id, workspace_id, sku, name, description, cost_price, selling_price,
-          condition, category, category_provenance, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          condition, category, category_provenance, status, created_at, updated_at,
+          min_acceptable_price_minor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $15)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          description = EXCLUDED.description,
          cost_price = EXCLUDED.cost_price,
          selling_price = EXCLUDED.selling_price,
+         min_acceptable_price_minor = EXCLUDED.min_acceptable_price_minor,
          condition = EXCLUDED.condition,
          category = CASE WHEN $14 THEN EXCLUDED.category ELSE products.category END,
          category_provenance = CASE WHEN $14 THEN EXCLUDED.category_provenance ELSE products.category_provenance END,
@@ -148,6 +151,7 @@ export class ProductRepository implements IProductRepository {
         product.createdAt,
         product.updatedAt,
         product.hasCategoryStateChanges,
+        product.minAcceptablePrice?.minorUnits ?? null,
       ],
       client
     );

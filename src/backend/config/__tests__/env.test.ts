@@ -67,6 +67,12 @@ function forgeWithEmptyKey(payload: Record<string, unknown>): string {
 
 // The refusal of any other OLX_ADAPTER_MODE or of an invalid PUBLIC_BASE_URL is reported by the
 // boot gate; main.boot.test.ts covers it from raw variables.
+describe('env.replies', () => {
+  it('drafts automatically only for buyer messages of the last 14 days by default', () => {
+    expect(env.replies.maxMessageAgeDays).toBe(14);
+  });
+});
+
 describe('resolveOlxAdapterMode', () => {
   it('defaults to the stub sandbox and accepts stub or real', () => {
     expect(resolveOlxAdapterMode(undefined)).toBe('stub');
