@@ -1,0 +1,1 @@
+{"id":"a85c7c8a48688f2377541adcbbb846b4.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/di/__tests__/recordedQueue.test.ts#recordedProcessor passes non-object data null through untouched","name":"passes non-object data null through untouched","status":"passed","testResultsByEnv":{"default":"eed54f6991900c1d4dc795ac44337260"}}

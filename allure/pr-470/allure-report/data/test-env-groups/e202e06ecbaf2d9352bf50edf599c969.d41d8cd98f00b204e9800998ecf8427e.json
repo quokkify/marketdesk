@@ -1,0 +1,1 @@
+{"id":"e202e06ecbaf2d9352bf50edf599c969.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/runs/__tests__/runContext.test.ts#runContext keeps the run across awaits and isolates parallel runs","name":"keeps the run across awaits and isolates parallel runs","status":"passed","testResultsByEnv":{"default":"494e20526d1fa7fa680ea88b387e297c"}}
