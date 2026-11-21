@@ -730,6 +730,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     products: productRepo,
     replyQueue: conversationReplyQueue,
     now: () => new Date(),
+    maxMessageAgeDays: env.replies.maxMessageAgeDays,
     onThreadFailure: (failure) => warnByCode(CONVERSATION_SYNC_FAILURE_MESSAGE, failure),
   });
   // The sync handler persists fetched listing stats and updates the marketplace

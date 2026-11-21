@@ -73,19 +73,25 @@ describe('OfflineReplyDraftAI', () => {
 });
 
 describe('HermesReplyDraftAI', () => {
-  it('sessionKeyIsPerThread', async () => {
+  // Buyer replies are stateless: the whole recent thread goes in each call, so Hermes is never
+  // given a session to keep buyer text in beyond the retention period.
+  it('buyerReplySendsNoSessionKey', async () => {
     const requests: AICompletionRequest[] = [];
     const ai = new HermesReplyDraftAI({
       complete: async (request) => {
         requests.push(request);
-        return JSON.stringify({ intent: 'other', confidence: 'low' });
+        return requests.length === 1
+          ? JSON.stringify({ intent: 'other', confidence: 'low' })
+          : JSON.stringify({ reply: 'Hi', counterOffer: false, proposedPrice: null });
       },
     });
     await ai.classify(ctxWith('hi', 'thread-a'));
-    await ai.classify(ctxWith('hi', 'thread-b'));
-    expect(requests[0].sessionKey).toBe('marketdesk:buyer-reply:thread-a');
-    expect(requests[1].sessionKey).toBe('marketdesk:buyer-reply:thread-b');
-    expect(requests[0].prompt).not.toContain('thread-a');
+    await ai.draft(ctxWith('hi', 'thread-a'), 'other');
+    expect(requests).toHaveLength(2);
+    for (const request of requests) {
+      expect(request).not.toHaveProperty('sessionKey');
+      expect(request.prompt).not.toContain('thread-a');
+    }
   });
 });
 

@@ -93,8 +93,22 @@ describe('ConversationThread markup', () => {
 
   it('explains a failed draft', () => {
     const html = render({ ...base, draft: { ...pendingDraft, status: 'failed', text: null, failureReason: 'iban' } });
-    expect(html).toContain("Hermes couldn&#x27;t write a safe reply (it contains bank or card details).");
+    expect(html).toContain("Couldn&#x27;t write a safe reply (it contains bank or card details).");
+    expect(html).not.toContain('Hermes');
     expect(html).toContain('>Regenerate<');
+  });
+
+  it('unclearSendHasNoRegenerate', () => {
+    const html = render({
+      ...base,
+      draft: { ...pendingDraft, status: 'failed', failureReason: 'unclear_send' },
+    });
+    expect(html).toContain(
+      'We couldn&#x27;t confirm the reply reached OLX. Check the conversation on OLX before replying again.'
+    );
+    expect(html).not.toContain('safe reply');
+    expect(html).not.toContain('>Regenerate<');
+    expect(html).not.toContain('>Send<');
   });
 
   it('shows Sent for a sent draft and the action error when present', () => {

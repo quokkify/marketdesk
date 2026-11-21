@@ -1052,7 +1052,7 @@ describe('SyncMarketplaceHandler', () => {
           { externalListingId: 'ext-expired', status: 'expired' as ListingStatus, remoteStatus: 'removed_by_user' },
         ]),
         listThreads: jest.fn(async () => []),
-        listThreadMessages: jest.fn(async () => []),
+        listThreadMessages: jest.fn(async () => ({ messages: [], fetchedCount: 0 })),
         ...adapterOverrides,
       });
       const marketplace = unwrap(Marketplace.create({ id: 'm-1', workspaceId: 'w-1', key: 'olx', name: 'OLX' }));

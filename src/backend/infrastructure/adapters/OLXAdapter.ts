@@ -17,6 +17,7 @@ import type {
   ImportedMarketplaceListing,
   ListingPublishInput,
   MarketplaceMessage,
+  MarketplaceThreadMessages,
   MarketplaceThread,
   PublishResult,
   SyncedListing,
@@ -546,7 +547,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     });
   }
 
-  listThreadMessages(externalThreadId: string): Promise<MarketplaceMessage[]> {
+  listThreadMessages(externalThreadId: string): Promise<MarketplaceThreadMessages> {
     return this.execute('listThreadMessages', async () => {
       const res = await this.requestThreadMessages<OlxMessageListResponse>(externalThreadId, { method: 'GET' });
       const raw = Array.isArray(res.data) ? res.data : res.data?.data;
@@ -560,7 +561,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         if (!sentAt || Number.isNaN(sentAt.getTime())) continue;
         messages.push({ externalMessageId, direction, text: message.text, sentAt });
       }
-      return messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime());
+      messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime());
+      return { messages, fetchedCount: raw.length };
     });
   }
 

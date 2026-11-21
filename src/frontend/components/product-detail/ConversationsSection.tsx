@@ -124,6 +124,9 @@ export const ConversationThread: React.FC<ConversationThreadProps> = ({
           </Button>
         </Stack>
       )}
+      {panel.kind === 'unclear_send' && (
+        <Typography variant="body2">{panel.message}</Typography>
+      )}
       {panel.kind === 'no_draft' && (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography variant="body2">No draft yet.</Typography>

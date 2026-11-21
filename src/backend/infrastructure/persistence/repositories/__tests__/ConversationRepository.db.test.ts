@@ -421,4 +421,31 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     expect(await byId(kept.id)).toEqual(earlier);
     expect(await byId(other.id)).toBeNull();
   });
+
+  it('revivedListingStopsRetention', async () => {
+    const started = new Date('2026-10-01T00:00:00Z');
+    const purged = await repo.upsertThread({
+      workspaceId, listingId, productId, externalThreadId: 'ext-purged', retentionStartsAt: started,
+    });
+    await repo.upsertMessages(purged.id, [message('p1')]);
+    expect(await repo.purgeExpiredText(new Date('2026-11-01T00:00:00Z'))).toBe(1);
+    const otherListing = randomUUID();
+    await client.query('INSERT INTO listings (id) VALUES ($1)', [otherListing]);
+    const other = await repo.upsertThread({
+      workspaceId, listingId: otherListing, productId, externalThreadId: 'ext-other', retentionStartsAt: started,
+    });
+
+    expect(await repo.stopRetentionForListing(listingId, randomUUID())).toBe(0);
+    expect(await repo.stopRetentionForListing(listingId, workspaceId)).toBe(1);
+    expect(await repo.stopRetentionForListing(listingId, workspaceId)).toBe(0);
+
+    const revived = await repo.findThreadForWorkspace(purged.id, workspaceId);
+    expect(revived?.retentionStartsAt).toBeNull();
+    expect(revived?.textPurgedAt).toBeNull();
+    expect((await repo.findThreadForWorkspace(other.id, workspaceId))?.retentionStartsAt).toEqual(started);
+    // A later purge leaves the revived thread alone until retention starts again.
+    await repo.upsertMessages(purged.id, [message('p2', { sentAt: new Date('2026-11-21T10:00:00Z') })]);
+    await repo.purgeExpiredText(new Date('2027-01-01T00:00:00Z'));
+    expect((await repo.recentMessages(purged.id, 1))[0].text).toBe('text p2');
+  });
 });

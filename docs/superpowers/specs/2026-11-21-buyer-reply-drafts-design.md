@@ -117,15 +117,18 @@ LangGraph `StateGraph`, nodes:
 2. `classify` — Hermes, strict Zod output `{ intent, confidence }`.
 3. `draft` — Hermes, input: product (title, description, condition, price) and the last N
    messages of this thread. The floor is never sent to the model (see prompt-injection defence).
+   Buyer-reply calls carry no Hermes session key: each call sends the recent thread, so Hermes
+   keeps no buyer text between calls.
    Output: `{ reply, counterOffer, proposedPrice | null }`; code fills the `{{PRICE}}` placeholder.
 4. `validate` — code: the filled price ≥ floor; any price number in the text ≥ floor; no URL, phone,
    e-mail, IBAN, address; length limit; no payment/delivery outside OLX. Failure → draft not
-   stored as `pending`; the thread shows "Hermes could not draft a safe reply" with the reason.
+   stored as `pending`; the thread shows "Couldn't write a safe reply" with the reason.
 
 Graph state holds tenant-scoped ids and the result only. The observer receives node lifecycle
 only (as in `ProductAssistanceGraph`). AI usage is recorded through `withAiUsageScope` with a new
-feature `reply`. Caps: at most one graph run per buyer message, and a per-workspace daily cap on
-reply runs (config value).
+feature `reply`. Caps: at most one graph run per buyer message, a per-workspace daily cap on
+reply runs (config value), and no automatic run for a newest buyer message older than
+`REPLY_MAX_MESSAGE_AGE_DAYS` (default 14; the seller can still regenerate).
 
 ### Prompt-injection defence
 

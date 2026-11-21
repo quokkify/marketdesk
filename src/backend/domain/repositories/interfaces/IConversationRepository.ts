@@ -53,6 +53,9 @@ export interface IConversationRepository {
   newestUnansweredBuyerMessage(threadId: string): Promise<ConversationMessage | null>;
   // Sets retention_starts_at on the listing's threads that have none; returns how many.
   startRetentionForListing(listingId: string, workspaceId: string, at: Date): Promise<number>;
+  // Clears retention_starts_at and text_purged_at on the listing's threads that have either, for a
+  // listing that is live again; returns how many.
+  stopRetentionForListing(listingId: string, workspaceId: string): Promise<number>;
   // Newest first.
   recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]>;
   // Buyer messages only.

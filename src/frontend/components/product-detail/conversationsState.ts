@@ -28,6 +28,9 @@ export const INTENT_LABELS: Record<BuyerIntent, string> = {
   other: 'Other',
 };
 
+const UNCLEAR_SEND_MESSAGE =
+  "We couldn't confirm the reply reached OLX. Check the conversation on OLX before replying again.";
+
 export const reasonLabel = (reason: ConversationScreeningReason): string => SCREENING_REASON_LABELS[reason];
 
 export const isSendDisabled = (sending: boolean): boolean => sending;
@@ -57,11 +60,7 @@ export function describeActionError(error: unknown): ActionErrorView {
     case 'already_sending':
       return { message: 'Already sending…', refetch: false };
     case 'unclear_send':
-      return {
-        message:
-          "We couldn't confirm the reply reached OLX. Check the conversation on OLX before replying again.",
-        refetch: true,
-      };
+      return { message: UNCLEAR_SEND_MESSAGE, refetch: true };
     case 'daily_cap':
       return { message: "Today's AI limit is reached. Try again tomorrow or reply on OLX.", refetch: false };
     default:
@@ -74,6 +73,7 @@ export type ThreadPanel =
   | { kind: 'draft' }
   | { kind: 'sent' }
   | { kind: 'failed'; message: string }
+  | { kind: 'unclear_send'; message: string }
   | { kind: 'no_draft' }
   | { kind: 'none' };
 
@@ -84,11 +84,14 @@ export function threadPanel(thread: ConversationThreadView): ThreadPanel {
   const draft = thread.draft;
   if (draft?.status === 'pending' || draft?.status === 'sending') return { kind: 'draft' };
   if (draft?.status === 'sent') return { kind: 'sent' };
+  if (draft?.status === 'failed' && draft.failureReason === 'unclear_send') {
+    return { kind: 'unclear_send', message: UNCLEAR_SEND_MESSAGE };
+  }
   if (draft?.status === 'failed') {
     const label = draft.failureReason === null ? undefined : DRAFT_RULE_LABELS[draft.failureReason];
     return {
       kind: 'failed',
-      message: label ? `Hermes couldn't write a safe reply (${label}).` : "Hermes couldn't write a safe reply.",
+      message: label ? `Couldn't write a safe reply (${label}).` : "Couldn't write a safe reply.",
     };
   }
   const newest = thread.messages[thread.messages.length - 1];

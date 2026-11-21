@@ -80,6 +80,13 @@ export interface MarketplaceMessage {
   sentAt: Date;
 }
 
+export interface MarketplaceThreadMessages {
+  // Oldest first; only the messages with text.
+  messages: MarketplaceMessage[];
+  // Every message the marketplace returned, the skipped ones (attachments only) included.
+  fetchedCount: number;
+}
+
 export interface IMarketplaceAdapter {
   getKey(): MarketplaceKey;
 
@@ -114,8 +121,8 @@ export interface IMarketplaceAdapter {
 
   // Buyer conversations. Optional: only adapters with a messaging API implement them.
   listThreads?(externalListingId: string): Promise<MarketplaceThread[]>;
-  // Oldest first. Reading never marks a thread as read on the marketplace.
-  listThreadMessages?(externalThreadId: string): Promise<MarketplaceMessage[]>;
+  // Reading never marks a thread as read on the marketplace.
+  listThreadMessages?(externalThreadId: string): Promise<MarketplaceThreadMessages>;
   // Not retried: the marketplace has no idempotency key, so a retry could double-send.
   sendThreadMessage?(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }>;
 }

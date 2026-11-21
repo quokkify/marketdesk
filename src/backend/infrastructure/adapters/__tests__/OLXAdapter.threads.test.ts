@@ -65,12 +65,14 @@ describe('OLXAdapter thread reading', () => {
         ],
       },
     }));
-    const messages = await new OLXAdapter(client, fastOptions).listThreadMessages('thr 1');
+    const { messages, fetchedCount } = await new OLXAdapter(client, fastOptions).listThreadMessages('thr 1');
     expect(messages).toEqual([
       { externalMessageId: '9', direction: 'buyer', text: 'hello', sentAt: new Date('2026-11-20T10:00:00Z') },
       { externalMessageId: 'm2', direction: 'seller', text: 'reply', sentAt: new Date('2026-11-20T10:05:00Z') },
     ]);
     expect(request.mock.calls[0][0].url).toMatch(/\/threads\/thr%201\/messages$/);
+    // Skipped messages still count, so the thread's total_count can be met.
+    expect(fetchedCount).toBe(4);
   });
 
   it('accepts a bare array of messages', async () => {
@@ -78,7 +80,7 @@ describe('OLXAdapter thread reading', () => {
       status: 200,
       data: [{ uuid: 'm1', type: 'received', text: 'hi', created_at: '2026-11-20T10:00:00Z' }],
     }));
-    expect(await new OLXAdapter(client, fastOptions).listThreadMessages('t')).toHaveLength(1);
+    expect((await new OLXAdapter(client, fastOptions).listThreadMessages('t')).messages).toHaveLength(1);
   });
 
   it('never calls mark-as-read while reading', async () => {
@@ -173,7 +175,7 @@ describe('OLXAdapter sandbox stub conversations', () => {
       'sbx-adv-9-buyer', 'sbx-adv-9-haggle', 'sbx-adv-9-scam',
     ]);
     const texts = await Promise.all(threads.map(async (thread) =>
-      (await adapter.listThreadMessages(thread.externalThreadId)).map((m) => [m.direction, m.text])));
+      (await adapter.listThreadMessages(thread.externalThreadId)).messages.map((m) => [m.direction, m.text])));
     expect(texts).toEqual([
       [['buyer', 'Hi, is it still available?']],
       [['buyer', 'Would you take 50 zł?']],
@@ -196,7 +198,7 @@ describe('OLXAdapter sandbox stub conversations', () => {
     const sent = await adapter.sendThreadMessage('sbx-adv-2-haggle', 'Sure, 60 zł');
     expect(sent).toEqual({ externalMessageId: 'sbx-msg-1' });
     appendSandboxBuyerMessage('sbx-adv-2-haggle', 'Deal');
-    const messages = await adapter.listThreadMessages('sbx-adv-2-haggle');
+    const { messages } = await adapter.listThreadMessages('sbx-adv-2-haggle');
     expect(messages.map((m) => [m.direction, m.text])).toEqual([
       ['buyer', 'Would you take 50 zł?'], ['seller', 'Sure, 60 zł'], ['buyer', 'Deal'],
     ]);
@@ -209,7 +211,7 @@ describe('OLXAdapter sandbox stub conversations', () => {
     expect(await appendOwnedSandboxBuyerMessage('sbx-adv-3-buyer', 'Hello?', owns)).toBe(true);
     expect(await appendOwnedSandboxBuyerMessage('sbx-adv-3-buyer', 'Hello?', async () => false)).toBe(false);
     expect(await appendOwnedSandboxBuyerMessage('sbx-unknown-buyer', 'Hello?', async () => true)).toBe(false);
-    expect((await adapter.listThreadMessages('sbx-adv-3-buyer')).map((m) => m.text))
+    expect((await adapter.listThreadMessages('sbx-adv-3-buyer')).messages.map((m) => m.text))
       .toEqual(['Hi, is it still available?', 'Hello?']);
   });
 });

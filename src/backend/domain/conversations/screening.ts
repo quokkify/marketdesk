@@ -23,7 +23,7 @@ export interface ScreeningLimits {
 
 const CARD_MIN_DIGITS = 13;
 const CARD_MAX_DIGITS = 19;
-const ZERO_WIDTH = /[\u200b-\u200f\u2060\ufeff]/g;
+const ZERO_WIDTH = /[\u00ad\u180e\u200b-\u200f\u2060-\u2064\ufeff]/g;
 const CARD_RUN = /\d+(?:[ -]\d+)*/g;
 const BASE64_BLOB = new RegExp(`[A-Za-z0-9+/]{${BASE64_BLOB_MIN_RUN},}={0,2}`);
 const LABEL = '[\\p{L}\\p{N}_-]+';

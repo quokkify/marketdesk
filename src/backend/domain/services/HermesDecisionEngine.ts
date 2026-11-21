@@ -536,8 +536,7 @@ export class HermesDecisionEngine {
       const startPrice =
         labelled.startPrice < currentPrice ? Math.max(labelled.startPrice, sellerFloor) : labelled.startPrice;
       if (labelled.startPrice < currentPrice && startPrice >= currentPrice) return null;
-      const floorPrice = Math.min(Math.max(labelled.floorPrice, sellerFloor), startPrice);
-      estimate = { ...labelled, startPrice, floorPrice };
+      estimate = { ...labelled, startPrice };
     }
     if (!shouldSurfacePriceEstimate(estimate, currentPrice)) return null;
     const isLower = estimate.startPrice < currentPrice;

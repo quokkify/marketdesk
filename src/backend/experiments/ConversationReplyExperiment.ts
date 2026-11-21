@@ -151,6 +151,7 @@ class ExperimentConversations implements IConversationRepository {
   async listThreadsForProduct(): Promise<ConversationThread[]> { return [...this.threads.values()]; }
   async newestUnansweredBuyerMessage(): Promise<ConversationMessage | null> { return null; }
   async startRetentionForListing(): Promise<number> { return 0; }
+  async stopRetentionForListing(): Promise<number> { return 0; }
   async findDraft(draftId: string, threadId: string) {
     return this.drafts.find((d) => d.id === draftId && d.threadId === threadId) ?? null;
   }

@@ -227,9 +227,9 @@ describe('HermesDecisionEngine.run', () => {
       expect(await priceProposals(60, 80)).toHaveLength(0);
     });
 
-    it('raises the estimate floor to the seller floor', async () => {
+    it('clamps the estimate start price but keeps the floor price Hermes reported', async () => {
       const proposals = await priceProposals(60, 70);
-      expect(proposals[0].change).toMatchObject({ estimate: { startPrice: 70, floorPrice: 70 } });
+      expect(proposals[0].change).toMatchObject({ estimate: { startPrice: 70, floorPrice: 60 } });
     });
 
     it('does not clamp a price increase', async () => {

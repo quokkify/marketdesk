@@ -77,6 +77,17 @@ class FakeConversations {
     return started;
   }
 
+  async stopRetentionForListing(listingId: string, workspaceId: string): Promise<number> {
+    let stopped = 0;
+    for (const t of this.threads.values()) {
+      if (t.listingId !== listingId || t.workspaceId !== workspaceId) continue;
+      if (!t.retentionStartsAt && !t.textPurgedAt) continue;
+      this.threads.set(t.id, { ...t, retentionStartsAt: null, textPurgedAt: null });
+      stopped += 1;
+    }
+    return stopped;
+  }
+
   byExternalId(id: string): ConversationMessage {
     const message = this.messages.find((m) => m.externalMessageId === id);
     if (!message) throw new Error(`no message ${id}`);
@@ -105,13 +116,17 @@ const buyer = (id: string, minute: number, text = `buyer ${id}`): MarketplaceMes
 const seller = (id: string, minute: number): MarketplaceMessage =>
   ({ externalMessageId: id, direction: 'seller', text: `seller ${id}`, sentAt: at(minute) });
 
-function adapterWith(threads: MarketplaceThread[], messages: Record<string, MarketplaceMessage[]>) {
+function adapterWith(
+  threads: MarketplaceThread[],
+  messages: Record<string, MarketplaceMessage[]>,
+  skipped: Record<string, number> = {},
+) {
   return {
     listThreads: jest.fn(async () => threads),
     listThreadMessages: jest.fn(async (id: string) => {
       const found = messages[id];
       if (!found) throw new Error(`thread ${id} unreadable`);
-      return found;
+      return { messages: found, fetchedCount: found.length + (skipped[id] ?? 0) };
     }),
   };
 }
@@ -140,6 +155,7 @@ async function setup(options: { productStatus?: ProductStatus } = {}) {
     products,
     replyQueue: queue,
     now: () => NOW,
+    maxMessageAgeDays: 14,
     onThreadFailure: (failure) => failures.push(failure),
   });
   return { conversations, queue, service, failures };
@@ -171,8 +187,8 @@ describe('ConversationSyncService', () => {
       { data: { workspaceId: WORKSPACE, threadId: 't1', messageId: newestA.id }, options: { jobId: `reply:${newestA.id}` } },
       { data: { workspaceId: WORKSPACE, threadId: 't2', messageId: newestB.id }, options: { jobId: `reply:${newestB.id}` } },
     ]);
-    // One transaction per thread.
-    expect(conversations.transactions).toEqual(['begin', 'commit', 'begin', 'commit']);
+    // One transaction for the listing's retention, then one per thread.
+    expect(conversations.transactions).toEqual(['begin', 'commit', 'begin', 'commit', 'begin', 'commit']);
   });
 
   it('queues nothing and supersedes nothing on a resync once the message has a draft', async () => {
@@ -328,6 +344,53 @@ describe('ConversationSyncService', () => {
     expect(adapter.listThreads).not.toHaveBeenCalled();
     expect(conversations.threads.size).toBe(0);
     expect(queue.jobs).toEqual([]);
+  });
+
+  it('stopsRetentionWhenListingIsLiveAgain', async () => {
+    const { conversations, service } = await setup();
+    const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
+    await service.syncListing(listing({ status: 'expired' }), adapter);
+    const stored = conversations.threads.get('t1')!;
+    conversations.threads.set('t1', { ...stored, textPurgedAt: NOW });
+    expect(stored.retentionStartsAt).toEqual(NOW);
+
+    await service.syncListing(listing(), adapter);
+
+    expect(conversations.threads.get('t1')?.retentionStartsAt).toBeNull();
+    expect(conversations.threads.get('t1')?.textPurgedAt).toBeNull();
+  });
+
+  it('keeps retention for a live listing of a sold product', async () => {
+    const { conversations, service } = await setup({ productStatus: 'sold' });
+    const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
+    await service.syncListing(listing(), adapter);
+    await service.syncListing(listing(), adapter);
+    expect(conversations.threads.get('t1')?.retentionStartsAt).toEqual(NOW);
+  });
+
+  it('countsSkippedMessagesTowardsTheTotal', async () => {
+    const { conversations, queue, service } = await setup();
+    // OLX counts an attachment-only message the adapter does not return as text.
+    const adapter = adapterWith([thread('a', 3)], { a: [buyer('a1', 1), buyer('a3', 3)] }, { a: 1 });
+
+    await service.syncListing(listing(), adapter);
+
+    expect(queue.jobs.map((j) => j.data.messageId)).toEqual([conversations.byExternalId('a3').id]);
+  });
+
+  it('queuesNoRunForAnOldBuyerMessage', async () => {
+    const { conversations, queue, service } = await setup();
+    const old = new Date(NOW.getTime() - 15 * 24 * 60 * 60 * 1000);
+    const recent = new Date(NOW.getTime() - 13 * 24 * 60 * 60 * 1000);
+    const adapter = adapterWith([thread('a'), thread('b')], {
+      a: [{ externalMessageId: 'a1', direction: 'buyer', text: 'old', sentAt: old }],
+      b: [{ externalMessageId: 'b1', direction: 'buyer', text: 'recent', sentAt: recent }],
+    });
+
+    expect(await service.syncListing(listing(), adapter)).toEqual({ newBuyerMessages: 2 });
+
+    expect(conversations.messages.map((m) => m.externalMessageId)).toEqual(['a1', 'b1']);
+    expect(queue.jobs.map((j) => j.data.messageId)).toEqual([conversations.byExternalId('b1').id]);
   });
 
   it('reads no threads with an adapter that cannot', async () => {

@@ -49,6 +49,11 @@ describe('validateDraft', () => {
     expect(rule('Zobacz https://www.olx.pl/d/oferta/1')).toBe('link');
     expect(rule('Zobacz example[.]com')).toBe('link');
   });
+  it('rejectsSoftHyphenatedLink', () => {
+    const softHyphen = String.fromCharCode(0x00ad);
+    expect(rule(`Zobacz example${softHyphen}.com`)).toBe('link');
+    expect(rule(`Zobacz exam${softHyphen}ple.com/x`)).toBe('link');
+  });
   it('rejectsPhone', () => {
     expect(rule('Zadzwoń +48 600 100 200')).toBe('contact');
     expect(rule('Телефон 050-123-45-67 8')).toBe('contact');

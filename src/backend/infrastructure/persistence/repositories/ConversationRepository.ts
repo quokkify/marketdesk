@@ -216,6 +216,17 @@ export class ConversationRepository implements IConversationRepository {
     return rowCount;
   }
 
+  async stopRetentionForListing(listingId: string, workspaceId: string): Promise<number> {
+    const { rowCount } = await query(
+      `UPDATE conversation_threads SET retention_starts_at = NULL, text_purged_at = NULL, updated_at = now()
+        WHERE listing_id = $1 AND workspace_id = $2
+          AND (retention_starts_at IS NOT NULL OR text_purged_at IS NOT NULL)`,
+      [listingId, workspaceId],
+      this.queryClient,
+    );
+    return rowCount;
+  }
+
   async recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]> {
     const { rows } = await query<MessageRow>(
       'SELECT * FROM conversation_messages WHERE thread_id = $1 ORDER BY sent_at DESC, id LIMIT $2',

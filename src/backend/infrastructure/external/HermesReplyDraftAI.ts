@@ -1,5 +1,7 @@
 // Hermes-backed buyer-reply drafting. The thread goes in as a <buyer_thread> data block, the
 // answer is parsed against strict schemas, and no prompt or model text ever reaches an error.
+// Calls are stateless: no Hermes session key, so buyer text is never kept server-side beyond the
+// retention period; each call sends the recent thread again.
 
 import type { BuyerIntent } from '../../domain/conversations/types';
 import type { IReplyDraftAI, ReplyClassification, ReplyContext, ReplyDraftResult } from '../../domain/ports/IReplyDraftAI';
@@ -34,7 +36,6 @@ export class HermesReplyDraftAI implements IReplyDraftAI {
         },
         required: ['intent', 'confidence'],
       },
-      sessionKey: sessionKey(ctx),
     }));
     const parsed = replyClassifyOutputSchema.safeParse(parseJsonObject(raw));
     if (parsed.success) return { ...parsed.data, source: 'hermes' };
@@ -59,14 +60,9 @@ export class HermesReplyDraftAI implements IReplyDraftAI {
         },
         required: ['reply', 'counterOffer', 'proposedPrice'],
       },
-      sessionKey: sessionKey(ctx),
     }));
     const parsed = replyDraftOutputSchema.safeParse(parseJsonObject(raw));
     if (parsed.success) return { ...parsed.data, source: 'hermes' };
     throw new Error('Hermes buyer-reply draft failed strict schema validation');
   }
-}
-
-function sessionKey(ctx: ReplyContext): string {
-  return `marketdesk:buyer-reply:${ctx.threadId}`;
 }

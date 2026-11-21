@@ -132,7 +132,23 @@ describe('threadPanel', () => {
   it('explains a failed draft with the rule label and offers regenerate', () => {
     expect(
       threadPanel(thread({ draft: { ...draft('failed'), text: null, failureReason: 'link' } }))
-    ).toEqual({ kind: 'failed', message: "Hermes couldn't write a safe reply (it contains a link)." });
+    ).toEqual({ kind: 'failed', message: "Couldn't write a safe reply (it contains a link)." });
+  });
+
+  it('names no AI source for a failed draft', () => {
+    expect(threadPanel(thread({ draft: { ...draft('failed'), text: null, offline: true } }))).toEqual({
+      kind: 'failed',
+      message: "Couldn't write a safe reply.",
+    });
+  });
+
+  it('unclearSendIsNotAWritingFailure', () => {
+    expect(
+      threadPanel(thread({ draft: { ...draft('failed'), failureReason: 'unclear_send' } }))
+    ).toEqual({
+      kind: 'unclear_send',
+      message: "We couldn't confirm the reply reached OLX. Check the conversation on OLX before replying again.",
+    });
   });
 
   it('says no draft yet when the buyer wrote last and nothing is active', () => {

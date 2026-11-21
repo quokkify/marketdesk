@@ -161,7 +161,7 @@ export class ReplySendService {
 
     let remote: MarketplaceMessage[];
     try {
-      remote = await messenger.listThreadMessages(thread.externalThreadId);
+      ({ messages: remote } = await messenger.listThreadMessages(thread.externalThreadId));
     } catch {
       await this.release(owned);
       throw new ServiceUnavailableError('OLX is not answering right now; try again shortly');
@@ -192,7 +192,7 @@ export class ReplySendService {
     } else {
       // OLX documents no response body, so the id is learned from the thread; it may stay unknown.
       try {
-        const after = await messenger.listThreadMessages(thread.externalThreadId);
+        const { messages: after } = await messenger.listThreadMessages(thread.externalThreadId);
         await this.store(thread.id, after);
         externalMessageId = reconciledMessage({ text: input.text, startedAt }, after)?.externalMessageId ?? null;
       } catch {
@@ -278,7 +278,7 @@ export class ReplySendService {
     if (!draft.sentText || !draft.attemptStartedAt) return { kind: 'rejected', code: 'unclear_send' };
     let remote: MarketplaceMessage[];
     try {
-      remote = await messenger.listThreadMessages(thread.externalThreadId);
+      ({ messages: remote } = await messenger.listThreadMessages(thread.externalThreadId));
     } catch {
       return { kind: 'rejected', code: 'unclear_send' };
     }
@@ -305,7 +305,7 @@ export class ReplySendService {
     }
     let found: MarketplaceMessage | null = null;
     try {
-      const remote = await messenger.listThreadMessages(thread.externalThreadId);
+      const { messages: remote } = await messenger.listThreadMessages(thread.externalThreadId);
       await this.store(thread.id, remote);
       found = reconciledMessage(attempt, remote);
     } catch {

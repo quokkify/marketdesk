@@ -7,7 +7,7 @@ import type {
   ReplyDraftPatch,
 } from '../../../domain/repositories/interfaces/IConversationRepository';
 import type { ActivityLogEntry } from '../../../domain/repositories/interfaces/IActivityLogRepository';
-import type { MarketplaceMessage } from '../../../domain/services/MarketplaceAdapter';
+import type { MarketplaceMessage, MarketplaceThreadMessages } from '../../../domain/services/MarketplaceAdapter';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { InMemoryProductRepository, money, unwrap } from '../../../domain/testkit/support';
 import type { ConversationReplyJob, IJobQueue, JobEnqueueOptions } from '../../ports/IJobQueue';
@@ -96,12 +96,12 @@ class FakeMessenger implements ThreadMessenger {
   sendError: Error | null = null;
   returnId = true;
 
-  async listThreadMessages(): Promise<MarketplaceMessage[]> {
+  async listThreadMessages(): Promise<MarketplaceThreadMessages> {
     if (this.failReads > 0) {
       this.failReads -= 1;
       throw new Error('read failed');
     }
-    return [...this.remote];
+    return { messages: [...this.remote], fetchedCount: this.remote.length };
   }
 
   async sendThreadMessage(_thread: string, text: string): Promise<{ externalMessageId: string | null }> {
