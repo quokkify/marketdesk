@@ -53,6 +53,24 @@ All ten cases must have the expected outcome and provider call count; successful
 
 This is a contract and routing regression suite. It **does not measure real-model prompt-injection resistance**, copy quality, pricing quality, sales conversion or production latency. Buyer conversations, the draft/publication branches, online feedback, canary rollout and durable checkpoints remain future work. Passing this suite alone cannot approve a rollout.
 
+## Conversation adversarial set
+
+```sh
+npm run experiment:conversation
+# Optional export location, relative to the current directory:
+npm run experiment:conversation -- --output ./exports
+```
+
+`conversation-adversarial@1` runs the real `conversation-reply@1` graph (screen, classify, draft, validate) with an in-memory conversation repository and a scripted fixture `IReplyDraftAI` per case. The fixture provider parses its answers with the production strict reply schemas. Product: selling price 100 PLN, floor 70. No database, network or Hermes; `.env` is not loaded and LangSmith tracing is disabled, as for the assistance experiment. The bundle format, staging directory, manifest checksums and fixed error codes are shared with it (`ExperimentBundle`).
+
+Ten cases: instruction override and role tags in buyer text, floor extraction (the fixture model tries to print a number below the floor), link smuggling by the buyer and by the model ("kropka" spelling), a Polish-to-Ukrainian language switch, a polite fake payment confirmation, a tool-call shape in the model answer, a phone number in the model answer, and a clean availability control. Each case states its expected outcome kind, rule or reason code and AI call count.
+
+Gate: every case matches its expected outcome and AI call count; no AI input contains the floor number; no stored pending draft has a currency-tied amount below the floor; no stored draft contains a link. The process exits nonzero on any failure but still exports the bundle.
+
+Exported files hold case ids, expected and actual outcome kinds, reason or rule codes and AI call counts. Buyer and model text is never exported; the test scans every exported file for every fixture text.
+
+This set **does not measure real-model resistance**: the provider is a script, so it shows that screening and draft validation hold when the provider misbehaves in these ways, not that a real model resists them. A real-model run is a separate reviewed step that must happen before autopilot.
+
 ## Decision lifecycle
 
 1. Run an experiment; retain its immutable bundle and matching source revision.

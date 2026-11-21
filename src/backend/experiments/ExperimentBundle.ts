@@ -19,14 +19,55 @@ const limitations = [
   'Timing measures local fixture execution, not production model latency.',
 ];
 
-function json(value: unknown): string {
+export function json(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
-function jsonl(values: unknown[]): string {
+export function jsonl(values: unknown[]): string {
   return values.map((value) => JSON.stringify(value)).join('\n') + (values.length ? '\n' : '');
 }
 export function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+export function assertProvenance(provenance: ExperimentProvenance): void {
+  if (
+    !/^[a-f0-9]{40}$/.test(provenance.commit) ||
+    Object.keys(provenance.sourceSha256).length === 0 ||
+    Object.values(provenance.sourceSha256).some((hash) => !/^[a-f0-9]{64}$/.test(hash))
+  ) {
+    throw new Error('Valid source provenance is required');
+  }
+}
+
+// Adds manifest.json (with checksums of every other file) and writes the bundle through a
+// staging directory so a failure never leaves an apparently complete bundle.
+export async function writeBundleFiles(
+  outputRoot: string,
+  experimentId: string,
+  files: Record<string, string>,
+  manifest: Record<string, unknown>
+): Promise<string> {
+  files['manifest.json'] = json({
+    ...manifest,
+    files: Object.fromEntries(
+      Object.entries(files).map(([name, content]) => [name, { sha256: sha256(content) }])
+    ),
+  });
+  await mkdir(outputRoot, { recursive: true });
+  const staging = join(outputRoot, `.${experimentId}.partial`);
+  const destination = join(outputRoot, experimentId);
+  await mkdir(staging);
+  try {
+    await mkdir(join(staging, 'decision'));
+    for (const [name, content] of Object.entries(files)) {
+      await writeFile(join(staging, name), content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    }
+    await rename(staging, destination);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    throw error;
+  }
+  return destination;
 }
 
 // This entry point cannot accept raw traces or external datasets: only built-in synthetic
@@ -35,13 +76,7 @@ export async function writeAssistanceExperiment(
   outputRoot: string,
   provenance: ExperimentProvenance
 ) {
-  if (
-    !/^[a-f0-9]{40}$/.test(provenance.commit) ||
-    Object.keys(provenance.sourceSha256).length === 0 ||
-    Object.values(provenance.sourceSha256).some((hash) => !/^[a-f0-9]{64}$/.test(hash))
-  ) {
-    throw new Error('Valid source provenance is required');
-  }
+  assertProvenance(provenance);
   const experimentId = randomUUID();
   const createdAt = new Date().toISOString();
   const results = await runAssistanceExperiment();
@@ -136,7 +171,7 @@ export async function writeAssistanceExperiment(
     [`decision/decision-${experimentId}.json`]: json(decision),
     [`decision/decision-${experimentId}.md`]: `# Decision draft ${experimentId} · v1\n\nStatus: pending-review. Owner: unassigned. Approval: none.\n\n## Hypothesis\n\n${decision.hypothesis}\n\n## Evidence\n\nExperiment: ${experimentId}. Recipe: ${experimentRecipe.id}. Gate: ${evaluation.gate}; ${passed}/${results.length} passed. See ../evaluation.json and ../security-findings.md.\n\n## Decision\n\n${decision.decision}\n\nRejected alternative: automatic promotion from fixture results.\n\n## Required analysis\n\n${decision.nextStep}\n\nNo graph changes or new regression cases have been approved by this draft. Keep the experiment immutable; create a new versioned decision for reviewed conclusions.\n`,
   };
-  files['manifest.json'] = json({
+  const destination = await writeBundleFiles(outputRoot, experimentId, files, {
     schemaVersion: 1,
     experimentId,
     createdAt,
@@ -144,24 +179,7 @@ export async function writeAssistanceExperiment(
     environment: 'local-offline-synthetic',
     provenance,
     recipe: experimentRecipe,
-    files: Object.fromEntries(
-      Object.entries(files).map(([name, content]) => [name, { sha256: sha256(content) }])
-    ),
   });
-  await mkdir(outputRoot, { recursive: true });
-  const staging = join(outputRoot, `.${experimentId}.partial`);
-  const destination = join(outputRoot, experimentId);
-  await mkdir(staging);
-  try {
-    await mkdir(join(staging, 'decision'));
-    for (const [name, content] of Object.entries(files)) {
-      await writeFile(join(staging, name), content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-    }
-    await rename(staging, destination);
-  } catch (error) {
-    await rm(staging, { recursive: true, force: true });
-    throw error;
-  }
   return {
     directory: destination,
     experimentId,
