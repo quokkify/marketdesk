@@ -24,6 +24,14 @@ export interface IAuthUserStore {
   create(input: CreateAuthUserInput): Promise<AuthUserRecord>;
   /** Returns the new version; rejects NotFoundError when the user does not exist. */
   bumpTokenVersion(userId: string): Promise<number>;
-  /** Sets the hash and bumps the version; returns the new version; rejects NotFoundError. */
-  updatePassword(userId: string, passwordHash: string): Promise<number>;
+  /**
+   * Sets the hash and bumps the version, only while the stored version still equals
+   * `expectedVersion`. Returns the new version, or null when the version moved meanwhile (the
+   * session was revoked) and nothing changed; rejects NotFoundError when the user is missing.
+   */
+  updatePassword(
+    userId: string,
+    passwordHash: string,
+    expectedVersion: number,
+  ): Promise<number | null>;
 }

@@ -175,12 +175,14 @@ describeDb('AuthUserRepository / PriceHistoryRepository (integration)', () => {
     expect((await repo.findById(created.id))?.tokenVersion).toBe(0);
     expect(await repo.bumpTokenVersion(created.id)).toBe(1);
     expect(await repo.bumpTokenVersion(created.id)).toBe(2);
-    expect(await repo.updatePassword(created.id, 'h2')).toBe(3);
+    expect(await repo.updatePassword(created.id, 'h2', 2)).toBe(3);
     const after = await repo.findById(created.id);
     expect(after?.passwordHash).toBe('h2');
     expect(after?.tokenVersion).toBe(3);
     await expect(repo.bumpTokenVersion(randomUUID())).rejects.toBeInstanceOf(NotFoundError);
-    await expect(repo.updatePassword(randomUUID(), 'h3')).rejects.toBeInstanceOf(NotFoundError);
+    expect(await repo.updatePassword(created.id, 'h4', 2)).toBeNull();
+    expect((await repo.findById(created.id))?.passwordHash).toBe('h2');
+    await expect(repo.updatePassword(randomUUID(), 'h3', 0)).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('returns an empty price history for an unknown listing', async () => {

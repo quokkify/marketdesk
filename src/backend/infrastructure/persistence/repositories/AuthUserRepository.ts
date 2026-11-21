@@ -93,15 +93,20 @@ export class AuthUserRepository implements IAuthUserStore {
     return rows[0].token_version;
   }
 
-  async updatePassword(userId: string, passwordHash: string): Promise<number> {
+  async updatePassword(
+    userId: string,
+    passwordHash: string,
+    expectedVersion: number,
+  ): Promise<number | null> {
     const { rows } = await query<{ token_version: number }>(
       `UPDATE users SET password_hash = $2, token_version = token_version + 1
-       WHERE id = $1
+       WHERE id = $1 AND token_version = $3
        RETURNING token_version`,
-      [userId, passwordHash],
+      [userId, passwordHash, expectedVersion],
       this.queryClient,
     );
-    if (!rows[0]) throw new NotFoundError(`User ${userId} not found`);
-    return rows[0].token_version;
+    if (rows[0]) return rows[0].token_version;
+    if (!(await this.findById(userId))) throw new NotFoundError(`User ${userId} not found`);
+    return null;
   }
 }

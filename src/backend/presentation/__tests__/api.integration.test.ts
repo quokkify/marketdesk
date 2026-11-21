@@ -1197,6 +1197,22 @@ describe('Presentation API', () => {
       expect((await request(app).get('/api/products').set(bearerOf(a))).status).toBe(200);
     });
 
+    it('refuses the change when the session was revoked after it was checked', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const a = await loginToken(app);
+      const original = authUserStore.updatePassword.bind(authUserStore);
+      authUserStore.updatePassword = jest.fn(async (userId, hash, expectedVersion) => {
+        await authUserStore.bumpTokenVersion(userId);
+        return original(userId, hash, expectedVersion);
+      });
+
+      const res = await change(app, a, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toBe('Session has been revoked');
+      expect(authUserStore.users[0].passwordHash).not.toBe(changed);
+    });
+
     it('validates the new password', async () => {
       const { app } = await buildTestApp();
       const a = await loginToken(app);

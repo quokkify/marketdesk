@@ -167,7 +167,18 @@ export class AuthController {
       return;
     }
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-    const tokenVersion = await this.users.updatePassword(user.id, passwordHash);
+    const tokenVersion = await this.users.updatePassword(
+      user.id,
+      passwordHash,
+      user.tokenVersion,
+    );
+    if (tokenVersion === null) {
+      fail(res, undefined, 401, {
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Session has been revoked',
+      });
+      return;
+    }
     const token = signToken({
       userId: user.id,
       workspaceId: user.workspaceId ?? undefined,

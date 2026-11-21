@@ -34,9 +34,16 @@ export class InMemoryAuthStore implements IAuthUserStore {
     user.tokenVersion += 1;
     return user.tokenVersion;
   }
-  async updatePassword(userId: string, passwordHash: string): Promise<number> {
-    const version = await this.bumpTokenVersion(userId);
-    this.users.find((u) => u.id === userId)!.passwordHash = passwordHash;
-    return version;
+  async updatePassword(
+    userId: string,
+    passwordHash: string,
+    expectedVersion: number,
+  ): Promise<number | null> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) throw new NotFoundError(`User ${userId} not found`);
+    if (user.tokenVersion !== expectedVersion) return null;
+    user.passwordHash = passwordHash;
+    user.tokenVersion += 1;
+    return user.tokenVersion;
   }
 }
