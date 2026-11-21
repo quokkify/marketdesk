@@ -50,15 +50,26 @@ export function moveProductImage(images: string[], from: number, to: number): st
   return next;
 }
 
-export function selectProductImageFiles(
+export function selectProductImageFiles(files: File[]): {
+  accepted: File[];
+  rejectedNames: string[];
+} {
+  return {
+    accepted: files.filter((file) => ACCEPTED_TYPES.has(file.type)),
+    rejectedNames: files.filter((file) => !ACCEPTED_TYPES.has(file.type)).map((file) => file.name),
+  };
+}
+
+export function unsupportedFilesNotice(rejectedNames: string[]): string | null {
+  return rejectedNames.length > 0 ? `Skipped unsupported files: ${rejectedNames.join(', ')}` : null;
+}
+
+export function limitProductImageFiles(
   files: File[],
   available: number
 ): { selected: File[]; error?: string } {
   if (available <= 0) return { selected: [], error: 'The 12-photo limit has been reached.' };
   const selected = files.slice(0, available);
-  if (selected.some((file) => !ACCEPTED_TYPES.has(file.type))) {
-    return { selected: [], error: 'Only JPEG, PNG, and WebP photos are supported.' };
-  }
   return files.length > available
     ? {
         selected,
@@ -82,10 +93,12 @@ export const ProductImageUploader: React.FC<ProductImageUploaderProps> = ({
   const [dragging, setDragging] = useState(false);
 
   const uploadFiles = async (files: File[]) => {
-    setUploadError(null);
+    const { accepted, rejectedNames } = selectProductImageFiles(files);
     const available = Math.max(0, maxImages - images.length);
-    const selection = selectProductImageFiles(files, available);
-    setUploadError(selection.error ?? null);
+    const selection =
+      accepted.length > 0 ? limitProductImageFiles(accepted, available) : { selected: [] };
+    const notices = [unsupportedFilesNotice(rejectedNames), selection.error].filter(Boolean);
+    setUploadError(notices.length > 0 ? notices.join(' ') : null);
     if (selection.selected.length === 0) return;
 
     const uploaded: string[] = [];
@@ -115,7 +128,9 @@ export const ProductImageUploader: React.FC<ProductImageUploaderProps> = ({
       onChange(images.filter((_image, current) => current !== index));
     } catch (caught) {
       const failure = caught as { data?: { error?: { message?: string } }; message?: string };
-      setUploadError(failure.data?.error?.message ?? failure.message ?? 'Could not remove the photo.');
+      setUploadError(
+        failure.data?.error?.message ?? failure.message ?? 'Could not remove the photo.'
+      );
     }
   };
 
@@ -163,7 +178,7 @@ export const ProductImageUploader: React.FC<ProductImageUploaderProps> = ({
           onChange={(event) => void uploadFiles(Array.from(event.target.files ?? []))}
         />
         <AddPhotoAlternateOutlinedIcon color="primary" sx={{ fontSize: 36 }} />
-        <Typography variant="subtitle2">Drop photos here or choose files</Typography>
+        <Typography variant="subtitle2">Take or choose photos</Typography>
         <Typography variant="caption" color="text.secondary">
           JPEG, PNG or WebP · up to {maxImages} photos · first photo is the cover
         </Typography>

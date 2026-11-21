@@ -13,6 +13,7 @@ import {
   resolveJwtSecret,
   resolveOlxAdapterMode,
   resolvePublicBaseUrl,
+  resolveRegistrationEnabled,
   type OlxAdapterMode,
 } from '../env';
 
@@ -72,6 +73,22 @@ describe('resolveOlxAdapterMode', () => {
     expect(resolveOlxAdapterMode('  ')).toBe('stub');
     expect(resolveOlxAdapterMode('stub')).toBe('stub');
     expect(resolveOlxAdapterMode(' real ')).toBe('real');
+  });
+});
+
+// Regression guard (2026-11-20 audit): registration can be switched off, and an unset value keeps
+// the previous behaviour, open registration.
+describe('resolveRegistrationEnabled', () => {
+  it.each([undefined, '', '  ', 'true', ' TRUE '])('keeps registration open for %p', (value) => {
+    expect(resolveRegistrationEnabled(value)).toBe(true);
+  });
+
+  it('switches registration off for false', () => {
+    expect(resolveRegistrationEnabled(' false ')).toBe(false);
+  });
+
+  it.each(['no', '0', 'off', 'yes'])('rejects %p', (value) => {
+    expect(() => resolveRegistrationEnabled(value)).toThrow(/REGISTRATION_ENABLED/);
   });
 });
 

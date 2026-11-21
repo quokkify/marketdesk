@@ -3,6 +3,7 @@ import type {
   OlxOAuthTokens,
 } from '../../application/services/MarketplaceOAuthService';
 import { ConfigurationError } from '../../domain/shared/DomainError';
+import { secretRegistry } from '../runRecorder/SecretRegistry';
 
 interface OlxOAuthClientConfig {
   authorizationUrl: string;
@@ -119,6 +120,10 @@ export class OlxOAuthClient implements OlxOAuthClientPort {
       }
       if (typeof payload.access_token !== 'string' || !payload.access_token) {
         throw new Error('OLX token response did not include an access token');
+      }
+      secretRegistry.register(payload.access_token, 'SECRET:olx-token');
+      if (typeof payload.refresh_token === 'string') {
+        secretRegistry.register(payload.refresh_token, 'SECRET:olx-token');
       }
       const expiresIn = Number(payload.expires_in ?? 3600);
       if (!Number.isFinite(expiresIn) || expiresIn <= 0) {

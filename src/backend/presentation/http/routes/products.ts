@@ -1,7 +1,7 @@
 // Product routes (§18 REST conventions). Auth is applied by the API router when this
 // is mounted; validation is applied on writes.
 
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import type { ProductController } from '../controllers/ProductController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
@@ -14,15 +14,21 @@ import {
   updateProductSchema,
 } from '../validation/schemas';
 
-export function createProductRoutes(controller: ProductController): Router {
+const passthrough: RequestHandler = (_req, _res, next) => next();
+
+// aiLimiter guards the routes that call the AI provider (see aiRateLimiter).
+export function createProductRoutes(
+  controller: ProductController,
+  aiLimiter: RequestHandler = passthrough
+): Router {
   const router = Router();
   router.get('/', asyncHandler(controller.list));
   router.post('/', validateBody(createProductSchema), asyncHandler(controller.create));
-  router.post('/ai-draft', validateBody(productAIDraftSchema), asyncHandler(controller.generateAIDraft));
+  router.post('/ai-draft', aiLimiter, validateBody(productAIDraftSchema), asyncHandler(controller.generateAIDraft));
   router.get('/:id', asyncHandler(controller.get));
   router.patch('/:id', validateBody(updateProductSchema), asyncHandler(controller.update));
-  router.post('/:id/recheck', validateBody(productRecheckSchema), asyncHandler(controller.recheck));
-  router.post('/:id/improvements', validateBody(productImprovementSchema), asyncHandler(controller.proposeImprovements));
+  router.post('/:id/recheck', aiLimiter, validateBody(productRecheckSchema), asyncHandler(controller.recheck));
+  router.post('/:id/improvements', aiLimiter, validateBody(productImprovementSchema), asyncHandler(controller.proposeImprovements));
   router.delete('/:id', asyncHandler(controller.remove));
   router.get('/:id/listings', asyncHandler(controller.getListings));
   router.post('/:id/listings', validateBody(createListingSchema), asyncHandler(controller.createListing));

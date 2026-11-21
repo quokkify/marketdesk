@@ -3,6 +3,7 @@ import {
   PRODUCT_WIZARD_DRAFT_MAX_AGE_MS,
   hasMeaningfulProductWizardDraft,
   productWizardDraftStorageKey,
+  productWizardTabId,
   readProductWizardDraft,
   removeProductWizardDraft,
   writeProductWizardDraft,
@@ -28,8 +29,20 @@ class MemoryStorage {
 function draft(): ProductWizardDraftState {
   return {
     values: { ...emptyProductValues(), name: 'Saved camera', images: ['camera.jpg'] },
-    activeStep: 2,
+    activeStep: 1,
     targetMarketplace: 'olx',
+    olxCategory: { providerCategoryId: '123', name: 'Cameras', path: ['Electronics', 'Cameras'] },
+    createdProductId: null,
+  };
+}
+
+function validValues() {
+  return {
+    ...emptyProductValues(),
+    name: 'Camera',
+    description: 'Camera in good condition with all required product details.',
+    sellingPrice: 100,
+    images: ['camera.jpg'],
   };
 }
 
@@ -45,7 +58,7 @@ describe('product wizard draft persistence', () => {
       ...draft(),
       values: { ...draft().values, name: 'Updated in another tab' },
     };
-    storage.setItem(key, JSON.stringify({ ...newerDraft, version: 1, updatedAt: 1_500 }));
+    storage.setItem(key, JSON.stringify({ ...newerDraft, version: 2, updatedAt: 1_500 }));
     expect(readProductWizardDraft(storage, key, 2_000)).toEqual(newerDraft);
     expect(key).toContain('workspace%2F1');
     expect(key).toContain('user%40example.com');
@@ -61,10 +74,10 @@ describe('product wizard draft persistence', () => {
     storage.setItem(key, JSON.stringify({ ...draft(), version: 99, updatedAt: 1_000 }));
     expect(readProductWizardDraft(storage, key, 10_000)).toBeNull();
 
-    storage.setItem(key, JSON.stringify({ ...draft(), version: 1, updatedAt: 80_001 }));
+    storage.setItem(key, JSON.stringify({ ...draft(), version: 2, updatedAt: 80_001 }));
     expect(readProductWizardDraft(storage, key, 10_000)).toBeNull();
 
-    storage.setItem(key, JSON.stringify({ ...draft(), version: 1, updatedAt: 1_000 }));
+    storage.setItem(key, JSON.stringify({ ...draft(), version: 2, updatedAt: 1_000 }));
     expect(
       readProductWizardDraft(storage, key, 1_000 + PRODUCT_WIZARD_DRAFT_MAX_AGE_MS + 1)
     ).toBeNull();
@@ -78,7 +91,7 @@ describe('product wizard draft persistence', () => {
       JSON.stringify({
         ...draft(),
         values: { ...draft().values, images: ['valid.jpg', 42] },
-        version: 1,
+        version: 2,
         updatedAt: 1_000,
       })
     );
@@ -94,9 +107,113 @@ describe('product wizard draft persistence', () => {
         values: emptyProductValues(),
         activeStep: 0,
         targetMarketplace: null,
+        olxCategory: null,
+        createdProductId: null,
       })
     ).toBe(false);
     expect(hasMeaningfulProductWizardDraft(draft())).toBe(true);
+    const empty = {
+      values: emptyProductValues(),
+      activeStep: 0 as const,
+      targetMarketplace: null,
+      olxCategory: null,
+      createdProductId: null,
+    };
+    expect(hasMeaningfulProductWizardDraft({ ...empty, olxCategory: draft().olxCategory })).toBe(
+      true
+    );
+    // A remembered product alone is no reason to keep or offer a draft.
+    expect(hasMeaningfulProductWizardDraft({ ...empty, createdProductId: 'p1' })).toBe(false);
+  });
+
+  it('keeps the id of the tab that created the product', () => {
+    const storage = new MemoryStorage();
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    const created = { ...draft(), createdProductId: 'p1', createdByTabId: 'tab-a' };
+
+    writeProductWizardDraft(storage, key, created, 1_000);
+
+    expect(readProductWizardDraft(storage, key, 2_000)).toEqual(created);
+  });
+
+  it('loads a version 2 draft stored before drafts named their tab', () => {
+    const storage = new MemoryStorage();
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    storage.setItem(
+      key,
+      JSON.stringify({ ...draft(), createdProductId: 'p1', version: 2, updatedAt: 1_000 })
+    );
+
+    const restored = readProductWizardDraft(storage, key, 2_000);
+
+    expect(restored).toMatchObject({ createdProductId: 'p1' });
+    expect(restored?.createdByTabId).toBeUndefined();
+  });
+
+  it('converts a six-step draft to the review screen', () => {
+    const storage = new MemoryStorage();
+    const now = 5_000;
+    const v1Key = 'marketdesk.productWizardDraft.v1.w1.u1';
+    storage.setItem(
+      v1Key,
+      JSON.stringify({
+        version: 1,
+        updatedAt: now,
+        activeStep: 5,
+        targetMarketplace: 'olx',
+        values: { ...validValues(), sku: 'CAM-001', category: 'Electronics' },
+      })
+    );
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    const draft = readProductWizardDraft(storage, key, now);
+    expect(draft).toMatchObject({ activeStep: 1, olxCategory: null, createdProductId: null });
+    expect(draft?.values.sku).toBe('CAM-001');
+    expect(draft?.values.category).toBe('Electronics');
+    expect(storage.getItem(v1Key)).toBeNull();
+    expect(JSON.parse(storage.getItem(key)!)).toMatchObject({ version: 2, activeStep: 1 });
+    expect(readProductWizardDraft(storage, key, now)).toEqual(draft);
+  });
+
+  it('keeps a version 1 draft on the photos screen at step 0', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      'marketdesk.productWizardDraft.v1.w1.u1',
+      JSON.stringify({
+        version: 1,
+        updatedAt: 1_000,
+        activeStep: 0,
+        targetMarketplace: null,
+        values: validValues(),
+      })
+    );
+    expect(
+      readProductWizardDraft(storage, productWizardDraftStorageKey('w1', 'u1'), 2_000)
+    ).toMatchObject({ activeStep: 0, targetMarketplace: null });
+  });
+
+  it('rejects a stored activeStep above 1', () => {
+    const storage = new MemoryStorage();
+    const key = productWizardDraftStorageKey('w1', 'u1');
+    storage.setItem(
+      key,
+      JSON.stringify({ ...draft(), activeStep: 2, version: 2, updatedAt: 1_000 })
+    );
+    expect(readProductWizardDraft(storage, key, 2_000)).toBeNull();
+  });
+
+  it('rejects a malformed stored OLX category', () => {
+    const storage = new MemoryStorage();
+    const key = 'draft';
+    storage.setItem(
+      key,
+      JSON.stringify({
+        ...draft(),
+        olxCategory: { providerCategoryId: '123', name: 'Cameras', path: 'Electronics' },
+        version: 2,
+        updatedAt: 1_000,
+      })
+    );
+    expect(readProductWizardDraft(storage, key, 2_000)).toBeNull();
   });
 
   it('falls back to an isolated session draft when browser storage is unavailable', () => {
@@ -128,5 +245,37 @@ describe('product wizard draft persistence', () => {
     expect(readProductWizardDraft(null, key)).toEqual(draft());
     expect(removeProductWizardDraft(null, key)).toBe(false);
     expect(readProductWizardDraft(null, key)).toBeNull();
+  });
+});
+
+describe('product wizard tab id', () => {
+  it('keeps one id per tab across reloads and gives another tab its own', () => {
+    const tabA = new MemoryStorage();
+    const tabB = new MemoryStorage();
+    let next = 0;
+    const newId = () => `id-${++next}`;
+
+    const first = productWizardTabId(tabA, newId);
+
+    expect(productWizardTabId(tabA, newId)).toBe(first);
+    expect(productWizardTabId(tabB, newId)).not.toBe(first);
+  });
+
+  it('keeps an in-memory id when session storage is unavailable', () => {
+    const broken = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    let next = 0;
+    const newId = () => `id-${++next}`;
+
+    const first = productWizardTabId(null, newId);
+
+    expect(productWizardTabId(null, newId)).toBe(first);
+    expect(productWizardTabId(broken, newId)).toBe(first);
   });
 });

@@ -2,6 +2,7 @@
 import type { Marketplace, ApiResponse } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { unwrap } from './envelope.js';
+import type { OlxCategorySearchResult } from './listingsApi.js';
 import type {
   ConnectMarketplaceInput,
   MarketplaceOAuthStart,
@@ -79,6 +80,15 @@ export const marketplacesApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Marketplace', id }],
     }),
 
+    searchMarketplaceCategories: builder.query<
+      OlxCategorySearchResult[],
+      { marketplaceId: string; query: string }
+    >({
+      query: ({ marketplaceId, query }) =>
+        `/marketplaces/${marketplaceId}/categories?query=${encodeURIComponent(query)}`,
+      transformResponse: (res: ApiResponse<OlxCategorySearchResult[]>) => unwrap(res),
+    }),
+
     updateMarketplace: builder.mutation<Marketplace, UpdateMarketplaceArg>({
       query: ({ id, patch }) => ({
         url: `/marketplaces/${id}`,
@@ -104,4 +114,5 @@ export const {
   useCheckMarketplaceQuery,
   useLazyCheckMarketplaceQuery,
   useUpdateMarketplaceMutation,
+  useLazySearchMarketplaceCategoriesQuery,
 } = marketplacesApi;

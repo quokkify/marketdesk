@@ -1,6 +1,6 @@
 // Hermes (autonomous agent) routes.
 
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import type { HermesController } from '../controllers/HermesController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
@@ -12,7 +12,13 @@ import {
   runProductHermesSchema,
 } from '../validation/schemas';
 
-export function createHermesRoutes(controller: HermesController): Router {
+const passthrough: RequestHandler = (_req, _res, next) => next();
+
+// aiLimiter guards the route that runs the AI agent (see aiRateLimiter).
+export function createHermesRoutes(
+  controller: HermesController,
+  aiLimiter: RequestHandler = passthrough
+): Router {
   const router = Router();
   router.get('/status', asyncHandler(controller.status));
   router.get('/events', asyncHandler(controller.list));
@@ -43,6 +49,7 @@ export function createHermesRoutes(controller: HermesController): Router {
   );
   router.post(
     '/products/:productId/run',
+    aiLimiter,
     validateBody(runProductHermesSchema),
     asyncHandler(controller.runForProduct)
   );

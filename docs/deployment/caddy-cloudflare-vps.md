@@ -43,6 +43,8 @@ TRUST_PROXY=true
 DB_SSL_MODE=disable
 # Always set explicitly: stub is the labelled sandbox, real calls the OLX Partner API.
 OLX_ADAPTER_MODE=stub
+# A private instance: create its accounts, then switch self-service sign-up off.
+REGISTRATION_ENABLED=false
 ```
 
 `TRUST_PROXY=true` makes the app trust one proxy hop, here Caddy, and take the client address
@@ -55,6 +57,27 @@ could then forge the header; the Compose stack binds the app to loopback, so onl
 it. In Cloudflare's **Proxied** mode the peer Caddy sees is a Cloudflare address, so the limits
 count per Cloudflare address, not per visitor, until Caddy is configured to trust Cloudflare's
 forwarded client address.
+
+Sign-in has a second limit that does not depend on the client address: after 10 failed attempts
+for one e-mail address within 15 minutes, further sign-ins for that address answer `429` until the
+window ends, whichever addresses the attempts come from. Successful sign-ins do not count. So a
+wrong `TRUST_PROXY` setting or an unrestored Cloudflare client address weakens the per-IP limit but
+not the per-account one. The routes that call the AI provider share a per-workspace limit of
+`AI_RATE_LIMIT_PER_MINUTE` requests per minute (10 when unset), also independent of the client
+address. All limits are counted in the memory of each app process, so they apply per instance.
+
+The per-account limit can be triggered on purpose: anyone who knows an address, for example the
+administrator's, can send 10 wrong passwords for it and block its sign-in for up to 15 minutes. The
+block ends on its own. To narrow who can do this, switch registration off (below) so that strangers
+have no reason to reach the sign-in page, or allow only known addresses to `/api/auth` at Caddy or
+Cloudflare (an IP allowlist) when the instance is private.
+
+`REGISTRATION_ENABLED=false` makes `POST /api/auth/register` answer `403` with a message that the
+login page shows. Leave it unset, or `true`, only while people are meant to create their own
+accounts; it defaults to open so existing installations keep working after an update.
+While registration is open, registering with an address that already has an account answers
+`409`. The message no longer repeats the address, but the status still confirms that the account
+exists; that is accepted for as long as anyone may register.
 
 `DB_SSL_MODE` is mandatory in production. Keep `disable` for the internal Compose
 PostgreSQL service shown in this runbook. For an external managed PostgreSQL endpoint,

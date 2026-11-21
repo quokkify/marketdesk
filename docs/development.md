@@ -55,6 +55,36 @@ Start the MarketDesk Compose stack before running `./gradlew apiTest`; the tests
 
 The Java project has its own `.copier-answers.yml`; update it independently with Copier from inside `test-automation/`. CI uses [ci-kit](https://github.com/quokkify/ci-kit) and checks this project alongside the existing Node pipeline.
 
+## Reading a local run
+
+A run is one `/api` request plus everything it causes, including the queued job and all of its retry attempts. In development the app records runs under `.local/runs/`: every `/api` request that is not a `GET`, `HEAD` or `OPTIONS`, every such request that fails with a 5xx or queues a job, and every queue job. Successful `GET`s and `GET`s refused with 4xx leave no record. The response header `X-Run-Id` carries the run id; find it in the browser's network tab.
+
+Commands:
+
+- `npm run runs -- doctor` shows whether recording is on, where it writes, and whether the marker belongs to the running app. It exits 1 when the app cannot be reached or the directory is missing.
+- `npm run runs -- list [--failed] [--since 30m|2h] [--json]` lists recent runs.
+- `npm run runs -- show <runId | prefix | operationId | last> [--full] [--json]` prints one run.
+- `npm run runs -- tail [--failed]` follows new runs as they finish.
+
+Runs are tagged in `.local/runs/index.log`. A run can add no line (a request the client aborted without an error), one line, or several (one `RUN-RETRY` per failed attempt that will be retried, and a refused request that also queued a job can add both a `RUN-BLOCKED` and a job line). The four tags:
+
+- `RUN-OK`: the request succeeded with no job, or the job completed.
+- `RUN-BLOCKED`: the request was refused with a 4xx and queued no job.
+- `RUN-RETRY`: a job attempt failed and another will follow.
+- `RUN-FAIL`: an unexpected error or 5xx, or the last job attempt failed.
+
+`--failed` selects `RUN-FAIL` and `RUN-BLOCKED`.
+
+`index.log` is never trimmed; delete it by hand when it grows (it is git-ignored). Run directories are trimmed to the newest 200 at startup only. `RUN_RECORDER_DIR` changes the directory; a relative value is relative to the directory the app is started from, while `npm run runs` resolves it against the repository root.
+
+The recorder is on only when `NODE_ENV=development` and `RUN_RECORDER` is not `off`. It is always off in production and in tests. Startup logs one line, "Run recorder on" or "Run recorder off", with the reason.
+
+What is recorded: successful `GET` requests and `GET` requests refused with 4xx leave no record. Request bodies, request headers and query strings are never recorded. Job payloads are recorded after sanitizing: secret values, tokens and OAuth codes are replaced and long strings are cut.
+
+Under Docker Compose the app writes to `/app/.local/runs`, bind-mounted from `./.local/runs`. On a Linux host that directory may not be writable by the container user (UID 1001). Then the recorder turns itself off, the app starts normally, and `npm run runs -- doctor` prints the fix: `sudo chown -R 1001:1001 .local/runs`. On Docker Desktop it works as is.
+
+`.local/` is git-ignored; records never belong in a commit.
+
 ## Architecture and API
 
 The system is a React/TypeScript SPA served by a Node/Express TypeScript API. PostgreSQL stores workspace-scoped data; Redis backs cache/queue responsibilities. Backend code is layered into domain, application, infrastructure, and presentation boundaries. The canonical architecture and product sources are linked from [`spec/README.md`](spec/README.md); implementation evidence and gaps are in [`spec/TRACEABILITY.md`](spec/TRACEABILITY.md).

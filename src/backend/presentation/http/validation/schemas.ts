@@ -36,7 +36,8 @@ const nonEmptyPatch = (value: object) => Object.keys(value).length > 0;
 
 export const createProductSchema = z
   .object({
-    sku: z.string().min(1),
+    // Blank counts as absent; the use case generates a SKU.
+    sku: z.string().optional(),
     name: z.string().min(1),
     description: z.string().min(1),
     costPrice: z.number().nonnegative().nullable(),
@@ -226,13 +227,17 @@ export const updateMarketplaceSchema = z
     message: 'At least one field must be provided',
   });
 
+// RFC 5321 caps an address at 254 characters. No trim: whitespace around an address is still
+// rejected, as before, so the set of accepted logins does not change.
+const EMAIL_MAX_LENGTH = 254;
+
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().max(EMAIL_MAX_LENGTH).email(),
   password: z.string().min(1),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().max(EMAIL_MAX_LENGTH).email(),
   password: z.string().min(8),
   // A blank or null name means "no name": the controller derives the default, so the
   // account still lands in a working workspace.

@@ -271,6 +271,28 @@ describe('boot configuration with a setting that cannot be parsed', () => {
     expect(message).not.toContain('Offline-typo');
   });
 
+  // Regression guard (2026-11-20 audit): the registration switch is validated like the others and
+  // stays closed while the gate reports it.
+  it('refuses an unknown REGISTRATION_ENABLED at the gate and keeps registration closed meanwhile', async () => {
+    setProcessEnvWithValidSecrets({ REGISTRATION_ENABLED: 'no-thanks' });
+    const loaded = await loadEnvModule();
+    const message = gateMessage(loaded);
+
+    expect(loaded.env.auth.registrationEnabled).toBe(false);
+    expect(message).toMatch(
+      /^- REGISTRATION_ENABLED must be true or false\. Fix: set REGISTRATION_ENABLED to true or false/m,
+    );
+    expect(message).not.toContain('no-thanks');
+  });
+
+  it('keeps registration open when REGISTRATION_ENABLED is unset', async () => {
+    setProcessEnvWithValidSecrets({ REGISTRATION_ENABLED: undefined });
+    const loaded = await loadEnvModule();
+
+    expect(loaded.env.auth.registrationEnabled).toBe(true);
+    expect(gateMessage(loaded)).toBe('');
+  });
+
   it('lists every invalid setting with the other startup problems, one bullet each', async () => {
     setProcessEnvWithValidSecrets({
       MARKETPLACE_CREDENTIALS_KEY: '',

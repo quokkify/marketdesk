@@ -25,6 +25,10 @@ export interface ProductFieldsProps {
   onChange: <K extends keyof ProductFormValues>(field: K, value: ProductFormValues[K]) => void;
   showStatus?: boolean;
   showCategory?: boolean;
+  showSku?: boolean;
+  // The edit form: an update does not change the SKU.
+  skuReadOnly?: boolean;
+  showTags?: boolean;
   currency?: string;
 }
 
@@ -43,6 +47,8 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
   errors,
   onChange,
   showCategory = true,
+  showSku = true,
+  skuReadOnly = false,
 }) => (
   <Stack spacing={2}>
     <TextField
@@ -54,27 +60,31 @@ export const NameSkuFields: React.FC<ProductFieldsProps> = ({
       error={Boolean(errors.name)}
       helperText={errors.name}
     />
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-      <TextField
-        label="SKU"
-        required
-        fullWidth
-        value={values.sku}
-        onChange={(e) => onChange('sku', e.target.value)}
-        error={Boolean(errors.sku)}
-        helperText={errors.sku}
-      />
-      {showCategory && (
-        <TextField
-          label="Category"
-          fullWidth
-          value={values.category}
-          onChange={(e) => onChange('category', e.target.value)}
-          error={Boolean(errors.category)}
-          helperText={errors.category}
-        />
-      )}
-    </Stack>
+    {(showSku || showCategory) && (
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {showSku && (
+          <TextField
+            label="SKU"
+            fullWidth
+            value={values.sku}
+            onChange={(e) => onChange('sku', e.target.value)}
+            error={Boolean(errors.sku)}
+            helperText={errors.sku ?? (skuReadOnly ? 'Set when the product was created.' : undefined)}
+            slotProps={skuReadOnly ? { htmlInput: { readOnly: true } } : undefined}
+          />
+        )}
+        {showCategory && (
+          <TextField
+            label="Category"
+            fullWidth
+            value={values.category}
+            onChange={(e) => onChange('category', e.target.value)}
+            error={Boolean(errors.category)}
+            helperText={errors.category}
+          />
+        )}
+      </Stack>
+    )}
     <FormControl fullWidth error={Boolean(errors.condition)}>
       <InputLabel id="condition-label">Condition</InputLabel>
       <Select
@@ -98,6 +108,7 @@ export const DescriptionTagsFields: React.FC<ProductFieldsProps> = ({
   values,
   errors,
   onChange,
+  showTags = true,
 }) => (
   <Stack spacing={2}>
     <TextField
@@ -114,28 +125,30 @@ export const DescriptionTagsFields: React.FC<ProductFieldsProps> = ({
         `${values.description.trim().length}/${PRODUCT_DESCRIPTION_MAX_LENGTH}`
       }
     />
-    <Autocomplete
-      multiple
-      freeSolo
-      options={[]}
-      value={values.tags}
-      onChange={(_e, next) => onChange('tags', next as string[])}
-      renderValue={(value, getItemProps) =>
-        value.map((option, index) => {
-          const { key, ...itemProps } = getItemProps({ index });
-          return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
-        })
-      }
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label="Tags"
-          placeholder="Add a tag and press Enter"
-          error={Boolean(errors.tags)}
-          helperText={errors.tags}
-        />
-      )}
-    />
+    {showTags && (
+      <Autocomplete
+        multiple
+        freeSolo
+        options={[]}
+        value={values.tags}
+        onChange={(_e, next) => onChange('tags', next as string[])}
+        renderValue={(value, getItemProps) =>
+          value.map((option, index) => {
+            const { key, ...itemProps } = getItemProps({ index });
+            return <Chip key={key} variant="outlined" size="small" label={option} {...itemProps} />;
+          })
+        }
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Tags"
+            placeholder="Add a tag and press Enter"
+            error={Boolean(errors.tags)}
+            helperText={errors.tags}
+          />
+        )}
+      />
+    )}
   </Stack>
 );
 
@@ -145,9 +158,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
   onChange,
   currency,
 }) => {
-  const adornment = (
-    <InputAdornment position="end">{currencySymbol(currency)}</InputAdornment>
-  );
+  const adornment = <InputAdornment position="end">{currencySymbol(currency)}</InputAdornment>;
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
       <TextField

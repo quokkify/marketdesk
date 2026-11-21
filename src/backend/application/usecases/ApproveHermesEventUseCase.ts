@@ -201,7 +201,7 @@ export class ApproveHermesEventUseCase {
         return this.applyProductTextChange(event, change);
       case 'relist':
         // Enqueues an actual republish job per referenced listing (real action).
-        return this.applyRelist(change.listingIds, actorId);
+        return this.applyRelist(event.workspaceId, change.listingIds, actorId);
       case 'create_listing':
         // There is no synchronous listing-creation flow wired, so approving a
         // create_listing event cannot actually create the listing. Reject rather
@@ -246,7 +246,7 @@ export class ApproveHermesEventUseCase {
     const recommendation = await this.findListingSeoRecommendation(event);
     if (!recommendation?.appliedAt) return null;
 
-    const product = await this.requireProduct(event.productId);
+    const product = await this.requireProduct(event.workspaceId, event.productId);
     if (product.isErr()) return product;
     const currentValue = change.kind === 'title' ? product.value.name : product.value.description;
     if (currentValue !== change.from) return null;
@@ -336,7 +336,10 @@ export class ApproveHermesEventUseCase {
   ): Promise<Result<void>> {
     for (const listing of listings) {
       if (!this.isListingSeoLiveTarget(listing)) continue;
-      const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+        listing.marketplaceId,
+        event.workspaceId
+      );
       if (!marketplace || !marketplace.isConnected()) {
         await this.recordListingSeoReconciliationFailure(event, 'marketplace_not_connected');
         return Err(
@@ -469,7 +472,7 @@ export class ApproveHermesEventUseCase {
     event: HermesEvent,
     change: Extract<ProposedChange, { kind: 'price' }>
   ): Promise<Result<ApplyChangeOutcome>> {
-    const loaded = await this.requireProduct(event.productId);
+    const loaded = await this.requireProduct(event.workspaceId, event.productId);
     if (loaded.isErr()) return loaded;
     const product = loaded.value;
 
@@ -508,7 +511,7 @@ export class ApproveHermesEventUseCase {
     event: HermesEvent,
     change: Extract<ProposedChange, { kind: 'title' | 'description' }>
   ): Promise<Result<ApplyChangeOutcome>> {
-    const loaded = await this.requireProduct(event.productId);
+    const loaded = await this.requireProduct(event.workspaceId, event.productId);
     if (loaded.isErr()) return loaded;
     const product = loaded.value;
     const rollbackValue = change.kind === 'title' ? product.name : product.description;
@@ -565,7 +568,9 @@ export class ApproveHermesEventUseCase {
     return queued;
   }
 
+  // Ids from the event are resolved in the event's workspace; a foreign one is skipped.
   private async applyRelist(
+    workspaceId: string,
     listingIds: string[],
     actorId?: string
   ): Promise<Result<ApplyChangeOutcome>> {
@@ -577,10 +582,13 @@ export class ApproveHermesEventUseCase {
       marketplace: Marketplace;
     }> = [];
     for (const listingId of listingIds) {
-      const listing = await this.listingRepo.findById(listingId);
+      const listing = await this.listingRepo.findByIdForWorkspace(listingId, workspaceId);
       if (!listing) continue;
-      const product = await this.productRepo.findById(listing.productId);
-      const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+      const product = await this.productRepo.findByIdForWorkspace(listing.productId, workspaceId);
+      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+        listing.marketplaceId,
+        workspaceId
+      );
       if (!product || !marketplace) continue;
       if (!marketplace.isConnected()) continue;
       if (this.marketplaceAccountRepo) {
@@ -693,7 +701,10 @@ export class ApproveHermesEventUseCase {
     for (const listing of listings) {
       if (!this.isListingSeoLiveTarget(listing)) continue;
 
-      const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+        listing.marketplaceId,
+        product.workspaceId
+      );
       if (!marketplace || !marketplace.isConnected()) {
         skippedLiveListings.push({ listingId: listing.id, reason: 'marketplace_not_connected' });
         continue;
@@ -747,11 +758,14 @@ export class ApproveHermesEventUseCase {
     });
   }
 
-  private async requireProduct(productId: string | null): Promise<Result<Product>> {
+  private async requireProduct(
+    workspaceId: string,
+    productId: string | null
+  ): Promise<Result<Product>> {
     if (!productId) {
       return Err(new InvalidStateError('Event has no product to apply the change to'));
     }
-    const product = await this.productRepo.findById(productId);
+    const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
     if (!product) {
       return Err(new NotFoundError(`Product not found: ${productId}`));
     }

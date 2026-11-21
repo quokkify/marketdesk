@@ -119,4 +119,34 @@ describe('CreateProductUseCase', () => {
     expect(second.isErr()).toBe(true);
     if (second.isErr()) expect(second.error.code).toBe('CONFLICT');
   });
+
+  describe('SKU generation', () => {
+    function setupWithUuidIds() {
+      const base = setup();
+      return new CreateProductUseCase(
+        new ProductService(base.productRepo, base.publisher),
+        base.workspaceRepo,
+        () => '3f2a9c1e-77b4-4d0a-9c1e-000000000000',
+      );
+    }
+    const { sku: _omitted, ...dtoWithoutSku } = validDto;
+
+    it('generates a SKU when none is given', async () => {
+      const result = await setupWithUuidIds().execute(dtoWithoutSku);
+
+      expect(unwrap(result).sku).toMatch(/^MD-[0-9A-F]{10}$/);
+    });
+
+    it('keeps a seller-provided SKU', async () => {
+      const result = await setupWithUuidIds().execute({ ...validDto, sku: 'CAM-001' });
+
+      expect(unwrap(result).sku).toBe('CAM-001');
+    });
+
+    it('generates a SKU when the given one is blank', async () => {
+      const result = await setupWithUuidIds().execute({ ...validDto, sku: '   ' });
+
+      expect(unwrap(result).sku).toBe('MD-3F2A9C1E77');
+    });
+  });
 });
