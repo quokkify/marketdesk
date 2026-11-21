@@ -45,12 +45,15 @@ function initialForm(proposal: RevivalProposal, condition: Product['condition'])
 }
 
 // Owner's choices carried over to a refreshed proposal, kept only where the field is still proposed.
+// The below-cost confirmation is asked again, and a price the refreshed guard finds below cost is
+// unticked, as on a first opening.
 function keptForm(form: RevivalForm, proposal: RevivalProposal): RevivalForm {
   return {
     ...form,
     useTitle: form.useTitle && proposal.title !== undefined,
     useDescription: form.useDescription && proposal.description !== undefined,
-    usePrice: form.usePrice && proposal.price !== undefined,
+    usePrice: form.usePrice && proposal.price !== undefined && proposal.priceGuard.status !== 'below_cost',
+    allowBelowCost: false,
   };
 }
 
@@ -222,7 +225,7 @@ export const RevivalDialog: React.FC<RevivalDialogProps> = ({ open, listingId, p
                   label="Sell below cost"
                 />
                 <Typography variant="caption" color="text.secondary" sx={{ pl: 4, display: 'block' }}>
-                  The advert price is below the cost price. Tick to apply it anyway.
+                  The price would be below the cost price. Tick to apply it anyway.
                 </Typography>
               </Box>
             )}

@@ -1,4 +1,4 @@
-// Pure rules of the revival dialog: what blocks the apply button, whether the price row needs the
+// Pure rules of the revival dialog: what blocks the apply button, whether the apply needs the
 // below-cost confirmation, and the words for a refused OLX step.
 import type { ProductCondition, RevivalAiStep, RevivalProposal } from '@shared/types';
 import type { ReviveListingResult } from '../../state/api/listingsApi.js';
@@ -24,7 +24,7 @@ export interface RevivalView {
 
 export const CONDITION_REASON = "Choose the product's condition";
 export const COST_PRICE_REASON = 'Enter the cost price as a positive number';
-export const BELOW_COST_REASON = 'Confirm selling below cost, or untick the price change';
+export const BELOW_COST_REASON = 'Confirm selling below cost, or change the prices';
 export const DESCRIPTION_REASON = `The description must be ${DESCRIPTION_MIN_LENGTH} to ${DESCRIPTION_MAX_LENGTH} characters`;
 
 /** The entered cost price; null when empty, NaN when it is not a positive number. */
@@ -47,13 +47,16 @@ export function revivalView(proposal: RevivalProposal, form: RevivalForm): Reviv
     if (length < DESCRIPTION_MIN_LENGTH || length > DESCRIPTION_MAX_LENGTH) reasons.push(DESCRIPTION_REASON);
   }
 
-  const costPrice = enteredCost ?? proposal.priceGuard.costPrice;
+  // Mirrors the server's refusals, so the confirmation is offered exactly when an apply would be
+  // refused without it: the cost price (entered or known) above the advert price (ticked or
+  // current), or a newly entered cost price above the product's selling price.
   const proposedPrice = proposal.price;
-  const effectivePrice = proposedPrice ? (form.usePrice ? proposedPrice.proposed : proposedPrice.current) : null;
+  const enteredValid = enteredCost !== null && !Number.isNaN(enteredCost);
+  const costPrice = enteredValid ? enteredCost : proposal.priceGuard.costPrice;
+  const advertPrice = form.usePrice && proposedPrice ? proposedPrice.proposed : proposal.currentPrice;
   const needsBelowCostConfirmation =
-    // The guard judged the proposed price, so it only counts while that price is ticked.
-    (proposal.priceGuard.status === 'below_cost' && form.usePrice && proposedPrice !== undefined) ||
-    (costPrice !== null && !Number.isNaN(costPrice) && effectivePrice !== null && costPrice > effectivePrice);
+    (costPrice !== null && costPrice > advertPrice) ||
+    (enteredValid && enteredCost !== proposal.priceGuard.costPrice && enteredCost > proposal.productSellingPrice);
   if (needsBelowCostConfirmation && !form.allowBelowCost) reasons.push(BELOW_COST_REASON);
 
   return {
@@ -81,7 +84,7 @@ export function revivalFailureMessage(result: Pick<ReviveListingResult, 'outcome
   if (result.step === 'done') return '';
   const reason = (result.reason ?? 'no reason given').replace(/\.+$/, '');
   if (result.step === 'activate') {
-    return `OLX refused to bring the advert back: ${reason}. Your changes are saved; retry when ready.`;
+    return `Your changes are on OLX, but the advert is still expired: ${reason}. Try Reactivate on OLX.`;
   }
   return result.outcome === 'update_refused'
     ? `OLX refused the update, so the advert was not reactivated: ${reason}. Your changes are saved; retry when ready.`

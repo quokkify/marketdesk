@@ -13,7 +13,7 @@ import type { IProductRepository } from '../../domain/repositories/interfaces/IP
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
-import { missingFacts, priceGuard, REVIVAL_REFUSAL_MESSAGE } from '../../domain/services/revivalRules';
+import { fitsOlxTitle, missingFacts, priceGuard, REVIVAL_REFUSAL_MESSAGE } from '../../domain/services/revivalRules';
 import type { ProductAIDraftService, ProductDraftLogger } from './ProductAIDraftService';
 import type { ProductRecheckService, RecheckProductInput } from './ProductRecheckService';
 import { withAiUsageScope } from '../ai/aiUsageScope';
@@ -185,7 +185,9 @@ export class ProductAssistanceGraph {
             ? { current, proposed: recommendation.proposedValue, rationale: recommendation.rationale }
             : undefined;
         };
-        const title = proposeCopy('title', product.name);
+        // An over-long title is dropped without an aiIssue: Hermes answered, the title is just unusable.
+        const proposedTitle = proposeCopy('title', product.name);
+        const title = proposedTitle && fitsOlxTitle(proposedTitle.proposed) ? proposedTitle : undefined;
         const description = proposeCopy('description', product.description);
         const costPrice = product.costPrice?.amount ?? null;
         const result: RevivalProposal = {
@@ -200,6 +202,8 @@ export class ProductAssistanceGraph {
             current: listing.price.amount, proposed: hermesPrice.suggestedPrice,
             currency: listing.price.currency, rationale: hermesPrice.reasoning,
           } } : {}),
+          currentPrice: listing.price.amount,
+          productSellingPrice: product.sellingPrice.amount,
           priceGuard: priceGuard(hermesPrice?.suggestedPrice ?? null, costPrice),
           aiIssues,
           aiUsage: usage,

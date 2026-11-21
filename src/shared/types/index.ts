@@ -398,6 +398,10 @@ export interface RevivalProposal {
   title?: RevivalCopyProposal;
   description?: RevivalCopyProposal;
   price?: { current: number; proposed: number; currency: string; rationale: string };
+  /** The advert's price now; the apply compares the cost price with it when no new price is ticked. */
+  currentPrice: number;
+  /** The product's selling price; the apply compares a new cost price with it. */
+  productSellingPrice: number;
   priceGuard: RevivalPriceGuard;
   /** Hermes steps that failed (unreachable, refused, invalid output); offline results are not failures. */
   aiIssues: RevivalAiStep[];

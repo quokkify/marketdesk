@@ -4,6 +4,12 @@ import type { Product } from '../entities/Product';
 import type { RevivalMissingFact, RevivalPriceGuard } from '../../../shared/types';
 
 export const REVIVAL_REFUSAL_MESSAGE = 'Only an expired listing with an OLX advert can be revived';
+export const OLX_TITLE_MAX_LENGTH = 70;
+
+/** A proposed title OLX would refuse as too long is not offered. */
+export function fitsOlxTitle(title: string): boolean {
+  return title.trim().length <= OLX_TITLE_MAX_LENGTH;
+}
 
 export function missingFacts(product: Pick<Product, 'condition' | 'costPrice'>): RevivalMissingFact[] {
   const facts: RevivalMissingFact[] = [];

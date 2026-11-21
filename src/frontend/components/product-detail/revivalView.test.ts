@@ -19,6 +19,8 @@ const proposal: RevivalProposal = {
   title: { current: 'Old', proposed: 'New title', rationale: 'Clearer' },
   description: { current: 'Old text', proposed: 'A description that is long enough to apply', rationale: 'More detail' },
   price: { current: 120, proposed: 100, currency: 'PLN', rationale: 'Market' },
+  currentPrice: 120,
+  productSellingPrice: 120,
   priceGuard: { status: 'ok', costPrice: 50 },
   aiIssues: [],
   aiUsage: { provider: 'offline', calls: 0, promptTokens: null, completionTokens: null, totalTokens: null, costStatus: 'not_applicable' },
@@ -56,7 +58,7 @@ describe('revivalView', () => {
   });
 
   it('ignores the below-cost guard once the price change is unticked', () => {
-    const below = { ...proposal, priceGuard: { status: 'below_cost' as const, costPrice: 50 } };
+    const below = { ...proposal, priceGuard: { status: 'below_cost' as const, costPrice: 110 } };
     const unticked = revivalView(below, { ...form, usePrice: false });
     expect(unticked.priceRow.needsBelowCostConfirmation).toBe(false);
     expect(unticked.canApply).toBe(true);
@@ -73,6 +75,30 @@ describe('revivalView', () => {
     const costly = { ...form, costPrice: '110' };
     expect(revivalView(proposal, costly).priceRow.needsBelowCostConfirmation).toBe(true);
     expect(revivalView(proposal, { ...costly, usePrice: false }).priceRow.needsBelowCostConfirmation).toBe(false);
+  });
+
+  it('asks for the confirmation without a Hermes price when the cost price is above the current price', () => {
+    const noPrice = { ...proposal, price: undefined, priceGuard: { status: 'no_proposal' as const, costPrice: 50 } };
+    const view = revivalView(noPrice, { ...form, costPrice: '130' });
+    expect(view.priceRow).toMatchObject({ show: false, needsBelowCostConfirmation: true });
+    expect(view.reasons).toEqual([BELOW_COST_REASON]);
+    expect(revivalView(noPrice, { ...form, costPrice: '130', allowBelowCost: true }).canApply).toBe(true);
+    const knownAbove = { ...noPrice, priceGuard: { status: 'no_proposal' as const, costPrice: 130 } };
+    expect(revivalView(knownAbove, form).priceRow.needsBelowCostConfirmation).toBe(true);
+  });
+
+  it('asks for the confirmation when a new cost price is above the product selling price', () => {
+    const cheapProduct = { ...proposal, productSellingPrice: 80 };
+    expect(revivalView(cheapProduct, { ...form, costPrice: '90' }).priceRow.needsBelowCostConfirmation).toBe(true);
+    expect(revivalView(cheapProduct, form).priceRow.needsBelowCostConfirmation).toBe(false);
+    // The known cost price re-entered is not a new one: the server skips the selling-price check.
+    const knownCost = { ...cheapProduct, priceGuard: { status: 'ok' as const, costPrice: 90 } };
+    expect(revivalView(knownCost, { ...form, costPrice: '90' }).priceRow.needsBelowCostConfirmation).toBe(false);
+  });
+
+  it('needs no confirmation when the cost price stays below both prices', () => {
+    expect(revivalView(proposal, { ...form, costPrice: '60' }).priceRow.needsBelowCostConfirmation).toBe(false);
+    expect(revivalView({ ...proposal, price: undefined }, form).priceRow.needsBelowCostConfirmation).toBe(false);
   });
 
   it('refuses a cost price that is not a positive number', () => {
@@ -109,8 +135,8 @@ describe('revivalFailureMessage', () => {
       'was not reactivated: Bad title.'
     );
     expect(revivalFailureMessage({ outcome: 'live', step: 'update', reason: 'Bad title' })).toContain('old text');
-    expect(revivalFailureMessage({ outcome: 'unchanged', step: 'activate', reason: 'Nope' })).toContain(
-      'refused to bring the advert back: Nope'
+    expect(revivalFailureMessage({ outcome: 'unchanged', step: 'activate', reason: 'Nope.' })).toBe(
+      'Your changes are on OLX, but the advert is still expired: Nope. Try Reactivate on OLX.'
     );
     expect(revivalFailureMessage({ outcome: 'live', step: 'done', reason: null })).toBe('');
   });

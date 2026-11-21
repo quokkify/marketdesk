@@ -1,4 +1,4 @@
-import { missingFacts, priceGuard } from './revivalRules';
+import { fitsOlxTitle, missingFacts, OLX_TITLE_MAX_LENGTH, priceGuard } from './revivalRules';
 import { Money } from '../valueObjects/Money';
 
 function money(minor: number): Money {
@@ -41,5 +41,13 @@ describe('priceGuard', () => {
   it('accepts a proposed price at or above the cost price', () => {
     expect(priceGuard(50, 50)).toEqual({ status: 'ok', costPrice: 50 });
     expect(priceGuard(120, 50)).toEqual({ status: 'ok', costPrice: 50 });
+  });
+});
+
+describe('fitsOlxTitle', () => {
+  it('keeps a title of up to 70 characters and drops a longer one', () => {
+    expect(fitsOlxTitle('a'.repeat(OLX_TITLE_MAX_LENGTH))).toBe(true);
+    expect(fitsOlxTitle(` ${'a'.repeat(OLX_TITLE_MAX_LENGTH)} `)).toBe(true);
+    expect(fitsOlxTitle('a'.repeat(OLX_TITLE_MAX_LENGTH + 1))).toBe(false);
   });
 });
