@@ -53,6 +53,14 @@ export function resolveOlxAdapterMode(value: string | undefined): OlxAdapterMode
   return mode;
 }
 
+// Empty keeps registration open, as it always was; only an explicit true or false is accepted.
+export function resolveRegistrationEnabled(value: string | undefined): boolean {
+  const setting = value?.trim().toLowerCase() ?? '';
+  if (setting === '' || setting === 'true') return true;
+  if (setting === 'false') return false;
+  throw new Error('REGISTRATION_ENABLED must be true or false');
+}
+
 const DEFAULT_PUBLIC_BASE_URL = 'http://localhost:3000';
 
 function parseHttpUrl(value: string): URL | null {
@@ -143,7 +151,11 @@ export function resolveJwtSecret(
 
 // Settings parsed while this module is imported. One that cannot be parsed falls back to its
 // default instead of throwing before the logger exists; assertStartupConfiguration reports it.
-type ParsedSetting = 'PUBLIC_BASE_URL' | 'HERMES_PROVIDER_MODE' | 'OLX_ADAPTER_MODE';
+type ParsedSetting =
+  | 'PUBLIC_BASE_URL'
+  | 'HERMES_PROVIDER_MODE'
+  | 'OLX_ADAPTER_MODE'
+  | 'REGISTRATION_ENABLED';
 const invalidSettings: Partial<Record<ParsedSetting, string>> = {};
 
 function parsedOrDefault<T>(setting: ParsedSetting, parse: () => T, fallback: T): T {
@@ -203,6 +215,25 @@ export const env = {
     expiration: process.env.JWT_EXPIRATION || '7d',
     refreshSecret: process.env.JWT_REFRESH_SECRET || '',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
+  },
+
+  // Self-service sign-up. A private instance should set REGISTRATION_ENABLED=false. An invalid
+  // value falls back to closed, and the boot gate refuses to start with it.
+  auth: {
+    registrationEnabled: parsedOrDefault(
+      'REGISTRATION_ENABLED',
+      () => resolveRegistrationEnabled(process.env.REGISTRATION_ENABLED),
+      false,
+    ),
+  },
+
+  // Requests per minute per workspace across the routes that call the AI provider.
+  rateLimit: {
+    aiRequestsPerMinute: positiveInt(
+      process.env.AI_RATE_LIMIT_PER_MINUTE,
+      10,
+      'AI_RATE_LIMIT_PER_MINUTE',
+    ),
   },
 
   // Hermes Integration
@@ -326,6 +357,8 @@ const INVALID_SETTING_FIXES: Record<ParsedSetting, string> = {
     'Fix: set HERMES_PROVIDER_MODE to auto, hermes or offline, or leave it empty for auto.',
   OLX_ADAPTER_MODE:
     'Fix: set OLX_ADAPTER_MODE to stub for the labelled sandbox or to real for the OLX Partner API.',
+  REGISTRATION_ENABLED:
+    'Fix: set REGISTRATION_ENABLED to true or false, or leave it empty to keep registration open.',
 };
 
 // OLX fetches advert photos from PUBLIC_BASE_URL, so real mode needs an explicit

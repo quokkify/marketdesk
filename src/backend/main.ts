@@ -14,6 +14,7 @@ import {
 import { createPool } from './config/database.js';
 import { createRedisClient } from './config/redis.js';
 import { buildApp } from './presentation/http/app.js';
+import { createReadinessHandler } from './presentation/http/readiness.js';
 import { buildContainer, type AppContainer } from './config/di/index.js';
 import { safeErrorDetails } from './config/safeErrorDetails.js';
 import { verifyUploadStorageWritable } from './infrastructure/storage/verifyUploadStorage.js';
@@ -115,26 +116,17 @@ const startServer = async () => {
       });
     });
 
-    app.get('/ready', healthLimiter, async (_req, res) => {
-      try {
-        const p = createPool();
-        await p.query('SELECT NOW()');
-        const r = createRedisClient();
-        await r.ping();
-        res.status(200).json({
-          status: 'ready',
-          database: 'connected',
-          redis: 'connected',
-          timestamp: new Date().toISOString(),
-        });
-      } catch (error) {
-        logger.error({ error }, 'Readiness check failed');
-        res.status(503).json({
-          status: 'not_ready',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    });
+    app.get(
+      '/ready',
+      healthLimiter,
+      createReadinessHandler(
+        {
+          database: () => createPool().query('SELECT NOW()'),
+          redis: () => createRedisClient().ping(),
+        },
+        logger,
+      ),
+    );
 
     // Product images must be publicly reachable while OLX imports them.
     app.use(

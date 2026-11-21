@@ -93,7 +93,8 @@ export class AuthController {
     };
     const existing = await this.users.findByEmail(email);
     if (existing) {
-      return next(new ConflictError(`Email already registered: ${email}`));
+      // The address is not echoed back; the sign-in hint is all the user needs.
+      return next(new ConflictError('An account with this e-mail already exists. Sign in instead.'));
     }
 
     let workspaceId: string | undefined;
