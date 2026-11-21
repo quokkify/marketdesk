@@ -11,6 +11,7 @@
 // so the graph can be built and asserted without any live infrastructure (see the
 // container unit test). Absent overrides, the real config-backed clients are used.
 
+import type { RequestLogger } from '../../presentation/http/middleware/RequestLoggingMiddleware';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Pool, PoolClient } from 'pg';
@@ -219,7 +220,7 @@ export interface ContainerOverrides {
   eventBroker?: EventBroker;
   aiProvider?: IAIProvider;
   idGenerator?: IdGenerator;
-  logger?: ErrorLogger & ProductDraftLogger;
+  logger?: ErrorLogger & ProductDraftLogger & RequestLogger;
   marketplaceCredentialsKey?: string;
   runRecorder?: IRunRecorder;
   // Factory for background job queues. Overridable so tests avoid a live Bull/Redis.
@@ -265,6 +266,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const olxHttpClient =
     env.marketplaces.olx.adapterMode === 'real'
       ? new FetchMarketplaceHttpClient({
+          logger: overrides.logger,
           defaultHeaders: buildOlxHeaders(env.marketplaces.olx.accessToken),
           timeoutMs: env.marketplaces.olx.requestTimeoutMs,
           livePublishEnabled: env.marketplaces.olx.livePublishEnabled,
@@ -344,6 +346,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       ? async (marketplaceId) => {
           const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplaceId);
           const http = new FetchMarketplaceHttpClient({
+            logger: overrides.logger,
             defaultHeaders: buildOlxHeaders(accessToken),
             timeoutMs: env.marketplaces.olx.requestTimeoutMs,
             livePublishEnabled: false,
@@ -517,6 +520,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         return adapterFactory.create(
           marketplace.key,
           new FetchMarketplaceHttpClient({
+            logger: overrides.logger,
             defaultHeaders: buildOlxHeaders(accessToken),
             timeoutMs: env.marketplaces.olx.requestTimeoutMs,
             livePublishEnabled: env.marketplaces.olx.livePublishEnabled,
@@ -550,6 +554,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaceOAuthService,
     (accessToken) =>
       new FetchMarketplaceHttpClient({
+        logger: overrides.logger,
         defaultHeaders: buildOlxHeaders(accessToken),
         timeoutMs: env.marketplaces.olx.requestTimeoutMs,
         livePublishEnabled: false,
@@ -585,6 +590,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     env.marketplaces.olx.adapterMode === 'real'
       ? (accessToken) =>
           new FetchMarketplaceHttpClient({
+            logger: overrides.logger,
             defaultHeaders: buildOlxHeaders(accessToken),
             timeoutMs: env.marketplaces.olx.requestTimeoutMs,
             livePublishEnabled: env.marketplaces.olx.livePublishEnabled,
@@ -605,6 +611,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       env.marketplaces.olx.adapterMode === 'real'
         ? (accessToken) =>
             new FetchMarketplaceHttpClient({
+              logger: overrides.logger,
               defaultHeaders: buildOlxHeaders(accessToken),
               timeoutMs: env.marketplaces.olx.requestTimeoutMs,
               livePublishEnabled: env.marketplaces.olx.livePublishEnabled,
@@ -731,6 +738,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceHistoryRecorder: priceHistoryRepo,
     idGenerator,
     logger: overrides.logger,
+    requestLogger: overrides.logger,
     runRecorder: overrides.runRecorder ?? noopRunRecorder,
   };
 

@@ -13,6 +13,7 @@
 import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator, type RateLimitRequestHandler } from 'express-rate-limit';
+import { recordResponseError } from './RequestLoggingMiddleware';
 
 const WINDOW_MS = 60 * 1000;
 const ME_WINDOW_MS = 15 * 60 * 1000;
@@ -39,10 +40,9 @@ export function loginFailureKey(req: Request): string {
 }
 
 function rejection(_req: Request, res: Response): void {
-  res.status(429).json({
-    success: false,
-    error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' },
-  });
+  const error = { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' };
+  recordResponseError(res, error);
+  res.status(429).json({ success: false, error });
 }
 
 function build(

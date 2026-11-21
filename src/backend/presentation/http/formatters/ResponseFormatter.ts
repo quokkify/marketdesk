@@ -6,6 +6,7 @@
 //   Paginated: { success: true, data: [...], pagination: { page, limit, total, totalPages } }
 //   Error:     { success: false, error: { code, message, details? } }
 
+import { recordResponseError } from '../middleware/RequestLoggingMiddleware';
 import type { Response } from 'express';
 import { DomainError } from '../../../domain/shared/DomainError';
 import { ERROR_CODES } from '../../../../shared/constants';
@@ -149,7 +150,16 @@ export function fail(
   status?: number,
   body?: ErrorBody,
 ): Response {
-  return res
-    .status(status ?? statusForError(error))
-    .json({ success: false, error: body ?? toErrorBody(error) });
+  const errorBody = body ?? toErrorBody(error);
+  recordResponseError(res, summarizeErrorBody(errorBody));
+  return res.status(status ?? statusForError(error)).json({ success: false, error: errorBody });
+}
+
+// The request log gets the code, the message and, for validation, only the field paths: issue
+// messages can echo the submitted value.
+function summarizeErrorBody(body: ErrorBody): { code: string; message: string; fields?: string[] } {
+  const fields = Array.isArray(body.details)
+    ? body.details.map((detail) => detail?.field).filter((field): field is string => Boolean(field))
+    : undefined;
+  return { code: body.code, message: body.message, ...(fields ? { fields } : {}) };
 }

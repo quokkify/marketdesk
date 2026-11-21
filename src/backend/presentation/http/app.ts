@@ -52,6 +52,7 @@ import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/O
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
+import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
 import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 
@@ -88,6 +89,8 @@ export interface AppDeps {
   priceHistoryRecorder?: IPriceHistoryRecorder;
   idGenerator?: IdGenerator;
   logger?: ErrorLogger;
+  // Writes one line per API request; absent in tests that do not care about the log.
+  requestLogger?: RequestLogger;
 }
 
 export interface AppOptions {
@@ -181,6 +184,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       maxUploadFileSize
     );
 
+  // Before the body parsers and CORS, so their rejections (malformed JSON, 413) are logged too.
+  if (deps.requestLogger) app.use('/api', createRequestLoggingMiddleware(deps.requestLogger));
   app.use(helmet(HELMET_OPTIONS));
   app.use(compression());
   // CORS is allowlist-based when credentials are enabled. We intentionally avoid
@@ -260,7 +265,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
 
   // Unmatched /api route -> 404 envelope via the central error handler.
   app.use('/api', (req: Request, _res: Response, next) => {
-    next(new NotFoundError(`Route not found: ${req.method} ${req.originalUrl}`));
+    // baseUrl + path, not originalUrl: the query string may carry an OAuth code or state.
+    next(new NotFoundError(`Route not found: ${req.method} ${req.baseUrl}${req.path}`));
   });
 
   // Central error handler MUST be last.
