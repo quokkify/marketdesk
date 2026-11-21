@@ -1,6 +1,7 @@
 export type ThreadStatus = 'open' | 'suspicious' | 'closed';
 export type DraftStatus = 'pending' | 'sending' | 'sent' | 'dismissed' | 'superseded' | 'failed';
 export type BuyerIntent = 'availability' | 'haggle' | 'logistics' | 'other';
+export type DraftSource = 'hermes' | 'offline';
 export type ScreeningReason =
   | 'foreign_link'
   | 'payment_data_request'
@@ -46,6 +47,7 @@ export interface ReplyDraft {
   filledPrice: number | null;
   status: DraftStatus;
   failureReason: string | null;
+  source: DraftSource | null;
   attemptKey: string | null;
   attemptStartedAt: Date | null;
   externalMessageId: string | null;

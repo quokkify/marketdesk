@@ -21,10 +21,9 @@ const TABLES = [
 // The migration text runs unchanged except that its tables are created as session TEMP tables,
 // so the shared database is never written.
 function migrationAsTemp(): string {
-  const sql = fs.readFileSync(
-    path.resolve(process.cwd(), 'src/backend/persistence/migrations/047_conversations.sql'),
-    'utf8',
-  );
+  const sql = ['047_conversations.sql', '048_reply_draft_source.sql']
+    .map((file) => fs.readFileSync(path.resolve(process.cwd(), 'src/backend/persistence/migrations', file), 'utf8'))
+    .join('\n');
   return sql.replace(/CREATE TABLE IF NOT EXISTS/g, 'CREATE TEMP TABLE');
 }
 
@@ -205,7 +204,7 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
       message('m2', { textHash: 'same', sentAt: new Date('2026-11-20T00:00:00Z') }),
       message('m3', { direction: 'seller', textHash: 'same', sentAt: new Date('2026-11-20T01:00:00Z') }),
     ]);
-    expect(await repo.countTextHashInWorkspace(workspaceId, 'same', since)).toBe(2);
+    expect(await repo.countTextHashInWorkspace(workspaceId, 'same', since)).toBe(1);
     expect(await repo.countTextHashInWorkspace(randomUUID(), 'same', since)).toBe(0);
     expect(await repo.countBuyerMessagesSince(thread.id, since)).toBe(1);
 
@@ -219,5 +218,32 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     expect((await repo.findDraft(d1.id, thread.id))?.status).toBe('superseded');
     expect((await repo.findDraft(d2.id, thread.id))?.status).toBe('superseded');
     expect(await repo.awaitingReplyCounts(workspaceId)).toEqual({});
+  });
+
+  it('counts repeated text over buyer messages only', async () => {
+    const thread = await newThread();
+    const other = await newThread('ext-2');
+    const at = new Date('2026-11-20T00:00:00Z');
+    await repo.upsertMessages(thread.id, [
+      message('b1', { textHash: 'dup', sentAt: at }),
+      message('s1', { direction: 'seller', textHash: 'dup', sentAt: at }),
+    ]);
+    await repo.upsertMessages(other.id, [
+      message('b2', { textHash: 'dup', sentAt: at }),
+      message('s2', { direction: 'seller', textHash: 'dup', sentAt: at }),
+    ]);
+    expect(await repo.countTextHashInWorkspace(workspaceId, 'dup', new Date('2026-11-01T00:00:00Z'))).toBe(2);
+  });
+
+  it('stores the draft source and the failure reason', async () => {
+    const thread = await newThread();
+    const [msg] = await repo.upsertMessages(thread.id, [message('m1')]);
+    const failed = await repo.insertDraft({
+      threadId: thread.id, answersMessageId: msg.id, status: 'failed', failureReason: 'link', source: 'offline',
+    });
+    expect(failed).toMatchObject({ status: 'failed', failureReason: 'link', source: 'offline', proposedText: null });
+    const plain = await repo.insertDraft({ threadId: thread.id, answersMessageId: msg.id });
+    expect(plain.source).toBeNull();
+    expect((await repo.findDraft(failed.id, thread.id))?.source).toBe('offline');
   });
 });

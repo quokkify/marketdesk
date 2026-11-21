@@ -25,7 +25,7 @@ export type NewConversationMessage = Pick<
 >;
 
 export type NewReplyDraft = Pick<ReplyDraft, 'threadId' | 'answersMessageId'> &
-  Partial<Pick<ReplyDraft, 'intent' | 'proposedText' | 'filledPrice' | 'status'>>;
+  Partial<Pick<ReplyDraft, 'intent' | 'proposedText' | 'filledPrice' | 'status' | 'failureReason' | 'source'>>;
 
 export type ReplyDraftPatch = Partial<
   Pick<
@@ -50,6 +50,7 @@ export interface IConversationRepository {
   upsertMessages(threadId: string, messages: NewConversationMessage[]): Promise<ConversationMessage[]>;
   // Newest first.
   recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]>;
+  // Buyer messages only.
   countTextHashInWorkspace(workspaceId: string, hash: string, since: Date): Promise<number>;
   countBuyerMessagesSince(threadId: string, since: Date): Promise<number>;
   insertDraft(draft: NewReplyDraft): Promise<ReplyDraft>;

@@ -50,6 +50,7 @@ interface DraftRow {
   filled_price: string | null;
   status: ReplyDraft['status'];
   failure_reason: string | null;
+  source: ReplyDraft['source'];
   attempt_key: string | null;
   attempt_started_at: Date | null;
   external_message_id: string | null;
@@ -93,6 +94,7 @@ const toDraft = (row: DraftRow): ReplyDraft => ({
   filledPrice: row.filled_price === null ? null : Number(row.filled_price),
   status: row.status,
   failureReason: row.failure_reason,
+  source: row.source,
   attemptKey: row.attempt_key,
   attemptStartedAt: row.attempt_started_at,
   externalMessageId: row.external_message_id,
@@ -198,7 +200,7 @@ export class ConversationRepository implements IConversationRepository {
       `SELECT COUNT(*)::text AS count
          FROM conversation_messages m
          JOIN conversation_threads t ON t.id = m.thread_id
-        WHERE t.workspace_id = $1 AND m.text_hash = $2 AND m.sent_at >= $3`,
+        WHERE t.workspace_id = $1 AND m.direction = 'buyer' AND m.text_hash = $2 AND m.sent_at >= $3`,
       [workspaceId, hash, since],
       this.queryClient,
     );
@@ -217,8 +219,9 @@ export class ConversationRepository implements IConversationRepository {
 
   async insertDraft(draft: NewReplyDraft): Promise<ReplyDraft> {
     const { rows } = await query<DraftRow>(
-      `INSERT INTO reply_drafts (thread_id, answers_message_id, intent, proposed_text, filled_price, status)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'pending'))
+      `INSERT INTO reply_drafts
+         (thread_id, answers_message_id, intent, proposed_text, filled_price, status, failure_reason, source)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'pending'), $7, $8)
        RETURNING *`,
       [
         draft.threadId,
@@ -227,6 +230,8 @@ export class ConversationRepository implements IConversationRepository {
         draft.proposedText ?? null,
         draft.filledPrice ?? null,
         draft.status ?? null,
+        draft.failureReason ?? null,
+        draft.source ?? null,
       ],
       this.queryClient,
     );
