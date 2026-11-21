@@ -1799,6 +1799,8 @@ describe('Presentation API', () => {
           activeProvider: 'offline',
           hermesConfigured: false,
           hermesReachable: null,
+          hermesToolsSafe: null,
+          hermesEnabledToolsets: [],
           checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
         },
       });

@@ -117,6 +117,8 @@ describe('hermesStatusChip', () => {
     activeProvider: 'offline',
     hermesConfigured: false,
     hermesReachable: null,
+    hermesToolsSafe: null,
+    hermesEnabledToolsets: [],
     checkedAt: '2026-10-24T10:00:00.000Z',
     ...overrides,
   });
@@ -125,7 +127,7 @@ describe('hermesStatusChip', () => {
   it('says Hermes is connected only when Hermes answers and is the active provider', () => {
     expect(
       hermesStatusChip(
-        status({ activeProvider: 'hermes', hermesConfigured: true, hermesReachable: true }),
+        status({ activeProvider: 'hermes', hermesConfigured: true, hermesReachable: true, hermesToolsSafe: true }),
         ready,
       ),
     ).toEqual({ label: 'Hermes connected', color: 'success' });

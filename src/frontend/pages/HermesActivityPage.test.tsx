@@ -102,6 +102,8 @@ const offlineStatus: HermesStatusView = {
   activeProvider: 'offline',
   hermesConfigured: false,
   hermesReachable: null,
+  hermesToolsSafe: null,
+  hermesEnabledToolsets: [],
   checkedAt: '2026-10-24T10:00:00.000Z',
 };
 
@@ -201,6 +203,7 @@ describe('Hermes banner', () => {
         activeProvider: 'hermes',
         hermesConfigured: true,
         hermesReachable: true,
+        hermesToolsSafe: true,
       }),
     );
 
