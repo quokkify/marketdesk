@@ -134,6 +134,9 @@ describe('HermesAI (IAIProvider)', () => {
       name: 'Retro Sneakers',
       marketplace: 'OLX',
     });
+    const outside = calls[0].prompt.replace(/<seller_data>[\s\S]*<\/seller_data>/, '');
+    expect(outside).not.toContain('OLX');
+    expect(outside).not.toContain('Retro Sneakers');
     expect(calls[0].system).toContain(SELLER_DATA_RULE);
   });
 
@@ -152,6 +155,8 @@ describe('HermesAI (IAIProvider)', () => {
 
     const outside = calls[0].prompt.replace(/<seller_data>[\s\S]*<\/seller_data>/, '');
     expect(outside).not.toContain('Classic retro sneakers');
+    expect(outside).not.toContain('Retro Sneakers');
+    expect(outside).not.toContain('retro');
     expect(Object.keys(parseBlock(calls[0].prompt))).toEqual(
       expect.arrayContaining(['name', 'description', 'category', 'condition', 'tags', 'imageCount'])
     );
