@@ -42,7 +42,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
       unauthorized(res, 'Invalid token payload');
       return;
     }
-    const tokenVersion = decoded.tv ?? 0;
+    const tokenVersion = decoded.tv === undefined ? 0 : decoded.tv;
     if (typeof tokenVersion !== 'number' || !Number.isInteger(tokenVersion) || tokenVersion < 0) {
       unauthorized(res, 'Invalid token payload');
       return;

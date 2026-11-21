@@ -142,6 +142,9 @@ export class AuthController {
   };
 
   me = async (req: Request, res: Response): Promise<void> => {
-    ok(res, toUserView(req.currentUser!));
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.me');
+    }
+    ok(res, toUserView(req.currentUser));
   };
 }

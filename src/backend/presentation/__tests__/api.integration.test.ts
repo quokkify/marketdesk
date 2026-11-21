@@ -1051,6 +1051,20 @@ describe('Presentation API', () => {
       }
     });
 
+    it.each([['"0"', '0'], ['-1', -1], ['0.5', 0.5], ['null', null]])(
+      'refuses a token whose version claim is malformed (%s)',
+      async (_label, tv) => {
+        const { app } = await buildTestApp();
+        const bad = jwt.sign({ userId: 'u-1', workspaceId: 'ws-1', tv }, env.jwt.secret);
+
+        for (const path of ['/api/products', '/api/auth/me']) {
+          const res = await request(app).get(path).set(bearerOf(bad));
+          expect(res.status).toBe(401);
+          expect(res.body.error.message).toBe('Invalid token payload');
+        }
+      }
+    );
+
     it('issues tokens that carry the current version', async () => {
       const { app, authUserStore } = await buildTestApp();
       await authUserStore.bumpTokenVersion('u-1');

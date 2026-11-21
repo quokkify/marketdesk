@@ -1,8 +1,9 @@
 // Auth routes. login/register are public; the per-IP public limiter is mounted on the whole
 // /auth prefix by routes/index.ts, in front of this router, so it also caps unauthenticated
 // hits on the /me token check. /me is then protected by the JWT auth middleware and rate
-// limited per user, then checked against the stored user (exists, token version current). Failed logins are also limited per account (loginLimiter), and register
-// answers 403 when the instance has registration switched off.
+// limited per user, then checked against the stored user (exists, token version current).
+// Failed logins are also limited per account (loginLimiter), and register answers
+// 403 when the instance has registration switched off.
 
 import { Router, type RequestHandler } from 'express';
 import type { AuthController } from '../controllers/AuthController';
