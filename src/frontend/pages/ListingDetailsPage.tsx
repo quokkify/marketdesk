@@ -106,6 +106,7 @@ import {
 } from '../components/product-detail/ProductDetailSections.js';
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 import { RevivalDialog } from '../components/product-detail/RevivalDialog.js';
+import { PriceResearchSection } from '../components/product-detail/PriceResearchSection.js';
 
 export { mainPreviewImageSx };
 
@@ -1404,6 +1405,7 @@ const ListingDetailsPage: React.FC = () => {
             }
             statusColor={remoteMarketplaceChipColor(primaryListing)}
           />
+          <PriceResearchSection productId={p.id} currentPrice={p.sellingPrice} currency={currency} />
           <ProductHermesCard
             analyzing={analyzing}
             activeProvider={activeProvider}
