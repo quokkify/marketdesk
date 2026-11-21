@@ -265,6 +265,22 @@ describe('HermesHealthProbe', () => {
       });
     });
 
+    it.each([
+      { shape: 'a bare string entry', body: ['terminal'] },
+      { shape: 'an entry without enabled', body: [{ name: 'terminal' }] },
+      { shape: 'a string enabled flag', body: [{ name: 'terminal', enabled: 'true' }] },
+      { shape: 'a null entry', body: [null] },
+      { shape: 'an entry without a name', body: { data: [{ enabled: false }] } },
+    ])('reports tools-unsafe on $shape', async ({ body }) => {
+      globalThis.fetch = routedFetch(async () => toolsetsResponse(body)) as typeof fetch;
+
+      await expect(newProbe().reachability()).resolves.toMatchObject({
+        reachable: true,
+        toolsSafe: false,
+        enabledToolsets: [],
+      });
+    });
+
     it('does not ask /toolsets when /models fails', async () => {
       const fetchMock = jest.fn(async () => new Response('', { status: 503 }));
       globalThis.fetch = fetchMock as typeof fetch;

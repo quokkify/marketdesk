@@ -70,7 +70,7 @@ export class HermesHealthProbe {
     return { reachable: true, ...(await this.requestToolsets()) };
   }
 
-  // Fails closed: any error, non-2xx, non-JSON or list-less answer is "not safe".
+  // Fails closed: any error, non-2xx, non-JSON, list-less or oddly shaped answer is "not safe".
   private async requestToolsets(): Promise<{ toolsSafe: boolean; enabledToolsets: string[] }> {
     const unsafe = { toolsSafe: false, enabledToolsets: [] };
     try {
@@ -83,10 +83,19 @@ export class HermesHealthProbe {
       if (!Array.isArray(list)) {
         return unsafe;
       }
-      const enabledToolsets = list
-        .filter((entry) => (entry as { enabled?: unknown } | null)?.enabled === true)
-        .map((entry) => String((entry as { name?: unknown }).name));
-      return { toolsSafe: enabledToolsets.length === 0, enabledToolsets };
+      const entries = list.map((entry) => entry as { name?: unknown; enabled?: unknown } | null);
+      const wellFormed = entries.filter(
+        (entry): entry is { name: string; enabled: boolean } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.enabled === 'boolean' &&
+          typeof entry.name === 'string',
+      );
+      const enabledToolsets = wellFormed.filter((entry) => entry.enabled).map((entry) => entry.name);
+      return {
+        toolsSafe: wellFormed.length === entries.length && enabledToolsets.length === 0,
+        enabledToolsets,
+      };
     } catch {
       return unsafe;
     }
