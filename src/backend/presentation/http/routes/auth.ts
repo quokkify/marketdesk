@@ -1,15 +1,18 @@
 // Auth routes. login/register are public; the per-IP public limiter is mounted on the whole
 // /auth prefix by routes/index.ts, in front of this router, so it also caps unauthenticated
 // hits on the /me token check. /me is then protected by the JWT auth middleware and rate
-// limited per user. Failed logins are also limited per account (loginLimiter), and register
-// answers 403 when the instance has registration switched off.
+// limited per user, then checked against the stored user (exists, token version current).
+// Failed logins are also limited per account (loginLimiter), and register answers
+// 403 when the instance has registration switched off.
 
 import { Router, type RequestHandler } from 'express';
 import type { AuthController } from '../controllers/AuthController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { authMiddleware } from '../middleware/AuthMiddleware';
+import { requireCurrentPrincipal } from '../middleware/CurrentPrincipalMiddleware';
+import type { IAuthUserStore } from '../ports/IAuthUserStore';
 import { validateBody } from '../middleware/ValidationMiddleware';
-import { loginSchema, registerSchema } from '../validation/schemas';
+import { changePasswordSchema, loginSchema, registerSchema } from '../validation/schemas';
 import { fail } from '../formatters/ResponseFormatter';
 import { ERROR_CODES } from '../../../../shared/constants';
 
@@ -23,14 +26,21 @@ const registrationDisabled: RequestHandler = (_req, res) => {
 };
 
 export interface AuthRouteOptions {
+  currentUserStore: IAuthUserStore;
   loginLimiter?: RequestHandler;
+  passwordLimiter?: RequestHandler;
   registrationEnabled?: boolean;
 }
 
 export function createAuthRoutes(
   controller: AuthController,
   meLimiter: RequestHandler = passthrough,
-  { loginLimiter = passthrough, registrationEnabled = true }: AuthRouteOptions = {}
+  {
+    currentUserStore,
+    loginLimiter = passthrough,
+    passwordLimiter = passthrough,
+    registrationEnabled = true,
+  }: AuthRouteOptions
 ): Router {
   const router = Router();
 
@@ -43,6 +53,31 @@ export function createAuthRoutes(
   }
   // The per-user limiter runs after authMiddleware so it can key by user; a bad token never
   // reaches it and spends only the per-IP allowance of the /auth mount.
-  router.get('/me', authMiddleware, meLimiter, asyncHandler(controller.me));
+  router.get(
+    '/me',
+    authMiddleware,
+    meLimiter,
+    requireCurrentPrincipal(currentUserStore),
+    asyncHandler(controller.me)
+  );
+  // No renewal on sign-out: the token is revoked in this very request.
+  router.post(
+    '/logout',
+    authMiddleware,
+    meLimiter,
+    requireCurrentPrincipal(currentUserStore, { renew: false }),
+    asyncHandler(controller.logout)
+  );
+  // No renewal here: the response carries the new token, and a second one would be redundant.
+  // Per-user limiter after validation: only failed attempts count (successes are skipped).
+  router.post(
+    '/password',
+    authMiddleware,
+    meLimiter,
+    requireCurrentPrincipal(currentUserStore, { renew: false }),
+    validateBody(changePasswordSchema),
+    passwordLimiter,
+    asyncHandler(controller.changePassword)
+  );
   return router;
 }

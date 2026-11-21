@@ -49,7 +49,7 @@ const integrations: IntegrationsSettings = {
   ],
 };
 
-async function renderSettings(url: string): Promise<string> {
+async function renderSettings(url: string, withWorkspaceSettings = true): Promise<string> {
   const store = configureStore({
     reducer: {
       auth: authReducer,
@@ -81,7 +81,8 @@ async function renderSettings(url: string): Promise<string> {
   );
   const { util } = settingsApi;
   await Promise.all([
-    store.dispatch(util.upsertQueryData('getWorkspaceSettings', principal, workspaceSettings)),
+    withWorkspaceSettings &&
+      store.dispatch(util.upsertQueryData('getWorkspaceSettings', principal, workspaceSettings)),
     store.dispatch(util.upsertQueryData('getUserPreferences', principal, preferences)),
     store.dispatch(util.upsertQueryData('getIntegrationSettings', principal, integrations)),
   ]);
@@ -123,6 +124,24 @@ describe('SettingsPage sections', () => {
     expect(currentSection(html)).toBe('General');
     expect(text).toContain('Workspace name');
     expect(text).toContain('Save changes');
+  });
+
+  it('renders the Change password card with three password inputs in General', async () => {
+    const html = await renderSettings('/settings');
+
+    expect(visibleText(html)).toContain('Change password');
+    expect(html.match(/type="password"/g)).toHaveLength(3);
+    expect(
+      html.match(/autoComplete="current-password"|autocomplete="current-password"/gi)
+    ).toHaveLength(1);
+    expect(html.match(/autoComplete="new-password"|autocomplete="new-password"/gi)).toHaveLength(2);
+  });
+
+  it('keeps the Change password card while workspace settings are still loading', async () => {
+    const text = visibleText(await renderSettings('/settings', false));
+
+    expect(text).toContain('Loading settings');
+    expect(text).toContain('Change password');
   });
 
   it('ignores an unknown ?section= value', async () => {

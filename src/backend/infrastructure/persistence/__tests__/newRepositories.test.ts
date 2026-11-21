@@ -5,6 +5,7 @@
 // otherwise it skips cleanly so `npx jest` stays green without Postgres.
 
 import { randomUUID } from 'crypto';
+import { NotFoundError } from '../../../domain/shared/DomainError';
 import { AuthUserMapper, type AuthUserRow } from '../repositories/AuthUserRepository';
 import { PriceHistoryMapper, type PriceHistoryRow } from '../repositories/PriceHistoryRepository';
 
@@ -14,6 +15,7 @@ describe('AuthUserMapper', () => {
     email: 'owner@example.com',
     password_hash: '$2a$10$abcdefghijklmnopqrstuv',
     workspace_id: 'ws-1',
+    token_version: 3,
     created_at: new Date('2026-01-01T00:00:00Z'),
   };
 
@@ -24,6 +26,7 @@ describe('AuthUserMapper', () => {
       email: 'owner@example.com',
       passwordHash: '$2a$10$abcdefghijklmnopqrstuv',
       workspaceId: 'ws-1',
+      tokenVersion: 3,
       createdAt: new Date('2026-01-01T00:00:00Z'),
     });
   });
@@ -91,6 +94,7 @@ describeDb('AuthUserRepository / PriceHistoryRepository (integration)', () => {
   let AuthUserRepository: typeof import('../repositories/AuthUserRepository').AuthUserRepository;
   let PriceHistoryRepository: typeof import('../repositories/PriceHistoryRepository').PriceHistoryRepository;
   const email = `it-${randomUUID()}@example.com`;
+  const versionEmail = `it-${randomUUID()}@example.com`;
 
   beforeAll(async () => {
     try {
@@ -140,7 +144,7 @@ describeDb('AuthUserRepository / PriceHistoryRepository (integration)', () => {
     if (ready) {
       try {
         const db = await import('../../../config/database');
-        await db.query('DELETE FROM users WHERE email = $1', [email]);
+        await db.query('DELETE FROM users WHERE email = ANY($1)', [[email, versionEmail]]);
       } catch {
         // Ignore cleanup errors
       }
@@ -162,6 +166,23 @@ describeDb('AuthUserRepository / PriceHistoryRepository (integration)', () => {
     expect(byEmail?.id).toBe(created.id);
     const byId = await repo.findById(created.id);
     expect(byId?.email).toBe(email);
+  });
+
+  it('versions tokens: starts at 0, bumps, and bumps on password update', async () => {
+    if (!ready) return;
+    const repo = new AuthUserRepository();
+    const created = await repo.create({ email: versionEmail, passwordHash: 'h1', workspaceId: null });
+    expect((await repo.findById(created.id))?.tokenVersion).toBe(0);
+    expect(await repo.bumpTokenVersion(created.id)).toBe(1);
+    expect(await repo.bumpTokenVersion(created.id)).toBe(2);
+    expect(await repo.updatePassword(created.id, 'h2', 2)).toBe(3);
+    const after = await repo.findById(created.id);
+    expect(after?.passwordHash).toBe('h2');
+    expect(after?.tokenVersion).toBe(3);
+    await expect(repo.bumpTokenVersion(randomUUID())).rejects.toBeInstanceOf(NotFoundError);
+    expect(await repo.updatePassword(created.id, 'h4', 2)).toBeNull();
+    expect((await repo.findById(created.id))?.passwordHash).toBe('h2');
+    await expect(repo.updatePassword(randomUUID(), 'h3', 0)).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('returns an empty price history for an unknown listing', async () => {

@@ -39,6 +39,18 @@ export const authApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<LoginResult>) => unwrap(res),
     }),
 
+    logout: builder.mutation<void, void>({
+      query: () => ({ url: '/auth/logout', method: 'POST' }),
+    }),
+
+    changePassword: builder.mutation<
+      { token: string },
+      { currentPassword: string; newPassword: string }
+    >({
+      query: (body) => ({ url: '/auth/password', method: 'POST', body }),
+      transformResponse: (res: ApiResponse<{ token: string }>) => unwrap(res),
+    }),
+
     me: builder.query<AuthUser, void>({
       query: () => '/auth/me',
       transformResponse: (res: ApiResponse<AuthUser>) => unwrap(res),
@@ -46,4 +58,11 @@ export const authApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useLoginMutation, useRegisterMutation, useMeQuery, useLazyMeQuery } = authApi;
+export const {
+  useLoginMutation,
+  useRegisterMutation,
+  useLogoutMutation,
+  useChangePasswordMutation,
+  useMeQuery,
+  useLazyMeQuery,
+} = authApi;

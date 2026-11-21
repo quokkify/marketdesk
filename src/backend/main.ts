@@ -11,6 +11,7 @@ import {
   insecureDevJwtAllowed,
   isDevelopment,
   isTest,
+  startupWarnings,
 } from './config/env.js';
 import { createPool } from './config/database.js';
 import { createRedisClient } from './config/redis.js';
@@ -59,6 +60,8 @@ const startServer = async () => {
         'JWT secret checks are relaxed (ALLOW_INSECURE_DEV_JWT=true or NODE_ENV=test). Use this for local development only.',
       );
     }
+
+    for (const warning of startupWarnings(env)) logger.warn(warning);
 
     const uploadsDir = await verifyUploadStorageWritable(env.upload.uploadDir);
     logger.info({ uploadsDir }, 'Upload storage writable');

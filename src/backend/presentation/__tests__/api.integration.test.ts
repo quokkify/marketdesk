@@ -3,6 +3,7 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import { createHmac } from 'node:crypto';
 import express from 'express';
 import type { OlxAdapterMode } from '../../config/env';
 import request from 'supertest';
@@ -12,6 +13,7 @@ import { z } from 'zod';
 import { buildApp, type AppDeps } from '../http/app';
 import { validateBody } from '../http/middleware/ValidationMiddleware';
 import { signToken } from '../http/middleware/AuthMiddleware';
+import { env } from '../../config/env';
 import { meRateLimiter } from '../http/middleware/RateLimitMiddleware';
 import { createAuthRoutes } from '../http/routes/auth';
 import type { AuthController } from '../http/controllers/AuthController';
@@ -507,6 +509,7 @@ async function buildTestApp(
     email: 'demo@example.com',
     passwordHash,
     workspaceId: 'ws-1',
+    tokenVersion: 0,
     createdAt: new Date(),
   });
 
@@ -620,7 +623,7 @@ async function seedPreviewListing(
   await listingRepo.save(listing.value);
 }
 
-const token = signToken({ userId: 'u-1', workspaceId: 'ws-1' });
+const token = signToken({ userId: 'u-1', workspaceId: 'ws-1', tokenVersion: 0 });
 const auth = (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
 
 describe('Presentation API', () => {
@@ -820,7 +823,7 @@ describe('Presentation API', () => {
     // users out. The public per-IP flood guard (100/min) still fronts the whole /auth prefix
     // (routes/index.ts), but the per-user allowance is spent only after authentication.
     describe('GET /me', () => {
-      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1' })}`;
+      const bearer = (userId: string) => `Bearer ${signToken({ userId, workspaceId: 'ws-1', tokenVersion: 0 })}`;
       const me = (app: express.Express, authorization?: string) => {
         const req = request(app).get('/api/auth/me');
         return authorization ? req.set('Authorization', authorization) : req;
@@ -845,6 +848,7 @@ describe('Presentation API', () => {
           email: 'second@example.com',
           passwordHash: 'unused',
           workspaceId: 'ws-1',
+          tokenVersion: 0,
           createdAt: new Date(),
         });
 
@@ -890,8 +894,21 @@ describe('Presentation API', () => {
             res.json({ userId: req.user?.userId });
           },
         } as unknown as AuthController;
+        const userStore = new InMemoryAuthStore();
+        for (const id of ['u-1', 'u-2']) {
+          userStore.users.push({
+            id,
+            email: `${id}@example.com`,
+            passwordHash: 'unused',
+            workspaceId: 'ws-1',
+            tokenVersion: 0,
+            createdAt: new Date(),
+          });
+        }
         const app = express();
-        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2)));
+        app.use('/api/auth', createAuthRoutes(controller, meRateLimiter(2), {
+          currentUserStore: userStore,
+        }));
 
         const first = await me(app, bearer('u-1'));
         const second = await me(app, bearer('u-1'));
@@ -983,7 +1000,7 @@ describe('Presentation API', () => {
 
       it('applies the configured AI limit per workspace on the mounted API', async () => {
         const { app } = await buildTestApp({ enableRateLimit: true, aiRateLimit: 1 });
-        const token = `Bearer ${signToken({ userId: 'u-1', workspaceId: 'ws-1' })}`;
+        const token = `Bearer ${signToken({ userId: 'u-1', workspaceId: 'ws-1', tokenVersion: 0 })}`;
         const draft = () =>
           request(app)
             .post('/api/products/ai-draft')
@@ -996,6 +1013,327 @@ describe('Presentation API', () => {
         expect(first.status).not.toBe(429);
         expect(second.status).toBe(429);
       });
+    });
+  });
+
+  describe('token revocation', () => {
+    const legacyToken = () => jwt.sign({ userId: 'u-1', workspaceId: 'ws-1' }, env.jwt.secret);
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    it('accepts a token issued before token versions existed while the user is at version 0', async () => {
+      const { app } = await buildTestApp();
+
+      const products = await request(app).get('/api/products').set(bearerOf(legacyToken()));
+      const me = await request(app).get('/api/auth/me').set(bearerOf(legacyToken()));
+
+      expect(products.status).toBe(200);
+      expect(me.status).toBe(200);
+    });
+
+    it('refuses every token of a user after the version is bumped', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      const issued = login.body.data.token as string;
+
+      await authUserStore.bumpTokenVersion('u-1');
+
+      for (const t of [issued, legacyToken()]) {
+        const products = await request(app).get('/api/products').set(bearerOf(t));
+        const me = await request(app).get('/api/auth/me').set(bearerOf(t));
+        for (const res of [products, me]) {
+          expect(res.status).toBe(401);
+          expect(res.body.error).toEqual({
+            code: 'UNAUTHORIZED',
+            message: 'Session has been revoked',
+          });
+        }
+      }
+    });
+
+    it.each([['"0"', '0'], ['-1', -1], ['0.5', 0.5], ['null', null]])(
+      'refuses a token whose version claim is malformed (%s)',
+      async (_label, tv) => {
+        const { app } = await buildTestApp();
+        const bad = jwt.sign({ userId: 'u-1', workspaceId: 'ws-1', tv }, env.jwt.secret);
+
+        for (const path of ['/api/products', '/api/auth/me']) {
+          const res = await request(app).get(path).set(bearerOf(bad));
+          expect(res.status).toBe(401);
+          expect(res.body.error.message).toBe('Invalid token payload');
+        }
+      }
+    );
+
+    it('issues tokens that carry the current version', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      const issued = login.body.data.token as string;
+
+      expect(jwt.decode(issued)).toMatchObject({ tv: 1 });
+      const me = await request(app).get('/api/auth/me').set(bearerOf(issued));
+      expect(me.status).toBe(200);
+    });
+  });
+
+  describe('sign out', () => {
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const loginToken = async (app: Parameters<typeof request>[0]) => {
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      return login.body.data.token as string;
+    };
+
+    it('signs out every device', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+      const b = await loginToken(app);
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(a));
+
+      expect(out.status).toBe(204);
+      expect(out.text).toBe('');
+      for (const t of [a, b]) {
+        const res = await request(app).get('/api/products').set(bearerOf(t));
+        expect(res.status).toBe(401);
+        expect(res.body.error.message).toBe('Session has been revoked');
+      }
+      expect((await request(app).get('/api/products').set(bearerOf(await loginToken(app)))).status).toBe(200);
+    });
+
+    it('refuses sign-out with a revoked token', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const a = await loginToken(app);
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(a));
+
+      expect(out.status).toBe(401);
+    });
+
+    it('signs out with an old token without handing out a renewed one', async () => {
+      const { app } = await buildTestApp();
+      const old = jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv: 0, iat: Math.floor(Date.now() / 1000) - 13 * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' },
+      );
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(old));
+
+      expect(out.status).toBe(204);
+      expect(out.headers['x-renewed-token']).toBeUndefined();
+    });
+  });
+
+  describe('change password', () => {
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const current = 'secret123';
+    const changed = `${current}-changed`;
+    const loginToken = async (app: Parameters<typeof request>[0], password = current) => {
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password });
+      return login.body.data.token as string;
+    };
+    const change = (
+      app: Parameters<typeof request>[0],
+      token: string,
+      body: { currentPassword: string; newPassword: string }
+    ) => request(app).post('/api/auth/password').set(bearerOf(token)).send(body);
+
+    it('changes the password, keeps this device and signs out the others', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+      const b = await loginToken(app);
+
+      const res = await change(app, a, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(200);
+      const c = res.body.data.token as string;
+      for (const t of [a, b]) {
+        expect((await request(app).get('/api/products').set(bearerOf(t))).status).toBe(401);
+      }
+      expect((await request(app).get('/api/products').set(bearerOf(c))).status).toBe(200);
+      const oldLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: current });
+      const newLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: changed });
+      expect(oldLogin.status).toBe(401);
+      expect(newLogin.status).toBe(200);
+    });
+
+    it('answers an old token without a renewed one next to the returned token', async () => {
+      const { app } = await buildTestApp();
+      const old = jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv: 0, iat: Math.floor(Date.now() / 1000) - 13 * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' }
+      );
+
+      const res = await change(app, old, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.token).toBe('string');
+      expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+
+    it('refuses a wrong current password without revoking anything', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+
+      const res = await change(app, a, { currentPassword: `${current}-wrong`, newPassword: changed });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toBe('Current password is incorrect');
+      expect((await request(app).get('/api/products').set(bearerOf(a))).status).toBe(200);
+    });
+
+    it('refuses the change when the session was revoked after it was checked', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const a = await loginToken(app);
+      const original = authUserStore.updatePassword.bind(authUserStore);
+      authUserStore.updatePassword = jest.fn(async (userId, hash, expectedVersion) => {
+        await authUserStore.bumpTokenVersion(userId);
+        return original(userId, hash, expectedVersion);
+      });
+
+      const res = await change(app, a, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toBe('Session has been revoked');
+      expect(authUserStore.users[0].passwordHash).not.toBe(changed);
+    });
+
+    it('validates the new password', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+
+      const short = await change(app, a, { currentPassword: current, newPassword: 'a'.repeat(7) });
+      const same = await change(app, a, { currentPassword: current, newPassword: current });
+
+      for (const res of [short, same]) {
+        expect(res.status).toBe(400);
+        expect(res.body.error.details).toEqual([expect.objectContaining({ field: 'newPassword' })]);
+      }
+    });
+
+    it('limits failed password changes per user', async () => {
+      const { app } = await buildTestApp({ enableRateLimit: true });
+      const a = await loginToken(app);
+      const wrong = { currentPassword: `${current}-wrong`, newPassword: changed };
+
+      for (let i = 0; i < 5; i += 1) {
+        expect((await change(app, a, wrong)).status).toBe(401);
+      }
+      const blocked = await change(app, a, wrong);
+
+      expect(blocked.status).toBe(429);
+    });
+
+    it('does not count a successful change against the allowance', async () => {
+      const { app } = await buildTestApp({ enableRateLimit: true });
+      const a = await loginToken(app);
+      const ok = await change(app, a, { currentPassword: current, newPassword: changed });
+      const c = ok.body.data.token as string;
+
+      for (let i = 0; i < 5; i += 1) {
+        const res = await change(app, c, { currentPassword: current, newPassword: `${changed}-2` });
+        expect(res.status).toBe(401);
+      }
+    });
+  });
+
+  describe('token renewal', () => {
+    const tokenAged = (hours: number, tv = 0) =>
+      jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv, iat: Math.floor(Date.now() / 1000) - hours * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' },
+      );
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+    it.each(['/api/products', '/api/auth/me'])(
+      'hands an active session on %s a fresh token once the old one is past the renewal age',
+      async (path) => {
+        const { app, authUserStore } = await buildTestApp();
+        await authUserStore.bumpTokenVersion('u-1');
+
+        const res = await request(app).get(path).set(bearerOf(tokenAged(13, 1)));
+
+        expect(res.status).toBe(200);
+        const renewed = res.headers['x-renewed-token'];
+        expect(jwt.decode(renewed)).toMatchObject({ userId: 'u-1', workspaceId: 'ws-1', tv: 1 });
+        const followUp = await request(app).get(path).set(bearerOf(renewed));
+        expect(followUp.status).toBe(200);
+        expect(followUp.headers['x-renewed-token']).toBeUndefined();
+      },
+    );
+
+    it.each(['/api/products', '/api/auth/me'])('keeps a young token on %s as it is', async (path) => {
+      const { app } = await buildTestApp();
+
+      const res = await request(app).get(path).set(bearerOf(tokenAged(1)));
+
+      expect(res.status).toBe(200);
+      expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+
+    // Regression guard: renewal used to sign the user's current workspace into the new token,
+    // so a token for a workspace the user had left was swapped for one of the new workspace.
+    it.each([['/api/products', 403], ['/api/auth/me', 200]])(
+      'never renews a token whose workspace no longer matches on %s',
+      async (path, status) => {
+        const { app, authUserStore } = await buildTestApp();
+        authUserStore.users.find((u) => u.id === 'u-1')!.workspaceId = 'ws-2';
+
+        const res = await request(app).get(path).set(bearerOf(tokenAged(13)));
+
+        expect(res.status).toBe(status);
+        expect(res.headers['x-renewed-token']).toBeUndefined();
+      },
+    );
+
+    it('rejects a token without a usable issue time instead of renewing it on every request', async () => {
+      const { app } = await buildTestApp();
+      const noIat = jwt.sign({ userId: 'u-1', workspaceId: 'ws-1', tv: 0 }, env.jwt.secret, {
+        noTimestamp: true,
+      });
+      // jsonwebtoken refuses to sign a non-numeric iat, so the token is assembled by hand.
+      const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+      const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({
+        userId: 'u-1',
+        workspaceId: 'ws-1',
+        tv: 0,
+        iat: 'yesterday',
+      })}`;
+      const badIat = `${unsigned}.${createHmac('sha256', env.jwt.secret).update(unsigned).digest('base64url')}`;
+
+      const withoutIat = await request(app).get('/api/products').set(bearerOf(noIat));
+      const withBadIat = await request(app).get('/api/products').set(bearerOf(badIat));
+
+      expect(withoutIat.status).toBe(200);
+      expect(withoutIat.headers['x-renewed-token']).toBeUndefined();
+      expect(withBadIat.status).toBe(401);
+      expect(withBadIat.body.error.message).toBe('Invalid token payload');
+    });
+
+    it.each(['/api/products', '/api/auth/me'])('never renews a revoked token on %s', async (path) => {
+      const { app, authUserStore } = await buildTestApp();
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const res = await request(app).get(path).set(bearerOf(tokenAged(13, 0)));
+
+      expect(res.status).toBe(401);
+      expect(res.headers['x-renewed-token']).toBeUndefined();
     });
   });
 

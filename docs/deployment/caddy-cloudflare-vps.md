@@ -274,6 +274,40 @@ Confirm in a browser:
 - OAuth callback URLs, if enabled, use the public HTTPS hostname;
 - Caddy and app logs show no repeated 4xx/5xx errors.
 
+## Sessions
+
+A sign-in lasts `JWT_EXPIRATION`, default `24h`. Any authenticated response from a token older
+than `JWT_RENEW_AFTER`, default `12h`, carries a fresh token in the `X-Renewed-Token` header, so
+an active user stays signed in and an idle one is signed out after 24 hours. `JWT_RENEW_AFTER`
+must be shorter than `JWT_EXPIRATION`. Both take `<integer><unit>` with the unit `s`, `m`, `h`
+or `d`, for example `12h`; anything else stops the boot and names the variable.
+
+An existing `.env` with `JWT_EXPIRATION=7d` is still honoured, but the app logs one warning at
+boot because the value is longer than 24 hours. Change it to `24h` and restart the app.
+
+- **Sign out** in the app signs out every device of that user, not only the current one.
+- **Change password** in Settings, General signs out every other device and keeps the current
+  one signed in.
+- A revoked session answers `401` with `Session has been revoked`, and the app returns to the
+  sign-in screen.
+
+For an incident, such as a lost laptop or a leaked token, revoke every session of one user from
+the operator side. From a source checkout:
+
+```bash
+npm run auth:revoke -- user@example.com
+```
+
+In the Docker image:
+
+```bash
+docker compose exec app node dist/backend/revokeTokens.js user@example.com
+```
+
+The command prints `Revoked all sessions of <email>` and exits `0`. It exits `1` for an unknown
+e-mail and `2` when the e-mail argument is missing. The user signs in again with the same
+password.
+
 ## Rollback
 
 1. Restore the previous Caddyfile backup:

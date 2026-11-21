@@ -5,7 +5,8 @@ import { ThemeProvider } from '@mui/material/styles';
 import { lightTheme } from '../../theme/lightTheme';
 import { textOf } from '../../testkit/staticMarkup';
 import { SIDEBAR_WIDTH } from '../../utils/constants';
-import { Sidebar, isPrimaryNavActive, resolveSidebarResponsiveMode } from './Sidebar';
+import { Sidebar, isPrimaryNavActive, resolveSidebarResponsiveMode, signOut } from './Sidebar';
+import { logout } from '../../state/slices/authSlice';
 
 const state = {
   ui: { sidebarCollapsed: false, sidebarMobileOpen: false },
@@ -20,6 +21,7 @@ jest.mock('../../state/hooks.js', () => ({
 
 jest.mock('../../state/api/index.js', () => ({
   useGetHermesEventsQuery: () => ({ currentData: { total: 3 } }),
+  useLogoutMutation: () => [jest.fn()],
 }));
 
 // Layout geometry is intentionally tested as a contract because MUI's default
@@ -110,5 +112,37 @@ describe('expanded desktop sidebar (PRD shell)', () => {
     expect(text).toContain('seller@example.test');
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('background-color:#F2F3F6');
+  });
+});
+
+describe('signOut', () => {
+  it('asks the server to revoke the session and then ends it locally', async () => {
+    const calls: string[] = [];
+    const dispatch = jest.fn(() => {
+      calls.push('dispatch');
+    });
+    const callLogout = jest.fn(async () => {
+      calls.push('callLogout');
+    });
+
+    await signOut({ callLogout, dispatch });
+
+    expect(calls).toEqual(['callLogout', 'dispatch']);
+    expect(dispatch).toHaveBeenCalledWith(logout());
+  });
+
+  it.each([
+    ['the request never reaches the server', { status: 'FETCH_ERROR' }],
+    ['the session is already rejected', { status: 401 }],
+  ])('still ends the session locally when %s', async (_name, failure) => {
+    const dispatch = jest.fn();
+    const callLogout = jest.fn(async () => {
+      throw failure;
+    });
+
+    await signOut({ callLogout, dispatch });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(logout());
   });
 });

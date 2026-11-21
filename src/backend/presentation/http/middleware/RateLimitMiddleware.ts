@@ -6,6 +6,7 @@
 //   - sensitive price operations:  10 req/min keyed by workspaceId (fallback IP)
 //   - AI-invoking routes:          AI_RATE_LIMIT_PER_MINUTE (default 10) req/min keyed by
 //                                  workspaceId (fallback IP), one allowance for all of them
+//   - failed password changes:     5 per 15 min keyed by userId, successes not counted
 //   - failed logins:               10 per 15 min keyed by normalised e-mail, any IP
 // All limiters emit the §18 error envelope (429, RATE_LIMITED) on rejection.
 
@@ -17,6 +18,8 @@ const WINDOW_MS = 60 * 1000;
 const ME_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_FAILURE_LIMIT = 10;
 const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const PASSWORD_CHANGE_LIMIT = 5;
+const PASSWORD_CHANGE_WINDOW_MS = 15 * 60 * 1000;
 
 function keyByWorkspace(req: Request): string {
   return req.user?.workspaceId ?? ipKeyGenerator(req.ip ?? 'unknown');
@@ -105,6 +108,23 @@ export function loginFailureRateLimiter(
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     keyGenerator: loginFailureKey,
+    handler: rejection,
+  });
+}
+
+// Mount it after authMiddleware: the allowance belongs to the user, and only failed attempts
+// (wrong current password) count.
+export function passwordChangeRateLimiter(
+  limit = PASSWORD_CHANGE_LIMIT,
+  windowMs = PASSWORD_CHANGE_WINDOW_MS
+): RateLimitRequestHandler {
+  return rateLimit({
+    windowMs,
+    limit,
+    standardHeaders: false,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: keyByUser,
     handler: rejection,
   });
 }

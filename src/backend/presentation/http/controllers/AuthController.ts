@@ -81,6 +81,7 @@ export class AuthController {
     const token = signToken({
       userId: user.id,
       workspaceId: user.workspaceId ?? undefined,
+      tokenVersion: user.tokenVersion,
     });
     ok(res, { token, user: toUserView(user) });
   };
@@ -121,7 +122,11 @@ export class AuthController {
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const user = await this.users.create({ email, passwordHash, workspaceId });
-      const token = signToken({ userId: user.id, workspaceId: user.workspaceId ?? undefined });
+      const token = signToken({
+        userId: user.id,
+        workspaceId: user.workspaceId ?? undefined,
+        tokenVersion: user.tokenVersion,
+      });
       created(res, { token, user: toUserView(user) });
     } catch (err) {
       // Best-effort compensating cleanup keeps workspace/bootstrap artifacts from
@@ -137,14 +142,57 @@ export class AuthController {
   };
 
   me = async (req: Request, res: Response): Promise<void> => {
-    const user = await this.users.findById(req.user!.userId);
-    if (!user) {
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.me');
+    }
+    ok(res, toUserView(req.currentUser));
+  };
+
+  // updatePassword bumps the version in the same statement, so every other device is signed
+  // out; the returned token belongs to the new version and keeps this one.
+  changePassword = async (req: Request, res: Response): Promise<void> => {
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.changePassword');
+    }
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    const user = req.currentUser;
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
       fail(res, undefined, 401, {
         code: ERROR_CODES.UNAUTHORIZED,
-        message: 'User no longer exists',
+        message: 'Current password is incorrect',
       });
       return;
     }
-    ok(res, toUserView(user));
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const tokenVersion = await this.users.updatePassword(
+      user.id,
+      passwordHash,
+      user.tokenVersion,
+    );
+    if (tokenVersion === null) {
+      fail(res, undefined, 401, {
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Session has been revoked',
+      });
+      return;
+    }
+    const token = signToken({
+      userId: user.id,
+      workspaceId: user.workspaceId ?? undefined,
+      tokenVersion,
+    });
+    ok(res, { token });
+  };
+
+  // Bumping the version invalidates every token of the user, on all devices.
+  logout = async (req: Request, res: Response): Promise<void> => {
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.logout');
+    }
+    await this.users.bumpTokenVersion(req.currentUser.id);
+    res.status(204).end();
   };
 }

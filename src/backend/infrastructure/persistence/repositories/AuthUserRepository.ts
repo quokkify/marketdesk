@@ -11,6 +11,7 @@ import type {
   AuthUserRecord,
   CreateAuthUserInput,
 } from '../../../presentation/http/ports/IAuthUserStore';
+import { NotFoundError } from '../../../domain/shared/DomainError';
 import { toDate } from '../mappers/support';
 
 export interface AuthUserRow {
@@ -18,11 +19,12 @@ export interface AuthUserRow {
   email: string;
   password_hash: string;
   workspace_id: string | null;
+  token_version: number;
   created_at: Date | string;
 }
 
 const USER_SELECT = `
-  SELECT id, email, password_hash, workspace_id, created_at
+  SELECT id, email, password_hash, workspace_id, token_version, created_at
   FROM users
 `;
 
@@ -33,6 +35,7 @@ export const AuthUserMapper = {
       email: row.email,
       passwordHash: row.password_hash,
       workspaceId: row.workspace_id ?? null,
+      tokenVersion: row.token_version,
       createdAt: toDate(row.created_at),
     };
   },
@@ -71,10 +74,39 @@ export class AuthUserRepository implements IAuthUserStore {
     const { rows } = await query<AuthUserRow>(
       `INSERT INTO users (email, password_hash, workspace_id)
        VALUES ($1, $2, $3)
-       RETURNING id, email, password_hash, workspace_id, created_at`,
+       RETURNING id, email, password_hash, workspace_id, token_version, created_at`,
       [input.email, input.passwordHash, input.workspaceId ?? null],
       this.queryClient,
     );
     return AuthUserMapper.toRecord(rows[0]);
+  }
+
+  async bumpTokenVersion(userId: string): Promise<number> {
+    const { rows } = await query<{ token_version: number }>(
+      `UPDATE users SET token_version = token_version + 1
+       WHERE id = $1
+       RETURNING token_version`,
+      [userId],
+      this.queryClient,
+    );
+    if (!rows[0]) throw new NotFoundError(`User ${userId} not found`);
+    return rows[0].token_version;
+  }
+
+  async updatePassword(
+    userId: string,
+    passwordHash: string,
+    expectedVersion: number,
+  ): Promise<number | null> {
+    const { rows } = await query<{ token_version: number }>(
+      `UPDATE users SET password_hash = $2, token_version = token_version + 1
+       WHERE id = $1 AND token_version = $3
+       RETURNING token_version`,
+      [userId, passwordHash, expectedVersion],
+      this.queryClient,
+    );
+    if (rows[0]) return rows[0].token_version;
+    if (!(await this.findById(userId))) throw new NotFoundError(`User ${userId} not found`);
+    return null;
   }
 }

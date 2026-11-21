@@ -2,6 +2,7 @@ import { BlockList, isIP } from 'node:net';
 import dotenv from 'dotenv';
 import { readEmbeddedApplicationVersion } from './applicationVersion';
 import { resolveDatabaseSslMode } from './databaseConfig';
+import { parseDurationMs } from './duration';
 import { resolveHermesProviderMode } from './hermesProviderMode';
 export { resolveDatabaseSslMode, type DatabaseSslMode } from './databaseConfig';
 
@@ -155,8 +156,26 @@ type ParsedSetting =
   | 'PUBLIC_BASE_URL'
   | 'HERMES_PROVIDER_MODE'
   | 'OLX_ADAPTER_MODE'
-  | 'REGISTRATION_ENABLED';
+  | 'REGISTRATION_ENABLED'
+  | 'JWT_EXPIRATION'
+  | 'JWT_RENEW_AFTER';
 const invalidSettings: Partial<Record<ParsedSetting, string>> = {};
+
+const DEFAULT_JWT_EXPIRATION = '24h';
+const DEFAULT_JWT_RENEW_AFTER = '12h';
+
+function durationSetting(setting: ParsedSetting, value: string | undefined, fallback: string): number {
+  const raw = value?.trim() || fallback;
+  return parsedOrDefault(
+    setting,
+    () => {
+      const ms = parseDurationMs(raw);
+      if (ms === null) throw new Error(`${setting} is not a duration like 24h`);
+      return ms;
+    },
+    parseDurationMs(fallback)!,
+  );
+}
 
 function parsedOrDefault<T>(setting: ParsedSetting, parse: () => T, fallback: T): T {
   try {
@@ -216,7 +235,9 @@ export const env = {
   // so it is neither required nor validated.
   jwt: {
     secret: resolveJwtSecret(process.env.JWT_SECRET, 'JWT_SECRET'),
-    expiration: process.env.JWT_EXPIRATION || '7d',
+    expiration: process.env.JWT_EXPIRATION?.trim() || DEFAULT_JWT_EXPIRATION,
+    expirationMs: durationSetting('JWT_EXPIRATION', process.env.JWT_EXPIRATION, DEFAULT_JWT_EXPIRATION),
+    renewAfterMs: durationSetting('JWT_RENEW_AFTER', process.env.JWT_RENEW_AFTER, DEFAULT_JWT_RENEW_AFTER),
     refreshSecret: process.env.JWT_REFRESH_SECRET || '',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
@@ -363,6 +384,8 @@ const INVALID_SETTING_FIXES: Record<ParsedSetting, string> = {
     'Fix: set OLX_ADAPTER_MODE to stub for the labelled sandbox or to real for the OLX Partner API.',
   REGISTRATION_ENABLED:
     'Fix: set REGISTRATION_ENABLED to true or false, or leave it empty to keep registration open.',
+  JWT_EXPIRATION: `Fix: use <integer><s|m|h|d>, for example ${DEFAULT_JWT_EXPIRATION}.`,
+  JWT_RENEW_AFTER: `Fix: use <integer><s|m|h|d>, for example ${DEFAULT_JWT_RENEW_AFTER}.`,
 };
 
 // OLX fetches advert photos from PUBLIC_BASE_URL, so real mode needs an explicit
@@ -420,9 +443,30 @@ export function assertStartupConfiguration(e: typeof env): void {
     problems.push(`${publicBaseUrlProblem}. ${PUBLIC_BASE_URL_FIX_HINT}`);
   }
 
+  if (
+    !e.invalidSettings.JWT_EXPIRATION &&
+    !e.invalidSettings.JWT_RENEW_AFTER &&
+    e.jwt.renewAfterMs >= e.jwt.expirationMs
+  ) {
+    problems.push(
+      `JWT_RENEW_AFTER must be shorter than JWT_EXPIRATION. ${INVALID_SETTING_FIXES.JWT_RENEW_AFTER}`,
+    );
+  }
+
   if (problems.length > 0) {
     throw new Error(
       `Invalid startup configuration:\n${problems.map((problem) => `- ${problem}`).join('\n')}`,
     );
   }
+}
+
+// Non-fatal boot findings, logged once by main.ts after the gate passes.
+export function startupWarnings(e: typeof env): string[] {
+  const warnings: string[] = [];
+  if (e.jwt.expirationMs > parseDurationMs(DEFAULT_JWT_EXPIRATION)!) {
+    warnings.push(
+      `JWT_EXPIRATION is longer than ${DEFAULT_JWT_EXPIRATION}: a stolen or forgotten session stays valid that long.`,
+    );
+  }
+  return warnings;
 }

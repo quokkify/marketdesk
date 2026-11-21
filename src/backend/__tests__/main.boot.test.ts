@@ -134,7 +134,7 @@ describe('boot configuration', () => {
     });
     if (!auth) throw new Error('AuthMiddleware did not load');
 
-    expect(() => auth?.signToken({ userId: 'u-1' })).toThrow('secretOrPrivateKey must have a value');
+    expect(() => auth?.signToken({ userId: 'u-1', tokenVersion: 0 })).toThrow('secretOrPrivateKey must have a value');
   });
 
   it.each([
@@ -156,18 +156,74 @@ describe('boot configuration', () => {
     }
   );
 
-  it('issues tokens that last 7 days when JWT_EXPIRATION is unset', async () => {
-    setProcessEnv({ JWT_EXPIRATION: undefined });
+  it('issues tokens that last 24h and renews them after 12h when nothing is set', async () => {
+    setProcessEnv({ JWT_EXPIRATION: undefined, JWT_RENEW_AFTER: undefined });
     const { env } = await loadEnvModule();
 
-    expect(env.jwt.expiration).toBe('7d');
+    expect(env.jwt.expiration).toBe('24h');
+    expect(env.jwt.expirationMs).toBe(24 * 3_600_000);
+    expect(env.jwt.renewAfterMs).toBe(12 * 3_600_000);
   });
 
   it('takes the token lifetime from JWT_EXPIRATION when it is set', async () => {
-    setProcessEnv({ JWT_EXPIRATION: '12h' });
+    setProcessEnv({ JWT_EXPIRATION: '12h', JWT_RENEW_AFTER: '6h' });
     const { env } = await loadEnvModule();
 
     expect(env.jwt.expiration).toBe('12h');
+    expect(env.jwt.expirationMs).toBe(12 * 3_600_000);
+  });
+
+  describe('token lifetime', () => {
+    const bootWith = async (variables: Record<string, string | undefined>) => {
+      setProcessEnv({
+        NODE_ENV: 'development',
+        ALLOW_INSECURE_DEV_JWT: 'false',
+        JWT_SECRET: generatedSecret(),
+        MARKETPLACE_CREDENTIALS_KEY: generatedSecret(),
+        JWT_EXPIRATION: undefined,
+        JWT_RENEW_AFTER: undefined,
+        ...variables,
+      });
+      const module = await loadEnvModule();
+      return {
+        ...module,
+        boot: () => module.assertStartupConfiguration(module.env),
+      };
+    };
+
+    it('refuses an unreadable JWT_EXPIRATION and names it', async () => {
+      const { boot } = await bootWith({ JWT_EXPIRATION: 'abc' });
+
+      expect(boot).toThrow(/JWT_EXPIRATION/);
+    });
+
+    it('refuses an unreadable JWT_RENEW_AFTER and names it', async () => {
+      const { boot } = await bootWith({ JWT_RENEW_AFTER: '2 days' });
+
+      expect(boot).toThrow(/JWT_RENEW_AFTER/);
+    });
+
+    it('refuses a JWT_RENEW_AFTER that is not shorter than JWT_EXPIRATION', async () => {
+      const { boot } = await bootWith({ JWT_RENEW_AFTER: '24h', JWT_EXPIRATION: '24h' });
+
+      expect(boot).toThrow(/JWT_RENEW_AFTER/);
+    });
+
+    it('boots with JWT_EXPIRATION=7d and warns exactly once about the lifetime', async () => {
+      const { boot, env, startupWarnings } = await bootWith({ JWT_EXPIRATION: '7d' });
+
+      expect(boot).not.toThrow();
+      const warnings = startupWarnings(env);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('JWT_EXPIRATION');
+      expect(warnings[0]).toContain('24h');
+    });
+
+    it('does not warn with the default lifetime', async () => {
+      const { env, startupWarnings } = await bootWith({});
+
+      expect(startupWarnings(env)).toEqual([]);
+    });
   });
 
   it('reads ALLOW_INSECURE_DEV_JWT once, so the gate does not follow later process.env changes', async () => {
