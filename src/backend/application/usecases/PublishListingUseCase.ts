@@ -11,6 +11,7 @@ import {
   NotFoundError,
   InvalidStateError,
   GuardrailViolationError,
+  ValidationError,
 } from '../../domain/shared/DomainError';
 import type { Listing } from '../../domain/entities/Listing';
 import type { Product } from '../../domain/entities/Product';
@@ -24,7 +25,7 @@ import type { IdGenerator } from '../ports/IdGenerator';
 import type { PublishListingDTO } from '../dto/PublishListingDTO';
 import type { MarketplaceAccountRepository } from '../services/MarketplaceOAuthService';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
-import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
+import { evaluateOlxCategory, OLX_CONDITION_REQUIRED_MESSAGE } from '../../domain/services/OlxCategoryGuard';
 
 const PreflightState = Annotation.Root({
   input: Annotation<PublishListingDTO>(),
@@ -40,7 +41,7 @@ export const PUBLICATION_PREFLIGHT_GRAPH_VERSION = 'publication-preflight@1';
 export interface PublishEligibility {
   canPublish: boolean;
   warnings: string[];
-  error?: GuardrailViolationError | InvalidStateError;
+  error?: GuardrailViolationError | InvalidStateError | ValidationError;
 }
 
 export function evaluatePublishEligibility(
@@ -49,7 +50,7 @@ export function evaluatePublishEligibility(
   marketplace: Marketplace
 ): PublishEligibility {
   const warnings: string[] = [];
-  let error: GuardrailViolationError | InvalidStateError | undefined;
+  let error: GuardrailViolationError | InvalidStateError | ValidationError | undefined;
 
   if (!marketplace.isConnected()) {
     warnings.push(`Marketplace ${marketplace.key} is not connected`);
@@ -64,6 +65,10 @@ export function evaluatePublishEligibility(
   if (listing.price.isZero()) {
     warnings.push('Listing price must be set before publish');
     error ??= new InvalidStateError('Listing price must be set before publish');
+  }
+  if (marketplace.key === 'olx' && product.condition === 'unknown') {
+    warnings.push(OLX_CONDITION_REQUIRED_MESSAGE);
+    error ??= new ValidationError(OLX_CONDITION_REQUIRED_MESSAGE);
   }
 
   return { canPublish: warnings.length === 0, warnings, error };

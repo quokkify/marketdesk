@@ -1,5 +1,7 @@
 import type { MarketplaceCategoryMetadata } from '../../../shared/types';
 
+export const OLX_CONDITION_REQUIRED_MESSAGE = "Choose the product's condition before publishing to OLX";
+
 export type OlxCategoryGuardReason =
   | 'category_missing'
   | 'category_not_leaf'

@@ -12,6 +12,8 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String UNAUTHORIZED = "UNAUTHORIZED";
   private static final String NOT_FOUND = "NOT_FOUND";
   private static final String INVALID_STATE = "INVALID_STATE";
+  private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+  private static final String CONDITION_MESSAGE = "Choose the product's condition before publishing to OLX";
   private static final String SANDBOX_MESSAGE = "Reactivation is not available in sandbox mode";
 
   @Override
@@ -33,6 +35,19 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   public ListingVerification isSandboxRefusal(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
     response.body("error.message", Matchers.equalTo(SANDBOX_MESSAGE));
+    return self();
+  }
+
+  @Step("Publishing is refused until the product's condition is chosen")
+  public ListingVerification isConditionRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_BAD_REQUEST, VALIDATION_ERROR);
+    response.body("error.message", Matchers.equalTo(CONDITION_MESSAGE));
+    return self();
+  }
+
+  @Step("Publishing is not refused as a validation error")
+  public ListingVerification isNotValidationRefusal(ValidatableResponse response) {
+    response.body("error.code", Matchers.not(Matchers.equalTo(VALIDATION_ERROR)));
     return self();
   }
 

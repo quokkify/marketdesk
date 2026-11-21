@@ -32,7 +32,16 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
 
   @Step("Create a product with an OLX listing and keep both ids")
   public ProductListingPojo createOlxProductListing(AccountPojo account) {
-    String productId = productService.createProduct(account.token(), ProductRequestPojo.sample())
+    return createOlxProductListing(account, ProductRequestPojo.sample());
+  }
+
+  @Step("Create a product with condition {condition} and an OLX listing")
+  public String createOlxListingWithCondition(AccountPojo account, String condition) {
+    return createOlxProductListing(account, ProductRequestPojo.sample().withCondition(condition)).listingId();
+  }
+
+  private ProductListingPojo createOlxProductListing(AccountPojo account, ProductRequestPojo product) {
+    String productId = productService.createProduct(account.token(), product)
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
         .path(DATA_ID);
@@ -51,5 +60,10 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Reactivate listing {listingId} without authentication")
   public ValidatableResponse reactivateUnauthenticated(String listingId) {
     return service.reactivate(listingId);
+  }
+
+  @Step("Publish listing {listingId} to OLX")
+  public ValidatableResponse publish(AccountPojo account, String listingId) {
+    return service.publish(account.token(), listingId);
   }
 }
