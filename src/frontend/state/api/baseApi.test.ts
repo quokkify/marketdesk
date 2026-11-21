@@ -364,6 +364,30 @@ describe('password change', () => {
     expect(store.getState().ui.toasts).toEqual([]);
   });
 
+  it('ends the session with the expiry warning when the password change is answered with a revoked session', async () => {
+    const store = newStore();
+    signIn(store, 'valid-token');
+    serve({
+      '/api/auth/password': () =>
+        json(401, {
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Session has been revoked' },
+        }),
+    });
+
+    await store.dispatch(
+      authApi.endpoints.changePassword.initiate({
+        currentPassword: 'wrong-password',
+        newPassword: 'another-password',
+      })
+    );
+
+    expect(store.getState().auth.token).toBeNull();
+    expect(store.getState().ui.toasts).toEqual([
+      expect.objectContaining({ message: SESSION_EXPIRED, severity: 'warning' }),
+    ]);
+  });
+
   it('keeps the session and shows no expiry warning when logout answers 401', async () => {
     const store = newStore();
     signIn(store, 'valid-token');

@@ -42,3 +42,12 @@ export function unwrapPaginated<T>(res: PaginatedApiResponse<T>): PaginatedRespo
     totalPages: res.pagination.totalPages,
   };
 }
+
+export const WRONG_CURRENT_PASSWORD_MESSAGE = 'Current password is incorrect';
+
+// Message of the error envelope inside an RTK Query error, when the server sent one.
+export function apiErrorMessage(error: unknown): string | undefined {
+  const message = (error as { data?: { error?: { message?: unknown } } } | undefined)?.data?.error
+    ?.message;
+  return typeof message === 'string' ? message : undefined;
+}

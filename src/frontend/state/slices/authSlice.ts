@@ -48,6 +48,7 @@ const authSlice = createSlice({
       persistToken(action.payload.token);
     },
     setToken(state, action: PayloadAction<string>) {
+      if (state.token === null) return;
       state.token = action.payload;
       persistToken(action.payload);
     },
@@ -55,10 +56,12 @@ const authSlice = createSlice({
       state.user = action.payload;
     },
     logout(state) {
+      // Another tab may have signed in again; its stored token is not this tab's to remove.
+      const ownsStoredToken = readStoredToken() === state.token;
       state.token = null;
       state.user = null;
       state.isAuthenticated = false;
-      persistToken(null);
+      if (ownsStoredToken) persistToken(null);
     },
   },
 });

@@ -1,4 +1,8 @@
-import { changePasswordOutcome, validateChangePassword } from './changePasswordForm';
+import {
+  changePasswordOutcome,
+  isSameSession,
+  validateChangePassword,
+} from './changePasswordForm';
 
 const current = 'c'.repeat(9);
 const next = 'n'.repeat(9);
@@ -48,9 +52,27 @@ describe('validateChangePassword', () => {
 
 describe('changePasswordOutcome', () => {
   it('maps a wrong current password to the field', () => {
-    expect(changePasswordOutcome({ status: 401 })).toEqual({
+    const error = {
+      status: 401,
+      data: { error: { code: 'UNAUTHORIZED', message: 'Current password is incorrect' } },
+    };
+    expect(changePasswordOutcome(error)).toEqual({
       field: 'currentPassword',
       message: 'Current password is incorrect',
+    });
+  });
+
+  // Regression guard: any 401 used to read as "wrong password", hiding a revoked session.
+  it('does not blame the password for a 401 with another message', () => {
+    const error = {
+      status: 401,
+      data: { error: { code: 'UNAUTHORIZED', message: 'Session has been revoked' } },
+    };
+    expect(changePasswordOutcome(error)).toEqual({
+      message: 'Could not change the password. Try again.',
+    });
+    expect(changePasswordOutcome({ status: 401 })).toEqual({
+      message: 'Could not change the password. Try again.',
     });
   });
 
@@ -64,5 +86,14 @@ describe('changePasswordOutcome', () => {
     const generic = { message: 'Could not change the password. Try again.' };
     expect(changePasswordOutcome({ status: 500 })).toEqual(generic);
     expect(changePasswordOutcome(undefined)).toEqual(generic);
+  });
+});
+
+describe('isSameSession', () => {
+  it('holds only while the token sent with the request is still the current one', () => {
+    expect(isSameSession('t1', 't1')).toBe(true);
+    expect(isSameSession('t1', 't2')).toBe(false);
+    expect(isSameSession('t1', null)).toBe(false);
+    expect(isSameSession(null, null)).toBe(false);
   });
 });

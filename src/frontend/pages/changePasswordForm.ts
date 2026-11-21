@@ -1,3 +1,5 @@
+import { WRONG_CURRENT_PASSWORD_MESSAGE, apiErrorMessage } from '../state/api/envelope.js';
+
 export type ChangePasswordFields = {
   currentPassword: string;
   newPassword: string;
@@ -28,9 +30,14 @@ export type ChangePasswordFailure = {
 
 export function changePasswordOutcome(error: unknown): ChangePasswordFailure {
   const status = (error as { status?: unknown } | undefined)?.status;
-  if (status === 401) {
-    return { field: 'currentPassword', message: 'Current password is incorrect' };
+  if (status === 401 && apiErrorMessage(error) === WRONG_CURRENT_PASSWORD_MESSAGE) {
+    return { field: 'currentPassword', message: WRONG_CURRENT_PASSWORD_MESSAGE };
   }
   if (status === 429) return { message: 'Too many attempts. Try again later.' };
   return { message: 'Could not change the password. Try again.' };
+}
+
+// A password-change answer may only touch the session that sent the request.
+export function isSameSession(sentToken: string | null, currentToken: string | null): boolean {
+  return sentToken !== null && sentToken === currentToken;
 }

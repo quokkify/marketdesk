@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert, Button, Stack, TextField } from '@mui/material';
 import { useChangePasswordMutation } from '../state/api/authApi.js';
-import { useAppDispatch } from '../state/hooks.js';
+import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { setToken } from '../state/slices/authSlice.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
 import { Card } from '../components/common/Card.js';
 import {
   PASSWORD_CHANGED_TOAST,
   changePasswordOutcome,
+  isSameSession,
   validateChangePassword,
   type ChangePasswordFailure,
   type ChangePasswordFields,
@@ -18,6 +19,9 @@ const EMPTY: ChangePasswordFields = { currentPassword: '', newPassword: '', repe
 export const ChangePasswordCard: React.FC = () => {
   const dispatch = useAppDispatch();
   const [changePassword, { isLoading }] = useChangePasswordMutation();
+  const sessionToken = useAppSelector((state) => state.auth.token);
+  const latestSessionToken = useRef(sessionToken);
+  latestSessionToken.current = sessionToken;
   const [fields, setFields] = useState<ChangePasswordFields>(EMPTY);
   const [touched, setTouched] = useState<Partial<Record<keyof ChangePasswordFields, boolean>>>({});
   const [failure, setFailure] = useState<ChangePasswordFailure | null>(null);
@@ -39,12 +43,13 @@ export const ChangePasswordCard: React.FC = () => {
       return;
     }
     if (isLoading) return;
+    const sentToken = sessionToken;
     try {
       const { token } = await changePassword({
         currentPassword: fields.currentPassword,
         newPassword: fields.newPassword,
       }).unwrap();
-      dispatch(setToken(token));
+      if (isSameSession(sentToken, latestSessionToken.current)) dispatch(setToken(token));
       setFields(EMPTY);
       setTouched({});
       setFailure(null);

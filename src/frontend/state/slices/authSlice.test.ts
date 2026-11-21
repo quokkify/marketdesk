@@ -46,4 +46,23 @@ describe('authSlice setToken', () => {
     expect(reducer(state, logout()).token).toBeNull();
     expect(localStorage.getItem('marketdesk.token')).toBeNull();
   });
+
+  // Regression guard: a late password-change answer used to write a token after sign-out.
+  it('is a no-op when nobody is signed in', () => {
+    const signedOut = reducer(reducer(undefined, setCredentials({ token: 't1', user })), logout());
+
+    const after = reducer(signedOut, setToken('late'));
+
+    expect(after.token).toBeNull();
+    expect(localStorage.getItem('marketdesk.token')).toBeNull();
+  });
+
+  it('logout leaves the stored token of another tab alone', () => {
+    const state = reducer(undefined, setCredentials({ token: 't1', user }));
+    localStorage.setItem('marketdesk.token', 'other-tab-token');
+
+    reducer(state, logout());
+
+    expect(localStorage.getItem('marketdesk.token')).toBe('other-tab-token');
+  });
 });
