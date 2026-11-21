@@ -334,18 +334,25 @@ export class ConversationRepository implements IConversationRepository {
 
   async purgeExpiredText(before: Date): Promise<number> {
     const { rows } = await query<{ id: string }>(
-      `WITH expired AS (
-         UPDATE conversation_threads SET text_purged_at = now(), updated_at = now()
-          WHERE retention_starts_at < $1 AND text_purged_at IS NULL
-          RETURNING id
-       ), messages AS (
+      `WITH msgs AS (
          UPDATE conversation_messages SET text = NULL, text_hash = NULL
-          WHERE thread_id IN (SELECT id FROM expired)
+          WHERE (text IS NOT NULL OR text_hash IS NOT NULL)
+            AND thread_id IN (SELECT id FROM conversation_threads WHERE retention_starts_at < $1)
+          RETURNING thread_id
        ), drafts AS (
          UPDATE reply_drafts SET proposed_text = NULL, sent_text = NULL, updated_at = now()
-          WHERE thread_id IN (SELECT id FROM expired)
+          WHERE (proposed_text IS NOT NULL OR sent_text IS NOT NULL)
+            AND thread_id IN (SELECT id FROM conversation_threads WHERE retention_starts_at < $1)
+          RETURNING thread_id
+       ), touched AS (
+         SELECT thread_id FROM msgs UNION SELECT thread_id FROM drafts
+       ), threads AS (
+         UPDATE conversation_threads SET text_purged_at = now(), updated_at = now()
+          WHERE id IN (SELECT thread_id FROM touched)
+             OR (retention_starts_at < $1 AND text_purged_at IS NULL)
+          RETURNING id
        )
-       SELECT id FROM expired`,
+       SELECT id FROM threads`,
       [before],
       this.queryClient,
     );

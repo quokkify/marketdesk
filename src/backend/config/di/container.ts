@@ -23,6 +23,7 @@ import { createRedisClient } from '../redis';
 
 // --- Infrastructure: persistence ---
 import { ProductRepository } from '../../infrastructure/persistence/repositories/ProductRepository';
+import { ConversationRepository } from '../../infrastructure/persistence/repositories/ConversationRepository';
 import { ListingRepository } from '../../infrastructure/persistence/repositories/ListingRepository';
 import { MarketplaceRepository } from '../../infrastructure/persistence/repositories/MarketplaceRepository';
 import { MarketplaceAccountRepository } from '../../infrastructure/persistence/repositories/MarketplaceAccountRepository';
@@ -124,6 +125,7 @@ import { ListingApplicationService } from '../../application/services/ListingApp
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
+import { ConversationRetentionService } from '../../application/services/ConversationRetentionService';
 import { MarketplaceSyncScheduler } from '../../application/services/MarketplaceSyncScheduler';
 import { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import {
@@ -155,6 +157,9 @@ export interface ManagedQueue<T> extends IJobQueue<T> {
   registerHandler(handler: (data: T) => Promise<unknown>): void;
   close(): Promise<void>;
 }
+
+const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
+const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
 export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) {
   return {
@@ -403,6 +408,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const publishQueue = createQueue<PublishListingJob>('publish-listing');
   const syncQueue = createQueue<SyncMarketplaceJob>('sync-marketplace');
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
+  const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -759,6 +765,17 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   syncQueue.registerHandler((data) => syncHandler.handle(data));
 
+  const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
+  conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
+  void conversationRetentionQueue
+    .scheduleRepeat({}, { jobId: CONVERSATION_RETENTION_JOB_ID, everyMs: CONVERSATION_RETENTION_EVERY_MS })
+    .catch((error: unknown) => {
+      console.warn(
+        'Conversation retention could not be scheduled',
+        error instanceof Error ? error.message : String(error)
+      );
+    });
+
   const hermesLimitsReader = new HermesLimitsReader(env.hermes.usageFile);
 
   // 10. Assemble AppDeps.
@@ -808,6 +825,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const queues: ManagedQueue<unknown>[] = [
     publishQueue as ManagedQueue<unknown>,
     syncQueue as ManagedQueue<unknown>,
+    conversationRetentionQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

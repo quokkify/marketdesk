@@ -172,6 +172,29 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     expect((await repo.findThreadForWorkspace(fresh.id, workspaceId))?.textPurgedAt).toBeNull();
   });
 
+  it('purgesLateMessageInAlreadyPurgedThread', async () => {
+    const thread = await repo.upsertThread({
+      workspaceId,
+      listingId,
+      productId,
+      externalThreadId: 'ext-late',
+      retentionStartsAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const cutoff = new Date('2026-06-01T00:00:00Z');
+    await repo.upsertMessages(thread.id, [message('m1')]);
+    expect(await repo.purgeExpiredText(cutoff)).toBe(1);
+    const firstPurge = (await repo.findThreadForWorkspace(thread.id, workspaceId))?.textPurgedAt;
+    expect(firstPurge).toBeInstanceOf(Date);
+
+    await repo.upsertMessages(thread.id, [message('m2')]);
+    expect(await repo.purgeExpiredText(cutoff)).toBe(1);
+
+    const messages = await repo.recentMessages(thread.id, 10);
+    expect(messages).toHaveLength(2);
+    expect(messages.every((m) => m.text === null && m.textHash === null)).toBe(true);
+    expect(await repo.purgeExpiredText(cutoff)).toBe(0);
+  });
+
   it('threadsAreWorkspaceScoped', async () => {
     const thread = await newThread();
     const otherWorkspace = randomUUID();
