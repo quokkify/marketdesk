@@ -7,19 +7,43 @@ import type { ComparableCandidate } from '../../../shared/types';
 import { normalizeOlxAdvertUrl } from '../../../shared/olxAdvertUrl';
 import { parseHermesJson } from './HermesAI';
 import { sellerDataBlock } from './sellerData';
+import { ValidationError } from '../../domain/shared/DomainError';
 
 export const COMPARABLE_SEARCH_OPERATION = 'searchComparables';
 export const RESEARCH_TOOLSET = 'web';
+export const SEARCH_NAME_TOO_SHORT = 'Product name is too short to search';
 
 const MAX_NAME_LENGTH = 120;
 const MAX_TITLE_LENGTH = 200;
 const MAX_PRICE = 100_000;
 const MAX_CANDIDATES = 10;
 
-// Any scheme (also glued to text), any domain-like token (labels joined by dots ending in a 2+ letter
-// TLD, with an optional path), and a bare IPv4 host. Model numbers such as 4.5/5 or MXP63ZM/A stay.
-const URL_LIKE =
-  /\S*?[a-z][a-z0-9+.-]*:\/\/\S*|\S*(?:[\p{L}\p{N}-]+\.)+\p{L}{2,}(?:[/:?#]\S*)?|\S*\b\d{1,3}(?:\.\d{1,3}){3}\S*/giu;
+// Top-level domains that mark a dotted word as a host. A fixed list, so names written without a
+// space after a period (256GB.Czarny, stan.bdb) keep their words.
+const URL_TLDS = [
+  'com', 'net', 'org', 'info', 'biz', 'io', 'co', 'app', 'dev', 'xyz', 'site', 'online', 'top', 'pl', 'eu',
+  'de', 'uk', 'ru', 'ua', 'by', 'cz', 'sk', 'lt', 'lv', 'ee', 'fr', 'it', 'es', 'nl', 'be', 'at', 'ch', 'se',
+  'no', 'dk', 'fi', 'us', 'ca', 'me', 'tv', 'cc', 'ly', 'gl', 'to', 'sh', 'ai', 'gg', 'link', 'click', 'shop',
+  'store',
+];
+const LABEL = String.raw`[\p{L}\p{N}-]+`;
+const REST = String.raw`(?:[:/?#]\S*)?`;
+// Each alternative matches only the URL itself:
+// any scheme with ://; a web scheme with a bare colon (http:host); a //host; user@host;
+// an IPv4 host; a www. host; a host on a listed TLD; any dotted host followed by a port, path or query.
+const URL_LIKE = new RegExp(
+  [
+    String.raw`[a-z][a-z0-9+.-]*:\/\/\S*`,
+    String.raw`(?:https?|ftps?|file|wss?|mailto):\S*`,
+    String.raw`\/\/\S+`,
+    String.raw`[^\s@]*@\S+`,
+    String.raw`(?<![\p{N}.])\d{1,3}(?:\.\d{1,3}){3}(?![\p{N}])${REST}`,
+    String.raw`www\.\S*`,
+    String.raw`(?:${LABEL}\.)+(?:${URL_TLDS.join('|')})(?![\p{L}\p{N}-])${REST}`,
+    String.raw`(?:${LABEL}\.)+\p{L}{2,}[:/?#]\S*`,
+  ].join('|'),
+  'giu',
+);
 const NOT_ALLOWED = /[^\p{L}\p{N} \-/.()+]/gu;
 
 // URLs removed; only letters, digits, spaces and -/.()+ kept; spaces collapsed; at most 120 chars.
@@ -46,8 +70,11 @@ export function buildComparableSearchPrompt(input: {
   category: string;
   currency: string;
 }): { system: string; prompt: string } {
+  // Nothing left to search for once URLs and markup are gone: refuse before any Hermes call.
+  const name = sanitizeSearchName(input.name);
+  if (name === '') throw new ValidationError(SEARCH_NAME_TOO_SHORT);
   const item = {
-    name: sanitizeSearchName(input.name),
+    name,
     condition: input.condition.replace(/_/g, ' '),
     category: sanitizeSearchName(input.category),
   };

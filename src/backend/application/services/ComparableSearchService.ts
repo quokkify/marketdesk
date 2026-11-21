@@ -57,6 +57,14 @@ export class ComparableSearchService {
       throw new ValidationError(SEARCH_NEEDS_PLN);
     }
 
+    const categoryPath = listing.marketplaceCategory?.path ?? [];
+    const { system, prompt } = buildComparableSearchPrompt({
+      name: product.name,
+      condition: product.condition,
+      category: categoryPath[categoryPath.length - 1] ?? product.category,
+      currency: listing.price.currency,
+    });
+
     const profile = await this.research.checkProfile();
     if (!profile.reachable) {
       throw new ServiceUnavailableError('Market search is unavailable: the research profile is not reachable');
@@ -68,13 +76,6 @@ export class ComparableSearchService {
       );
     }
 
-    const categoryPath = listing.marketplaceCategory?.path ?? [];
-    const { system, prompt } = buildComparableSearchPrompt({
-      name: product.name,
-      condition: product.condition,
-      category: categoryPath[categoryPath.length - 1] ?? product.category,
-      currency: listing.price.currency,
-    });
     const client = this.research.client;
     let raw: string;
     try {

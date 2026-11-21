@@ -3,8 +3,10 @@ import {
   filterComparableCandidates,
   isResearchToolsetSafe,
   parseComparableCandidates,
+  SEARCH_NAME_TOO_SHORT,
   sanitizeSearchName,
 } from '../comparableSearchPrompt';
+import { ValidationError } from '../../../domain/shared/DomainError';
 
 const OWN_URL = 'https://www.olx.pl/d/oferta/airpods-4-moje-CID99-ID1own0.html';
 const VALID = {
@@ -29,16 +31,36 @@ describe('sanitizeSearchName', () => {
     }
     expect(name).not.toMatch(/ {2}/);
     expect(sanitizeSearchName('a'.repeat(300)).length).toBeLessThanOrEqual(120);
-    // Regression guard: hosts without a scheme, a scheme glued to text, any scheme, a bare IPv4 host.
+    // Regression guard: every URL-like token is stripped, including hosts without a scheme.
     for (const raw of [
       'AirPods evil.example/a?x=1',
-      'AirPodshttps://evil.example/a',
-      'ftp://evil.example',
+      'AirPods EVIL.EXAMPLE/a',
+      'AirPods evil.pl',
+      'AirPods shop.store/x',
+      'AirPods xn--80ak6aa92e.com',
+      'AirPods evil.com:8080',
+      'AirPods ftp://evil.com',
+      'AirPods file:///etc/passwd',
+      'AirPods http:evil.com',
+      'AirPods //evil.com',
+      'AirPods user@evil.com',
+      'AirPods www.evil.info',
       'AirPods 10.0.0.1/a',
+      'AirPods 10.0.0.1:8080',
     ]) {
       const cleaned = sanitizeSearchName(raw);
-      expect(cleaned).not.toMatch(/evil|example|https|ftp|\/\/|10\.0\.0\.1/);
+      expect(cleaned).toMatch(/^AirPods/);
+      expect(cleaned).not.toMatch(/evil|example|shop|xn--|https|ftp|file|passwd|\/\/|10\.0\.0\.1|8080/i);
     }
+    // A scheme glued to a word may take the word with it; the URL must still go.
+    expect(sanitizeSearchName('AirPodshttps://evil.com/a')).not.toMatch(/evil|https|\/\//);
+  });
+
+  it('keepsWordsJoinedByAPeriod', () => {
+    expect(sanitizeSearchName('Apple iPhone 15 Pro 256GB.Czarny')).toBe('Apple iPhone 15 Pro 256GB.Czarny');
+    expect(sanitizeSearchName('AirPods 4.Etui')).toBe('AirPods 4.Etui');
+    // An unlisted TLD-like word is a word, not a host.
+    expect(sanitizeSearchName('Etui.Nowe, stan.bdb')).toBe('Etui.Nowe stan.bdb');
   });
 
   it('keepsModelNumbersAndVariants', () => {
@@ -54,15 +76,24 @@ describe('buildComparableSearchPrompt', () => {
     const { system, prompt } = buildComparableSearchPrompt({
       name: 'Apple AirPods 4 https://evil.example/x',
       condition: 'like_new',
-      category: 'Słuchawki evil.example/x',
+      category: 'Słuchawki evil.com/x',
       currency: 'PLN',
     });
     expect(prompt).toContain(sanitizeSearchName('Apple AirPods 4 https://evil.example/x'));
-    expect(prompt).not.toContain('evil.example');
+    expect(prompt).not.toContain('evil.');
     expect(prompt).toContain('PLN');
     expect(prompt).toContain('web_search');
     expect(prompt).toContain('web_extract');
     expect(system).toMatch(/data/i);
+  });
+});
+
+describe('buildComparableSearchPrompt with nothing left of the name', () => {
+  it('refusesEmptySanitizedName', () => {
+    const build = () =>
+      buildComparableSearchPrompt({ name: 'https://evil.com/a <> !!', condition: 'good', category: 'x', currency: 'PLN' });
+    expect(build).toThrow(ValidationError);
+    expect(build).toThrow(SEARCH_NAME_TOO_SHORT);
   });
 });
 
