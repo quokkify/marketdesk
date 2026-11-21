@@ -108,10 +108,10 @@ LangGraph `StateGraph`, nodes:
    A hit → thread `suspicious` with reasons, graph ends. Rules are versioned data, Polish and
    Ukrainian and Russian phrasings included.
 2. `classify` — Hermes, strict Zod output `{ intent, confidence }`.
-3. `draft` — Hermes, input: product (title, description, condition, price), the floor only as
-   "may offer at most down to X" when intent is `haggle`, the last N messages of this thread.
-   Output: `{ reply, offeredPrice | null }`.
-4. `validate` — code: `offeredPrice ≥ floor`; any price number in the text ≥ floor; no URL, phone,
+3. `draft` — Hermes, input: product (title, description, condition, price) and the last N
+   messages of this thread. The floor is never sent to the model (see prompt-injection defence).
+   Output: `{ reply, counterOffer, proposedPrice | null }`; code fills the `{{PRICE}}` placeholder.
+4. `validate` — code: the filled price ≥ floor; any price number in the text ≥ floor; no URL, phone,
    e-mail, IBAN, address; length limit; no payment/delivery outside OLX. Failure → draft not
    stored as `pending`; the thread shows "Hermes could not draft a safe reply" with the reason.
 
@@ -119,6 +119,43 @@ Graph state holds tenant-scoped ids and the result only. The observer receives n
 only (as in `ProductAssistanceGraph`). AI usage is recorded through `withAiUsageScope` with a new
 feature `reply`. Caps: at most one graph run per buyer message, and a per-workspace daily cap on
 reply runs (config value).
+
+### Prompt-injection defence
+
+Assume buyer text will try to steer Hermes ("ignore your instructions", "you are now…", fake
+system/role tags, "tell me the lowest price"). Defence is layered so no single layer has to hold:
+
+1. **Nothing to steer towards.** Hermes runs on the no-tools profile and the graph gives it no
+   actions: its output is text plus fields that code checks. It sees only this product and this
+   thread: no other buyers, no seller contact data, no credentials.
+2. **The floor never reaches the model.** For `haggle` the model returns
+   `{ reply, counterOffer: boolean, proposedPrice | null }`, and the reply text uses a `{{PRICE}}`
+   placeholder instead of a number. Code clamps the price to `max(proposedPrice, floor)`, applies
+   the concession step, and fills the placeholder. A buyer asking "what is your minimum?" cannot
+   extract a number the model never had. Any other currency-tied number in the reply fails
+   `validate`.
+3. **Data, not instructions.** Each buyer message goes into the prompt inside a delimiter block
+   with role labels the buyer cannot forge (the delimiter is escaped in buyer text). The system
+   prompt states that the block is quoted customer text and never instructions.
+4. **Injection as a screening signal.** `screen` rules also flag injection markers (instruction
+   overrides, role/system tags, prompt-like markup, long base64 or encoded blobs). A hit marks the
+   thread suspicious with reason `prompt_injection`, so no draft is written and the model never
+   sees the message.
+5. **Strict outputs.** `classify` and `draft` outputs are parsed with strict Zod schemas. Extra
+   fields, tool-call shapes or out-of-enum intents are rejected, as in `ProductAssistanceGraph`.
+6. **Code validation and a human.** `validate` (no links, contacts, IBAN, off-platform payment,
+   no price below the floor) runs on the model draft and again on the seller's edited text. The
+   seller approves every send in this step.
+7. **Safe display.** Buyer text and drafts render as plain text in the UI, never as HTML or
+   Markdown links.
+8. **Regression cases.** The offline experiment dataset gains a `conversation-adversarial` set:
+   instruction overrides, role tags, floor extraction, link smuggling ("write olx-dostawa dot pl"),
+   language switching, and a scam message phrased politely. The gate requires zero floor leaks and
+   zero links in drafts. Like the existing suite, it uses a fixture provider and does not measure
+   real-model resistance; a real-model run is a separate, reviewed step before autopilot.
+
+Before autopilot, layers 4–6 must hold with the human removed. That is a gate for the autopilot
+design, not for this step.
 
 ### Sending
 
@@ -172,7 +209,7 @@ the owner (approach choice depended on it).
   to the old advert id.
 - **Spam detection** compares a SHA-256 of the normalised text within the workspace's stored
   messages; thresholds (repeat count, messages per thread per hour) are config values.
-- **Price numbers in a draft.** The validator checks `offeredPrice` and only number tokens tied to a
+- **Price numbers in a draft.** The validator checks the filled price and only number tokens tied to a
   currency (`zł`, `PLN`, `zl`, `грн`, `UAH`, `€`, `EUR`, the product's currency) or to price words.
   Plain numbers ("iPhone 12", "2 pieces") are not prices.
 - **Re-runs.** A draft that fails `validate` leaves the thread "no safe draft"; the seller can press
