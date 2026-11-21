@@ -10,6 +10,7 @@ import {
   delistListingToDraftSchema,
   marketplaceCategorySchema,
   publishListingSchema,
+  reactivateListingSchema,
 } from '../validation/schemas';
 
 const passthrough: RequestHandler = (_req, _res, next) => next();
@@ -57,6 +58,12 @@ export function createListingRoutes(
     sensitiveLimiter,
     validateBody(publishListingSchema),
     asyncHandler(controller.publish),
+  );
+  router.post(
+    '/:id/reactivate',
+    sensitiveLimiter,
+    validateBody(reactivateListingSchema),
+    asyncHandler(controller.reactivate),
   );
   router.post(
     '/:id/relist',

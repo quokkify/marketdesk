@@ -29,6 +29,12 @@ public class MarketplaceSteps extends ApiSteps<MarketplaceVerification> {
         .path(OLX_ID_PATH);
   }
 
+  // In stub mode connect attaches the labelled sandbox OLX account at once.
+  @Step("Connect the sandbox OLX account")
+  public void connectSandboxOlx(AccountPojo account) {
+    service.connect(account.token(), getOlxMarketplaceId(account)).statusCode(HttpStatus.SC_OK);
+  }
+
   @Step("Preview the OLX import without authentication")
   public ValidatableResponse previewImportUnauthenticated(String marketplaceId) {
     return service.previewImport(marketplaceId, MarketplaceImportRequestPojo.empty());

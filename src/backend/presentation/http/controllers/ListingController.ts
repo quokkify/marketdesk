@@ -22,6 +22,7 @@ import type { OlxPublicationQuotaService } from '../../../application/services/O
 import { evaluateOlxCategory, type OlxCategoryGuardResult } from '../../../domain/services/OlxCategoryGuard';
 import type { OlxTrustedTaxonomyResolver } from '../../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
+import type { ListingReactivationService } from '../../../application/services/ListingReactivationService';
 import { ok, paginated } from '../formatters/ResponseFormatter';
 import type { OlxAdapterMode } from '../../../config/env';
 
@@ -47,6 +48,7 @@ export interface ListingControllerDeps {
   olxQuotaService?: OlxPublicationQuotaService;
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
+  listingReactivationService?: ListingReactivationService;
   // OLX adapter mode from OLX_ADAPTER_MODE.
   olxAdapterMode: OlxAdapterMode;
 }
@@ -286,6 +288,21 @@ export class ListingController {
       }
     }
     ok(res, presentListing(listing));
+  };
+
+  reactivate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const service = this.deps.listingReactivationService;
+    if (!service) return next(new NotFoundError('Listing reactivation is unavailable'));
+    const result = await service.reactivate({
+      listingId: routeParam(req.params.id),
+      workspaceId: req.user!.workspaceId!,
+      actorId: req.user?.userId,
+    });
+    ok(res, {
+      listing: presentListing(result.listing),
+      outcome: result.outcome,
+      remoteStatus: result.remoteStatus,
+    });
   };
 
   relist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

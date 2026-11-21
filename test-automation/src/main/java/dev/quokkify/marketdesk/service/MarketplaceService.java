@@ -10,6 +10,8 @@ public class MarketplaceService extends MarketDeskApiService {
   private static final String MARKETPLACES = "/api/marketplaces";
   private static final String IMPORT_PREVIEW = MARKETPLACES + "/%s/import-preview";
   private static final String IMPORT = MARKETPLACES + "/%s/import";
+  private static final String CONNECT = MARKETPLACES + "/%s/connect";
+  private static final String EMPTY_BODY = "{}";
 
   public ValidatableResponse getMarketplaces(String token) {
     return get(authorized(token), MARKETPLACES);
@@ -21,6 +23,10 @@ public class MarketplaceService extends MarketDeskApiService {
 
   public ValidatableResponse previewImport(String marketplaceId, MarketplaceImportRequestPojo body) {
     return post(anonymous(), IMPORT_PREVIEW.formatted(marketplaceId), JsonConverter.toJsonIgnoreNulls(body));
+  }
+
+  public ValidatableResponse connect(String token, String marketplaceId) {
+    return post(authorized(token), CONNECT.formatted(marketplaceId), EMPTY_BODY);
   }
 
   public ValidatableResponse importAdverts(String token, String marketplaceId, MarketplaceImportRequestPojo body) {
