@@ -1,6 +1,6 @@
 // Price research of one product: the form the owner fills in, the body the API takes, and the
 // lines that show an estimate. The limits mirror the server's rules.
-import type { PriceComparable, PriceComparableSource, PriceEstimate, PriceResearch } from '@shared/types';
+import type { ComparableCandidate, PriceComparable, PriceComparableSource, PriceEstimate, PriceResearch } from '@shared/types';
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 
@@ -139,7 +139,30 @@ export function discountLine(price: number, research: PriceResearch | null, curr
   return `${percentText(percent)} vs new · ${formatMoney(research.retailPrice, currency)}${origin ? ` (${origin})` : ''}`;
 }
 
-export function estimateLines(e: PriceEstimate, currency: string): string[] {
+const isBlankRow = (row: PriceResearchForm['comparables'][number]) => row.price.trim() === '' && row.note.trim() === '';
+
+export function mergeFoundComparables(form: PriceResearchForm, picked: ComparableCandidate[]): PriceResearchForm {
+  const known = new Set(form.comparables.map((row) => (row.url ? normalizeOlxAdvertUrl(row.url) : null)));
+  const added: PriceResearchForm['comparables'] = [];
+  for (const c of picked) {
+    const key = normalizeOlxAdvertUrl(c.url);
+    if (key === null || known.has(key)) continue;
+    known.add(key);
+    added.push({ price: String(c.price), note: c.title, url: c.url, source: 'web' });
+  }
+  return { ...form, comparables: [...form.comparables, ...added] };
+}
+
+export function selectionFits(form: PriceResearchForm, pickedCount: number): boolean {
+  return form.comparables.filter((row) => !isBlankRow(row)).length + pickedCount <= MAX_COMPARABLES;
+}
+
+export function usedRangeSourceNote(research: PriceResearch | null): string | null {
+  const fromWeb = research?.comparables.filter((c) => c.source === 'web').length ?? 0;
+  return fromWeb > 0 ? `${fromWeb} from OLX` : null;
+}
+
+export function estimateLines(e: PriceEstimate, currency: string, sourceNote: string | null = null): string[] {
   const lines = [`Start ${formatMoney(e.startPrice, currency)}`, `Floor ${formatMoney(e.floorPrice, currency)}`];
   if (e.retailAnchor) {
     lines.push(`New price ${formatMoney(e.retailAnchor.amount, currency)} · ${e.retailAnchor.basis}`);
@@ -147,7 +170,8 @@ export function estimateLines(e: PriceEstimate, currency: string): string[] {
   if (e.usedRange) {
     const suffix = ` ${currencySymbol(currency)}`;
     const low = formatMoney(e.usedRange.low, currency).slice(0, -suffix.length);
-    lines.push(`Used range ${low}–${formatMoney(e.usedRange.high, currency)} · ${e.usedRange.basis}`);
+    const note = sourceNote && e.usedRange.basis === 'observed' ? ` (${sourceNote})` : '';
+    lines.push(`Used range ${low}–${formatMoney(e.usedRange.high, currency)} · ${e.usedRange.basis}${note}`);
   }
   if (e.retailAnchor) {
     const percent = discountVsNew(e.startPrice, e.retailAnchor.amount);

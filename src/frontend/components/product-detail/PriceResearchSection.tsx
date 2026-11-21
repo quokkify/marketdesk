@@ -2,24 +2,34 @@
 // a few comparable used prices. Hermes reads it when it proposes a start price. The retail price
 // is never written to the product's cost price.
 import React, { useState } from 'react';
-import { Alert, Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, IconButton, Link, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { PriceResearch } from '@shared/types';
+import type { ComparableCandidate, PriceResearch } from '@shared/types';
+import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { Card } from '../common/Card.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
-import { useGetPriceResearchQuery, useSavePriceResearchMutation } from '../../state/api/productsApi.js';
+import {
+  useGetPriceResearchQuery,
+  useSavePriceResearchMutation,
+  useSearchComparablesMutation,
+} from '../../state/api/productsApi.js';
 import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
 import {
   MAX_COMPARABLES,
   discountLine,
+  mergeFoundComparables,
   toPriceResearchBody,
   toPriceResearchForm,
   type PriceResearchForm,
 } from './priceResearchModel.js';
 import { formatDateTime, formatMoney } from '../../utils/formatters.js';
 import { requestErrorMessage } from './revivalView.js';
+import { ComparableSearchDialog } from './ComparableSearchDialog.js';
+
+const OLX_PLN_ONLY = 'OLX search needs a PLN listing';
+const OLX_CURRENCY = 'PLN';
 
 interface PriceResearchFormProps {
   productId: string;
@@ -32,6 +42,8 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
   const [save, { isLoading: saving }] = useSavePriceResearchMutation();
   const [form, setForm] = useState<PriceResearchForm>(() => toPriceResearchForm(research, currency));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [search, { isLoading: searching }] = useSearchComparablesMutation();
+  const [found, setFound] = useState<ComparableCandidate[] | null>(null);
 
   const patch = (change: Partial<PriceResearchForm>) => setForm((current) => ({ ...current, ...change }));
   const patchComparable = (index: number, change: Partial<PriceResearchForm['comparables'][number]>) =>
@@ -51,6 +63,32 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
       dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
     }
   };
+
+  const handleSearch = async () => {
+    try {
+      const result = await search(productId).unwrap();
+      setFound(result.candidates);
+    } catch (err) {
+      dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
+    }
+  };
+
+  const handleAddFound = async (picked: ComparableCandidate[]) => {
+    const result = toPriceResearchBody(mergeFoundComparables(form, picked));
+    if (!result.ok) {
+      dispatch(enqueueToast({ message: Object.values(result.errors)[0] ?? 'Check the price research', severity: 'error' }));
+      return;
+    }
+    try {
+      await save({ productId, body: result.body }).unwrap();
+      setFound(null);
+      dispatch(enqueueToast({ message: `Added ${picked.length} comparables from OLX.`, severity: 'success' }));
+    } catch (err) {
+      dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
+    }
+  };
+
+  const pln = currency === OLX_CURRENCY;
 
   return (
     <Stack spacing={2}>
@@ -115,6 +153,18 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
                 error={Boolean(errors[`comparables.${index}.note`])}
                 helperText={errors[`comparables.${index}.note`]}
               />
+              {row.source === 'web' && row.url && normalizeOlxAdvertUrl(row.url) !== null && (
+                <Link
+                  href={row.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="body2"
+                  sx={{ alignSelf: 'center' }}
+                  data-testid="comparable-olx-link"
+                >
+                  OLX
+                </Link>
+              )}
               <IconButton
                 aria-label={`Remove comparable ${index + 1}`}
                 onClick={() => patch({ comparables: form.comparables.filter((_, i) => i !== index) })}
@@ -125,15 +175,41 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
           ))}
         </Stack>
         {errors.comparables && <Alert severity="error" sx={{ mt: 1 }}>{errors.comparables}</Alert>}
-        <Button
-          size="small"
-          sx={{ mt: 1 }}
-          disabled={form.comparables.length >= MAX_COMPARABLES}
-          onClick={() => patch({ comparables: [...form.comparables, { price: '', note: '' }] })}
-        >
-          Add comparable
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            size="small"
+            disabled={form.comparables.length >= MAX_COMPARABLES}
+            onClick={() => patch({ comparables: [...form.comparables, { price: '', note: '' }] })}
+          >
+            Add comparable
+          </Button>
+          <Tooltip title={pln ? '' : OLX_PLN_ONLY}>
+            <span>
+              <Button
+                size="small"
+                disabled={!pln || searching}
+                startIcon={searching ? <CircularProgress size={14} /> : undefined}
+                onClick={() => void handleSearch()}
+                data-testid="comparable-search-button"
+              >
+                {searching ? 'Searching OLX…' : 'Find comparables on OLX'}
+              </Button>
+            </span>
+          </Tooltip>
+          {!pln && <Typography variant="caption" color="text.secondary">{OLX_PLN_ONLY}</Typography>}
+        </Stack>
       </Box>
+
+      {found !== null && (
+        <ComparableSearchDialog
+          open
+          candidates={found}
+          form={form}
+          saving={saving}
+          onClose={() => setFound(null)}
+          onAdd={(picked) => void handleAddFound(picked)}
+        />
+      )}
 
       <Box>
         <Button variant="contained" disabled={saving} onClick={() => void handleSave()} data-testid="price-research-save">
