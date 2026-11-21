@@ -14,6 +14,7 @@ q4j-sql = { module = "dev.quokkify:sql", version.ref = "q4j" }
 q4j-tyrus = { module = "dev.quokkify:tyrus", version.ref = "q4j" }
 q4j-selenide = { module = "dev.quokkify:selenide", version.ref = "q4j" }
 q4j-rest-assured = { module = "dev.quokkify:rest-assured", version.ref = "q4j" }
+q4j-awaitility = { module = "dev.quokkify:awaitility", version.ref = "q4j" }
 q4j-jackson-json = { module = "dev.quokkify:jackson-json", version.ref = "q4j" }
 postgresql = { module = "org.postgresql:postgresql", version = "42.7.14" }
 testng = { module = "org.testng:testng", version.ref = "testng" }

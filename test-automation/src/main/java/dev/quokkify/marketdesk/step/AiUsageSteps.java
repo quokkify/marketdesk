@@ -6,10 +6,10 @@ import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.service.AiUsageService;
 import dev.quokkify.marketdesk.verification.AiUsageVerification;
 import dev.quokkify.step.ApiSteps;
+import dev.quokkify.util.Waiter;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
-import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 
 public class AiUsageSteps extends ApiSteps<AiUsageVerification> {
@@ -32,16 +32,17 @@ public class AiUsageSteps extends ApiSteps<AiUsageVerification> {
   // The backend stores a call after answering, so the usage report catches up a moment later.
   @Step("Wait until today's usage counts {analyses} analyses")
   public ValidatableResponse getUsageOnceCounted(AccountPojo account, int analyses) {
-    ValidatableResponse[] last = new ValidatableResponse[1];
     try {
-      Awaitility.await().atMost(USAGE_TIMEOUT).pollInterval(USAGE_POLL_INTERVAL).until(() -> {
-        last[0] = service.getUsage(account.token());
-        return last[0].extract().jsonPath().getInt("data.today.analyses") == analyses;
-      });
+      Waiter.awaitCondition(() -> todayAnalyses(account) == analyses, "today's usage counts " + analyses,
+          USAGE_TIMEOUT, USAGE_POLL_INTERVAL);
     } catch (ConditionTimeoutException e) {
-      // The caller's verification reports the actual count.
+      // The caller's verification reports the actual count from the final request below.
     }
-    return last[0];
+    return service.getUsage(account.token());
+  }
+
+  private int todayAnalyses(AccountPojo account) {
+    return service.getUsage(account.token()).extract().jsonPath().getInt("data.today.analyses");
   }
 
   @Step("Get AI usage without authentication")
