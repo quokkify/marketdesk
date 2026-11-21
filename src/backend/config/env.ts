@@ -266,6 +266,8 @@ export const env = {
     apiUrl: process.env.HERMES_API_URL || '',
     apiKey: process.env.HERMES_API_KEY || '',
     webhookSecret: process.env.HERMES_WEBHOOK_SECRET || '',
+    // File the host writes with `hermes usage --json`; empty means limits are not configured.
+    usageFile: process.env.HERMES_USAGE_FILE || '',
     providerMode: parsedOrDefault(
       'HERMES_PROVIDER_MODE',
       () => resolveHermesProviderMode(process.env.HERMES_PROVIDER_MODE),

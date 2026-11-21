@@ -155,6 +155,8 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./.local/runs:/app/.local/runs
+      # Written on the host by `hermes usage --json`; the app only reads it.
+      - ${HERMES_USAGE_DIR:-./hermes-usage}:/app/hermes-usage:ro
     networks:
       - marketdesk-network
     restart: unless-stopped

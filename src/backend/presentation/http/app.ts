@@ -15,7 +15,7 @@ import type { ProductApplicationService } from '../../application/services/Produ
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import type { HermesApplicationService } from '../../application/services/HermesApplicationService';
-import type { AiUsageReport, HermesStatusView } from '../../../shared/types';
+import type { AiUsageReport, HermesLimits, HermesStatusView } from '../../../shared/types';
 import type { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
@@ -70,6 +70,8 @@ export interface AppDeps {
   hermesStatus?: () => Promise<HermesStatusView>;
   // Stored AI usage of one workspace (GET /api/hermes/usage).
   aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>;
+  // Account-wide limits of the AI provider, read from the Hermes usage file (GET /api/hermes/limits).
+  hermesLimits?: () => Promise<HermesLimits>;
   analyticsService: AnalyticsApplicationService;
   productRepo: IProductRepository;
   listingRepo: IListingRepository;
@@ -243,7 +245,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.hermesService,
       deps.categoryCorrectionOperationService,
       deps.hermesStatus,
-      deps.aiUsageReport
+      deps.aiUsageReport,
+      deps.hermesLimits
     ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),

@@ -8,4 +8,7 @@ interface MarketDeskApiConfiguration extends Config {
 
   @Key("MARKETDESK_API_BASE_URI")
   String baseUri();
+
+  @Key("MARKETDESK_HERMES_USAGE_DIR")
+  String hermesUsageDir();
 }

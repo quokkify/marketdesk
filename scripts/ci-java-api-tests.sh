@@ -33,6 +33,9 @@ grep -v '^MARKETPLACE_CREDENTIALS_KEY=' .env.example > "$env_file"
 printf 'MARKETPLACE_CREDENTIALS_KEY=%s\n' "$credentials_key" >> "$env_file"
 export MARKETDESK_ENV_FILE="$env_file"
 
+# The app mounts this directory read-only; creating it here keeps Docker from creating it root-owned.
+mkdir -p hermes-usage
+
 docker compose up --build --detach
 
 ready=false

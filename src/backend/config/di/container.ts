@@ -82,6 +82,7 @@ import { env } from '../env';
 import { HermesAI, loadHermesConfig } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
+import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsReader';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
@@ -743,6 +744,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   syncQueue.registerHandler((data) => syncHandler.handle(data));
 
+  const hermesLimitsReader = new HermesLimitsReader(env.hermes.usageFile);
+
   // 10. Assemble AppDeps.
   const deps: AppDeps = {
     productService,
@@ -761,6 +764,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       if (!workspace) throw new NotFoundError('Workspace not found');
       return aiUsageRepo.summary(workspaceId, workspace.timezone, new Date());
     },
+    hermesLimits: () => hermesLimitsReader.read(new Date()),
     analyticsService,
     productRepo,
     listingRepo,

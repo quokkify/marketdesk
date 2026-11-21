@@ -7,6 +7,7 @@ public final class MarketDeskApiConfig {
   private static final MarketDeskApiConfiguration CONFIG = ConfigRegistry.get(MarketDeskApiConfiguration.class);
 
   public static final String BASE_URI = CONFIG.baseUri();
+  public static final String HERMES_USAGE_DIR = CONFIG.hermesUsageDir();
 
   private MarketDeskApiConfig() {
   }

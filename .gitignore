@@ -97,3 +97,4 @@ dist-ssr/
 
 # Generated files that shouldn't be committed
 .prettierignore.generated
+hermes-usage/
