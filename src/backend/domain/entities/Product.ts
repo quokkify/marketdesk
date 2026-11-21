@@ -301,6 +301,17 @@ export class Product {
     this.touch();
   }
 
+  // A marketplace import is the source of truth for the price: it lowers the floor
+  // instead of failing when the imported price falls below it.
+  syncSellingPriceFromMarketplace(price: Money): Result<void> {
+    if (this._minAcceptablePrice?.isGreaterThan(price) && this._minAcceptablePrice.currency === price.currency) {
+      this._minAcceptablePrice = price;
+    } else if (this._minAcceptablePrice && this._minAcceptablePrice.currency !== price.currency) {
+      this._minAcceptablePrice = null;
+    }
+    return this.updateSellingPrice(price);
+  }
+
   updateMinAcceptablePrice(price: Money | null): Result<void> {
     const check = Product.validateFloor(price, this._sellingPrice);
     if (check.isErr()) return check;

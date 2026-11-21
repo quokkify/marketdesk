@@ -481,6 +481,9 @@ export class ApproveHermesEventUseCase {
 
     // Approved AI price changes may go below cost; > 20% drops were already gated
     // to human review by HermesEvent.requiresHumanReview() before reaching approval.
+    if (product.minAcceptablePrice && money.value.isLessThan(product.minAcceptablePrice)) {
+      return Err(new InvalidStateError('The new price is below the lowest price you accept'));
+    }
     const updated = product.updateSellingPrice(money.value, true);
     if (updated.isErr()) return updated;
     await this.productRepo.save(product);

@@ -20,7 +20,7 @@ import {
 } from '../testkit/support';
 import type { PublishListingJob } from '../ports/IJobQueue';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
-import { GuardrailViolationError } from '../../domain/shared/DomainError';
+import { GuardrailViolationError, InvalidStateError } from '../../domain/shared/DomainError';
 import {
   recommendationFingerprint,
   seoSourceFingerprint,
@@ -162,6 +162,38 @@ function setup(
 }
 
 describe('ApproveHermesEventUseCase', () => {
+  it('rejects an approved price change below the lowest acceptable price with 422', async () => {
+    const { useCase, eventRepo, product, productRepo } = setup();
+    unwrap(product.updateMinAcceptablePrice(money(95)));
+    await productRepo.save(product);
+    const event = unwrap(
+      HermesEvent.create({
+        id: 'evt-floor',
+        workspaceId: 'ws-1',
+        productId: 'prod-1',
+        type: 'suggested_lower_price',
+        severity: 'warning',
+        title: 'Lower the price',
+        detail: 'Move stock faster',
+        proposedChange: { kind: 'price', field: 'price', from: 100, to: 90 },
+      })
+    );
+    await eventRepo.save(event);
+
+    const result = await useCase.execute({
+      eventId: 'evt-floor',
+      workspaceId: 'ws-1',
+      actorId: 'user-1',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(InvalidStateError);
+      expect(result.error.message).toBe('The new price is below the lowest price you accept');
+    }
+    expect(product.sellingPrice.amount).toBe(100);
+  });
+
   it('applies a pending price change: updates product, records history and marks applied', async () => {
     const { useCase, eventRepo, product, priceHistory, activityLog, publisher } = setup();
 

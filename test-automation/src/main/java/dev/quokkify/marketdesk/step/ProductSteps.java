@@ -40,6 +40,17 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
     return service.getProduct(account.token(), productId);
   }
 
+  @Step("Set the lowest acceptable price of product {productId} to {minAcceptablePrice}")
+  public ValidatableResponse updateMinAcceptablePrice(AccountPojo account, String productId,
+      Double minAcceptablePrice) {
+    return service.updateMinAcceptablePrice(account.token(), productId, minAcceptablePrice);
+  }
+
+  @Step("Set the selling price of product {productId} to {sellingPrice}")
+  public ValidatableResponse updateSellingPrice(AccountPojo account, String productId, double sellingPrice) {
+    return service.updateSellingPrice(account.token(), productId, sellingPrice);
+  }
+
   @Step("Ask for improvements of the product and its listing")
   public ValidatableResponse proposeImprovements(AccountPojo account, ProductListingPojo productListing) {
     return service.proposeImprovements(account.token(), productListing.productId(),

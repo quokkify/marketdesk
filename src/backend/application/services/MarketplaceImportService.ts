@@ -753,7 +753,7 @@ export class MarketplaceImportService {
           remote.price,
           remote.currency ?? product.sellingPrice.currency
         );
-        const priced = product.updateSellingPrice(selling);
+        const priced = product.syncSellingPriceFromMarketplace(selling);
         if (priced.isErr()) throw priced.error;
       }
       await repos.productRepo.save(product);

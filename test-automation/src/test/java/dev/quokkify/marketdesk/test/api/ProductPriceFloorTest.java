@@ -29,6 +29,37 @@ public class ProductPriceFloorTest extends BaseTest {
   }
 
   @Test
+  public void updatesAndClearsFloor() {
+    AccountPojo account = authSteps.registerNewAccount();
+    ValidatableResponse created = productSteps.createProduct(account,
+        ProductRequestPojo.withPriceFloor(SELLING_PRICE, null));
+    String productId = created.extract().path(DATA_ID);
+
+    ValidatableResponse set = productSteps.updateMinAcceptablePrice(account, productId, FLOOR);
+    productSteps.verify()
+        .verifyResponseStatusCode(set, HttpStatus.SC_OK)
+        .hasMinAcceptablePrice(set, FLOOR);
+
+    ValidatableResponse cleared = productSteps.updateMinAcceptablePrice(account, productId, null);
+    productSteps.verify()
+        .verifyResponseStatusCode(cleared, HttpStatus.SC_OK)
+        .hasNoMinAcceptablePrice(cleared);
+  }
+
+  @Test
+  public void rejectsSellingPriceBelowFloorOnUpdate() {
+    AccountPojo account = authSteps.registerNewAccount();
+    ValidatableResponse created = productSteps.createProduct(account,
+        ProductRequestPojo.withPriceFloor(SELLING_PRICE, FLOOR));
+    String productId = created.extract().path(DATA_ID);
+
+    ValidatableResponse response = productSteps.updateSellingPrice(account, productId, 70.0);
+    productSteps.verify()
+        .verifyResponseStatusCode(response, HttpStatus.SC_UNPROCESSABLE_ENTITY)
+        .hasFailed(response);
+  }
+
+  @Test
   public void rejectsFloorAboveSellingPrice() {
     AccountPojo account = authSteps.registerNewAccount();
     ValidatableResponse response = productSteps.createProduct(account,

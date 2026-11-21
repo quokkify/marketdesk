@@ -636,6 +636,50 @@ describe('MarketplaceImportService', () => {
     });
   });
 
+  it('lowers the price floor instead of failing when the imported price is below it', async () => {
+    const product = unwrap(
+      Product.create({
+        id: 'product-floor',
+        workspaceId: 'workspace-1',
+        sku: 'SKU-FLOOR',
+        name: 'Remote camera',
+        description: 'Existing OLX advert with enough seller supplied detail.',
+        costPrice: money(10),
+        sellingPrice: money(120),
+        minAcceptablePrice: money(110),
+        condition: 'good',
+        category: 'Old category',
+        status: 'active',
+        images: ['https://img/1.jpg'],
+      })
+    );
+    const existing = unwrap(
+      Listing.create({
+        id: 'listing-floor',
+        productId: product.id,
+        marketplaceId: 'marketplace-1',
+        marketplaceListingId: 'olx-1',
+        price: money(120),
+        status: 'draft',
+      })
+    );
+    const { service, productRepo } = createService([remoteListing({ price: 100 })], [existing]);
+    productRepo.items.set(product.id, product);
+
+    const result = await service.import({
+      workspaceId: 'workspace-1',
+      marketplaceId: 'marketplace-1',
+      externalListingIds: ['olx-1'],
+      actorId: 'user-1',
+    });
+
+    if (result.isErr()) throw result.error;
+    expect(result.value).toMatchObject({ failed: 0 });
+    const stored = productRepo.items.get(product.id);
+    expect(stored?.sellingPrice.amount).toBe(100);
+    expect(stored?.minAcceptablePrice?.amount).toBe(100);
+  });
+
   it('preserves imported exact remote category metadata', async () => {
     const remote = remoteListing({ marketplaceCategory: headphonesCategory });
     const { service, listingRepo } = createService([remote]);

@@ -8,7 +8,8 @@ import type { ProductImageRow, ProductRow, ProductTagRow } from '../mappers/rows
 // products carry no currency column; join workspaces to reconstruct Money.
 const PRODUCT_SELECT = `
   SELECT p.id, p.workspace_id, p.sku, p.name, p.description,
-         p.cost_price, p.selling_price, p.min_acceptable_price_minor, p.condition, p.category, p.category_provenance, p.status,
+         p.cost_price, p.selling_price, p.min_acceptable_price_minor, p.condition, p.category,
+         p.category_provenance, p.status,
          p.created_at, p.updated_at, w.currency
   FROM products p
   JOIN workspaces w ON w.id = p.workspace_id

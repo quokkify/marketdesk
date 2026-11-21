@@ -437,22 +437,29 @@ export class HermesDecisionEngine {
       });
 
       const currentPrice = product.sellingPrice.amount;
+      // A drop never goes below the seller's lowest acceptable price.
+      // Without an explicit floor, repricing stays as it was.
+      const floor = product.minAcceptablePrice?.amount;
+      const suggestedPrice =
+        floor !== undefined && priceResult.suggestedPrice < currentPrice
+          ? Math.max(priceResult.suggestedPrice, floor)
+          : priceResult.suggestedPrice;
       if (
         priceResult.confidence === 'high' &&
         currentPrice > 0 &&
-        Math.abs(priceResult.suggestedPrice - currentPrice) >= 0.05 * currentPrice
+        Math.abs(suggestedPrice - currentPrice) >= 0.05 * currentPrice
       ) {
-        const isLower = priceResult.suggestedPrice < currentPrice;
+        const isLower = suggestedPrice < currentPrice;
         suggestions.push({
           type: isLower ? 'suggested_lower_price' : 'suggested_higher_price',
           severity: isLower ? 'warning' : 'info',
-          title: `AI suggests price ${priceResult.suggestedPrice}`,
+          title: `AI suggests price ${suggestedPrice}`,
           detail: priceResult.reasoning,
           change: {
             kind: 'price',
             field: 'price',
             from: currentPrice,
-            to: priceResult.suggestedPrice,
+            to: suggestedPrice,
           },
         });
       }
