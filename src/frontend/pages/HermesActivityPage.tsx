@@ -27,7 +27,9 @@ import {
   useAnalyticsOverview,
   useHermesEventFeed,
   useHermesEvents,
+  useHermesLimits,
   useHermesStatus,
+  useHermesUsage,
   useMarketplaces,
 } from '../services/hooks/index.js';
 import { APP_ROUTE_PATHS } from '../utils/constants.js';
@@ -36,7 +38,7 @@ import { EmptyState } from '../components/common/EmptyState.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { LoadingSkeleton } from '../components/common/Skeleton.js';
 import { HermesStatusBadge, HermesSeverityBadge } from '../components/common/Badge.js';
-import { HermesEventCard } from '../components/hermes/index.js';
+import { AiUsageCard, HermesEventCard, HermesLimitsCard } from '../components/hermes/index.js';
 import {
   HERMES_ACTIONS_SAMPLE_SIZE,
   HERMES_ACTIVITY_TABS,
@@ -267,6 +269,9 @@ function useHermesMetrics(): HermesMetric[] {
   return buildHermesMetrics({ awaitingReview, completed, dismissed, recent, now: new Date() });
 }
 
+// Limits and usage change while the page stays open, so both refetch once a minute.
+const HERMES_POLL_MS = 60_000;
+
 export interface HermesActivityPageProps {
   /** Filters shown first. The route renders the page without props: the All tab and no selects. */
   initialTab?: HermesActivityTab;
@@ -299,6 +304,8 @@ const HermesActivityPage: React.FC<HermesActivityPageProps> = ({
   const overview = useAnalyticsOverview();
   const marketplaces = useMarketplaces();
   const metrics = useHermesMetrics();
+  const usage = useHermesUsage(undefined, { pollingInterval: HERMES_POLL_MS });
+  const limits = useHermesLimits(undefined, { pollingInterval: HERMES_POLL_MS });
 
   const handleStatus = (e: SelectChangeEvent<HermesEventStatus[]>) => {
     const value = e.target.value;
@@ -320,6 +327,17 @@ const HermesActivityPage: React.FC<HermesActivityPageProps> = ({
         onSelectProduct={() => navigate(APP_ROUTE_PATHS.products)}
       />
       <HermesMetrics metrics={metrics} />
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          mb: 2.5,
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        <HermesLimitsCard limits={limits.data} loading={limits.isLoading} failed={limits.isError} />
+        <AiUsageCard usage={usage.data} loading={usage.isLoading} failed={usage.isError} />
+      </Box>
 
       <Card sx={{ mb: 2.5 }} contentSx={{ p: 2 }}>
         <Stack
