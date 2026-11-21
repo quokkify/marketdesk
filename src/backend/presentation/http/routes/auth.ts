@@ -54,5 +54,13 @@ export function createAuthRoutes(
     requireCurrentPrincipal(currentUserStore),
     asyncHandler(controller.me)
   );
+  // No renewal on sign-out: the token is revoked in this very request.
+  router.post(
+    '/logout',
+    authMiddleware,
+    meLimiter,
+    requireCurrentPrincipal(currentUserStore, { renew: false }),
+    asyncHandler(controller.logout)
+  );
   return router;
 }

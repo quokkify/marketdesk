@@ -1081,6 +1081,57 @@ describe('Presentation API', () => {
     });
   });
 
+  describe('sign out', () => {
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const loginToken = async (app: Parameters<typeof request>[0]) => {
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: 'secret123' });
+      return login.body.data.token as string;
+    };
+
+    it('signs out every device', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+      const b = await loginToken(app);
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(a));
+
+      expect(out.status).toBe(204);
+      expect(out.text).toBe('');
+      for (const t of [a, b]) {
+        const res = await request(app).get('/api/products').set(bearerOf(t));
+        expect(res.status).toBe(401);
+        expect(res.body.error.message).toBe('Session has been revoked');
+      }
+      expect((await request(app).get('/api/products').set(bearerOf(await loginToken(app)))).status).toBe(200);
+    });
+
+    it('refuses sign-out with a revoked token', async () => {
+      const { app, authUserStore } = await buildTestApp();
+      const a = await loginToken(app);
+      await authUserStore.bumpTokenVersion('u-1');
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(a));
+
+      expect(out.status).toBe(401);
+    });
+
+    it('signs out with an old token without handing out a renewed one', async () => {
+      const { app } = await buildTestApp();
+      const old = jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv: 0, iat: Math.floor(Date.now() / 1000) - 13 * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' },
+      );
+
+      const out = await request(app).post('/api/auth/logout').set(bearerOf(old));
+
+      expect(out.status).toBe(204);
+      expect(out.headers['x-renewed-token']).toBeUndefined();
+    });
+  });
+
   describe('token renewal', () => {
     const tokenAged = (hours: number, tv = 0) =>
       jwt.sign(

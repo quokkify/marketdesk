@@ -147,4 +147,13 @@ export class AuthController {
     }
     ok(res, toUserView(req.currentUser));
   };
+
+  // Bumping the version invalidates every token of the user, on all devices.
+  logout = async (req: Request, res: Response): Promise<void> => {
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.logout');
+    }
+    await this.users.bumpTokenVersion(req.currentUser.id);
+    res.status(204).end();
+  };
 }
