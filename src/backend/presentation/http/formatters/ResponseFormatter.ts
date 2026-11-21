@@ -158,6 +158,8 @@ export function fail(
 // The request log gets the code, the message and, for validation, only the field paths: issue
 // messages can echo the submitted value.
 function summarizeErrorBody(body: ErrorBody): { code: string; message: string; fields?: string[] } {
-  const fields = Array.isArray(body.details) ? body.details.map((detail) => detail.field) : undefined;
+  const fields = Array.isArray(body.details)
+    ? body.details.map((detail) => detail?.field).filter((field): field is string => Boolean(field))
+    : undefined;
   return { code: body.code, message: body.message, ...(fields ? { fields } : {}) };
 }

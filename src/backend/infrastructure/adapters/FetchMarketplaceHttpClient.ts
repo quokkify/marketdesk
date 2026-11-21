@@ -96,6 +96,7 @@ export class FetchMarketplaceHttpClient implements MarketplaceHttpClient {
         this.logFailure(config, 504, 'Marketplace request timed out');
         throw new HttpError(504, 'Marketplace request timed out');
       }
+      this.logFailure(config, undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -110,7 +111,7 @@ export class FetchMarketplaceHttpClient implements MarketplaceHttpClient {
     }
   }
 
-  private logFailure(config: HttpRequestConfig, status: number, data: unknown): void {
+  private logFailure(config: HttpRequestConfig, status: number | undefined, data: unknown): void {
     this.options.logger?.warn(
       { method: config.method, url: urlWithoutQuery(config.url), status, body: bodyExcerpt(data) },
       MARKETPLACE_ERROR_LOG_MESSAGE,

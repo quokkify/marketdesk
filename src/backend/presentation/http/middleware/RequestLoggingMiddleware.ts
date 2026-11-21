@@ -1,6 +1,6 @@
-// One log line per API request, written when the response finishes, so a failed request is
-// visible on the server without the browser. Bodies, query strings and headers are never logged:
-// they carry passwords, OAuth codes and tokens.
+// One log line per API request (mounted on /api), written when the response finishes, so a failed
+// request is visible on the server without the browser. Bodies, query strings and headers are never
+// logged: they carry passwords, OAuth codes and tokens.
 import type { RequestHandler, Response } from 'express';
 
 export interface RequestLogger {
@@ -15,7 +15,6 @@ export interface ResponseErrorSummary {
   fields?: string[];
 }
 
-const UNLOGGED_PATHS = new Set(['/health', '/ready']);
 const RESPONSE_ERROR_KEY = 'responseError';
 const REQUEST_LOG_MESSAGE = 'HTTP request';
 const CLIENT_ERROR_STATUS = 400;
@@ -35,10 +34,6 @@ function pathWithoutQuery(originalUrl: string): string {
 export function createRequestLoggingMiddleware(logger: RequestLogger): RequestHandler {
   return (req, res, next) => {
     const path = pathWithoutQuery(req.originalUrl);
-    if (UNLOGGED_PATHS.has(path)) {
-      next();
-      return;
-    }
     const startedAt = process.hrtime.bigint();
     res.on('finish', () => {
       const status = res.statusCode;

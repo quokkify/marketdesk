@@ -184,6 +184,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       maxUploadFileSize
     );
 
+  // Before the body parsers and CORS, so their rejections (malformed JSON, 413) are logged too.
+  if (deps.requestLogger) app.use('/api', createRequestLoggingMiddleware(deps.requestLogger));
   app.use(helmet(HELMET_OPTIONS));
   app.use(compression());
   // CORS is allowlist-based when credentials are enabled. We intentionally avoid
@@ -193,7 +195,6 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
   app.use(cors(createCorsOptions(options.corsOrigin)));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
-  if (deps.requestLogger) app.use(createRequestLoggingMiddleware(deps.requestLogger));
   const runRecorder = deps.runRecorder ?? noopRunRecorder;
   app.use(createRunContextMiddleware(runRecorder));
 
@@ -264,7 +265,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
 
   // Unmatched /api route -> 404 envelope via the central error handler.
   app.use('/api', (req: Request, _res: Response, next) => {
-    next(new NotFoundError(`Route not found: ${req.method} ${req.originalUrl}`));
+    // baseUrl + path, not originalUrl: the query string may carry an OAuth code or state.
+    next(new NotFoundError(`Route not found: ${req.method} ${req.baseUrl}${req.path}`));
   });
 
   // Central error handler MUST be last.
