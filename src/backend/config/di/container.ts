@@ -11,6 +11,7 @@
 // so the graph can be built and asserted without any live infrastructure (see the
 // container unit test). Absent overrides, the real config-backed clients are used.
 
+import { activateDraftWithLiveListing } from '../../domain/services/productSaleStatus';
 import type { RequestLogger } from '../../presentation/http/middleware/RequestLoggingMiddleware';
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -551,6 +552,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const listingReactivationService = new ListingReactivationService({
     listingRepo,
     marketplaceRepo,
+    productRepo,
     activityLog: activityLogRepo,
     idGenerator,
     sandboxMode: env.marketplaces.olx.adapterMode !== 'real',
@@ -685,6 +687,9 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
             marketplace.workspaceId
           );
           if (!product) throw new Error(`Product not found for synchronized listing: ${productId}`);
+          const activated = activateDraftWithLiveListing(product, listings);
+          if (activated.isErr()) throw activated.error;
+          if (activated.value) await repositories.productRepo.save(product);
         }
         await repositories.listingRepo.saveAllIfUnchanged(listings, expectedUpdatedAt);
         if (mismatchCandidates.length > 0 && !marketplaceAccount) {

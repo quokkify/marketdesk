@@ -3,6 +3,8 @@
 // used up OLX answers with status `limited` and waits for a paid packet, which MarketDesk reports.
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
+import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
+import { activateDraftWithLiveListing } from '../../domain/services/productSaleStatus';
 import type { IActivityLogRepository } from '../../domain/repositories/interfaces/IActivityLogRepository';
 import type { IMarketplaceAdapter } from '../../domain/services/MarketplaceAdapter';
 import type { Marketplace } from '../../domain/entities/Marketplace';
@@ -31,6 +33,7 @@ export interface ReactivationAdapterResolver {
 export interface ListingReactivationServiceDeps {
   listingRepo: IListingRepository;
   marketplaceRepo: IMarketplaceRepository;
+  productRepo: IProductRepository;
   adapters: ReactivationAdapterResolver;
   activityLog: IActivityLogRepository;
   idGenerator: IdGenerator;
@@ -144,6 +147,24 @@ export class ListingReactivationService {
       if (relisted.isErr()) throw relisted.error;
       if (remote?.externalUrl) listing.recordExternalUrl(remote.externalUrl);
       await this.deps.listingRepo.save(listing);
+      // A live advert puts a draft product on sale, as publishing does. The OLX action already
+      // happened, so a failure here is logged instead of failing the request; the next sync repairs it.
+      try {
+        const product = await this.deps.productRepo.findByIdForWorkspace(
+          listing.productId,
+          input.workspaceId
+        );
+        if (product) {
+          const activated = activateDraftWithLiveListing(product, [listing]);
+          if (activated.isErr()) throw activated.error;
+          if (activated.value) await this.deps.productRepo.save(product);
+        }
+      } catch (error) {
+        this.deps.logger?.warn(
+          { listingId: listing.id, error: error instanceof Error ? error.message : String(error) },
+          'Product could not be put on sale after reactivation'
+        );
+      }
     }
 
     await this.recordActivity(input, listing, { externalListingId, outcome, remoteStatus });
