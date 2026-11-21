@@ -147,15 +147,23 @@ export class ListingReactivationService {
       if (relisted.isErr()) throw relisted.error;
       if (remote?.externalUrl) listing.recordExternalUrl(remote.externalUrl);
       await this.deps.listingRepo.save(listing);
-      // A live advert puts a draft product on sale, as publishing does.
-      const product = await this.deps.productRepo.findByIdForWorkspace(
-        listing.productId,
-        input.workspaceId
-      );
-      if (product) {
-        const activated = activateDraftWithLiveListing(product, [listing]);
-        if (activated.isErr()) throw activated.error;
-        if (activated.value) await this.deps.productRepo.save(product);
+      // A live advert puts a draft product on sale, as publishing does. The OLX action already
+      // happened, so a failure here is logged instead of failing the request; the next sync repairs it.
+      try {
+        const product = await this.deps.productRepo.findByIdForWorkspace(
+          listing.productId,
+          input.workspaceId
+        );
+        if (product) {
+          const activated = activateDraftWithLiveListing(product, [listing]);
+          if (activated.isErr()) throw activated.error;
+          if (activated.value) await this.deps.productRepo.save(product);
+        }
+      } catch (error) {
+        this.deps.logger?.warn(
+          { listingId: listing.id, error: error instanceof Error ? error.message : String(error) },
+          'Product could not be put on sale after reactivation'
+        );
       }
     }
 
