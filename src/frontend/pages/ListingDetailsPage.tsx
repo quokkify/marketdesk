@@ -105,6 +105,7 @@ import {
   PublicationReadinessSection,
 } from '../components/product-detail/ProductDetailSections.js';
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
+import { RevivalDialog } from '../components/product-detail/RevivalDialog.js';
 
 export { mainPreviewImageSx };
 
@@ -122,11 +123,11 @@ export function editRequestedByNavigation(state: unknown): boolean {
   );
 }
 
-// The pricing card's main action: publish a draft, reactivate an expired OLX
-// advert under its own id, relist an ended listing without one, ask for an OLX
+// The pricing card's main action: publish a draft, revive an expired OLX
+// advert under its own id (plain reactivation stays a second action), relist an ended listing without one, ask for an OLX
 // connection first, or edit a live or sold product. The server refuses to
 // relist a failed listing that still references an OLX advert, so that case
-// falls back to editing. A sandbox advert cannot be reactivated on OLX.
+// falls back to editing. A sandbox advert cannot be revived on OLX.
 export function productPrimaryAction(input: {
   productStatus: Product['status'];
   olxListing: Listing | undefined;
@@ -137,7 +138,7 @@ export function productPrimaryAction(input: {
   if (input.productStatus === 'sold' || listing?.status === 'live') return 'edit';
   if (listing?.status === 'error' && listing.marketplaceListingId) return 'edit';
   if (!input.olxConnected) return 'connect';
-  if (listing?.status === 'expired' && listing.marketplaceListingId && !input.olxSandbox) return 'reactivate';
+  if (listing?.status === 'expired' && listing.marketplaceListingId && !input.olxSandbox) return 'revive';
   if (listing?.status === 'expired' || listing?.status === 'error') return 'relist';
   return 'publish';
 }
@@ -718,6 +719,7 @@ const ListingDetailsPage: React.FC = () => {
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [reactivateListing, { isLoading: reactivating }] = useReactivateListing();
   const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [reviveOpen, setReviveOpen] = useState(false);
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
   const [publishListingPreview] = usePublishListingPreview();
   const [searchOlxCategories] = useSearchOlxCategories();
@@ -1377,6 +1379,7 @@ const ListingDetailsPage: React.FC = () => {
             onEdit={() => setEditOpen(true)}
             onPublish={() => void handlePublishToOlx()}
             onRelist={recheckListing ? () => handleRelist(recheckListing) : undefined}
+            onRevive={recheckListing ? () => setReviveOpen(true) : undefined}
             onReactivate={recheckListing ? () => setReactivateOpen(true) : undefined}
             onConnect={() => navigate('/marketplaces')}
           />
@@ -1516,6 +1519,16 @@ const ListingDetailsPage: React.FC = () => {
       </Box>
 
       {deleteDialog}
+      {recheckListing && (
+        <RevivalDialog
+          open={reviveOpen}
+          listingId={recheckListing.id}
+          product={p}
+          currency={currency}
+          onClose={() => setReviveOpen(false)}
+          onRevived={(result) => dispatch(enqueueToast(reactivationToast(result.outcome === 'update_refused' ? 'unchanged' : result.outcome, null)))}
+        />
+      )}
       {recheckListing && (
         <ConfirmDialog
           open={reactivateOpen}

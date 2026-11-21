@@ -1,5 +1,5 @@
 // Listings endpoints, injected into the shared baseApi (Group 8).
-import type { Listing, PriceHistory, ApiResponse } from '@shared/types';
+import type { Listing, PriceHistory, ApiResponse, ProductCondition, RevivalProposal } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
 import { unwrap } from './envelope.js';
@@ -23,6 +23,30 @@ export interface ListingReactivationResult {
   listing: Listing;
   outcome: 'live' | 'pending_moderation' | 'limited' | 'unchanged' | 'unconfirmed';
   remoteStatus: string | null;
+}
+
+// POST /listings/:id/revive body: only the ticked changes; the timestamps are those of the proposal.
+export interface ReviveListingInput {
+  id: string;
+  condition: ProductCondition;
+  costPrice?: number;
+  title?: string;
+  description?: string;
+  price?: number;
+  allowBelowCost?: boolean;
+  productUpdatedAt: string;
+  listingUpdatedAt: string;
+}
+
+// `step` names the OLX step that failed, or `done`; `update_refused` means the update failed first
+// and nothing was reactivated. The timestamps are fresh, so a retry from the same dialog is not stale.
+export interface ReviveListingResult {
+  outcome: ListingReactivationResult['outcome'] | 'update_refused';
+  step: 'update' | 'activate' | 'done';
+  reason: string | null;
+  listing: Listing;
+  productUpdatedAt: string;
+  listingUpdatedAt: string;
 }
 
 export const listingsApi = baseApi.injectEndpoints({
@@ -120,6 +144,25 @@ export const listingsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    // POST /listings/:id/revival-proposal — review-only; nothing is saved or sent to OLX.
+    getRevivalProposal: builder.mutation<RevivalProposal, string>({
+      query: (id) => ({ url: `/listings/${id}/revival-proposal`, method: 'POST', body: {} }),
+      transformResponse: (res: ApiResponse<RevivalProposal>) => unwrap(res),
+      invalidatesTags: ['AiUsage'],
+    }),
+
+    reviveListing: builder.mutation<ReviveListingResult, ReviveListingInput>({
+      query: ({ id, ...body }) => ({ url: `/listings/${id}/revive`, method: 'POST', body }),
+      transformResponse: (res: ApiResponse<ReviveListingResult>) => unwrap(res),
+      invalidatesTags: (result, _error, { id }) => [
+        { type: 'Listing', id },
+        { type: 'Listing', id: 'LIST' },
+        ...(result ? [{ type: 'Product' as const, id: result.listing.productId }] : []),
+        { type: 'Product', id: 'LIST' },
+        'AiUsage',
+      ],
+    }),
+
     delistListingToDraft: builder.mutation<ListingDelistOperation, DelistListingToDraftInput>({
       query: ({ id, ...body }) => ({ url: `/listings/${id}/delist-to-draft`, method: 'POST', body }),
       transformResponse: (res: ApiResponse<ListingDelistOperation>) => unwrap(res),
@@ -148,6 +191,8 @@ export const {
   useUpdateListingMutation,
   useRelistListingMutation,
   useReactivateListingMutation,
+  useGetRevivalProposalMutation,
+  useReviveListingMutation,
   useDelistListingToDraftMutation,
   useGetPriceHistoryQuery,
 } = listingsApi;

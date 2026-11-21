@@ -21,4 +21,11 @@ public class ProductDetailPageVerification
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
     return this;
   }
+
+  @Step("The page offers to relist the expired sandbox advert, not to revive it")
+  public ProductDetailPageVerification offersRelistNotRevive() {
+    page.relistButton().shouldBe(Condition.visible, getTimeout());
+    page.reviveButton().shouldNot(Condition.exist);
+    return this;
+  }
 }
