@@ -1,0 +1,1 @@
+{"id":"02c3b81c9d9bcb31f89a695aa61308c5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/duration.test.ts#parseDurationMs rejects \"-1h\"","name":"rejects \"-1h\"","status":"passed","testResultsByEnv":{"default":"bfb014dc78e6b64015fe9d1b7ed169a9"}}

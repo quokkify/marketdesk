@@ -1,0 +1,1 @@
+{"id":"f29e3e076a68f7fc5d3390194aa65503.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/di/__tests__/recordedQueue.test.ts#recordedProcessor strips a malformed __run and starts a fresh job run","name":"strips a malformed __run and starts a fresh job run","status":"passed","testResultsByEnv":{"default":"db12d2a21f5e265b500b319e53e24f6e"}}
