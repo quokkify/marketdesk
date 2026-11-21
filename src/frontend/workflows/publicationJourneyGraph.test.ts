@@ -1,16 +1,18 @@
 import {
   advancePublicationJourney,
 } from './publicationJourneyGraph';
-import { wizardPhaseAt, wizardStepIndex } from './publicationJourneyContract';
+import {
+  PUBLICATION_JOURNEY_VERSION,
+  WIZARD_PHASES,
+  wizardPhaseAt,
+  wizardStepIndex,
+} from './publicationJourneyContract';
 
 describe('publication journey graph', () => {
   it('walks from the product wizard through explicit review to a queued publication', async () => {
-    let journey = { phase: 'photos' as const };
-    for (let step = 0; step < 5; step += 1) {
-      journey = await advancePublicationJourney(journey, { type: 'next', validated: true }) as typeof journey;
-      expect(wizardStepIndex(journey.phase)).toBe(step + 1);
-    }
-    expect(wizardPhaseAt(5)).toBe('review');
+    const journey = await advancePublicationJourney({ phase: 'photos' }, { type: 'next', validated: true });
+    expect(wizardStepIndex(journey.phase)).toBe(1);
+    expect(wizardPhaseAt(1)).toBe('review');
     const saved = await advancePublicationJourney(journey, {
       type: 'product_created', productId: 'product-1', marketplaceKey: 'olx',
     });
@@ -49,5 +51,23 @@ describe('publication journey graph', () => {
     await expect(advancePublicationJourney(review, {
       type: 'approval_given', quotaOverrideConfirmed: true,
     })).resolves.toMatchObject({ phase: 'approved' });
+  });
+
+  it('carries the wizard category and approval to the product page', async () => {
+    const state = await advancePublicationJourney({ phase: 'review' }, {
+      type: 'product_created', productId: 'p1', marketplaceKey: 'olx',
+      providerCategoryId: '123', approvedInWizard: true });
+    expect(state).toMatchObject({ phase: 'product_saved', providerCategoryId: '123', approvedInWizard: true });
+  });
+
+  it('moves photos to review and back', async () => {
+    const review = await advancePublicationJourney({ phase: 'photos' }, { type: 'next', validated: true });
+    expect(review.phase).toBe('review');
+    const photos = await advancePublicationJourney(review, { type: 'back' });
+    expect(photos.phase).toBe('photos');
+    await expect(advancePublicationJourney(review, { type: 'next', validated: true }))
+      .rejects.toThrow('Cannot continue publication journey from review');
+    expect(PUBLICATION_JOURNEY_VERSION).toBe('publication-journey@2');
+    expect(WIZARD_PHASES).toEqual(['photos', 'review']);
   });
 });

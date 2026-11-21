@@ -6,6 +6,7 @@ import { Result, Err } from '../../domain/shared/Result';
 import { NotFoundError } from '../../domain/shared/DomainError';
 import { Money } from '../../domain/valueObjects/Money';
 import { ProductService } from '../../domain/services/ProductService';
+import { generateSku } from '../../domain/services/skuGenerator';
 import type { Product } from '../../domain/entities/Product';
 import type { IWorkspaceRepository } from '../../domain/repositories/interfaces/IWorkspaceRepository';
 import type { IdGenerator } from '../ports/IdGenerator';
@@ -41,10 +42,11 @@ export class CreateProductUseCase {
     const sellingPrice = Money.of(dto.sellingPrice, currency);
     if (sellingPrice.isErr()) return sellingPrice;
 
+    const id = this.idGenerator();
     return this.productService.createProduct({
-      id: this.idGenerator(),
+      id,
       workspaceId: dto.workspaceId,
-      sku: dto.sku,
+      sku: dto.sku?.trim() || generateSku(id),
       name: dto.name,
       description: dto.description,
       costPrice,

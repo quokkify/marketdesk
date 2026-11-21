@@ -9,7 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import type { Breakpoint } from '@mui/material';
+import type { Breakpoint, Theme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 
 export interface ModalProps {
@@ -23,7 +23,22 @@ export interface ModalProps {
   fullWidth?: boolean;
   dividers?: boolean;
   closeDisabled?: boolean;
+  // Fills the screen below the `sm` breakpoint.
+  fullScreenOnMobile?: boolean;
 }
+
+// The paper styles MUI applies for `fullScreen`, limited to narrow screens. A breakpoint
+// style rather than a media-query hook keeps the first render right on a phone.
+const fullScreenBelowSm = (theme: Theme) => ({
+  [theme.breakpoints.down('sm')]: {
+    margin: 0,
+    width: '100%',
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: 'none',
+    borderRadius: 0,
+  },
+});
 
 export const Modal: React.FC<ModalProps> = ({
   open,
@@ -36,12 +51,14 @@ export const Modal: React.FC<ModalProps> = ({
   fullWidth = true,
   dividers = true,
   closeDisabled = false,
+  fullScreenOnMobile = false,
 }) => (
   <Dialog
     open={open}
     onClose={closeDisabled ? undefined : onClose}
     maxWidth={maxWidth}
     fullWidth={fullWidth}
+    slotProps={fullScreenOnMobile ? { paper: { sx: fullScreenBelowSm } } : undefined}
   >
     {(title || subtitle) && (
       <DialogTitle component="div" sx={{ pr: 6 }}>

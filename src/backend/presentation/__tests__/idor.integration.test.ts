@@ -332,6 +332,21 @@ describe('IDOR: workspace A cannot reach workspace B resources (S2)', () => {
     expect(taxonomySearch).toHaveBeenCalledTimes(1);
   });
 
+  it('GET /marketplaces/:idB/categories -> 404 (no cross-tenant taxonomy lookup)', async () => {
+    const { app, marketplaceBId, marketplaceRepo, taxonomySearch } = await build();
+    const marketplaceA = unwrap(Marketplace.create({
+      id: 'mkt-a-cat', workspaceId: WS_A, key: 'olx', name: 'OLX-A', connected: true,
+    }));
+    marketplaceRepo.items.set(marketplaceA.id, marketplaceA);
+    const own = await authA(request(app).get(`/api/marketplaces/${marketplaceA.id}/categories?query=projektor`));
+    expect(own.status).toBe(200);
+    expect(taxonomySearch).toHaveBeenCalledTimes(1);
+    const res = await authA(request(app).get(`/api/marketplaces/${marketplaceBId}/categories?query=projektor`));
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(taxonomySearch).toHaveBeenCalledTimes(1);
+  });
+
   it('GET /marketplaces/:idB -> 404', async () => {
     const { app, marketplaceBId } = await build();
     const res = await authA(request(app).get(`/api/marketplaces/${marketplaceBId}`));

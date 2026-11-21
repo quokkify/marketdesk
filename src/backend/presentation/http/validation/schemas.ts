@@ -36,7 +36,8 @@ const nonEmptyPatch = (value: object) => Object.keys(value).length > 0;
 
 export const createProductSchema = z
   .object({
-    sku: z.string().min(1),
+    // Blank counts as absent; the use case generates a SKU.
+    sku: z.string().optional(),
     name: z.string().min(1),
     description: z.string().min(1),
     costPrice: z.number().nonnegative().nullable(),
