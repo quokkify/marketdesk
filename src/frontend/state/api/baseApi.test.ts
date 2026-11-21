@@ -265,3 +265,117 @@ describe('logout', () => {
     expect(store.getState().workspace.id).toBeNull();
   });
 });
+
+describe('token renewal', () => {
+  const meWithRenewal = () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        data: { id: userA.id, email: userA.email, workspaceId: 'ws-1' },
+      }),
+      {
+        status: 200,
+        headers: { 'content-type': 'application/json', 'x-renewed-token': 'renewed-token' },
+      }
+    );
+
+  it('replaces the session token with the renewed one and keeps the user', async () => {
+    const store = newStore();
+    signIn(store, 'old-token');
+    serve({ '/api/auth/me': meWithRenewal });
+
+    await store.dispatch(authApi.endpoints.me.initiate());
+
+    expect(store.getState().auth).toMatchObject({
+      token: 'renewed-token',
+      user: userA,
+      isAuthenticated: true,
+    });
+  });
+
+  it('ignores a renewed token for a session that a new sign-in already replaced', async () => {
+    const store = newStore();
+    signIn(store, 'old-token');
+    let answer!: (response: Response) => void;
+    const heldBack = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    serve({ '/api/auth/me': () => heldBack });
+    const pending = store.dispatch(authApi.endpoints.me.initiate());
+    await requestInFlight();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    signIn(store, 'new-token');
+    answer(meWithRenewal());
+    await pending;
+
+    expect(store.getState().auth.token).toBe('new-token');
+  });
+
+  it('ignores a renewed token after the session was signed out meanwhile', async () => {
+    const store = newStore();
+    signIn(store, 'old-token');
+    let answer!: (response: Response) => void;
+    const heldBack = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    serve({ '/api/auth/me': () => heldBack });
+    const pending = store.dispatch(authApi.endpoints.me.initiate());
+    await requestInFlight();
+
+    store.dispatch(logout());
+    answer(meWithRenewal());
+    await pending;
+
+    expect(store.getState().auth.token).toBeNull();
+  });
+
+  it('does not touch the session when a request was sent without one', async () => {
+    const store = newStore();
+    serve({ '/api/auth/me': meWithRenewal });
+
+    await store.dispatch(authApi.endpoints.me.initiate());
+
+    expect(store.getState().auth.token).toBeNull();
+  });
+});
+
+describe('password change', () => {
+  it('keeps the session and shows no expiry warning when the current password is wrong', async () => {
+    const store = newStore();
+    signIn(store, 'valid-token');
+    serve({
+      '/api/auth/password': () =>
+        json(401, {
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Current password is incorrect' },
+        }),
+    });
+
+    const result = await store.dispatch(
+      authApi.endpoints.changePassword.initiate({
+        currentPassword: 'wrong-password',
+        newPassword: 'another-password',
+      })
+    );
+
+    expect(result).toMatchObject({ error: { status: 401 } });
+    expect(store.getState().auth.token).toBe('valid-token');
+    expect(store.getState().ui.toasts).toEqual([]);
+  });
+
+  it('returns the unwrapped token of the new session', async () => {
+    const store = newStore();
+    signIn(store, 'valid-token');
+    serve({ '/api/auth/password': () => json(200, { success: true, data: { token: 'fresh' } }) });
+
+    const result = await store.dispatch(
+      authApi.endpoints.changePassword.initiate({
+        currentPassword: 'wrong-password',
+        newPassword: 'another-password',
+      })
+    );
+
+    expect(result).toMatchObject({ data: { token: 'fresh' } });
+  });
+});

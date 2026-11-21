@@ -27,7 +27,7 @@ import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
-import { useGetHermesEventsQuery } from '../../state/api/index.js';
+import { useGetHermesEventsQuery, useLogoutMutation } from '../../state/api/index.js';
 import { setMobileSidebarOpen, toggleSidebar } from '../../state/slices/uiSlice.js';
 import { logout } from '../../state/slices/authSlice.js';
 import {
@@ -52,6 +52,22 @@ export function isPrimaryNavActive(current: string, target: string): boolean {
 const avatarGradient = (t: Theme) =>
   `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.secondary.main})`;
 
+// The server revokes the session first; whatever that call answers, the local session ends.
+export async function signOut({
+  callLogout,
+  dispatch,
+}: {
+  callLogout: () => Promise<unknown>;
+  dispatch: (action: ReturnType<typeof logout>) => unknown;
+}): Promise<void> {
+  try {
+    await callLogout();
+  } catch {
+    // An unreachable server or an already rejected session must not keep the user signed in.
+  }
+  dispatch(logout());
+}
+
 export const Sidebar: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery('(max-width:767.95px)');
@@ -66,6 +82,7 @@ export const Sidebar: React.FC = () => {
     offset: 0,
   });
   const dispatch = useAppDispatch();
+  const [logoutRequest] = useLogoutMutation();
   const navigate = useNavigate();
   const location = useLocation();
   const [accountMenuAnchor, setAccountMenuAnchor] = React.useState<HTMLElement | null>(null);
@@ -94,7 +111,7 @@ export const Sidebar: React.FC = () => {
   const handleSignOut = () => {
     handleAccountMenuClose();
     if (isMobile) dispatch(setMobileSidebarOpen(false));
-    dispatch(logout());
+    void signOut({ callLogout: () => logoutRequest().unwrap(), dispatch });
   };
 
   const renderNavItem = (item: (typeof NAV_ITEMS)[number]) => {
