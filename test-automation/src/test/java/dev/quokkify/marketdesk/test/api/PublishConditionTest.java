@@ -15,12 +15,13 @@ public class PublishConditionTest extends BaseTest {
     listingSteps.verify().isConditionRefusal(listingSteps.publish(account, listingId));
   }
 
-  // Guard: a product with a known condition passes the condition rule, whatever a later publish step answers.
+  // Guard: the product has no OLX category, so a known condition gets past the condition rule and meets the next
+  // preflight step, the category guard (422). Only the unknown condition is refused earlier, with 400.
   @Test
-  public void publishesAProductWithAKnownCondition() {
+  public void passesTheConditionRuleWithAKnownCondition() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     String listingId = listingSteps.createOlxListingWithCondition(account, "good");
-    listingSteps.verify().isNotValidationRefusal(listingSteps.publish(account, listingId));
+    listingSteps.verify().isCategoryGuardRefusal(listingSteps.publish(account, listingId));
   }
 }

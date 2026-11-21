@@ -13,6 +13,8 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String NOT_FOUND = "NOT_FOUND";
   private static final String INVALID_STATE = "INVALID_STATE";
   private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+  private static final String GUARDRAIL_VIOLATION = "GUARDRAIL_VIOLATION";
+  private static final String CATEGORY_MESSAGE = "Select an exact OLX leaf category before publishing";
   private static final String CONDITION_MESSAGE = "Choose the product's condition before publishing to OLX";
   private static final String SANDBOX_MESSAGE = "Reactivation is not available in sandbox mode";
 
@@ -45,9 +47,10 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     return self();
   }
 
-  @Step("Publishing is not refused as a validation error")
-  public ListingVerification isNotValidationRefusal(ValidatableResponse response) {
-    response.body("error.code", Matchers.not(Matchers.equalTo(VALIDATION_ERROR)));
+  @Step("Publishing passes the condition rule and stops at the category guard")
+  public ListingVerification isCategoryGuardRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, GUARDRAIL_VIOLATION);
+    response.body("error.message", Matchers.equalTo(CATEGORY_MESSAGE));
     return self();
   }
 
