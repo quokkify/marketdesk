@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import { query } from '../../../config/database';
+import { query, withTransaction } from '../../../config/database';
 import type {
   ConversationMessage,
   ConversationThread,
@@ -91,7 +91,7 @@ const toDraft = (row: DraftRow): ReplyDraft => ({
   intent: row.intent,
   proposedText: row.proposed_text,
   sentText: row.sent_text,
-  filledPrice: row.filled_price === null ? null : Number(row.filled_price),
+  filledPrice: row.filled_price === null ? null : Number(row.filled_price) / MINOR_UNITS,
   status: row.status,
   failureReason: row.failure_reason,
   source: row.source,
@@ -101,6 +101,12 @@ const toDraft = (row: DraftRow): ReplyDraft => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+// filled_price is stored in minor units; the domain keeps major units.
+const MINOR_UNITS = 100;
+const toMinor = (price: number | null | undefined): number | null =>
+  price === null || price === undefined ? null : Math.round(price * MINOR_UNITS);
+const UNIQUE_VIOLATION = '23505';
 
 // Patch keys to columns; the column names are fixed here, never taken from input.
 const DRAFT_PATCH_COLUMNS: Record<keyof ReplyDraftPatch, string> = {
@@ -118,7 +124,7 @@ const DRAFT_PATCH_COLUMNS: Record<keyof ReplyDraftPatch, string> = {
 export class ConversationRepository implements IConversationRepository {
   private readonly queryClient?: PoolClient | Pool;
 
-  constructor(pool?: Pool, client?: PoolClient) {
+  constructor(private readonly pool?: Pool, private readonly client?: PoolClient) {
     this.queryClient = client || pool;
   }
 
@@ -217,7 +223,7 @@ export class ConversationRepository implements IConversationRepository {
     return Number(rows[0].count);
   }
 
-  async insertDraft(draft: NewReplyDraft): Promise<ReplyDraft> {
+  async insertDraft(draft: NewReplyDraft, client: PoolClient | Pool | undefined = this.queryClient): Promise<ReplyDraft> {
     const { rows } = await query<DraftRow>(
       `INSERT INTO reply_drafts
          (thread_id, answers_message_id, intent, proposed_text, filled_price, status, failure_reason, source)
@@ -228,12 +234,12 @@ export class ConversationRepository implements IConversationRepository {
         draft.answersMessageId,
         draft.intent ?? null,
         draft.proposedText ?? null,
-        draft.filledPrice ?? null,
+        toMinor(draft.filledPrice),
         draft.status ?? null,
         draft.failureReason ?? null,
         draft.source ?? null,
       ],
-      this.queryClient,
+      client,
     );
     return toDraft(rows[0]);
   }
@@ -251,7 +257,7 @@ export class ConversationRepository implements IConversationRepository {
     const keys = (Object.keys(patch) as (keyof ReplyDraftPatch)[]).filter((k) => patch[k] !== undefined);
     const values: unknown[] = [id, expectedStatus];
     const sets = keys.map((key) => {
-      values.push(patch[key]);
+      values.push(key === 'filledPrice' ? toMinor(patch.filledPrice) : patch[key]);
       return `${DRAFT_PATCH_COLUMNS[key]} = $${values.length}`;
     });
     const { rowCount } = await query(
@@ -263,14 +269,53 @@ export class ConversationRepository implements IConversationRepository {
     return rowCount > 0;
   }
 
-  async supersedePendingDrafts(threadId: string): Promise<number> {
+  async supersedePendingDrafts(threadId: string, client: PoolClient | Pool | undefined = this.queryClient): Promise<number> {
     const { rowCount } = await query(
       `UPDATE reply_drafts SET status = 'superseded', updated_at = now()
         WHERE thread_id = $1 AND status = 'pending'`,
       [threadId],
-      this.queryClient,
+      client,
     );
     return rowCount;
+  }
+
+  async replacePendingDraft(
+    threadId: string,
+    expectedNewestMessageId: string,
+    draft: Omit<NewReplyDraft, 'threadId'>,
+  ): Promise<ReplyDraft | null> {
+    const run = async (client: PoolClient): Promise<ReplyDraft | null> => {
+      // The thread row lock serialises concurrent runs of one thread.
+      await query('SELECT id FROM conversation_threads WHERE id = $1 FOR UPDATE', [threadId], client);
+      const { rows } = await query<{ id: string }>(
+        'SELECT id FROM conversation_messages WHERE thread_id = $1 ORDER BY sent_at DESC, id LIMIT 1',
+        [threadId],
+        client,
+      );
+      if (rows[0]?.id !== expectedNewestMessageId) return null;
+      await this.supersedePendingDrafts(threadId, client);
+      return this.insertDraft({ ...draft, threadId }, client);
+    };
+    try {
+      // A client passed in belongs to a caller that owns the transaction.
+      if (this.client) return await run(this.client);
+      if (!this.pool) return await withTransaction(run);
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await run(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if ((error as { code?: unknown }).code === UNIQUE_VIOLATION) return null;
+      throw error;
+    }
   }
 
   async countReplyRunsToday(workspaceId: string, since: Date): Promise<number> {

@@ -58,6 +58,14 @@ export interface IConversationRepository {
   // Compare-and-set on status: false when the row is not in expectedStatus.
   updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean>;
   supersedePendingDrafts(threadId: string): Promise<number>;
+  // One transaction: supersedes the thread's pending drafts and inserts this one, but only while
+  // expectedNewestMessageId is still the thread's newest message. Null when it is not, or when a
+  // concurrent run inserted its pending draft first.
+  replacePendingDraft(
+    threadId: string,
+    expectedNewestMessageId: string,
+    draft: Omit<NewReplyDraft, 'threadId'>,
+  ): Promise<ReplyDraft | null>;
   countReplyRunsToday(workspaceId: string, since: Date): Promise<number>;
   purgeExpiredText(before: Date): Promise<number>;
   awaitingReplyCounts(workspaceId: string): Promise<Record<string, number>>;

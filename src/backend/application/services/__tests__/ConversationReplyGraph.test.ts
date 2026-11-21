@@ -18,7 +18,7 @@ import type {
   ReplyDraftResult,
 } from '../../../domain/ports/IReplyDraftAI';
 import { normalizedTextHash } from '../../../domain/conversations/screening';
-import { InMemoryProductRepository, money, sequentialIdFactory, unwrap } from '../../../domain/testkit/support';
+import { InMemoryProductRepository, money, unwrap } from '../../../domain/testkit/support';
 import { ConversationReplyGraph, CONVERSATION_REPLY_GRAPH_VERSION } from '../ConversationReplyGraph';
 
 const NOW = new Date('2026-11-21T12:00:00Z');
@@ -93,6 +93,12 @@ class FakeConversations implements IConversationRepository {
   async updateDraft(_id: string, _patch: ReplyDraftPatch, _expected: ReplyDraft['status']): Promise<boolean> {
     return false;
   }
+  async replacePendingDraft(threadId: string, expectedNewestMessageId: string, draft: Omit<NewReplyDraft, 'threadId'>) {
+    const [newest] = await this.recentMessages(threadId, 1);
+    if (newest?.id !== expectedNewestMessageId) return null;
+    await this.supersedePendingDrafts(threadId);
+    return this.insertDraft({ ...draft, threadId });
+  }
   async supersedePendingDrafts(threadId: string) {
     let n = 0;
     for (const d of this.drafts) {
@@ -141,7 +147,6 @@ async function setup(options: { status?: 'active' | 'sold' } = {}) {
   const graph = new ConversationReplyGraph({
     conversations, products, ai,
     limits: { repeatThreshold: 3, floodPerHour: 10, dailyRunCap: 5, historyMessages: 10 },
-    ids: sequentialIdFactory('run'),
     now: () => NOW,
     observe: (t) => transitions.push(t),
   });
@@ -225,6 +230,48 @@ describe('ConversationReplyGraph', () => {
     const m = await s.say('Dam 30 zł', 1);
     await s.run(m.id);
     expect(s.conversations.drafts.map((d) => d.status)).toEqual(['superseded', 'pending']);
+  });
+
+  it('fills a decimal proposal as a decimal price', async () => {
+    const s = await setup();
+    s.ai.result = { reply: 'Mogę zejść do {{PRICE}} zł.', counterOffer: true, proposedPrice: 72.5, source: 'hermes' };
+    const m = await s.say('Dam 70 zł', 1);
+    expect(await s.run(m.id)).toEqual({ kind: 'drafted', draftId: 'd1' });
+    expect(s.conversations.drafts[0]).toMatchObject({ proposedText: 'Mogę zejść do 72,50 zł.', filledPrice: 72.5 });
+  });
+
+  it('aiFailureKeepsPreviousPendingDraft', async () => {
+    const s = await setup();
+    const first = await s.say('Aktualne?', 10);
+    await s.conversations.insertDraft({ threadId: s.thread.id, answersMessageId: first.id, proposedText: 'old' });
+    s.ai.draft = async () => { throw new Error('provider down'); };
+    const m = await s.say('Dam 30 zł', 1);
+    await expect(s.run(m.id)).rejects.toThrow('provider down');
+    expect(s.conversations.drafts.map((d) => d.status)).toEqual(['pending']);
+  });
+
+  it('skips when a newer message arrives while drafting', async () => {
+    const s = await setup();
+    const first = await s.say('Aktualne?', 10);
+    await s.conversations.insertDraft({ threadId: s.thread.id, answersMessageId: first.id, proposedText: 'old' });
+    const m = await s.say('Dam 30 zł', 2);
+    const draft = s.ai.draft.bind(s.ai);
+    s.ai.draft = async (ctx: ReplyContext) => {
+      await s.say('Halo?', 1);
+      return draft(ctx);
+    };
+    expect(await s.run(m.id)).toEqual({ kind: 'skipped', reason: 'not_latest' });
+    expect(s.conversations.drafts.map((d) => d.status)).toEqual(['pending']);
+  });
+
+  it('a failed draft also supersedes the older pending draft', async () => {
+    const s = await setup();
+    const first = await s.say('Aktualne?', 10);
+    await s.conversations.insertDraft({ threadId: s.thread.id, answersMessageId: first.id, proposedText: 'old' });
+    s.ai.result = { reply: 'Kup tutaj https://secure-pay.com/x', counterOffer: false, proposedPrice: null, source: 'hermes' };
+    const m = await s.say('Dam 30 zł', 1);
+    expect(await s.run(m.id)).toEqual({ kind: 'no_safe_draft', rule: 'link' });
+    expect(s.conversations.drafts.map((d) => d.status)).toEqual(['superseded', 'failed']);
   });
 
   it('unsafeModelDraftIsNotOffered', async () => {

@@ -7,7 +7,6 @@ import type { IReplyDraftAI, ReplyContext, ReplyDraftResult } from '../../domain
 import type { IConversationRepository } from '../../domain/repositories/interfaces/IConversationRepository';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import { NotFoundError } from '../../domain/shared/DomainError';
-import type { IdGenerator } from '../ports/IdGenerator';
 import { withAiUsageScope } from '../ai/aiUsageScope';
 
 export const CONVERSATION_REPLY_GRAPH_VERSION = 'conversation-reply@1';
@@ -31,7 +30,6 @@ export interface ConversationReplyGraphDeps {
   products: Pick<IProductRepository, 'findByIdForWorkspace'>;
   ai: IReplyDraftAI;
   limits: ScreeningLimits & { dailyRunCap: number; historyMessages: number };
-  ids: IdGenerator;
   now: () => Date;
   observe?: (transition: ReplyTransition) => void;
 }
@@ -145,7 +143,6 @@ export class ConversationReplyGraph {
       }))
       .addNode('draft', traced('draft', async (state) => {
         if (!state.intent) throw new Error('Draft node reached without an intent');
-        await conversations.supersedePendingDrafts(state.threadId);
         ctx.draft = await ai.draft(replyContext(), state.intent);
         return {};
       }))
@@ -158,17 +155,15 @@ export class ConversationReplyGraph {
         const proposed = draft.counterOffer && draft.proposedPrice !== null ? draft.proposedPrice : selling;
         const filled = fillPrice(draft.reply, proposed, floor, selling);
         const check = validateDraft(filled.text, { floor, currency, filledPrice: filled.price });
-        const base = {
-          threadId: state.threadId, answersMessageId: state.messageId, intent: state.intent, source: draft.source,
-        };
-        if (!check.ok) {
-          await conversations.insertDraft({ ...base, status: 'failed', failureReason: check.rule, proposedText: null });
-          return { outcome: { kind: 'no_safe_draft', rule: check.rule } };
-        }
-        const stored = await conversations.insertDraft({
-          ...base, status: 'pending', proposedText: filled.text, filledPrice: filled.price,
-        });
-        return { outcome: { kind: 'drafted', draftId: stored.id } };
+        const base = { answersMessageId: state.messageId, intent: state.intent, source: draft.source };
+        // Superseding happens only now, so a failed AI call keeps the previous pending draft.
+        const stored = await conversations.replacePendingDraft(state.threadId, state.messageId, check.ok
+          ? { ...base, status: 'pending', proposedText: filled.text, filledPrice: filled.price }
+          : { ...base, status: 'failed', failureReason: check.rule, proposedText: null });
+        if (!stored) return { outcome: { kind: 'skipped', reason: 'not_latest' } };
+        return { outcome: check.ok
+          ? { kind: 'drafted', draftId: stored.id }
+          : { kind: 'no_safe_draft', rule: check.rule } };
       }))
       .addEdge(START, 'screen')
       .addConditionalEdges('screen', (state: GraphState) => (state.outcome ? 'end' : 'classify'), {

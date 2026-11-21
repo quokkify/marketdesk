@@ -21,7 +21,7 @@ const TABLES = [
 // The migration text runs unchanged except that its tables are created as session TEMP tables,
 // so the shared database is never written.
 function migrationAsTemp(): string {
-  const sql = ['047_conversations.sql', '048_reply_draft_source.sql']
+  const sql = ['047_conversations.sql', '048_reply_draft_source.sql', '049_reply_drafts_one_pending.sql']
     .map((file) => fs.readFileSync(path.resolve(process.cwd(), 'src/backend/persistence/migrations', file), 'utf8'))
     .join('\n');
   return sql.replace(/CREATE TABLE IF NOT EXISTS/g, 'CREATE TEMP TABLE');
@@ -208,14 +208,14 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     expect(await repo.countTextHashInWorkspace(randomUUID(), 'same', since)).toBe(0);
     expect(await repo.countBuyerMessagesSince(thread.id, since)).toBe(1);
 
-    const d1 = await repo.insertDraft({ threadId: thread.id, answersMessageId: m1.id });
+    const d1 = await repo.insertDraft({ threadId: thread.id, answersMessageId: m1.id, status: 'failed' });
     const d2 = await repo.insertDraft({ threadId: thread.id, answersMessageId: m2.id });
     expect(await repo.countReplyRunsToday(workspaceId, new Date(Date.now() - 60_000))).toBe(2);
     expect(await repo.countReplyRunsToday(workspaceId, new Date(Date.now() + 60_000))).toBe(0);
     expect(await repo.awaitingReplyCounts(workspaceId)).toEqual({ [productId]: 1 });
 
     await repo.supersedePendingDrafts(thread.id);
-    expect((await repo.findDraft(d1.id, thread.id))?.status).toBe('superseded');
+    expect((await repo.findDraft(d1.id, thread.id))?.status).toBe('failed');
     expect((await repo.findDraft(d2.id, thread.id))?.status).toBe('superseded');
     expect(await repo.awaitingReplyCounts(workspaceId)).toEqual({});
   });
@@ -245,5 +245,40 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     const plain = await repo.insertDraft({ threadId: thread.id, answersMessageId: msg.id });
     expect(plain.source).toBeNull();
     expect((await repo.findDraft(failed.id, thread.id))?.source).toBe('offline');
+  });
+
+  it('storesDecimalFilledPrice', async () => {
+    const thread = await newThread();
+    const [msg] = await repo.upsertMessages(thread.id, [message('m1')]);
+    const draft = await repo.insertDraft({ threadId: thread.id, answersMessageId: msg.id, filledPrice: 72.5 });
+    expect(draft.filledPrice).toBe(72.5);
+    expect(await repo.updateDraft(draft.id, { filledPrice: 80.99 }, 'pending')).toBe(true);
+    expect((await repo.findDraft(draft.id, thread.id))?.filledPrice).toBe(80.99);
+  });
+
+  it('replacePendingDraftKeepsOnePending', async () => {
+    const thread = await newThread();
+    const [m1] = await repo.upsertMessages(thread.id, [message('m1', { sentAt: new Date('2026-11-20T10:00:00Z') })]);
+    const first = await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' });
+    const [m2] = await repo.upsertMessages(thread.id, [message('m2', { sentAt: new Date('2026-11-20T11:00:00Z') })]);
+    const second = await repo.replacePendingDraft(thread.id, m2.id, {
+      answersMessageId: m2.id, proposedText: 'two', source: 'hermes',
+    });
+    expect(second).toMatchObject({ status: 'pending', proposedText: 'two', source: 'hermes' });
+    expect((await repo.findDraft(first!.id, thread.id))?.status).toBe('superseded');
+
+    await expect(repo.insertDraft({ threadId: thread.id, answersMessageId: m2.id, proposedText: 'dup' }))
+      .rejects.toMatchObject({ code: '23505' });
+  });
+
+  it('replacePendingDraftRefusesStaleMessage', async () => {
+    const thread = await newThread();
+    const [m1] = await repo.upsertMessages(thread.id, [message('m1', { sentAt: new Date('2026-11-20T10:00:00Z') })]);
+    const kept = await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' });
+    await repo.upsertMessages(thread.id, [
+      message('s1', { direction: 'seller', sentAt: new Date('2026-11-20T11:00:00Z') }),
+    ]);
+    expect(await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'late' })).toBeNull();
+    expect((await repo.findDraft(kept!.id, thread.id))?.status).toBe('pending');
   });
 });
