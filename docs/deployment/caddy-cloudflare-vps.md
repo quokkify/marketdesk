@@ -306,7 +306,7 @@ docker compose exec app node dist/backend/revokeTokens.js user@example.com
 
 The command prints `Revoked all sessions of <email>` and exits `0`. It exits `1` for an unknown
 e-mail and `2` when the e-mail argument is missing. The user signs in again with the same
-password; to also lock the account out, change the password first.
+password.
 
 ## Rollback
 
