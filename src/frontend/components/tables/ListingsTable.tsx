@@ -341,7 +341,11 @@ export const ListingsTable: React.FC<ListingsTableProps> = ({
                         </IconButton>
                       </Tooltip>
                     )}
-                    {onRelist && (listing.status === 'expired' || listing.status === 'error') && (
+                    {/* Relist publishes a new advert; one that still has an OLX advert id is reactivated
+                        from the product page instead, so it never becomes a duplicate. */}
+                    {onRelist &&
+                      !listing.marketplaceListingId &&
+                      (listing.status === 'expired' || listing.status === 'error') && (
                       <Tooltip title="Relist">
                         <IconButton
                           size="small"

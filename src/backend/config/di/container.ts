@@ -124,6 +124,7 @@ import {
   selectProductCategoryTriggerListings,
 } from '../../application/services/ProductCategorySyncService';
 import { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
+import { ListingReactivationService } from '../../application/services/ListingReactivationService';
 import { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { IdGenerator } from '../../application/ports/IdGenerator';
 import { noopRunRecorder, type IRunRecorder } from '../../application/ports/IRunRecorder';
@@ -532,6 +533,28 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     idGenerator,
     publishAttemptRepo
   );
+  const listingReactivationService = new ListingReactivationService({
+    listingRepo,
+    marketplaceRepo,
+    activityLog: activityLogRepo,
+    idGenerator,
+    sandboxMode: env.marketplaces.olx.adapterMode !== 'real',
+    logger: overrides.logger,
+    adapters: {
+      resolve: async (marketplace) => {
+        const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
+        return adapterFactory.create(
+          marketplace.key,
+          new FetchMarketplaceHttpClient({
+            logger: overrides.logger,
+            defaultHeaders: buildOlxHeaders(accessToken),
+            timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+            livePublishEnabled: false,
+          })
+        );
+      },
+    },
+  });
   const productCategorySyncService = new ProductCategorySyncService(
     (work) =>
       withPoolTransaction(pool, (client) =>
@@ -729,6 +752,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     olxTaxonomyResolver,
     olxPublicationQuotaService,
     categoryCorrectionOperationService,
+    listingReactivationService,
     marketplaceOAuthReturnUrl: env.marketplaces.olx.oauthSuccessUrl,
     olxAdapterMode: env.marketplaces.olx.adapterMode,
     workspaceRepo,

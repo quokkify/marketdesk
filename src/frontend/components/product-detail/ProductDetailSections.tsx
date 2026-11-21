@@ -243,11 +243,12 @@ export const ProductCategoryEvidence: React.FC<{ product: Product; conflictLines
   );
 };
 
-export type ProductPrimaryAction = 'publish' | 'relist' | 'connect' | 'edit';
+export type ProductPrimaryAction = 'publish' | 'relist' | 'reactivate' | 'connect' | 'edit';
 
 const PRIMARY_ACTION_LABEL: Record<Exclude<ProductPrimaryAction, 'edit'>, string> = {
   publish: 'Publish to OLX',
   relist: 'Relist on OLX',
+  reactivate: 'Reactivate on OLX',
   connect: 'Connect OLX',
 };
 
@@ -262,10 +263,11 @@ export const PricingSummaryCard: React.FC<{
   onEdit: () => void;
   onPublish?: () => void;
   onRelist?: () => void;
+  onReactivate?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, busy = false, onEdit, onPublish, onRelist, onConnect }) => {
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, busy = false, onEdit, onPublish, onRelist, onReactivate, onConnect }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
-  const primaryHandler = { publish: onPublish, relist: onRelist, connect: onConnect }[
+  const primaryHandler = { publish: onPublish, relist: onRelist, reactivate: onReactivate, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
   ];
   return (

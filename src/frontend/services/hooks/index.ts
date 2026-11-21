@@ -26,6 +26,7 @@ import {
   usePublishListingMutation,
   useUpdateListingMutation,
   useRelistListingMutation,
+  useReactivateListingMutation,
   useDelistListingToDraftMutation,
   useGetMarketplacesQuery,
   useGetMarketplaceQuery,
@@ -108,6 +109,7 @@ export const useSetListingMarketplaceCategory = useSetListingMarketplaceCategory
 export const usePublishListing = usePublishListingMutation;
 export const useUpdateListing = useUpdateListingMutation;
 export const useRelistListing = useRelistListingMutation;
+export const useReactivateListing = useReactivateListingMutation;
 export const useDelistListingToDraft = useDelistListingToDraftMutation;
 export const usePriceHistory = useGetPriceHistoryQuery;
 

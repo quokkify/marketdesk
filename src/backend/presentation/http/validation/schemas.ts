@@ -139,6 +139,9 @@ export const publishListingSchema = z.object({
     .optional(),
 });
 
+// Reactivation takes no input; any body key is a client mistake.
+export const reactivateListingSchema = z.object({}).strict();
+
 export const delistListingToDraftSchema = z.object({
   operationId: z.string().uuid(),
   confirmed: z.literal(true),

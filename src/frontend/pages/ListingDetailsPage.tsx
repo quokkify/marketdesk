@@ -48,6 +48,7 @@ import {
   useDeleteProductImage,
   useUpdateListing,
   useRelistListing,
+  useReactivateListing,
   useDelistListingToDraft,
   usePublishListingPreview,
   useSearchOlxCategories,
@@ -64,6 +65,8 @@ import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
 import { useProductDeletion } from '../hooks/useProductDeletion.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
+import type { ToastSeverity } from '../state/slices/uiSlice.js';
+import type { ListingReactivationResult } from '../state/api/listingsApi.js';
 import { formatDateTime, formatMoney } from '../utils/formatters.js';
 import { isSandboxMarketplace } from '../utils/sandbox.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
@@ -75,6 +78,7 @@ import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
+import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { LoadingSkeleton } from '../components/common/Skeleton.js';
 import { ListingsTable } from '../components/tables/index.js';
@@ -117,21 +121,48 @@ export function editRequestedByNavigation(state: unknown): boolean {
   );
 }
 
-// The pricing card's main action: publish a draft, relist an ended listing,
-// ask for an OLX connection first, or edit a live or sold product. The server
-// refuses to relist a failed listing that still references an OLX advert, so
-// that case falls back to editing.
+// The pricing card's main action: publish a draft, reactivate an expired OLX
+// advert under its own id, relist an ended listing without one, ask for an OLX
+// connection first, or edit a live or sold product. The server refuses to
+// relist a failed listing that still references an OLX advert, so that case
+// falls back to editing. A sandbox advert cannot be reactivated on OLX.
 export function productPrimaryAction(input: {
   productStatus: Product['status'];
   olxListing: Listing | undefined;
   olxConnected: boolean;
+  olxSandbox?: boolean;
 }): ProductPrimaryAction {
   const listing = input.olxListing;
   if (input.productStatus === 'sold' || listing?.status === 'live') return 'edit';
   if (listing?.status === 'error' && listing.marketplaceListingId) return 'edit';
   if (!input.olxConnected) return 'connect';
+  if (listing?.status === 'expired' && listing.marketplaceListingId && !input.olxSandbox) return 'reactivate';
   if (listing?.status === 'expired' || listing?.status === 'error') return 'relist';
   return 'publish';
+}
+
+export function reactivationToast(
+  outcome: ListingReactivationResult['outcome'],
+  remoteStatus: string | null,
+): { message: string; severity: ToastSeverity } {
+  switch (outcome) {
+    case 'live':
+      return { message: 'The advert is live on OLX again.', severity: 'success' };
+    case 'pending_moderation':
+      return { message: 'OLX is reviewing the advert; it goes live after moderation.', severity: 'info' };
+    case 'limited':
+      return {
+        message: "OLX's free limit for this category is used up; the advert needs a paid packet on OLX. Nothing was bought.",
+        severity: 'warning',
+      };
+    case 'unconfirmed':
+      return {
+        message: 'OLX accepted the reactivation but its status could not be read yet; the next sync shows it.',
+        severity: 'info',
+      };
+    default:
+      return { message: `OLX reports the advert as ${remoteStatus ?? 'unknown'}; nothing changed here.`, severity: 'warning' };
+  }
 }
 
 // Category search and verification answer 404 when no trusted OLX taxonomy is
@@ -684,6 +715,8 @@ const ListingDetailsPage: React.FC = () => {
   const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
   const [relistListing, { isLoading: relisting }] = useRelistListing();
+  const [reactivateListing, { isLoading: reactivating }] = useReactivateListing();
+  const [reactivateOpen, setReactivateOpen] = useState(false);
   const [delistToDraft, { isLoading: delisting }] = useDelistListingToDraft();
   const [publishListingPreview] = usePublishListingPreview();
   const [searchOlxCategories] = useSearchOlxCategories();
@@ -941,6 +974,16 @@ const ListingDetailsPage: React.FC = () => {
   );
 
   const handleRelist = (listing: Listing) => void beginPublicationReview(listing, 'relist');
+
+  const handleReactivate = async (listing: Listing) => {
+    try {
+      const result = await reactivateListing(listing.id).unwrap();
+      dispatch(enqueueToast(reactivationToast(result.outcome, result.remoteStatus)));
+      setReactivateOpen(false);
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
   const handlePublish = (listing: Listing) => void beginPublicationReview(listing, 'publish');
 
   // The pricing card opens the same publication review as the listings table;
@@ -1197,6 +1240,7 @@ const ListingDetailsPage: React.FC = () => {
     productStatus: p.status,
     olxListing: recheckListing,
     olxConnected: Boolean(olxMarketplace?.connected),
+    olxSandbox: recheckListing ? resolveMarketplaceSandbox(recheckListing.marketplaceId) : false,
   });
   const hermesNote = analyzing
     ? productHermesAnalyzingNote(activeProvider, hermesStatus.data?.hermesToolsSafe)
@@ -1332,6 +1376,7 @@ const ListingDetailsPage: React.FC = () => {
             onEdit={() => setEditOpen(true)}
             onPublish={() => void handlePublishToOlx()}
             onRelist={recheckListing ? () => handleRelist(recheckListing) : undefined}
+            onReactivate={recheckListing ? () => setReactivateOpen(true) : undefined}
             onConnect={() => navigate('/marketplaces')}
           />
           <OlxInsightsCard
@@ -1465,6 +1510,17 @@ const ListingDetailsPage: React.FC = () => {
       </Box>
 
       {deleteDialog}
+      {recheckListing && (
+        <ConfirmDialog
+          open={reactivateOpen}
+          title="Reactivate on OLX?"
+          message="The expired advert comes back on OLX under the same link, with its views and history. If this category's free limit is used up, OLX marks the advert limited and asks for a paid packet; MarketDesk buys nothing."
+          confirmLabel="Reactivate"
+          loading={reactivating}
+          onConfirm={() => void handleReactivate(recheckListing)}
+          onCancel={() => setReactivateOpen(false)}
+        />
+      )}
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit product" maxWidth="md">
         <ProductForm
