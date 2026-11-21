@@ -403,13 +403,14 @@ Run MarketDesk against a dedicated profile that has no tools. A gateway with `ga
 
    The profile needs its own key: the default profile's key is rejected on the profile path (401), and the profile's key is rejected on the default path.
 
-4. Confirm that no toolset is enabled. This must print no `"enabled": true`:
+4. Confirm that no toolset is enabled. `KEY` is the profile's `API_SERVER_KEY`; read it from the profile's `.env` without printing it:
 
    ```bash
-   curl -s -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/p/<profile>/v1/toolsets | grep '"enabled": *true'
+   KEY=$(grep '^API_SERVER_KEY=' ~/.hermes/profiles/<profile>/.env | cut -d= -f2-)
+   curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/p/<profile>/v1/toolsets | grep -E '"enabled" *: *true'
    ```
 
-   The response is `{ "data": [ { "name": ..., "enabled": true|false, ... } ] }`.
+   No output from `grep` means no toolset is enabled, but only if `curl` succeeded and returned a list. An HTTP error (`-f` makes `curl` print it and exit non-zero) or an empty response is a failure, not a pass; fix it before continuing. The response is `{ "data": [ { "name": ..., "enabled": true|false, ... } ] }`.
 
 5. Point MarketDesk at the profile in `.env`, using the profile's key, then recreate the app container:
 
