@@ -17,7 +17,6 @@ async function checkCurrentUser(
   users: IAuthUserStore,
   req: Request,
   res: Response,
-  renew: boolean,
 ): Promise<boolean> {
   const jwtPrincipal = req.user!;
   const current = await users.findById(jwtPrincipal.userId);
@@ -30,17 +29,29 @@ async function checkCurrentUser(
     return false;
   }
   req.currentUser = current;
-  if (renew && Date.now() - jwtPrincipal.issuedAt * 1000 > env.jwt.renewAfterMs) {
-    res.setHeader(
-      RENEWED_TOKEN_HEADER,
-      signToken({
-        userId: current.id,
-        workspaceId: current.workspaceId ?? undefined,
-        tokenVersion: current.tokenVersion,
-      }),
-    );
-  }
   return true;
+}
+
+// Hands out a fresh token when the presented one is old enough. Only a request that is about to
+// succeed gets one, and only for the workspace the token already names, so a renewal never
+// moves a session into a workspace the client did not sign in to. A token without an issue time
+// (issuedAt 0) is never renewed.
+function renewIfDue(req: Request, res: Response): void {
+  const presented = req.user!;
+  const current = req.currentUser!;
+  const presentedWorkspace = presented.workspaceId ?? undefined;
+  const currentWorkspace = current.workspaceId ?? undefined;
+  if (presentedWorkspace !== currentWorkspace) return;
+  if (!Number.isFinite(presented.issuedAt) || presented.issuedAt <= 0) return;
+  if (Date.now() - presented.issuedAt * 1000 <= env.jwt.renewAfterMs) return;
+  res.setHeader(
+    RENEWED_TOKEN_HEADER,
+    signToken({
+      userId: current.id,
+      workspaceId: currentWorkspace,
+      tokenVersion: current.tokenVersion,
+    }),
+  );
 }
 
 export function requireCurrentPrincipal(
@@ -48,13 +59,15 @@ export function requireCurrentPrincipal(
   { renew = true }: { renew?: boolean } = {},
 ): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (await checkCurrentUser(users, req, res, renew)) next();
+    if (!(await checkCurrentUser(users, req, res))) return;
+    if (renew) renewIfDue(req, res);
+    next();
   };
 }
 
 export function requireCurrentWorkspacePrincipal(users: IAuthUserStore): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    if (!(await checkCurrentUser(users, req, res, true))) return;
+    if (!(await checkCurrentUser(users, req, res))) return;
     const current = req.currentUser!;
     if (!current.workspaceId || current.workspaceId !== req.user!.workspaceId) {
       fail(res, undefined, 403, {
@@ -63,6 +76,7 @@ export function requireCurrentWorkspacePrincipal(users: IAuthUserStore): Request
       });
       return;
     }
+    renewIfDue(req, res);
     next();
   };
 }

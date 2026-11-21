@@ -37,7 +37,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     // attacker-chosen algorithm (e.g. "none" or an RS/HS confusion). (S5)
     const decoded = jwt.verify(token, env.jwt.secret, {
       algorithms: ['HS256'],
-    }) as jwt.JwtPayload & { userId?: string; workspaceId?: string; tv?: unknown };
+    }) as jwt.JwtPayload & { userId?: string; workspaceId?: string; tv?: unknown; iat?: unknown };
     if (!decoded.userId) {
       unauthorized(res, 'Invalid token payload');
       return;
@@ -47,11 +47,16 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
       unauthorized(res, 'Invalid token payload');
       return;
     }
+    const issuedAt = decoded.iat === undefined ? 0 : decoded.iat;
+    if (typeof issuedAt !== 'number' || !Number.isFinite(issuedAt) || issuedAt < 0) {
+      unauthorized(res, 'Invalid token payload');
+      return;
+    }
     req.user = {
       userId: decoded.userId,
       workspaceId: decoded.workspaceId,
       tokenVersion,
-      issuedAt: decoded.iat ?? 0,
+      issuedAt,
     };
     next();
   } catch {

@@ -3,6 +3,7 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import { createHmac } from 'node:crypto';
 import express from 'express';
 import type { OlxAdapterMode } from '../../config/env';
 import request from 'supertest';
@@ -1113,6 +1114,45 @@ describe('Presentation API', () => {
 
       expect(res.status).toBe(200);
       expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+
+    // Regression guard: renewal used to sign the user's current workspace into the new token,
+    // so a token for a workspace the user had left was swapped for one of the new workspace.
+    it.each([['/api/products', 403], ['/api/auth/me', 200]])(
+      'never renews a token whose workspace no longer matches on %s',
+      async (path, status) => {
+        const { app, authUserStore } = await buildTestApp();
+        authUserStore.users.find((u) => u.id === 'u-1')!.workspaceId = 'ws-2';
+
+        const res = await request(app).get(path).set(bearerOf(tokenAged(13)));
+
+        expect(res.status).toBe(status);
+        expect(res.headers['x-renewed-token']).toBeUndefined();
+      },
+    );
+
+    it('rejects a token without a usable issue time instead of renewing it on every request', async () => {
+      const { app } = await buildTestApp();
+      const noIat = jwt.sign({ userId: 'u-1', workspaceId: 'ws-1', tv: 0 }, env.jwt.secret, {
+        noTimestamp: true,
+      });
+      // jsonwebtoken refuses to sign a non-numeric iat, so the token is assembled by hand.
+      const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+      const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({
+        userId: 'u-1',
+        workspaceId: 'ws-1',
+        tv: 0,
+        iat: 'yesterday',
+      })}`;
+      const badIat = `${unsigned}.${createHmac('sha256', env.jwt.secret).update(unsigned).digest('base64url')}`;
+
+      const withoutIat = await request(app).get('/api/products').set(bearerOf(noIat));
+      const withBadIat = await request(app).get('/api/products').set(bearerOf(badIat));
+
+      expect(withoutIat.status).toBe(200);
+      expect(withoutIat.headers['x-renewed-token']).toBeUndefined();
+      expect(withBadIat.status).toBe(401);
+      expect(withBadIat.body.error.message).toBe('Invalid token payload');
     });
 
     it.each(['/api/products', '/api/auth/me'])('never renews a revoked token on %s', async (path) => {
