@@ -1,0 +1,1 @@
+{"id":"94b2984447da71d18c7a3a6d1f463192.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/abuseLimits.test.ts#login failure limiter (regression guard) does not count successful logins","name":"does not count successful logins","status":"passed","testResultsByEnv":{"default":"1d526fbb04b6b90b2b628b79b3d646a9"}}

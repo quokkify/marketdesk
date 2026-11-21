@@ -1,0 +1,1 @@
+{"id":"24d6b5e2c09f2f8aab4855a715c6155d.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/layout/Sidebar.test.tsx#signOut asks the server to revoke the session and then ends it locally","name":"asks the server to revoke the session and then ends it locally","status":"passed","testResultsByEnv":{"default":"9fd94a2b3add922d04bd56c27e65fca9"}}

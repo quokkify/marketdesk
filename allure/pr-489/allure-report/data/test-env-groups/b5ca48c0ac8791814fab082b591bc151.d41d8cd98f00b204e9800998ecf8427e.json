@@ -1,0 +1,1 @@
+{"id":"b5ca48c0ac8791814fab082b591bc151.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ConversationSyncService.test.ts#ConversationSyncService stopsRetentionWhenListingIsLiveAgain","name":"stopsRetentionWhenListingIsLiveAgain","status":"passed","testResultsByEnv":{"default":"6e7bb4e1077abc2fa4087d2685a4adbc"}}
