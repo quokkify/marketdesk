@@ -134,6 +134,9 @@ services:
       HERMES_REQUEST_TIMEOUT_MS: ${HERMES_REQUEST_TIMEOUT_MS:-30000}
       # Keep the container storage path aligned with the fixed init-service target.
       UPLOAD_DIR: /app/uploads
+      # Local run records (development only); the host sees them in ./.local/runs.
+      RUN_RECORDER: ${RUN_RECORDER:-}
+      RUN_RECORDER_DIR: /app/.local/runs
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -147,9 +150,10 @@ services:
         condition: service_healthy
     # NOTE: the built frontend (dist/frontend) and backend (dist/backend) are baked
     # into the image and the backend serves the SPA, so dist is intentionally NOT
-    # bind-mounted (a host mount would shadow the image build). Only persist uploads.
+    # bind-mounted (a host mount would shadow the image build). Only uploads and run records are bind-mounted.
     volumes:
       - ./uploads:/app/uploads
+      - ./.local/runs:/app/.local/runs
     networks:
       - marketdesk-network
     restart: unless-stopped

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 import pino from 'pino';
+import { currentRun } from './application/runs/runContext.js';
 import {
   assertStartupConfiguration,
   env,
@@ -16,11 +17,18 @@ import { createRedisClient } from './config/redis.js';
 import { buildApp } from './presentation/http/app.js';
 import { createReadinessHandler } from './presentation/http/readiness.js';
 import { buildContainer, type AppContainer } from './config/di/index.js';
+import { createRunRecorder, envSecretEntries, registerEnvSecrets, resolveRunRecorder } from './config/runRecorder.js';
+import type { IRunRecorder } from './application/ports/IRunRecorder.js';
+import { FileRunRecorder } from './infrastructure/runRecorder/FileRunRecorder.js';
 import { safeErrorDetails } from './config/safeErrorDetails.js';
 import { verifyUploadStorageWritable } from './infrastructure/storage/verifyUploadStorage.js';
 
 const logger = pino({
   level: env.logLevel,
+  mixin: () => {
+    const run = currentRun();
+    return run ? { runId: run.runId } : {};
+  },
   transport: isDevelopment ? {
     target: 'pino-pretty',
     options: {
@@ -31,27 +39,14 @@ const logger = pino({
   } : undefined
 });
 
-const startupSensitiveValues = [
-  env.database.url,
-  env.database.password,
-  env.redis.url,
-  env.redis.password,
-  env.jwt.secret,
-  env.jwt.refreshSecret,
-  env.hermes.apiKey,
-  env.hermes.webhookSecret,
-  env.marketplaces.olx.clientSecret,
-  env.marketplaces.olx.accessToken,
-  env.marketplaces.olx.refreshToken,
-  env.marketplaceCredentialsKey,
-];
+const startupSensitiveValues = envSecretEntries(env).map(([, value]) => value);
 
 // Composition seam. The DI container (config/di) constructs the full object graph
 // — repositories, infrastructure services, ports and application services — and
 // returns an AppDeps-compatible container plus the lifecycle handles needed for
 // graceful shutdown.
-function resolveContainer(): AppContainer {
-  return buildContainer({ logger });
+function resolveContainer(runRecorder: IRunRecorder): AppContainer {
+  return buildContainer({ logger, runRecorder });
 }
 
 const startServer = async () => {
@@ -79,7 +74,17 @@ const startServer = async () => {
 
     // A wiring failure is fatal in every environment: the catch below logs it and exits 1,
     // so the process never answers /health while every /api route is missing.
-    const container = resolveContainer();
+    registerEnvSecrets(env);
+    const runRecorderState = resolveRunRecorder(env);
+    const runRecorder = createRunRecorder(runRecorderState, (error) => {
+      logger.warn({ error: safeErrorDetails(error, startupSensitiveValues) }, 'Run recorder fault');
+    });
+    if (runRecorder instanceof FileRunRecorder) runRecorder.start({ nodeEnv: env.nodeEnv });
+    logger.info(
+      { runRecorder: runRecorderState },
+      runRecorderState.enabled ? 'Run recorder on' : 'Run recorder off',
+    );
+    const container = resolveContainer(runRecorder);
     const app = buildApp(container.deps, {
       enableRateLimit: !isTest,
       corsOrigin: env.cors.origin,

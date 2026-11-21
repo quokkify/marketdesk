@@ -10,6 +10,7 @@ import compression from 'compression';
 import crypto from 'crypto';
 import path from 'path';
 
+import { noopRunRecorder, type IRunRecorder } from '../../application/ports/IRunRecorder';
 import type { ProductApplicationService } from '../../application/services/ProductApplicationService';
 import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 import type { ListingApplicationService } from '../../application/services/ListingApplicationService';
@@ -50,9 +51,11 @@ import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/O
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
+import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
 export interface AppDeps {
+  runRecorder?: IRunRecorder;
   productService: ProductApplicationService;
   productAIDraftService?: ProductAIDraftService;
   productRecheckService?: ProductRecheckService;
@@ -184,6 +187,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
   app.use(cors(createCorsOptions(options.corsOrigin)));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  const runRecorder = deps.runRecorder ?? noopRunRecorder;
+  app.use(createRunContextMiddleware(runRecorder));
 
   const controllers = {
     auth: new AuthController(deps.authUserStore, deps.workspaceRepo, deps.marketplaceRepo),
@@ -254,7 +259,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
   });
 
   // Central error handler MUST be last.
-  app.use(createErrorHandler(deps.logger));
+  app.use(createErrorHandler(deps.logger, runRecorder));
 
   return app;
 }
