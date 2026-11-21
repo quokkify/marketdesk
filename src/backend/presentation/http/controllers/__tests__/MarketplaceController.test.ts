@@ -18,7 +18,7 @@ async function seed(row: { id: string; workspaceId?: string; connected: boolean 
 
 async function search(repo: InMemoryMarketplaceRepository, resolver: unknown, id: string, query: string) {
   const controller = new MarketplaceController(
-    repo, {} as never, {} as never, {} as never, undefined, '', 'stub',
+    repo, {} as never, {} as never, {} as never, {} as never, undefined, '', 'stub',
     async () => {
       if (resolver instanceof Error) throw resolver;
       return resolver as OlxTrustedTaxonomyResolver;

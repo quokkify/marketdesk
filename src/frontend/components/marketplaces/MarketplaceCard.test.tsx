@@ -40,6 +40,7 @@ function cardProps(
     onRequestDisconnect: jest.fn(),
     onConfigure: jest.fn(),
     onSync: jest.fn(),
+    onImport: jest.fn(),
     ...props,
   };
 }

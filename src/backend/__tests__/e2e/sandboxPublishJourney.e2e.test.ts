@@ -4,6 +4,7 @@
 // connection, the stub taxonomy, the sandbox quota and the stub OLX transport. The
 // journey goes through HTTP only and must never reach the network.
 
+import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 
@@ -166,6 +167,7 @@ function buildSandboxApp() {
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,
+    marketplaceImportService: {} as unknown as MarketplaceImportService,
     marketplaceSyncScheduler: new MarketplaceSyncScheduler({
       scheduleRepeat: async () => undefined,
       removeRepeat: async () => undefined,

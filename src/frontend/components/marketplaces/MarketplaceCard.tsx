@@ -7,6 +7,7 @@ import { Box, Button, Stack, Switch, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import LinkIcon from '@mui/icons-material/Link';
 import SyncIcon from '@mui/icons-material/Sync';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownloadOutlined';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
 import type { Marketplace } from '@shared/types';
 import { MARKETPLACE_NAMES } from '@shared/constants';
@@ -71,6 +72,7 @@ export interface MarketplaceCardProps {
   onRequestDisconnect: (marketplace: Marketplace) => void;
   onConfigure: (marketplace: Marketplace) => void;
   onSync: (marketplace: Marketplace) => void;
+  onImport: (marketplace: Marketplace) => void;
 }
 
 export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
@@ -84,6 +86,7 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
   onRequestDisconnect,
   onConfigure,
   onSync,
+  onImport,
 }) => {
   const name = MARKETPLACE_NAMES[m.key];
   const titleId = `marketplace-${m.id}-title`;
@@ -171,6 +174,17 @@ export const MarketplaceCard: React.FC<MarketplaceCardProps> = ({
               sx={{ flex: '1 1 140px' }}
             >
               {syncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+          )}
+          {connected && !m.sandbox && (
+            <Button
+              variant="outlined"
+              startIcon={<CloudDownloadIcon />}
+              onClick={() => onImport(m)}
+              disabled={busy}
+              sx={{ flex: '1 1 140px' }}
+            >
+              Import from OLX
             </Button>
           )}
           {!connected && (

@@ -718,6 +718,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaceRepo,
     marketplaceOAuthService,
     marketplaceSyncScheduler,
+    marketplaceImportService,
     olxTaxonomyResolver,
     olxPublicationQuotaService,
     categoryCorrectionOperationService,

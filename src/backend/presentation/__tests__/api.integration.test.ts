@@ -3,6 +3,7 @@
 // focus is the HTTP contract: envelope shape (§18), auth, validation and error->status
 // mapping (§5/§19).
 
+import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import { createHmac } from 'node:crypto';
 import express from 'express';
 import type { OlxAdapterMode } from '../../config/env';
@@ -532,6 +533,7 @@ async function buildTestApp(
     marketplaceRepo: marketplaceRepo as IMarketplaceRepository,
     marketplaceOAuthService:
       options.marketplaceOAuthService?.(marketplaceRepo) ?? stubMarketplaceOAuthService(),
+    marketplaceImportService: {} as unknown as MarketplaceImportService,
     marketplaceSyncScheduler: { reconcile: async () => ({ mode: 'manual', scheduled: false }) },
     olxPublicationQuotaService: options.disableOlxPublicationQuotaService
       ? undefined
@@ -1780,15 +1782,6 @@ describe('Presentation API', () => {
       expect(list.body.data).toEqual([
         expect.objectContaining({ key: 'olx', connected: true, sandbox: false }),
       ]);
-    });
-
-    it.each(['import-preview', 'import'])('no longer serves POST %s', async (action) => {
-      const { app } = await buildTestApp();
-      const res = await auth(request(app).post(`/api/marketplaces/marketplace-olx/${action}`)).send(
-        {}
-      );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('NOT_FOUND');
     });
 
     it('reads and validates authenticated OLX quota operator contracts', async () => {
