@@ -7,16 +7,12 @@ import dev.quokkify.marketdesk.model.MarketplaceImportRequestPojo;
 import dev.quokkify.marketdesk.test.BaseTest;
 
 import io.restassured.response.ValidatableResponse;
-import org.apache.http.HttpStatus;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 // The API test stack runs OLX in stub mode, so a valid import request must stop at the sandbox guard; request
 // validation runs before it and is checked here for both endpoints.
 public class MarketplaceImportTest extends BaseTest {
-
-  private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
-  private static final String SANDBOX_MESSAGE = "Marketplace import is not available in sandbox mode";
 
   @DataProvider(name = "invalidPageSizes")
   public Object[][] invalidPageSizes() {
@@ -38,10 +34,7 @@ public class MarketplaceImportTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
     ValidatableResponse response = marketplaceSteps.previewImportUnauthenticated(marketplaceId);
-    marketplaceSteps.verify()
-        .verifyResponseStatusCode(response, HttpStatus.SC_UNAUTHORIZED)
-        .hasFailed(response)
-        .hasErrorCode(response, "UNAUTHORIZED");
+    marketplaceSteps.verify().isUnauthenticated(response);
   }
 
   @Test(dataProvider = "invalidPageSizes")
@@ -49,23 +42,26 @@ public class MarketplaceImportTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
     MarketplaceImportRequestPojo body = MarketplaceImportRequestPojo.withPageSize(pageSize);
-    verifyValidationError(marketplaceSteps.previewImport(account, marketplaceId, body));
-    verifyValidationError(marketplaceSteps.importAdverts(account, marketplaceId, body));
+    marketplaceSteps.verify()
+        .isValidationError(marketplaceSteps.previewImport(account, marketplaceId, body))
+        .isValidationError(marketplaceSteps.importAdverts(account, marketplaceId, body));
   }
 
   @Test(dataProvider = "malformedStatuses")
   public void rejectsMalformedStatuses(Object statuses) {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
-    verifyValidationError(marketplaceSteps.previewImport(account, marketplaceId,
-        MarketplaceImportRequestPojo.withStatuses(statuses)));
+    MarketplaceImportRequestPojo body = MarketplaceImportRequestPojo.withStatuses(statuses);
+    marketplaceSteps.verify()
+        .isValidationError(marketplaceSteps.previewImport(account, marketplaceId, body))
+        .isValidationError(marketplaceSteps.importAdverts(account, marketplaceId, body));
   }
 
   @Test(dataProvider = "malformedExternalListingIds")
   public void rejectsMalformedExternalListingIds(Object externalListingIds) {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
-    verifyValidationError(marketplaceSteps.importAdverts(account, marketplaceId,
+    marketplaceSteps.verify().isValidationError(marketplaceSteps.importAdverts(account, marketplaceId,
         MarketplaceImportRequestPojo.withExternalListingIds(externalListingIds)));
   }
 
@@ -74,14 +70,14 @@ public class MarketplaceImportTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
     MarketplaceImportRequestPojo body = new MarketplaceImportRequestPojo(null, null, List.of("olx-1"), "other");
-    verifyValidationError(marketplaceSteps.importAdverts(account, marketplaceId, body));
+    marketplaceSteps.verify().isValidationError(marketplaceSteps.importAdverts(account, marketplaceId, body));
   }
 
   @Test
   public void refusesImportPreviewInSandboxMode() {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
-    verifySandboxRefusal(marketplaceSteps.previewImport(account, marketplaceId,
+    marketplaceSteps.verify().isSandboxRefusal(marketplaceSteps.previewImport(account, marketplaceId,
         MarketplaceImportRequestPojo.withStatuses(List.of("active"))));
   }
 
@@ -89,22 +85,7 @@ public class MarketplaceImportTest extends BaseTest {
   public void refusesImportInSandboxMode() {
     AccountPojo account = authSteps.registerNewAccount();
     String marketplaceId = marketplaceSteps.getOlxMarketplaceId(account);
-    verifySandboxRefusal(marketplaceSteps.importAdverts(account, marketplaceId,
-        MarketplaceImportRequestPojo.withExternalListingIds(List.of("olx-1"))));
-  }
-
-  private void verifyValidationError(ValidatableResponse response) {
-    marketplaceSteps.verify()
-        .verifyResponseStatusCode(response, HttpStatus.SC_BAD_REQUEST)
-        .hasFailed(response)
-        .hasErrorCode(response, VALIDATION_ERROR);
-  }
-
-  private void verifySandboxRefusal(ValidatableResponse response) {
-    marketplaceSteps.verify()
-        .verifyResponseStatusCode(response, HttpStatus.SC_UNPROCESSABLE_ENTITY)
-        .hasFailed(response)
-        .hasErrorCode(response, "INVALID_STATE")
-        .hasErrorMessage(response, SANDBOX_MESSAGE);
+    marketplaceSteps.verify().isSandboxRefusal(marketplaceSteps.importAdverts(account, marketplaceId,
+        MarketplaceImportRequestPojo.withStatuses(List.of("active"))));
   }
 }

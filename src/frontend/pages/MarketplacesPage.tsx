@@ -163,16 +163,14 @@ const MarketplacesPage: React.FC = () => {
   };
 
   const handleImport = async () => {
-    if (!importPreview) return;
-    const externalListingIds = importPreview.items
-      .filter((item) => item.status === 'new' || item.status === 'changed')
-      .map((item) => item.externalListingId);
-    if (externalListingIds.length === 0) return;
+    if (!importPreview || importPreview.totals.new + importPreview.totals.changed === 0) return;
     setBusy(true);
     try {
+      // No id list: the server re-reads the same statuses and imports every new and changed advert,
+      // which also keeps accounts above the 500-id request cap importable.
       const result = await importMarketplaceAdverts({
         id: importPreview.marketplaceId,
-        externalListingIds,
+        statuses: IMPORT_STATUSES,
       }).unwrap();
       dispatch(
         enqueueToast({
