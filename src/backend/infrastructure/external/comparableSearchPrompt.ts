@@ -16,7 +16,10 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_PRICE = 100_000;
 const MAX_CANDIDATES = 10;
 
-const URL_LIKE = /\b(?:https?:\/\/|www\.)\S*/gi;
+// Any scheme (also glued to text), any domain-like token (labels joined by dots ending in a 2+ letter
+// TLD, with an optional path), and a bare IPv4 host. Model numbers such as 4.5/5 or MXP63ZM/A stay.
+const URL_LIKE =
+  /\S*?[a-z][a-z0-9+.-]*:\/\/\S*|\S*(?:[\p{L}\p{N}-]+\.)+\p{L}{2,}(?:[/:?#]\S*)?|\S*\b\d{1,3}(?:\.\d{1,3}){3}\S*/giu;
 const NOT_ALLOWED = /[^\p{L}\p{N} \-/.()+]/gu;
 
 // URLs removed; only letters, digits, spaces and -/.()+ kept; spaces collapsed; at most 120 chars.

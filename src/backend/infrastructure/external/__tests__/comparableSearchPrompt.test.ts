@@ -29,6 +29,23 @@ describe('sanitizeSearchName', () => {
     }
     expect(name).not.toMatch(/ {2}/);
     expect(sanitizeSearchName('a'.repeat(300)).length).toBeLessThanOrEqual(120);
+    // Regression guard: hosts without a scheme, a scheme glued to text, any scheme, a bare IPv4 host.
+    for (const raw of [
+      'AirPods evil.example/a?x=1',
+      'AirPodshttps://evil.example/a',
+      'ftp://evil.example',
+      'AirPods 10.0.0.1/a',
+    ]) {
+      const cleaned = sanitizeSearchName(raw);
+      expect(cleaned).not.toMatch(/evil|example|https|ftp|\/\/|10\.0\.0\.1/);
+    }
+  });
+
+  it('keepsModelNumbersAndVariants', () => {
+    const name = sanitizeSearchName('Apple AirPods 4 MXP63ZM/A, etui USB-C, bez ANC, ocena 4.5/5, A2482');
+    for (const kept of ['AirPods 4', 'MXP63ZM/A', 'USB-C', 'bez ANC', '4.5/5', 'A2482']) {
+      expect(name).toContain(kept);
+    }
   });
 });
 
@@ -37,7 +54,7 @@ describe('buildComparableSearchPrompt', () => {
     const { system, prompt } = buildComparableSearchPrompt({
       name: 'Apple AirPods 4 https://evil.example/x',
       condition: 'like_new',
-      category: 'Słuchawki',
+      category: 'Słuchawki evil.example/x',
       currency: 'PLN',
     });
     expect(prompt).toContain(sanitizeSearchName('Apple AirPods 4 https://evil.example/x'));
