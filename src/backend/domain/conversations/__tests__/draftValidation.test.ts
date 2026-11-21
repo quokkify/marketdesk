@@ -1,4 +1,4 @@
-import { fillPrice, validateDraft, MAX_REPLY_LENGTH, PRICE_PLACEHOLDER } from '../draftValidation';
+import { currencyAmounts, fillPrice, validateDraft, MAX_REPLY_LENGTH, PRICE_PLACEHOLDER } from '../draftValidation';
 
 const ctx: { floor: number; currency: string; filledPrice: number | null } = {
   floor: 70,
@@ -144,5 +144,13 @@ describe('validateDraft', () => {
     ]) {
       expect(rule(text)).toBe('below_floor');
     }
+  });
+});
+
+describe('currencyAmounts', () => {
+  it('returns amounts tied to a currency in text order, not plain numbers', () => {
+    expect(currencyAmounts('Would you take 50 zł?', 'PLN')).toEqual([50]);
+    expect(currencyAmounts('2 pieces for PLN 80 or 40-60 zł', 'PLN')).toEqual([80, 40, 60]);
+    expect(currencyAmounts('iPhone 12, 2 pieces', 'PLN')).toEqual([]);
   });
 });

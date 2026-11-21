@@ -9,7 +9,11 @@ import type { ProductStatus } from '../../../../shared/types';
 import type { ConversationReplyJob, IJobQueue, JobEnqueueOptions } from '../../ports/IJobQueue';
 import { normalizedTextHash } from '../../../domain/conversations/screening';
 import { InMemoryProductRepository, money, unwrap } from '../../../domain/testkit/support';
-import { ConversationSyncService, type ConversationSyncListing } from '../ConversationSyncService';
+import {
+  CONVERSATION_THREAD_SYNC_FAILED,
+  ConversationSyncService,
+  type ConversationSyncListing,
+} from '../ConversationSyncService';
 
 const NOW = new Date('2026-11-21T12:00:00Z');
 const WORKSPACE = 'w1';
@@ -17,6 +21,7 @@ const WORKSPACE = 'w1';
 class FakeConversations {
   readonly threads = new Map<string, ConversationThread>();
   readonly messages: ConversationMessage[] = [];
+  readonly answered = new Set<string>();
   readonly superseded: string[] = [];
   readonly transactions: string[] = [];
 
@@ -54,11 +59,39 @@ class FakeConversations {
     this.superseded.push(threadId);
     return 1;
   }
+
+  async newestUnansweredBuyerMessage(threadId: string): Promise<ConversationMessage | null> {
+    const newest = this.messages
+      .filter((m) => m.threadId === threadId)
+      .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())[0];
+    return newest?.direction === 'buyer' && !this.answered.has(newest.id) ? newest : null;
+  }
+
+  async startRetentionForListing(listingId: string, workspaceId: string, at: Date): Promise<number> {
+    let started = 0;
+    for (const t of this.threads.values()) {
+      if (t.listingId !== listingId || t.workspaceId !== workspaceId || t.retentionStartsAt) continue;
+      this.threads.set(t.id, { ...t, retentionStartsAt: at });
+      started += 1;
+    }
+    return started;
+  }
+
+  byExternalId(id: string): ConversationMessage {
+    const message = this.messages.find((m) => m.externalMessageId === id);
+    if (!message) throw new Error(`no message ${id}`);
+    return message;
+  }
 }
 
 class RecordingQueue implements IJobQueue<ConversationReplyJob> {
   readonly jobs: Array<{ data: ConversationReplyJob; options?: JobEnqueueOptions }> = [];
+  failNext = false;
   async enqueue(data: ConversationReplyJob, options?: JobEnqueueOptions): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('redis down');
+    }
     this.jobs.push({ data, options });
   }
   async enqueueAll(): Promise<void> {
@@ -75,7 +108,11 @@ const seller = (id: string, minute: number): MarketplaceMessage =>
 function adapterWith(threads: MarketplaceThread[], messages: Record<string, MarketplaceMessage[]>) {
   return {
     listThreads: jest.fn(async () => threads),
-    listThreadMessages: jest.fn(async (id: string) => messages[id] ?? []),
+    listThreadMessages: jest.fn(async (id: string) => {
+      const found = messages[id];
+      if (!found) throw new Error(`thread ${id} unreadable`);
+      return found;
+    }),
   };
 }
 
@@ -92,6 +129,7 @@ async function setup(options: { productStatus?: ProductStatus } = {}) {
     status: options.productStatus ?? 'active',
   })));
   const queue = new RecordingQueue();
+  const failures: unknown[] = [];
   const service = new ConversationSyncService({
     inTransaction: async (work) => {
       conversations.transactions.push('begin');
@@ -102,8 +140,9 @@ async function setup(options: { productStatus?: ProductStatus } = {}) {
     products,
     replyQueue: queue,
     now: () => NOW,
+    onThreadFailure: (failure) => failures.push(failure),
   });
-  return { conversations, queue, service };
+  return { conversations, queue, service, failures };
 }
 
 const listing = (overrides: Partial<ConversationSyncListing> = {}): ConversationSyncListing => ({
@@ -125,10 +164,9 @@ describe('ConversationSyncService', () => {
     const stored = [...conversations.threads.values()];
     expect(stored.map((t) => [t.externalThreadId, t.listingId, t.productId, t.externalBuyerId, t.lastExternalMessageId]))
       .toEqual([['a', 'l1', 'p1', 'buyer-a', 'a3'], ['b', 'l1', 'p1', 'buyer-b', 'b1']]);
-    expect(conversations.messages.find((m) => m.externalMessageId === 'a3')?.textHash)
-      .toBe(normalizedTextHash('Is it  AVAILABLE?'));
-    const newestA = conversations.messages.find((m) => m.externalMessageId === 'a3')!;
-    const newestB = conversations.messages.find((m) => m.externalMessageId === 'b1')!;
+    expect(conversations.byExternalId('a3').textHash).toBe(normalizedTextHash('Is it  AVAILABLE?'));
+    const newestA = conversations.byExternalId('a3');
+    const newestB = conversations.byExternalId('b1');
     expect(queue.jobs).toEqual([
       { data: { workspaceId: WORKSPACE, threadId: 't1', messageId: newestA.id }, options: { jobId: `reply:${newestA.id}` } },
       { data: { workspaceId: WORKSPACE, threadId: 't2', messageId: newestB.id }, options: { jobId: `reply:${newestB.id}` } },
@@ -137,10 +175,11 @@ describe('ConversationSyncService', () => {
     expect(conversations.transactions).toEqual(['begin', 'commit', 'begin', 'commit']);
   });
 
-  it('queues nothing and supersedes nothing on a resync without new messages', async () => {
+  it('queues nothing and supersedes nothing on a resync once the message has a draft', async () => {
     const { conversations, queue, service } = await setup();
     const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
     await service.syncListing(listing(), adapter);
+    conversations.answered.add(conversations.byExternalId('a1').id);
     queue.jobs.length = 0;
     conversations.superseded.length = 0;
 
@@ -149,11 +188,42 @@ describe('ConversationSyncService', () => {
     expect(conversations.superseded).toEqual([]);
   });
 
+  it('reenqueuesUnansweredMessageAfterLostEnqueue', async () => {
+    const { conversations, queue, service, failures } = await setup();
+    const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
+    queue.failNext = true;
+
+    await service.syncListing(listing(), adapter);
+    expect(queue.jobs).toEqual([]);
+    expect(failures).toEqual([{ listingId: 'l1', code: CONVERSATION_THREAD_SYNC_FAILED }]);
+
+    expect(await service.syncListing(listing(), adapter)).toEqual({ newBuyerMessages: 0 });
+    const message = conversations.byExternalId('a1');
+    expect(queue.jobs).toEqual([
+      { data: { workspaceId: WORKSPACE, threadId: 't1', messageId: message.id }, options: { jobId: `reply:${message.id}` } },
+    ]);
+  });
+
+  it('enqueuesPreviouslyTruncatedThreadOnceComplete', async () => {
+    const { conversations, queue, service } = await setup();
+    const threads = [thread('a', 3)];
+    const adapter = adapterWith(threads, { a: [buyer('a1', 1), buyer('a2', 2)] });
+
+    await service.syncListing(listing(), adapter);
+    expect(conversations.messages.map((m) => m.externalMessageId)).toEqual(['a1', 'a2']);
+    expect(queue.jobs).toEqual([]);
+
+    threads[0] = thread('a', 2);
+    expect(await service.syncListing(listing(), adapter)).toEqual({ newBuyerMessages: 0 });
+    expect(queue.jobs.map((j) => j.data.messageId)).toEqual([conversations.byExternalId('a2').id]);
+  });
+
   it('supersedes the pending draft when a newer buyer message arrives and queues a run for it', async () => {
     const { conversations, queue, service } = await setup();
     const messages: Record<string, MarketplaceMessage[]> = { a: [buyer('a1', 1)] };
     const adapter = adapterWith([thread('a')], messages);
     await service.syncListing(listing(), adapter);
+    conversations.answered.add(conversations.byExternalId('a1').id);
     queue.jobs.length = 0;
     conversations.superseded.length = 0;
     messages.a = [buyer('a1', 1), buyer('a2', 5)];
@@ -161,11 +231,10 @@ describe('ConversationSyncService', () => {
     await service.syncListing(listing(), adapter);
 
     expect(conversations.superseded).toEqual(['t1']);
-    const newest = conversations.messages.find((m) => m.externalMessageId === 'a2')!;
-    expect(queue.jobs.map((j) => j.data.messageId)).toEqual([newest.id]);
+    expect(queue.jobs.map((j) => j.data.messageId)).toEqual([conversations.byExternalId('a2').id]);
   });
 
-  it('does not supersede or queue when only a seller message is new', async () => {
+  it('does not supersede or queue when the newest message is from the seller', async () => {
     const { conversations, queue, service } = await setup();
     const messages: Record<string, MarketplaceMessage[]> = { a: [buyer('a1', 1)] };
     const adapter = adapterWith([thread('a')], messages);
@@ -176,6 +245,20 @@ describe('ConversationSyncService', () => {
 
     expect(await service.syncListing(listing(), adapter)).toEqual({ newBuyerMessages: 0 });
     expect(conversations.superseded).toEqual([]);
+    expect(queue.jobs).toEqual([]);
+  });
+
+  it('queues no run for a suspicious thread', async () => {
+    const { conversations, queue, service } = await setup();
+    const messages: Record<string, MarketplaceMessage[]> = { a: [buyer('a1', 1)] };
+    const adapter = adapterWith([thread('a')], messages);
+    await service.syncListing(listing(), adapter);
+    const stored = conversations.threads.get('t1')!;
+    conversations.threads.set('t1', { ...stored, status: 'suspicious', suspiciousReasons: ['foreign_link'] });
+    queue.jobs.length = 0;
+    messages.a = [buyer('a1', 1), buyer('a2', 2)];
+
+    await service.syncListing(listing(), adapter);
     expect(queue.jobs).toEqual([]);
   });
 
@@ -190,10 +273,36 @@ describe('ConversationSyncService', () => {
     expect(queue.jobs.map((j) => j.data.threadId)).toEqual(['t2']);
   });
 
+  it('keeps syncing the other threads when one fails and reports it by code', async () => {
+    const { conversations, queue, service, failures } = await setup();
+    const adapter = adapterWith([thread('a'), thread('b')], { b: [buyer('b1', 1, 'secret buyer text')] });
+
+    expect(await service.syncListing(listing(), adapter)).toEqual({ newBuyerMessages: 1 });
+    expect(conversations.messages.map((m) => m.externalMessageId)).toEqual(['b1']);
+    expect(queue.jobs).toHaveLength(1);
+    expect(failures).toEqual([{ listingId: 'l1', code: CONVERSATION_THREAD_SYNC_FAILED }]);
+    expect(JSON.stringify(failures)).not.toContain('unreadable');
+  });
+
   it('starts retention when the listing is no longer live', async () => {
     const { conversations, service } = await setup();
     await service.syncListing(listing({ status: 'expired' }), adapterWith([thread('a')], { a: [buyer('a1', 1)] }));
     expect(conversations.threads.get('t1')?.retentionStartsAt).toEqual(NOW);
+  });
+
+  it('startsRetentionForListingLeftLive', async () => {
+    const { conversations, queue, service } = await setup();
+    const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
+    await service.syncListing(listing(), adapter);
+    expect(conversations.threads.get('t1')?.retentionStartsAt).toBeNull();
+    adapter.listThreads.mockClear();
+    queue.jobs.length = 0;
+
+    expect(await service.syncListing(listing({ status: 'error' }), adapter)).toEqual({ newBuyerMessages: 0 });
+
+    expect(conversations.threads.get('t1')?.retentionStartsAt).toEqual(NOW);
+    expect(adapter.listThreads).not.toHaveBeenCalled();
+    expect(queue.jobs).toEqual([]);
   });
 
   it('starts retention when the product is sold', async () => {
@@ -212,7 +321,7 @@ describe('ConversationSyncService', () => {
     ['a draft listing', listing({ status: 'draft' })],
     ['a listing in error', listing({ status: 'error' })],
     ['a listing without an advert id', listing({ marketplaceListingId: null })],
-  ])('skips %s', async (_name, input) => {
+  ])('reads no threads for %s', async (_name, input) => {
     const { conversations, queue, service } = await setup();
     const adapter = adapterWith([thread('a')], { a: [buyer('a1', 1)] });
     expect(await service.syncListing(input, adapter)).toEqual({ newBuyerMessages: 0 });
@@ -221,7 +330,7 @@ describe('ConversationSyncService', () => {
     expect(queue.jobs).toEqual([]);
   });
 
-  it('skips an adapter without thread reading', async () => {
+  it('reads no threads with an adapter that cannot', async () => {
     const { queue, service } = await setup();
     expect(await service.syncListing(listing(), {})).toEqual({ newBuyerMessages: 0 });
     expect(queue.jobs).toEqual([]);

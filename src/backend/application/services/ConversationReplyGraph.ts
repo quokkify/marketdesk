@@ -68,7 +68,7 @@ export class ConversationReplyGraph {
     if (latest?.direction !== 'buyer' || latest.id !== input.messageId) {
       return { kind: 'skipped', reason: 'not_latest' };
     }
-    if (latest.text === null) throw new Error(`Buyer message text is no longer stored: ${input.messageId}`);
+    if (latest.text === null) throw new NotFoundError(`Buyer message text is no longer stored: ${input.messageId}`);
     const product = await products.findByIdForWorkspace(thread.productId, input.workspaceId);
     if (!product) throw new NotFoundError(`Product not found: ${thread.productId}`);
     if (product.isSold()) return { kind: 'skipped', reason: 'sold' };

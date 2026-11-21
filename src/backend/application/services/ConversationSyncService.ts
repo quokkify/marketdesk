@@ -9,6 +9,9 @@ import type { ConversationReplyJob, IJobQueue } from '../ports/IJobQueue';
 // Threads are read only for adverts that can still carry a conversation.
 const SYNCED_LISTING_STATUSES: readonly ListingStatus[] = ['live', 'expired'];
 
+// The only detail recorded for a failed thread: buyer text must never reach a log.
+export const CONVERSATION_THREAD_SYNC_FAILED = 'conversation_thread_sync_failed';
+
 export interface ConversationSyncListing {
   id: string;
   productId: string;
@@ -19,7 +22,11 @@ export interface ConversationSyncListing {
 
 export type ConversationSyncStore = Pick<
   IConversationRepository,
-  'upsertThread' | 'upsertMessages' | 'supersedePendingDrafts'
+  | 'upsertThread'
+  | 'upsertMessages'
+  | 'supersedePendingDrafts'
+  | 'newestUnansweredBuyerMessage'
+  | 'startRetentionForListing'
 >;
 
 export type ConversationThreadReader = Pick<IMarketplaceAdapter, 'listThreads' | 'listThreadMessages'>;
@@ -30,57 +37,70 @@ export interface ConversationSyncDeps {
   products: Pick<IProductRepository, 'findByIdForWorkspace'>;
   replyQueue: IJobQueue<ConversationReplyJob>;
   now: () => Date;
+  onThreadFailure?: (failure: { listingId: string; code: typeof CONVERSATION_THREAD_SYNC_FAILED }) => void;
 }
 
 export class ConversationSyncService {
   constructor(private readonly deps: ConversationSyncDeps) {}
 
+  // Called for every listing of the marketplace: retention starts from stored state alone,
+  // threads are read only for live or expired adverts.
   async syncListing(
     listing: ConversationSyncListing,
     adapter: ConversationThreadReader,
   ): Promise<{ newBuyerMessages: number }> {
-    const advertId = listing.marketplaceListingId;
-    if (!adapter.listThreads || !adapter.listThreadMessages) return { newBuyerMessages: 0 };
-    if (!advertId || !SYNCED_LISTING_STATUSES.includes(listing.status)) return { newBuyerMessages: 0 };
-
     const product = await this.deps.products.findByIdForWorkspace(listing.productId, listing.workspaceId);
     if (!product) throw new NotFoundError(`Product not found for synchronized listing: ${listing.productId}`);
     const retentionStartsAt = product.isSold() || listing.status !== 'live' ? this.deps.now() : undefined;
+    if (retentionStartsAt) {
+      await this.deps.inTransaction((conversations) =>
+        conversations.startRetentionForListing(listing.id, listing.workspaceId, retentionStartsAt),
+      );
+    }
+
+    const advertId = listing.marketplaceListingId;
+    if (!adapter.listThreads || !adapter.listThreadMessages) return { newBuyerMessages: 0 };
+    if (!advertId || !SYNCED_LISTING_STATUSES.includes(listing.status)) return { newBuyerMessages: 0 };
+    const readMessages = adapter.listThreadMessages.bind(adapter);
 
     let newBuyerMessages = 0;
     for (const thread of await adapter.listThreads(advertId)) {
-      const messages = await adapter.listThreadMessages(thread.externalThreadId);
-      const stored = await this.deps.inTransaction(async (conversations) => {
-        const row = await conversations.upsertThread({
-          workspaceId: listing.workspaceId,
-          listingId: listing.id,
-          productId: listing.productId,
-          externalThreadId: thread.externalThreadId,
-          externalBuyerId: thread.externalBuyerId,
-          lastExternalMessageId: messages[messages.length - 1]?.externalMessageId,
-          retentionStartsAt,
+      try {
+        const messages = await readMessages(thread.externalThreadId);
+        // A partial read could hide a newer message, so the thread waits for a complete read.
+        const truncated = thread.totalCount !== null && messages.length < thread.totalCount;
+        const stored = await this.deps.inTransaction(async (conversations) => {
+          const row = await conversations.upsertThread({
+            workspaceId: listing.workspaceId,
+            listingId: listing.id,
+            productId: listing.productId,
+            externalThreadId: thread.externalThreadId,
+            externalBuyerId: thread.externalBuyerId,
+            lastExternalMessageId: messages[messages.length - 1]?.externalMessageId,
+            retentionStartsAt,
+          });
+          const inserted = await conversations.upsertMessages(
+            row.id,
+            messages.map((m) => ({ ...m, textHash: normalizedTextHash(m.text) })),
+          );
+          const buyerMessages = inserted.filter((m) => m.direction === 'buyer').length;
+          if (buyerMessages > 0) await conversations.supersedePendingDrafts(row.id);
+          // Decided from stored state, so a run lost to a failed enqueue is queued again next sync.
+          const unanswered = truncated || row.status === 'suspicious'
+            ? null
+            : await conversations.newestUnansweredBuyerMessage(row.id);
+          return { threadId: row.id, buyerMessages, unanswered };
         });
-        const inserted = await conversations.upsertMessages(
-          row.id,
-          messages.map((m) => ({ ...m, textHash: normalizedTextHash(m.text) })),
-        );
-        const buyerMessages = inserted.filter((m) => m.direction === 'buyer');
-        if (buyerMessages.length > 0) await conversations.supersedePendingDrafts(row.id);
-        return { threadId: row.id, buyerMessages };
-      });
-      newBuyerMessages += stored.buyerMessages.length;
-
-      // A partial read could hide a newer message, so the thread waits for a complete read.
-      const truncated = thread.totalCount !== null && messages.length < thread.totalCount;
-      const newest = stored.buyerMessages.reduce<(typeof stored.buyerMessages)[number] | undefined>(
-        (latest, m) => (!latest || m.sentAt.getTime() >= latest.sentAt.getTime() ? m : latest),
-        undefined,
-      );
-      if (newest && !truncated) {
-        await this.deps.replyQueue.enqueue(
-          { workspaceId: listing.workspaceId, threadId: stored.threadId, messageId: newest.id },
-          { jobId: `reply:${newest.id}` },
-        );
+        newBuyerMessages += stored.buyerMessages;
+        // The job id deduplicates repeats; the graph skips a message that is no longer the newest.
+        if (stored.unanswered) {
+          await this.deps.replyQueue.enqueue(
+            { workspaceId: listing.workspaceId, threadId: stored.threadId, messageId: stored.unanswered.id },
+            { jobId: `reply:${stored.unanswered.id}` },
+          );
+        }
+      } catch {
+        this.deps.onThreadFailure?.({ listingId: listing.id, code: CONVERSATION_THREAD_SYNC_FAILED });
       }
     }
     return { newBuyerMessages };

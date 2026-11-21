@@ -46,6 +46,30 @@ describe('OfflineReplyDraftAI', () => {
     expect(draft.counterOffer).toBe(false);
   });
   it('reports offline', () => expect(ai.classify(ctxWith('hi'))).resolves.toMatchObject({ source: 'offline' }));
+
+  it.each([
+    'Would you take 50 zł?', 'Can you take less?', 'Any lower?', 'I can offer you something', 'Za ile oddasz?',
+    'Dam 40', 'Opuść trochę', 'Zejdzie Pan z ceny?', 'Уступите немного?', 'Уступишь?', 'Віддасте дешевше?',
+  ])('classifies %s as haggle', async (text) => {
+    expect((await ai.classify(ctxWith(text))).intent).toBe('haggle');
+  });
+
+  it.each(['Is there any damage?', 'Would you send it with delivery?', 'Taken photos?'])(
+    'does not read %s as haggle', async (text) => {
+      expect((await ai.classify(ctxWith(text))).intent).not.toBe('haggle');
+    },
+  );
+
+  it('proposes the amount the buyer offered in a haggle so the graph can clamp it', async () => {
+    const draft = await ai.draft(ctxWith('Would you take 50 zł?'), 'haggle');
+    expect(draft).toMatchObject({ counterOffer: true, proposedPrice: 50 });
+    expect(draft.reply).toContain('{{PRICE}}');
+  });
+
+  it('proposes no price for a haggle without a currency amount', async () => {
+    const draft = await ai.draft(ctxWith('Would you take less for 2 pieces?'), 'haggle');
+    expect(draft).toMatchObject({ counterOffer: false, proposedPrice: null });
+  });
 });
 
 describe('HermesReplyDraftAI', () => {

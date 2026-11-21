@@ -49,6 +49,10 @@ export interface IConversationRepository {
   listThreadsForProduct(productId: string, workspaceId: string): Promise<ConversationThread[]>;
   // Returns only the messages inserted by this call.
   upsertMessages(threadId: string, messages: NewConversationMessage[]): Promise<ConversationMessage[]>;
+  // The thread's newest message when it is from the buyer and no draft answers it.
+  newestUnansweredBuyerMessage(threadId: string): Promise<ConversationMessage | null>;
+  // Sets retention_starts_at on the listing's threads that have none; returns how many.
+  startRetentionForListing(listingId: string, workspaceId: string, at: Date): Promise<number>;
   // Newest first.
   recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]>;
   // Buyer messages only.

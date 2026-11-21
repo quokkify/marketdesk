@@ -147,6 +147,20 @@ function priceNumbers(text: string, currency: string): number[] {
   return found;
 }
 
+// Amounts tied to a currency (not price words), in the order they appear in the text.
+export function currencyAmounts(text: string, currency: string): number[] {
+  const lowered = text.toLowerCase();
+  const { after, before } = priceRegexes(currency);
+  const found: Array<{ index: number; value: number }> = [];
+  for (const m of lowered.matchAll(after)) {
+    // A range "40-50 zł" keeps its order: the upper bound sorts after the lower one.
+    if (m[1]) found.push({ index: m.index, value: toNumber(m[1]) });
+    found.push({ index: m.index + (m[1] ? 1 : 0), value: toNumber(m[2]) });
+  }
+  for (const m of lowered.matchAll(before)) found.push({ index: m.index, value: toNumber(m[1]) });
+  return found.sort((a, b) => a.index - b.index).map((f) => f.value);
+}
+
 function hasPhone(text: string): boolean {
   if (hasCardNumber(text)) return false;
   const withoutIban = text.replace(IBAN, ' ');

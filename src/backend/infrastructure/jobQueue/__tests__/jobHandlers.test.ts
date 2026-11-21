@@ -1076,12 +1076,12 @@ describe('SyncMarketplaceHandler', () => {
         conversationSync: { syncListing },
         onConversationSyncFailure: (failure) => failures.push(failure),
       });
-      return { adapter, handler, syncListing, failures, order, marketplace };
+      return { adapter, handler, syncListing, failures, order, marketplace, listingStore };
     }
 
     const job = { marketplaceKey: 'olx' as const, marketplaceId: 'm-1', externalListingIds: [] };
 
-    it('syncs threads of live and expired listings with an advert id after the stats', async () => {
+    it('syncs the conversations of every listing, whatever its status, after the stats', async () => {
       const { adapter, handler, syncListing, order } = setupConversations();
 
       await handler.handle(job);
@@ -1089,9 +1089,12 @@ describe('SyncMarketplaceHandler', () => {
       expect(syncListing.mock.calls.map(([listing]) => listing)).toEqual([
         { id: 'l-live', productId: 'p-l-live', workspaceId: 'w-1', marketplaceListingId: 'ext-live', status: 'live' },
         { id: 'l-expired', productId: 'p-l-expired', workspaceId: 'w-1', marketplaceListingId: 'ext-expired', status: 'expired' },
+        { id: 'l-draft', productId: 'p-l-draft', workspaceId: 'w-1', marketplaceListingId: null, status: 'draft' },
       ]);
       expect(syncListing.mock.calls.every(([, used]) => used === adapter)).toBe(true);
-      expect(order).toEqual(['stats', 'conversations:l-live', 'conversations:l-expired', 'marketplace']);
+      expect(order).toEqual([
+        'stats', 'conversations:l-live', 'conversations:l-expired', 'conversations:l-draft', 'marketplace',
+      ]);
     });
 
     it('records a failed listing by a fixed code and keeps syncing the others', async () => {
@@ -1104,15 +1107,25 @@ describe('SyncMarketplaceHandler', () => {
 
       expect(result.marketplaceUpdated).toBe(true);
       expect(marketplace.errorCount).toBe(0);
-      expect(syncListing).toHaveBeenCalledTimes(2);
+      expect(syncListing).toHaveBeenCalledTimes(3);
       expect(failures).toEqual([{ listingId: 'l-live', code: 'conversation_sync_failed' }]);
       expect(JSON.stringify(failures)).not.toContain('secret');
     });
 
-    it('skips conversations when the adapter cannot read threads', async () => {
-      const { handler, syncListing } = setupConversations({ listThreads: undefined });
-      await handler.handle(job);
+    it('does not fail the stats sync when the listings cannot be read for conversations', async () => {
+      const { handler, syncListing, failures, listingStore, marketplace } = setupConversations();
+      const listings = await listingStore.findByMarketplace();
+      listingStore.findByMarketplace
+        .mockResolvedValueOnce(listings)
+        .mockResolvedValueOnce(listings)
+        .mockRejectedValueOnce(new Error('db down'));
+
+      const result = await handler.handle(job);
+
+      expect(result.marketplaceUpdated).toBe(true);
+      expect(marketplace.errorCount).toBe(0);
       expect(syncListing).not.toHaveBeenCalled();
+      expect(failures).toEqual([{ code: 'conversation_sync_failed' }]);
     });
   });
 

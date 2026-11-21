@@ -11,7 +11,8 @@ import io.restassured.response.ValidatableResponse;
 import org.testng.annotations.Test;
 
 // The API test stack runs OLX in stub mode and the AI offline: every sandbox advert has three buyer threads
-// (an availability question, a haggle and a scam link), and reply drafts come from the offline templates.
+// (an availability question, a haggle offering 50 zł and a scam link), and reply drafts come from the offline
+// templates. The sample product sells for 100.
 public class ConversationSyncTest extends BaseTest {
 
   private static final int SANDBOX_THREADS = 3;
@@ -49,7 +50,7 @@ public class ConversationSyncTest extends BaseTest {
     marketplaceSteps.syncOlx(owner);
     ValidatableResponse conversations = conversationSteps.awaitSettledThreads(owner, listing.productId(),
         SANDBOX_THREADS);
-    conversationSteps.verify().haggleDraftKeepsFloor(conversations, FLOOR);
+    conversationSteps.verify().haggleDraftOffersFloor(conversations, FLOOR);
   }
 
   @Test

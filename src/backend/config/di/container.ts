@@ -187,7 +187,8 @@ class ReplyGraphConversationRepository extends ConversationRepository {
   }
 }
 
-const CONVERSATION_SYNC_FAILURE_MESSAGE = 'Conversation sync failed for a listing';
+const CONVERSATION_SYNC_FAILURE_MESSAGE = 'Conversation sync failed';
+const CONVERSATION_REPLY_DROPPED_MESSAGE = 'Conversation reply run dropped';
 
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -689,24 +690,26 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   publishQueue.registerHandler((data) => publishHandler.handle(data));
 
-  // Each thread is stored in its own transaction; new buyer messages queue reply runs.
+  // Conversation failures carry ids and a fixed code only: buyer text must never reach a log.
+  const warnByCode = (message: string, failure: Record<string, string>): void => {
+    if (overrides.logger) overrides.logger.warn(failure, message);
+    else console.warn(message, failure);
+  };
+  // Each thread is stored in its own transaction; unanswered buyer messages queue reply runs.
   const conversationSync = new ConversationSyncService({
     inTransaction: (work) =>
       withPoolTransaction(pool, (client) => work(new ConversationRepository(pool, client))),
     products: productRepo,
     replyQueue: conversationReplyQueue,
     now: () => new Date(),
+    onThreadFailure: (failure) => warnByCode(CONVERSATION_SYNC_FAILURE_MESSAGE, failure),
   });
   // The sync handler persists fetched listing stats and updates the marketplace
   // lastSyncAt/errorCount via the injected repositories (C5).
   const syncHandler = new SyncMarketplaceHandler(adapterFactory, {
     listingStore: listingRepo,
     conversationSync,
-    // The listing id and a fixed code only: buyer text must never reach a log.
-    onConversationSyncFailure: (failure) => {
-      if (overrides.logger) overrides.logger.warn(failure, CONVERSATION_SYNC_FAILURE_MESSAGE);
-      else console.warn(CONVERSATION_SYNC_FAILURE_MESSAGE, failure);
-    },
+    onConversationSyncFailure: (failure) => warnByCode(CONVERSATION_SYNC_FAILURE_MESSAGE, failure),
     marketplaceStore: marketplaceRepo,
     accessTokens: env.marketplaces.olx.adapterMode === 'real' ? marketplaceOAuthService : undefined,
     authenticatedHttpClient:
@@ -824,7 +827,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
           floodPerHour: env.replies.floodPerHour,
         },
         now: () => new Date(),
-      })
+      }),
+    (failure) => warnByCode(CONVERSATION_REPLY_DROPPED_MESSAGE, failure)
   );
   conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
 

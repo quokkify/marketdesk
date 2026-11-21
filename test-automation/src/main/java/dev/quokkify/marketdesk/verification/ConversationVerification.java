@@ -20,6 +20,7 @@ public class ConversationVerification extends BaseApiVerification<ConversationVe
   // The sandbox fixture texts the stub OLX adapter gives every advert (olxSandboxConversations.ts).
   private static final String SCAM_THREAD = "data.threads.find { it.messages[0].text.contains('olx-dostawa') }";
   private static final String HAGGLE_THREAD = "data.threads.find { it.messages[0].text.contains('Would you take') }";
+  private static final double PRICE_TOLERANCE = 0.001;
   private static final Duration QUIET_PERIOD = Duration.ofSeconds(6);
   private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
 
@@ -44,12 +45,14 @@ public class ConversationVerification extends BaseApiVerification<ConversationVe
     return self();
   }
 
-  @Step("The haggle thread has a pending draft priced at least {floor}")
-  public ConversationVerification haggleDraftKeepsFloor(ValidatableResponse response, double floor) {
+  // The buyer offers less than the floor, so the draft must counter with the floor itself.
+  @Step("The haggle thread has a pending haggle draft offering the floor {floor}")
+  public ConversationVerification haggleDraftOffersFloor(ValidatableResponse response, double floor) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
     response.body(HAGGLE_THREAD + ".draft.status", Matchers.equalTo("pending"));
+    response.body(HAGGLE_THREAD + ".draft.intent", Matchers.equalTo("haggle"));
     double price = response.extract().jsonPath().getDouble(HAGGLE_THREAD + ".draft.filledPrice");
-    MatcherAssert.assertThat(price, Matchers.greaterThanOrEqualTo(floor));
+    MatcherAssert.assertThat(price, Matchers.closeTo(floor, PRICE_TOLERANCE));
     return self();
   }
 

@@ -90,6 +90,12 @@ class FakeConversations implements IConversationRepository {
   async findDraft(draftId: string, threadId: string) {
     return this.drafts.find((d) => d.id === draftId && d.threadId === threadId) ?? null;
   }
+  async newestUnansweredBuyerMessage(): Promise<ConversationMessage | null> {
+    return null;
+  }
+  async startRetentionForListing(): Promise<number> {
+    return 0;
+  }
   async latestDraft(threadId: string) {
     return [...this.drafts].reverse().find((d) => d.threadId === threadId && d.status !== 'superseded') ?? null;
   }

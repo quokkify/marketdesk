@@ -1,5 +1,5 @@
 import { ConversationReplyHandler } from '../JobHandlers/ConversationReplyHandler';
-import { ServiceUnavailableError } from '../../../domain/shared/DomainError';
+import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../../domain/shared/DomainError';
 
 describe('ConversationReplyHandler', () => {
   const job = { workspaceId: 'w1', threadId: 't1', messageId: 'm1' };
@@ -29,5 +29,29 @@ describe('ConversationReplyHandler', () => {
       run: async () => { throw new ServiceUnavailableError('AI provider unavailable'); },
     }));
     await expect(handler.handle(job)).rejects.toBeInstanceOf(ServiceUnavailableError);
+  });
+
+  it('completes a job that cannot succeed on retry and reports it by code only', async () => {
+    const dropped: unknown[] = [];
+    const handler = new ConversationReplyHandler(() => ({
+      run: async () => { throw new NotFoundError('Buyer message text is no longer stored: m1'); },
+    }), (failure) => dropped.push(failure));
+
+    await expect(handler.handle(job)).resolves.toEqual({ kind: 'dropped', code: 'reply_target_missing' });
+    expect(dropped).toEqual([{ threadId: 't1', code: 'reply_target_missing' }]);
+  });
+
+  it('completes a job the domain rejects', async () => {
+    const handler = new ConversationReplyHandler(() => ({
+      run: async () => { throw new ValidationError('bad'); },
+    }));
+    await expect(handler.handle(job)).resolves.toEqual({ kind: 'dropped', code: 'reply_run_rejected' });
+  });
+
+  it('lets an unexpected error such as a database failure fail the job for a retry', async () => {
+    const handler = new ConversationReplyHandler(() => ({
+      run: async () => { throw new Error('connection terminated'); },
+    }));
+    await expect(handler.handle(job)).rejects.toThrow('connection terminated');
   });
 });

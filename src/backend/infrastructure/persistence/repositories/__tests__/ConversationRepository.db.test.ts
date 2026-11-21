@@ -372,4 +372,41 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     });
     expect((await repo.latestDraft(thread.id))?.id).toBe(failed.id);
   });
+
+  it('newestUnansweredBuyerMessageNeedsBuyerLatestWithoutDraft', async () => {
+    const thread = await newThread();
+    expect(await repo.newestUnansweredBuyerMessage(thread.id)).toBeNull();
+    const [m1] = await repo.upsertMessages(thread.id, [message('m1', { sentAt: new Date('2026-11-20T10:00:00Z') })]);
+    expect((await repo.newestUnansweredBuyerMessage(thread.id))?.id).toBe(m1.id);
+
+    await repo.insertDraft({ threadId: thread.id, answersMessageId: m1.id, status: 'failed', failureReason: 'link' });
+    expect(await repo.newestUnansweredBuyerMessage(thread.id)).toBeNull();
+
+    const [m2] = await repo.upsertMessages(thread.id, [message('m2', { sentAt: new Date('2026-11-20T11:00:00Z') })]);
+    expect((await repo.newestUnansweredBuyerMessage(thread.id))?.id).toBe(m2.id);
+
+    await repo.upsertMessages(thread.id, [message('m3', { direction: 'seller', sentAt: new Date('2026-11-20T12:00:00Z') })]);
+    expect(await repo.newestUnansweredBuyerMessage(thread.id)).toBeNull();
+  });
+
+  it('startRetentionForListingSetsOnlyUnsetThreadsOfThatListingAndWorkspace', async () => {
+    const earlier = new Date('2026-11-01T00:00:00Z');
+    const at = new Date('2026-11-21T00:00:00Z');
+    const open = await newThread('ext-open');
+    const kept = await repo.upsertThread({
+      workspaceId, listingId, productId, externalThreadId: 'ext-kept', retentionStartsAt: earlier,
+    });
+    const otherListing = randomUUID();
+    await client.query('INSERT INTO listings (id) VALUES ($1)', [otherListing]);
+    const other = await repo.upsertThread({ workspaceId, listingId: otherListing, productId, externalThreadId: 'ext-other' });
+
+    expect(await repo.startRetentionForListing(listingId, randomUUID(), at)).toBe(0);
+    expect(await repo.startRetentionForListing(listingId, workspaceId, at)).toBe(1);
+    expect(await repo.startRetentionForListing(listingId, workspaceId, new Date('2026-11-22T00:00:00Z'))).toBe(0);
+
+    const byId = async (id: string) => (await repo.findThreadForWorkspace(id, workspaceId))?.retentionStartsAt;
+    expect(await byId(open.id)).toEqual(at);
+    expect(await byId(kept.id)).toEqual(earlier);
+    expect(await byId(other.id)).toBeNull();
+  });
 });

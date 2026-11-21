@@ -193,6 +193,29 @@ export class ConversationRepository implements IConversationRepository {
     return inserted;
   }
 
+  async newestUnansweredBuyerMessage(threadId: string): Promise<ConversationMessage | null> {
+    const { rows } = await query<MessageRow>(
+      `SELECT m.* FROM (
+         SELECT * FROM conversation_messages WHERE thread_id = $1 ORDER BY sent_at DESC, id LIMIT 1
+       ) m
+       WHERE m.direction = 'buyer'
+         AND NOT EXISTS (SELECT 1 FROM reply_drafts d WHERE d.answers_message_id = m.id)`,
+      [threadId],
+      this.queryClient,
+    );
+    return rows[0] ? toMessage(rows[0]) : null;
+  }
+
+  async startRetentionForListing(listingId: string, workspaceId: string, at: Date): Promise<number> {
+    const { rowCount } = await query(
+      `UPDATE conversation_threads SET retention_starts_at = $3, updated_at = now()
+        WHERE listing_id = $1 AND workspace_id = $2 AND retention_starts_at IS NULL`,
+      [listingId, workspaceId, at],
+      this.queryClient,
+    );
+    return rowCount;
+  }
+
   async recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]> {
     const { rows } = await query<MessageRow>(
       'SELECT * FROM conversation_messages WHERE thread_id = $1 ORDER BY sent_at DESC, id LIMIT $2',

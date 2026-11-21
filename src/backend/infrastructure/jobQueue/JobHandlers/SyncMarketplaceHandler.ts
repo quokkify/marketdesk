@@ -64,7 +64,7 @@ export interface SyncMarketplaceHandlerDeps {
   conversationSync?: {
     syncListing(listing: ConversationSyncListing, adapter: ConversationThreadReader): Promise<unknown>;
   };
-  onConversationSyncFailure?: (failure: { listingId: string; code: typeof CONVERSATION_SYNC_FAILED }) => void;
+  onConversationSyncFailure?: (failure: { listingId?: string; code: typeof CONVERSATION_SYNC_FAILED }) => void;
   marketplaceStore?: MarketplaceSyncStore;
   accessTokens?: SyncMarketplaceAccessTokenProvider;
   authenticatedHttpClient?: (accessToken: string) => MarketplaceHttpClient;
@@ -180,28 +180,35 @@ export class SyncMarketplaceHandler {
     return { adapter: this.adapters.create(data.marketplaceKey), marketplaceAccount: null };
   }
 
-  // Per listing and best effort: a failed thread read must not fail the stats sync or other listings.
+  // Every listing, best effort: retention needs no OLX read, and a failed listing must not fail
+  // the stats sync or the other listings.
   private async syncConversations(data: SyncMarketplaceJobData, adapter: IMarketplaceAdapter): Promise<void> {
     const conversations = this.deps.conversationSync;
     const store = this.deps.listingStore;
-    if (!conversations || !store || !adapter.listThreads) return;
-    const marketplace = await this.deps.marketplaceStore?.findById(data.marketplaceId);
-    if (!marketplace) return;
-    const requested = new Set(data.externalListingIds);
-    for (const listing of await store.findByMarketplace(data.marketplaceId)) {
-      const advertId = listing.marketplaceListingId;
-      if (!advertId || (requested.size > 0 && !requested.has(advertId))) continue;
-      if (listing.status !== 'live' && listing.status !== 'expired') continue;
+    if (!conversations || !store) return;
+    const report = this.deps.onConversationSyncFailure;
+    let workspaceId: string;
+    let listings: Listing[];
+    try {
+      const marketplace = await this.deps.marketplaceStore?.findById(data.marketplaceId);
+      if (!marketplace) return;
+      workspaceId = marketplace.workspaceId;
+      listings = await store.findByMarketplace(data.marketplaceId);
+    } catch {
+      report?.({ code: CONVERSATION_SYNC_FAILED });
+      return;
+    }
+    for (const listing of listings) {
       try {
         await conversations.syncListing({
           id: listing.id,
           productId: listing.productId,
-          workspaceId: marketplace.workspaceId,
-          marketplaceListingId: advertId,
+          workspaceId,
+          marketplaceListingId: listing.marketplaceListingId,
           status: listing.status,
         }, adapter);
       } catch {
-        this.deps.onConversationSyncFailure?.({ listingId: listing.id, code: CONVERSATION_SYNC_FAILED });
+        report?.({ listingId: listing.id, code: CONVERSATION_SYNC_FAILED });
       }
     }
   }

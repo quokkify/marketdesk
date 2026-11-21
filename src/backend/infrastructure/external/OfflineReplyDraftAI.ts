@@ -1,17 +1,24 @@
 // Keyword intent detection and fixed polite templates, used when Hermes is not consulted.
-// Templates contain no numbers or links; a haggle reply carries {{PRICE}} and no proposed price,
-// so the graph offers the selling price.
+// Templates contain no numbers or links; a haggle reply carries {{PRICE}}. When the buyer named an
+// amount in a currency, it is proposed as a counter-offer and the graph clamps it to the floor;
+// otherwise the graph offers the selling price.
 
 import type { BuyerIntent } from '../../domain/conversations/types';
 import type { IReplyDraftAI, ReplyClassification, ReplyContext, ReplyDraftResult } from '../../domain/ports/IReplyDraftAI';
-import { PRICE_PLACEHOLDER } from '../../domain/conversations/draftValidation';
+import { PRICE_PLACEHOLDER, currencyAmounts } from '../../domain/conversations/draftValidation';
 
 type Language = 'pl' | 'uk' | 'ru' | 'en';
 
+// Short words match whole words only ("take" but not "taken", "dam" but not "damage").
+const HAGGLE_WORDS = /(?<!\p{L})(?:take|less|lower|offer|dam)(?!\p{L})/iu;
+// "would you" is checked after logistics, so "would you send it" stays a logistics question.
 const KEYWORDS: Array<[BuyerIntent, RegExp]> = [
   ['availability', /dostępn|available|є в наявності|в наявності|в наличии/i],
   ['haggle', /cena|taniej|zniżk|rabat|знижк|скидк|дешевше|дешевле|price|discount|cheaper/i],
+  ['haggle', HAGGLE_WORDS],
+  ['haggle', /(?<!\p{L})(?:za ile|opuś|opusc|zejdzie|уступ|віддас)/iu],
   ['logistics', /wysyłk|dostaw|odbiór|доставк|відправ|отправ|самовивіз|самовывоз|shipping|delivery|pickup/i],
+  ['haggle', /(?<!\p{L})would you(?!\p{L})/iu],
 ];
 
 const TEMPLATES: Record<BuyerIntent, Record<Language, string>> = {
@@ -69,7 +76,11 @@ export class OfflineReplyDraftAI implements IReplyDraftAI {
     ctx: ReplyContext,
     intent: BuyerIntent,
   ): Promise<ReplyDraftResult> {
-    const reply = TEMPLATES[intent][detectLanguage(lastBuyerText(ctx))];
-    return { reply, counterOffer: false, proposedPrice: null, source: 'offline' };
+    const text = lastBuyerText(ctx);
+    const reply = TEMPLATES[intent][detectLanguage(text)];
+    const offered = intent === 'haggle' ? currencyAmounts(text, ctx.product.currency).pop() : undefined;
+    return offered === undefined
+      ? { reply, counterOffer: false, proposedPrice: null, source: 'offline' }
+      : { reply, counterOffer: true, proposedPrice: offered, source: 'offline' };
   }
 }
