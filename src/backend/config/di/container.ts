@@ -87,6 +87,7 @@ import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsRe
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
+import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
@@ -411,12 +412,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         })
       )
   );
+  const priceResearchRepo = new PriceResearchRepository(pool);
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,
     eventRepo,
     eventPublisher,
     aiProvider,
+    priceResearchRepo,
     idGenerator
   );
 
@@ -795,6 +798,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     hermesLimits: () => hermesLimitsReader.read(new Date()),
     analyticsService,
     productRepo,
+    priceResearchRepo,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,

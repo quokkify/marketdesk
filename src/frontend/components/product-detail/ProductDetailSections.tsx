@@ -90,7 +90,8 @@ export const ProductIdentityHero: React.FC<{
   product: Product;
   onEdit: () => void;
   onDelete?: () => void;
-}> = ({ product, onEdit, onDelete }) => {
+  priceNote?: React.ReactNode;
+}> = ({ product, onEdit, onDelete, priceNote }) => {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const menuId = useId();
   return (
@@ -120,6 +121,7 @@ export const ProductIdentityHero: React.FC<{
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
             {`SKU ${product.sku || 'unavailable'} · Updated ${formatRelative(product.updatedAt)}`}
           </Typography>
+          {priceNote}
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' }, alignItems: 'center' }}>
           <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>

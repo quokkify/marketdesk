@@ -10,6 +10,7 @@ import type {
   AIProviderSourceAware,
   IAIProvider,
   ListingAnalysis,
+  PriceEstimateContext,
   PriceSuggestion,
   PriceSuggestionContext,
 } from '../../domain/ports/IAIProvider';
@@ -20,7 +21,7 @@ import type {
   ListingSeoInput,
   ListingSeoOutput,
 } from '../../domain/agents/MarketDeskAgentCatalog';
-import type { HermesProviderMode, HermesStatusView } from '../../../shared/types';
+import type { HermesProviderMode, HermesStatusView, PriceEstimate } from '../../../shared/types';
 import { ServiceUnavailableError } from '../../domain/shared/DomainError';
 import type { HermesHealthProbe } from './HermesHealthProbe';
 import type { AiUsageSink } from '../../application/ai/AiCallRecord';
@@ -39,6 +40,10 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
 
   async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
     return this.call('suggestPrice', (provider) => provider.suggestPrice(context));
+  }
+
+  async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
+    return this.call('estimatePrice', (provider) => provider.estimatePrice(context));
   }
 
   async generateTitle(

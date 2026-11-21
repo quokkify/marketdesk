@@ -16,6 +16,7 @@ import type { HermesGuardrails } from '../../../../shared/types';
 import {
   InMemoryEventRepository,
   InMemoryListingRepository,
+  InMemoryPriceResearchRepository,
   InMemoryProductRepository,
   RecordingEventPublisher,
   money,
@@ -88,6 +89,7 @@ function setup() {
     new InMemoryEventRepository(),
     new RecordingEventPublisher(),
     selector,
+    new InMemoryPriceResearchRepository(),
     sequentialIdFactory('offline-run'),
   );
   const workspace = unwrap(

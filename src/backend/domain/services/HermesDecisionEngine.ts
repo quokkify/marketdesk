@@ -14,7 +14,12 @@
 // Every AI-made event records its source, and offline ones say so in their detail.
 
 import { Result, Ok, Err } from '../shared/Result';
-import { ValidationError, InvalidStateError, NotFoundError } from '../shared/DomainError';
+import {
+  ValidationError,
+  InvalidStateError,
+  NotFoundError,
+  ServiceUnavailableError,
+} from '../shared/DomainError';
 import { HermesEvent } from '../entities/HermesEvent';
 import { Product } from '../entities/Product';
 import { Money } from '../valueObjects/Money';
@@ -24,6 +29,8 @@ import type {
   AutonomyDecision,
   HermesEventType,
   HermesSeverity,
+  PriceComparable,
+  PriceEstimate,
   ProposedChange,
 } from '../../../shared/types';
 import { BALANCED_SAFE_EVENT_TYPES } from '../../../shared/constants';
@@ -31,10 +38,14 @@ import type { Workspace } from '../entities/Workspace';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
+import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
+import type { Listing } from '../entities/Listing';
+import { shouldSurfacePriceEstimate, validatePriceEstimate } from './priceEstimate';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import {
   isAIProviderSourceAware,
   OFFLINE_AI_NOTICE,
+  PRICE_ESTIMATE_UNUSABLE_MESSAGE,
   type IAIProvider,
 } from '../ports/IAIProvider';
 import {
@@ -56,6 +67,43 @@ interface Suggestion {
 
 export type IdFactory = () => string;
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function unavailablePriceEstimate(detail: string): Suggestion {
+  return {
+    type: 'price_estimate_unavailable',
+    severity: 'info',
+    title: 'Price estimate unavailable',
+    detail,
+    change: null,
+  };
+}
+
+// The model's own basis labels are not trusted: a figure is observed only when it is the seller's
+// research that reached the provider, otherwise it is estimated.
+function labelEstimateFigures(
+  estimate: PriceEstimate,
+  researchAnchor: number | null,
+  comparables: readonly PriceComparable[],
+): PriceEstimate {
+  const retailAnchor = estimate.retailAnchor && {
+    amount: estimate.retailAnchor.amount,
+    basis: researchAnchor !== null && estimate.retailAnchor.amount === researchAnchor
+      ? ('observed' as const)
+      : ('estimated' as const),
+  };
+  let usedRange = estimate.usedRange;
+  if (usedRange) {
+    const prices = comparables.map((c) => c.price);
+    const withinComparables =
+      prices.length > 0 &&
+      usedRange.low >= Math.min(...prices) &&
+      usedRange.high <= Math.max(...prices);
+    usedRange = { low: usedRange.low, high: usedRange.high, basis: withinComparables ? 'observed' : 'estimated' };
+  }
+  return { ...estimate, retailAnchor, usedRange };
+}
+
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
 
 // Adds the offline notice unless the provider already wrote it into the detail.
@@ -73,6 +121,7 @@ export class HermesDecisionEngine {
     private readonly eventRepo: IEventRepository,
     private readonly eventPublisher: IEventPublisher,
     private readonly aiProvider: IAIProvider,
+    private readonly priceResearchRepo: IPriceResearchRepository,
     private readonly idFactory: IdFactory
   ) {}
 
@@ -93,8 +142,10 @@ export class HermesDecisionEngine {
         if (suggestion.change !== null && AI_MADE_CHANGE_KINDS.has(suggestion.change.kind)) {
           source = answeredOffline ? 'offline' : 'hermes';
         }
+        // A price from a Hermes estimate is never applied without the owner's approval.
+        const estimatedPrice = suggestion.change?.kind === 'price' && suggestion.change.estimate !== undefined;
         let decision: AutonomyDecision =
-          source === 'offline'
+          source === 'offline' || estimatedPrice
             ? 'pending_review'
             : this.determineAutonomy(workspace.autonomyLevel, suggestion.type, suggestion.severity);
         const created = HermesEvent.create({
@@ -312,6 +363,40 @@ export class HermesDecisionEngine {
       }
     }
 
+    // Asked after the SEO events are saved, so a failing estimate never discards them. The source
+    // is asked before and after the estimate call, as for the SEO call.
+    const priceOfflineBefore = primary ? await this.aiAnswersOffline() : false;
+    const priceSuggestion = primary ? await this.priceEstimateSuggestion(product, primary) : null;
+    if (priceSuggestion) {
+      // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change.
+      const priceSource =
+        priceSuggestion.change === null
+          ? null
+          : priceOfflineBefore || (await this.aiAnswersOffline())
+            ? 'offline'
+            : 'hermes';
+      const created = HermesEvent.create({
+        id: this.idFactory(),
+        workspaceId: workspace.id,
+        productId: product.id,
+        type: priceSuggestion.type,
+        severity: priceSuggestion.severity,
+        title: priceSuggestion.title,
+        detail:
+          priceSource === 'offline'
+            ? withOfflineNotice(priceSuggestion.detail)
+            : priceSuggestion.detail,
+        proposedChange: priceSuggestion.change,
+        status: 'pending_review',
+        autonomyDecision: 'pending_review',
+        source: priceSource,
+      });
+      if (created.isOk()) {
+        await this.eventRepo.saveAll([created.value]);
+        events.push(created.value);
+      }
+    }
+
     await this.eventPublisher.publish(this.runCompletedEvent(workspace.id, events.length));
     return events;
   }
@@ -404,6 +489,62 @@ export class HermesDecisionEngine {
     }
   }
 
+  /**
+   * Proposes a justified start price for the product's primary listing. Returns null when the
+   * estimate is valid but not worth surfacing, and an info-only "unavailable" suggestion when it
+   * is unusable or the call failed for any other reason. Provider unavailability propagates.
+   */
+  private async priceEstimateSuggestion(
+    product: Product,
+    primary: Listing
+  ): Promise<Suggestion | null> {
+    const stored = await this.priceResearchRepo.findByProduct(product.workspaceId, product.id);
+    // A retail anchor in another currency must not be compared against the listing price.
+    const research =
+      stored && stored.retailCurrency && stored.retailCurrency !== primary.price.currency
+        ? {
+            ...stored,
+            retailPrice: null,
+            retailCurrency: null,
+            retailSource: null,
+            retailCheckedAt: null,
+          }
+        : stored;
+    const daysLive = primary.publishedAt
+      ? Math.floor((Date.now() - primary.publishedAt.getTime()) / MS_PER_DAY)
+      : null;
+
+    let rawEstimate: Awaited<ReturnType<IAIProvider['estimatePrice']>>;
+    try {
+      rawEstimate = await this.aiProvider.estimatePrice({ product, listing: primary, daysLive, research });
+    } catch (error) {
+      if (error instanceof ServiceUnavailableError) throw error;
+      // A fixed message: raw error or model text never reaches the seller.
+      return unavailablePriceEstimate(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
+    }
+    const researchAnchor = research?.retailPrice ?? null;
+    const validated = validatePriceEstimate(rawEstimate, researchAnchor);
+    if (validated.isErr()) return unavailablePriceEstimate(validated.error.message);
+
+    const estimate = labelEstimateFigures(validated.value, researchAnchor, research?.comparables ?? []);
+    const currentPrice = product.sellingPrice.amount;
+    if (!shouldSurfacePriceEstimate(estimate, currentPrice)) return null;
+    const isLower = estimate.startPrice < currentPrice;
+    return {
+      type: isLower ? 'suggested_lower_price' : 'suggested_higher_price',
+      severity: isLower ? 'warning' : 'info',
+      title: `AI suggests price ${estimate.startPrice}`,
+      detail: estimate.reasoning,
+      change: {
+        kind: 'price',
+        field: 'price',
+        from: currentPrice,
+        to: estimate.startPrice,
+        estimate,
+      },
+    };
+  }
+
   async checkConditions(product: Product): Promise<Suggestion[]> {
     const suggestions: Suggestion[] = [];
     const listings = await this.listingRepo.findByProduct(product.id);
@@ -426,36 +567,8 @@ export class HermesDecisionEngine {
 
     // Check 2 + 3: AI-driven price and title suggestions (via abstracted provider)
     if (listings.length > 0) {
-      const primary = listings[0];
-      const recentViews = listings.reduce((sum, l) => sum + (l.views ?? 0), 0);
-
-      const priceResult = await this.aiProvider.suggestPrice({
-        listing: primary,
-        recentViews,
-        conversionRate: 0,
-        costPrice: product.costPrice?.amount,
-      });
-
-      const currentPrice = product.sellingPrice.amount;
-      if (
-        priceResult.confidence === 'high' &&
-        currentPrice > 0 &&
-        Math.abs(priceResult.suggestedPrice - currentPrice) >= 0.05 * currentPrice
-      ) {
-        const isLower = priceResult.suggestedPrice < currentPrice;
-        suggestions.push({
-          type: isLower ? 'suggested_lower_price' : 'suggested_higher_price',
-          severity: isLower ? 'warning' : 'info',
-          title: `AI suggests price ${priceResult.suggestedPrice}`,
-          detail: priceResult.reasoning,
-          change: {
-            kind: 'price',
-            field: 'price',
-            from: currentPrice,
-            to: priceResult.suggestedPrice,
-          },
-        });
-      }
+      const priceSuggestion = await this.priceEstimateSuggestion(product, listings[0]);
+      if (priceSuggestion) suggestions.push(priceSuggestion);
 
       const titleResult = await this.aiProvider.generateTitle(product, null);
       if (titleResult !== product.name && titleResult.length <= 120) {

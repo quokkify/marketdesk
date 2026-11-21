@@ -106,6 +106,7 @@ import {
 } from '../components/product-detail/ProductDetailSections.js';
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 import { RevivalDialog } from '../components/product-detail/RevivalDialog.js';
+import { PriceResearchSection, ProductPriceDiscount } from '../components/product-detail/PriceResearchSection.js';
 
 export { mainPreviewImageSx };
 
@@ -1260,7 +1261,12 @@ const ListingDetailsPage: React.FC = () => {
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
         Back to products
       </Button>
-      <ProductIdentityHero product={p} onEdit={() => setEditOpen(true)} onDelete={() => requestDelete(p)} />
+      <ProductIdentityHero
+        product={p}
+        onEdit={() => setEditOpen(true)}
+        onDelete={() => requestDelete(p)}
+        priceNote={<ProductPriceDiscount productId={p.id} currentPrice={p.sellingPrice} currency={currency} />}
+      />
 
       <Box sx={productDetailGridSx} data-testid="product-detail-layout">
         <Stack spacing={{ xs: 2, lg: 3 }} sx={{ minWidth: 0 }}>
@@ -1404,6 +1410,7 @@ const ListingDetailsPage: React.FC = () => {
             }
             statusColor={remoteMarketplaceChipColor(primaryListing)}
           />
+          <PriceResearchSection productId={p.id} currentPrice={p.sellingPrice} currency={currency} />
           <ProductHermesCard
             analyzing={analyzing}
             activeProvider={activeProvider}

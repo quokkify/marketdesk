@@ -8,11 +8,13 @@ import type {
   ProductAIDraftRequest,
   ProductRecheckResult,
   ProductImprovementSuggestions,
+  PriceResearch,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
 import { unwrap, unwrapPaginated } from './envelope.js';
 import type { PaginatedApiResponse } from './envelope.js';
+import type { PriceResearchBody } from '../../components/product-detail/priceResearchModel.js';
 import type {
   ProductListParams,
   CreateProductInput,
@@ -88,6 +90,18 @@ export const productsApi = baseApi.injectEndpoints({
       }),
       transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
       invalidatesTags: ['AiUsage'],
+    }),
+
+    getPriceResearch: builder.query<PriceResearch | null, string>({
+      query: (id) => `/products/${id}/price-research`,
+      transformResponse: (res: ApiResponse<PriceResearch | null>) => unwrap(res),
+      providesTags: (_result, _error, id) => [{ type: 'PriceResearch', id }],
+    }),
+
+    savePriceResearch: builder.mutation<PriceResearch, { productId: string; body: PriceResearchBody }>({
+      query: ({ productId, body }) => ({ url: `/products/${productId}/price-research`, method: 'PUT', body }),
+      transformResponse: (res: ApiResponse<PriceResearch>) => unwrap(res),
+      invalidatesTags: (_result, _error, { productId }) => [{ type: 'PriceResearch', id: productId }],
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
@@ -181,4 +195,6 @@ export const {
   useDeleteProductMutation,
   useCreateProductListingMutation,
   useGetProductListingsQuery,
+  useGetPriceResearchQuery,
+  useSavePriceResearchMutation,
 } = productsApi;

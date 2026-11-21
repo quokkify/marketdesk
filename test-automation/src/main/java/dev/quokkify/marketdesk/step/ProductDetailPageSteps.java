@@ -6,7 +6,9 @@ import dev.quokkify.marketdesk.verification.ProductDetailPageVerification;
 import dev.quokkify.model.PageSteps;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selenide;
 import io.qameta.allure.Step;
+import org.openqa.selenium.Keys;
 
 public class ProductDetailPageSteps
     extends PageSteps<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
@@ -46,6 +48,22 @@ public class ProductDetailPageSteps
       page.revivalConditionSelect().shouldBe(Condition.visible).click();
     }
     page.conditionOption(condition).shouldBe(Condition.visible).click();
+    return this;
+  }
+
+  @Step("Enter the retail price {price} {currency} from {source} and save it")
+  public ProductDetailPageSteps saveRetailAnchor(String price, String currency, String source) {
+    page.retailPriceInput().shouldBe(Condition.visible).setValue(price);
+    page.retailCurrencyInput().sendKeys(Keys.chord(Keys.CONTROL, "a"), currency);
+    page.retailSourceInput().setValue(source);
+    page.savePriceResearchButton().shouldBe(Condition.enabled).click();
+    page.priceResearchSavedNote().shouldBe(Condition.visible);
+    return this;
+  }
+
+  @Step("Reload the product page")
+  public ProductDetailPageSteps reloadPage() {
+    Selenide.refresh();
     return this;
   }
 }
