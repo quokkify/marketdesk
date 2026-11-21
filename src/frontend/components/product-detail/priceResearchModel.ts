@@ -153,6 +153,20 @@ export function mergeFoundComparables(form: PriceResearchForm, picked: Comparabl
   return { ...form, comparables: [...form.comparables, ...added] };
 }
 
+// A price the owner types over a web row is no longer the advert's price, so the row becomes manual.
+export function editComparablePrice(
+  rows: PriceResearchForm['comparables'],
+  index: number,
+  price: string,
+): PriceResearchForm['comparables'] {
+  return rows.map((row, i) => {
+    if (i !== index) return row;
+    if (row.source !== 'web' || row.price === price) return { ...row, price };
+    const { source: _source, url: _url, ...manual } = row;
+    return { ...manual, price };
+  });
+}
+
 export function selectionFits(form: PriceResearchForm, pickedCount: number): boolean {
   return form.comparables.filter((row) => !isBlankRow(row)).length + pickedCount <= MAX_COMPARABLES;
 }

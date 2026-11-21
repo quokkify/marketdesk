@@ -5,6 +5,7 @@ import {
   estimateLines,
   mergeFoundComparables,
   selectionFits,
+  editComparablePrice,
   usedRangeSourceNote,
   toPriceResearchBody,
   toPriceResearchForm,
@@ -162,5 +163,19 @@ describe('comparables found on OLX', () => {
     const observed = { ...estimate, usedRange: { low: 200, high: 285, basis: 'observed' as const } };
     expect(estimateLines(observed, 'PLN', '4 from OLX')).toContain('Used range 200–285 zł · observed (4 from OLX)');
     expect(estimateLines(estimate, 'PLN', '4 from OLX')).toContain('Used range 200–285 zł · estimated');
+  });
+});
+
+describe('editComparablePrice', () => {
+  const web = { price: '340', note: 'AirPods', url: 'https://www.olx.pl/d/oferta/a-CID99-ID1a.html', source: 'web' as const };
+
+  it('dropsSourceAndUrlWhenPriceOfWebRowChanges', () => {
+    expect(editComparablePrice([web], 0, '300')).toEqual([{ price: '300', note: 'AirPods' }]);
+  });
+
+  it('keepsWebRowWhenPriceIsUnchangedAndOtherRowsUntouched', () => {
+    const other = { price: '10', note: 'x' };
+    expect(editComparablePrice([web, other], 0, '340')).toEqual([web, other]);
+    expect(editComparablePrice([web, other], 1, '11')).toEqual([web, { price: '11', note: 'x' }]);
   });
 });

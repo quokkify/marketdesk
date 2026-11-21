@@ -1410,7 +1410,12 @@ const ListingDetailsPage: React.FC = () => {
             }
             statusColor={remoteMarketplaceChipColor(primaryListing)}
           />
-          <PriceResearchSection productId={p.id} currentPrice={p.sellingPrice} currency={currency} />
+          <PriceResearchSection
+            productId={p.id}
+            currentPrice={p.sellingPrice}
+            currency={currency}
+            listingCurrency={primaryListing?.currency ?? null}
+          />
           <ProductHermesCard
             analyzing={analyzing}
             activeProvider={activeProvider}

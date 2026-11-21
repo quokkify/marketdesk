@@ -19,6 +19,7 @@ import { enqueueToast } from '../../state/slices/uiSlice.js';
 import {
   MAX_COMPARABLES,
   discountLine,
+  editComparablePrice,
   mergeFoundComparables,
   toPriceResearchBody,
   toPriceResearchForm,
@@ -35,9 +36,10 @@ interface PriceResearchFormProps {
   productId: string;
   research: PriceResearch | null;
   currency: string;
+  listingCurrency: string | null;
 }
 
-const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency }) => {
+const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency, listingCurrency }) => {
   const dispatch = useAppDispatch();
   const [save, { isLoading: saving }] = useSavePriceResearchMutation();
   const [form, setForm] = useState<PriceResearchForm>(() => toPriceResearchForm(research, currency));
@@ -88,7 +90,7 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
     }
   };
 
-  const pln = currency === OLX_CURRENCY;
+  const pln = listingCurrency === OLX_CURRENCY;
 
   return (
     <Stack spacing={2}>
@@ -139,7 +141,7 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
                 size="small"
                 label="Price"
                 value={row.price}
-                onChange={(event) => patchComparable(index, { price: event.target.value })}
+                onChange={(event) => patch({ comparables: editComparablePrice(form.comparables, index, event.target.value) })}
                 error={Boolean(errors[`comparables.${index}.price`])}
                 helperText={errors[`comparables.${index}.price`]}
                 slotProps={{ htmlInput: { inputMode: 'decimal' } }}
@@ -212,7 +214,7 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
       )}
 
       <Box>
-        <Button variant="contained" disabled={saving} onClick={() => void handleSave()} data-testid="price-research-save">
+        <Button variant="contained" disabled={saving || searching} onClick={() => void handleSave()} data-testid="price-research-save">
           Save price research
         </Button>
       </Box>
@@ -226,7 +228,12 @@ export interface PriceResearchSectionProps {
   currency: string;
 }
 
-export const PriceResearchSection: React.FC<PriceResearchSectionProps> = ({ productId, currentPrice, currency }) => {
+export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listingCurrency?: string | null }> = ({
+  productId,
+  currentPrice,
+  currency,
+  listingCurrency = null,
+}) => {
   const query = useGetPriceResearchQuery(productId);
   const research = query.currentData;
   const discount = research ? discountLine(currentPrice, research, currency) : null;
@@ -257,6 +264,7 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps> = ({ prod
             productId={productId}
             research={research}
             currency={currency}
+            listingCurrency={listingCurrency}
           />
         </Stack>
       )}

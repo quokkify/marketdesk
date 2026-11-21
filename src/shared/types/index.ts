@@ -525,6 +525,7 @@ export interface Listing {
   marketplaceListingId?: string;
   externalUrl?: string;
   price: number;
+  currency?: string;
   status: ListingStatus;
   remoteStatus?: string;
   marketplaceCategory?: MarketplaceCategoryMetadata;
