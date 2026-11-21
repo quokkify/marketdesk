@@ -18,6 +18,13 @@ export interface OlxCategorySearchResult {
   path: string[];
 }
 
+// OLX `activate` result: live, waiting for moderation, limited (needs a paid packet) or unchanged.
+export interface ListingReactivationResult {
+  listing: Listing;
+  outcome: 'live' | 'pending_moderation' | 'limited' | 'unchanged';
+  remoteStatus: string | null;
+}
+
 export const listingsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getListings: builder.query<Listing[], ListingListParams | void>({
@@ -102,6 +109,17 @@ export const listingsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    reactivateListing: builder.mutation<ListingReactivationResult, string>({
+      query: (id) => ({ url: `/listings/${id}/reactivate`, method: 'POST', body: {} }),
+      transformResponse: (res: ApiResponse<ListingReactivationResult>) => unwrap(res),
+      invalidatesTags: (result, _error, id) => [
+        { type: 'Listing', id },
+        { type: 'Listing', id: 'LIST' },
+        ...(result ? [{ type: 'Product' as const, id: result.listing.productId }] : []),
+        { type: 'Product', id: 'LIST' },
+      ],
+    }),
+
     delistListingToDraft: builder.mutation<ListingDelistOperation, DelistListingToDraftInput>({
       query: ({ id, ...body }) => ({ url: `/listings/${id}/delist-to-draft`, method: 'POST', body }),
       transformResponse: (res: ApiResponse<ListingDelistOperation>) => unwrap(res),
@@ -129,6 +147,7 @@ export const {
   usePublishListingMutation,
   useUpdateListingMutation,
   useRelistListingMutation,
+  useReactivateListingMutation,
   useDelistListingToDraftMutation,
   useGetPriceHistoryQuery,
 } = listingsApi;
