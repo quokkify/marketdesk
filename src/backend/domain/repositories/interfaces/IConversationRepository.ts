@@ -1,0 +1,63 @@
+import type {
+  ConversationMessage,
+  ConversationThread,
+  ReplyDraft,
+} from '../../conversations/types';
+
+export type NewConversationThread = Pick<
+  ConversationThread,
+  'workspaceId' | 'listingId' | 'productId' | 'externalThreadId'
+> &
+  Partial<
+    Pick<
+      ConversationThread,
+      | 'externalBuyerId'
+      | 'status'
+      | 'suspiciousReasons'
+      | 'lastExternalMessageId'
+      | 'retentionStartsAt'
+    >
+  >;
+
+export type NewConversationMessage = Pick<
+  ConversationMessage,
+  'externalMessageId' | 'direction' | 'text' | 'textHash' | 'sentAt'
+>;
+
+export type NewReplyDraft = Pick<ReplyDraft, 'threadId' | 'answersMessageId'> &
+  Partial<Pick<ReplyDraft, 'intent' | 'proposedText' | 'filledPrice' | 'status'>>;
+
+export type ReplyDraftPatch = Partial<
+  Pick<
+    ReplyDraft,
+    | 'intent'
+    | 'proposedText'
+    | 'sentText'
+    | 'filledPrice'
+    | 'status'
+    | 'failureReason'
+    | 'attemptKey'
+    | 'attemptStartedAt'
+    | 'externalMessageId'
+  >
+>;
+
+export interface IConversationRepository {
+  upsertThread(thread: NewConversationThread): Promise<ConversationThread>;
+  findThreadForWorkspace(threadId: string, workspaceId: string): Promise<ConversationThread | null>;
+  listThreadsForProduct(productId: string, workspaceId: string): Promise<ConversationThread[]>;
+  // Returns only the messages inserted by this call.
+  upsertMessages(threadId: string, messages: NewConversationMessage[]): Promise<ConversationMessage[]>;
+  // Newest first.
+  recentMessages(threadId: string, limit: number): Promise<ConversationMessage[]>;
+  countTextHashInWorkspace(workspaceId: string, hash: string, since: Date): Promise<number>;
+  countBuyerMessagesSince(threadId: string, since: Date): Promise<number>;
+  insertDraft(draft: NewReplyDraft): Promise<ReplyDraft>;
+  findDraft(draftId: string, threadId: string): Promise<ReplyDraft | null>;
+  // Compare-and-set on status: false when the row is not in expectedStatus.
+  updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean>;
+  supersedePendingDrafts(threadId: string): Promise<number>;
+  countReplyRunsToday(workspaceId: string, since: Date): Promise<number>;
+  purgeExpiredText(before: Date): Promise<number>;
+  awaitingReplyCounts(workspaceId: string): Promise<Record<string, number>>;
+}
