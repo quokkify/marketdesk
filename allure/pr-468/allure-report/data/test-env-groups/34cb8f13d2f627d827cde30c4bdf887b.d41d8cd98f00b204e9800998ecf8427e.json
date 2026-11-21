@@ -1,0 +1,1 @@
+{"id":"34cb8f13d2f627d827cde30c4bdf887b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/sanitize.test.ts#sanitize redacts a token pair whose key has a long prefix","name":"redacts a token pair whose key has a long prefix","status":"passed","testResultsByEnv":{"default":"820481cc53bbdac509a3fdbcc299b2d4"}}
