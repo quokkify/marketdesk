@@ -20,9 +20,11 @@ export interface AiCallRecord {
   createdAt: Date;
 }
 
-// Fire-and-forget: implementations never throw, so recording cannot fail an AI call.
+// Fire-and-forget: recordAiCall catches anything a sink throws, so recording cannot fail an AI call.
 export interface AiUsageSink {
   record(r: AiCallRecord): void;
+  // Told when a record could not be made or delivered.
+  reportFailure?(error: unknown): void;
 }
 
 export interface AiUsageLogger {
@@ -31,16 +33,21 @@ export interface AiUsageLogger {
 }
 
 const AI_CALL_MESSAGE = 'AI call';
-const UNATTRIBUTED_MESSAGE = 'unattributed AI call';
+const RECORDING_FAILED_MESSAGE = 'AI usage could not be recorded';
 
-// One line per call. A call outside any usage scope is still logged, as a warning that names it.
+// One line per call. A call outside any usage scope is still logged, as a warning marked unattributed.
 export function loggingAiUsageSink(logger: AiUsageLogger): AiUsageSink {
   return {
     record(r) {
-      const line = { ai: r };
-      if (!r.workspaceId) logger.warn(line, UNATTRIBUTED_MESSAGE);
-      else if (r.outcome !== 'ok') logger.warn(line, AI_CALL_MESSAGE);
-      else logger.info(line, AI_CALL_MESSAGE);
+      if (!r.workspaceId) logger.warn({ ai: r, unattributed: true }, AI_CALL_MESSAGE);
+      else if (r.outcome !== 'ok') logger.warn({ ai: r }, AI_CALL_MESSAGE);
+      else logger.info({ ai: r }, AI_CALL_MESSAGE);
+    },
+    reportFailure(error) {
+      logger.warn(
+        { error: { message: error instanceof Error ? error.message : String(error) } },
+        RECORDING_FAILED_MESSAGE,
+      );
     },
   };
 }

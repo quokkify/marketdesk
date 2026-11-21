@@ -54,25 +54,41 @@ export function inAiUsageScope(): boolean {
 // Completes a measured call with the current attribution, adds it to the open scope and hands it
 // to the sink.
 export function recordAiCall(sink: AiUsageSink | undefined, call: AiCallMeasurement): void {
-  const context = storage.getStore();
-  const scope = context?.scope;
-  const runId = currentRun()?.runId;
-  const record: AiCallRecord = {
-    ...(scope
-      ? {
-          workspaceId: scope.workspaceId,
-          analysisId: scope.analysisId,
-          feature: scope.feature,
-          ...(scope.productId ? { productId: scope.productId } : {}),
-        }
-      : {}),
-    operation: context?.operation ?? UNNAMED_OPERATION,
-    ...call,
-    ...(runId ? { runId } : {}),
-    createdAt: new Date(),
-  };
-  scope?.records.push(record);
-  sink?.record(record);
+  // Recording must never fail the AI call it describes: a throw here would turn a good answer
+  // into a failed analysis, or replace a 503 with a generic error.
+  try {
+    const context = storage.getStore();
+    const scope = context?.scope;
+    const runId = currentRun()?.runId;
+    const record: AiCallRecord = {
+      ...(scope
+        ? {
+            workspaceId: scope.workspaceId,
+            analysisId: scope.analysisId,
+            feature: scope.feature,
+            ...(scope.productId ? { productId: scope.productId } : {}),
+          }
+        : {}),
+      operation: context?.operation ?? UNNAMED_OPERATION,
+      ...call,
+      ...(runId ? { runId } : {}),
+      createdAt: new Date(),
+    };
+    scope?.records.push(record);
+    sink?.record(record);
+  } catch (error) {
+    reportRecordingFailure(sink, error);
+  }
+}
+
+// The sink's own logger names the failure; without one there is nowhere to report it, and the
+// AI call must still go on.
+function reportRecordingFailure(sink: AiUsageSink | undefined, error: unknown): void {
+  try {
+    sink?.reportFailure?.(error);
+  } catch {
+    // Reporting failed as well; nothing else can carry it without risking the AI call.
+  }
 }
 
 function sumTokens(records: AiCallRecord[], key: 'promptTokens' | 'completionTokens' | 'totalTokens'): number | null {
