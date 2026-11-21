@@ -457,103 +457,107 @@ const SettingsPage: React.FC = () => {
     switch (activeSection) {
       case 'general':
         return (
-          <SettingsQueryState
-            isLoading={workspaceSettings.isFetching && !workspaceSettings.currentData}
-            isError={workspaceSettings.isError}
-            retry={workspaceSettings.refetch}
-          >
-            <Stack spacing={2.25}>
-              <TextField
-                label="Workspace name"
-                value={name}
-                disabled={!workspaceSettings.currentData || saving}
-                error={Boolean(fieldErrors.name)}
-                helperText={fieldErrors.name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  clearFieldError('name');
-                }}
-                fullWidth
-              />
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <Select
-                  value={currency}
-                  disabled={!workspaceSettings.currentData || saving}
-                  error={Boolean(fieldErrors.currency)}
-                  onChange={(e) => {
-                    setCurrency(e.target.value);
-                    clearFieldError('currency');
-                  }}
-                  fullWidth
-                  aria-label="Default currency"
-                >
-                  {CURRENCIES.map((c) => (
-                    <MenuItem key={c} value={c}>
-                      {c} — {c === 'PLN' ? 'Polish złoty' : c}
-                    </MenuItem>
-                  ))}
-                </Select>
+          <>
+            <SettingsQueryState
+              isLoading={workspaceSettings.isFetching && !workspaceSettings.currentData}
+              isError={workspaceSettings.isError}
+              retry={workspaceSettings.refetch}
+            >
+              <Stack spacing={2.25}>
                 <TextField
-                  label="Timezone"
-                  value={timezone}
+                  label="Workspace name"
+                  value={name}
                   disabled={!workspaceSettings.currentData || saving}
-                  error={Boolean(fieldErrors.timezone)}
-                  helperText={fieldErrors.timezone}
+                  error={Boolean(fieldErrors.name)}
+                  helperText={fieldErrors.name}
                   onChange={(e) => {
-                    setTimezone(e.target.value);
-                    clearFieldError('timezone');
+                    setName(e.target.value);
+                    clearFieldError('name');
                   }}
                   fullWidth
                 />
-              </Stack>
-              {fieldErrors.currency && (
-                <Typography color="error">{fieldErrors.currency}</Typography>
-              )}
-              <Select
-                value={language}
-                disabled={!workspaceSettings.currentData || saving}
-                error={Boolean(fieldErrors.language)}
-                onChange={(e) => {
-                  setLanguage(e.target.value as WorkspaceLanguage);
-                  clearFieldError('language');
-                }}
-                fullWidth
-                aria-label="Language"
-              >
-                <MenuItem value="en">English</MenuItem>
-                <MenuItem value="pl">Polski</MenuItem>
-              </Select>
-              {fieldErrors.language && (
-                <Typography color="error">{fieldErrors.language}</Typography>
-              )}
-              <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
-                <Button
-                  variant="outlined"
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <Select
+                    value={currency}
+                    disabled={!workspaceSettings.currentData || saving}
+                    error={Boolean(fieldErrors.currency)}
+                    onChange={(e) => {
+                      setCurrency(e.target.value);
+                      clearFieldError('currency');
+                    }}
+                    fullWidth
+                    aria-label="Default currency"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <MenuItem key={c} value={c}>
+                        {c} — {c === 'PLN' ? 'Polish złoty' : c}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <TextField
+                    label="Timezone"
+                    value={timezone}
+                    disabled={!workspaceSettings.currentData || saving}
+                    error={Boolean(fieldErrors.timezone)}
+                    helperText={fieldErrors.timezone}
+                    onChange={(e) => {
+                      setTimezone(e.target.value);
+                      clearFieldError('timezone');
+                    }}
+                    fullWidth
+                  />
+                </Stack>
+                {fieldErrors.currency && (
+                  <Typography color="error">{fieldErrors.currency}</Typography>
+                )}
+                <Select
+                  value={language}
                   disabled={!workspaceSettings.currentData || saving}
-                  onClick={() => {
-                    if (!workspaceSettings.currentData) return;
-                    const reset: WorkspaceDraft = workspaceSettings.currentData;
-                    setName(reset.name);
-                    setCurrency(reset.currency);
-                    setTimezone(reset.timezone);
-                    setLanguage(reset.language);
-                    setBaseline(reset);
-                    setFieldErrors({});
+                  error={Boolean(fieldErrors.language)}
+                  onChange={(e) => {
+                    setLanguage(e.target.value as WorkspaceLanguage);
+                    clearFieldError('language');
                   }}
+                  fullWidth
+                  aria-label="Language"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSaveProfile}
-                  disabled={!dirty || saving || !workspaceSettings.currentData}
-                >
-                  Save changes
-                </Button>
+                  <MenuItem value="en">English</MenuItem>
+                  <MenuItem value="pl">Polski</MenuItem>
+                </Select>
+                {fieldErrors.language && (
+                  <Typography color="error">{fieldErrors.language}</Typography>
+                )}
+                <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="outlined"
+                    disabled={!workspaceSettings.currentData || saving}
+                    onClick={() => {
+                      if (!workspaceSettings.currentData) return;
+                      const reset: WorkspaceDraft = workspaceSettings.currentData;
+                      setName(reset.name);
+                      setCurrency(reset.currency);
+                      setTimezone(reset.timezone);
+                      setLanguage(reset.language);
+                      setBaseline(reset);
+                      setFieldErrors({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveProfile}
+                    disabled={!dirty || saving || !workspaceSettings.currentData}
+                  >
+                    Save changes
+                  </Button>
+                </Stack>
               </Stack>
+            </SettingsQueryState>
+            <Box sx={{ mt: 2.25 }}>
               <ChangePasswordCard />
-            </Stack>
-          </SettingsQueryState>
+            </Box>
+          </>
         );
       case 'appearance':
         return (

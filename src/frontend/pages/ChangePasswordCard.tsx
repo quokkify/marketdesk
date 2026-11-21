@@ -29,12 +29,16 @@ export const ChangePasswordCard: React.FC = () => {
   const update = (field: keyof ChangePasswordFields, value: string) => {
     setFields((prev) => ({ ...prev, [field]: value }));
     setTouched((prev) => ({ ...prev, [field]: true }));
-    setFailure(null);
+    setFailure((prev) => (prev?.field && field !== 'currentPassword' ? prev : null));
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || isLoading) return;
+    if (!valid) {
+      setTouched({ currentPassword: true, newPassword: true, repeatPassword: true });
+      return;
+    }
+    if (isLoading) return;
     try {
       const { token } = await changePassword({
         currentPassword: fields.currentPassword,
