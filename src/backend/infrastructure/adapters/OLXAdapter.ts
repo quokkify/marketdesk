@@ -72,7 +72,8 @@ const OLX_STATUS_TO_LOCAL: Record<string, SyncedListing['status']> = {
   removed_by_user: 'expired',
   removed_by_moderator: 'expired',
   moderated: 'error',
-  disabled: 'error',
+  // Shown under "Oczekujące" (waiting for verification) on olx.pl, e.g. right after activate.
+  disabled: 'live',
   removed: 'expired',
   deactivated: 'expired',
   deleted: 'expired',

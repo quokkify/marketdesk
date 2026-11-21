@@ -64,11 +64,17 @@ function providerFailure(error: unknown): Error {
 }
 
 const ACTIVITY_ACTION = 'olx.advert_reactivated';
+// `disabled` right after activate is OLX's "waiting for verification" (listed under Oczekujące).
 const OUTCOME_BY_REMOTE_STATUS: Record<string, ReactivationOutcome> = {
   active: 'live',
   new: 'pending_moderation',
+  disabled: 'pending_moderation',
   limited: 'limited',
 };
+
+export function reactivationOutcome(remoteStatus: string | null): ReactivationOutcome {
+  return OUTCOME_BY_REMOTE_STATUS[(remoteStatus ?? '').toLowerCase()] ?? 'unchanged';
+}
 
 export class ListingReactivationService {
   constructor(private readonly deps: ListingReactivationServiceDeps) {}
@@ -131,7 +137,7 @@ export class ListingReactivationService {
     const remoteStatus = remote?.remoteStatus ?? null;
     const outcome: ReactivationOutcome = readBackFailed
       ? 'unconfirmed'
-      : (OUTCOME_BY_REMOTE_STATUS[(remoteStatus ?? '').toLowerCase()] ?? 'unchanged');
+      : reactivationOutcome(remoteStatus);
 
     if (outcome === 'live') {
       const relisted = listing.relist(this.now());

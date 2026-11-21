@@ -190,7 +190,7 @@ describe('OLXAdapter', () => {
     ['removed_by_user', 'expired'],
     ['removed_by_moderator', 'expired'],
     ['moderated', 'error'],
-    ['disabled', 'error'],
+    ['disabled', 'live'],
   ])('maps the documented OLX advert status %s to %s', async (remoteStatus, expected) => {
     const http = mockClient((config) => config.url.endsWith('/threads')
       ? { status: 200, data: [] }

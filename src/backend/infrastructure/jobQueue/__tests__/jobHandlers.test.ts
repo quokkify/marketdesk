@@ -1121,7 +1121,8 @@ describe('SyncMarketplaceHandler', () => {
       ['removed_by_user', 'expired'],
       ['removed_by_moderator', 'expired'],
       ['moderated', 'error'],
-      ['disabled', 'error'],
+      // OLX shows a disabled advert under "Oczekujące" (waiting for verification): sync leaves the listing alone.
+      ['disabled', 'live'],
     ])('applies the documented OLX advert status %s as %s', async (remoteStatus, expected) => {
       const adapter = fakeAdapter({
         sync: jest.fn(async (): Promise<SyncedListing[]> => [{
