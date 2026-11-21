@@ -371,7 +371,8 @@ export class SyncMarketplaceHandler {
   ): 'live' | 'expired' | 'error' | 'observe' | 'unknown' {
     if (synced.missing || remoteStatus === 'missing') return 'expired';
     if (['active', 'activated', 'live', 'published'].includes(remoteStatus)) return 'live';
-    if (['new', 'moderation', 'pending', 'limited'].includes(remoteStatus)) return 'observe';
+    // `disabled` is OLX's "waiting for verification" (listed under Oczekujące), not a failure.
+    if (['new', 'moderation', 'pending', 'limited', 'disabled'].includes(remoteStatus)) return 'observe';
     if (
       [
         'expired', 'removed', 'deactivated', 'deleted', 'closed', 'sold', 'completed',
@@ -381,7 +382,7 @@ export class SyncMarketplaceHandler {
     ) {
       return 'expired';
     }
-    if (['rejected', 'blocked', 'error', 'moderated', 'disabled'].includes(remoteStatus)) return 'error';
+    if (['rejected', 'blocked', 'error', 'moderated'].includes(remoteStatus)) return 'error';
     if (synced.remoteStatus === undefined) {
       switch (synced.status) {
         case 'live':
