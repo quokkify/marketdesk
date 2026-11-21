@@ -5,11 +5,17 @@ import { useSearchParams } from 'react-router-dom';
 import { Box, Skeleton, Stack } from '@mui/material';
 import type { Marketplace, MarketplaceKey, SyncMode } from '@shared/types';
 import { MARKETPLACE_NAMES } from '@shared/constants';
-import type { MarketplaceOAuthStatus, SaveMarketplaceAppCredentialsInput } from '../state/api/index.js';
+import type {
+  MarketplaceImportPreview,
+  MarketplaceOAuthStatus,
+  SaveMarketplaceAppCredentialsInput,
+} from '../state/api/index.js';
 import {
   useAnalyticsOverview,
   useCheckMarketplace,
   useConnectMarketplace,
+  useImportMarketplaceAdverts,
+  useImportMarketplacePreview,
   useMarketplaceAppCredentials,
   useMarketplaceConnection,
   useMarketplaces,
@@ -26,10 +32,14 @@ import { EmptyState } from '../components/common/EmptyState.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
 import { MarketplaceCard } from '../components/marketplaces/MarketplaceCard.js';
 import { MarketplaceConfigureDrawer } from '../components/marketplaces/MarketplaceConfigureDrawer.js';
+import { MarketplaceImportPanel } from '../components/marketplaces/MarketplaceImportPanel.js';
 
 // OLX is the only live integration (docs/spec/PRODUCT.md); a stored marketplace
 // with any other key is ignored, whatever the API reports for it.
 const LIVE_MARKETPLACE: MarketplaceKey = 'olx';
+
+// OLX advert statuses read by the import preview: live, pending and ended adverts.
+const IMPORT_STATUSES = ['active', 'new', 'moderation', 'limited', 'expired', 'removed', 'rejected'];
 
 const SANDBOX_CONNECTED_TOAST = 'Sandbox OLX connected — no real marketplace calls are made';
 
@@ -70,12 +80,15 @@ const MarketplacesPage: React.FC = () => {
   const [saveCredentials, { isLoading: savingCredentials }] = useSaveMarketplaceAppCredentials();
   const [syncMarketplace] = useSyncMarketplace();
   const [connectMarketplace] = useConnectMarketplace();
+  const [importMarketplacePreview] = useImportMarketplacePreview();
+  const [importMarketplaceAdverts] = useImportMarketplaceAdverts();
   const [checkMarketplace] = useCheckMarketplace();
   const [updateMarketplace] = useUpdateMarketplace();
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [configureOpen, setConfigureOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<MarketplaceImportPreview | null>(null);
 
   // The list view's flag only stands in until the OAuth check answers.
   const olxConnected = olxCheck?.connected ?? olx?.connected ?? false;
@@ -128,6 +141,50 @@ const MarketplacesPage: React.FC = () => {
       );
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleImportPreview = async (m: Marketplace) => {
+    setBusy(true);
+    try {
+      const preview = await importMarketplacePreview({ id: m.id, statuses: IMPORT_STATUSES }).unwrap();
+      setImportPreview(preview);
+      dispatch(
+        enqueueToast({
+          message: `OLX preview found ${preview.totals.discovered} advert(s).`,
+          severity: 'success',
+        }),
+      );
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importPreview) return;
+    const externalListingIds = importPreview.items
+      .filter((item) => item.status === 'new' || item.status === 'changed')
+      .map((item) => item.externalListingId);
+    if (externalListingIds.length === 0) return;
+    setBusy(true);
+    try {
+      const result = await importMarketplaceAdverts({
+        id: importPreview.marketplaceId,
+        externalListingIds,
+      }).unwrap();
+      dispatch(
+        enqueueToast({
+          message: `Imported ${result.imported}, updated ${result.updated}, skipped ${result.skipped}, failed ${result.failed}.`,
+          severity: result.failed > 0 ? 'warning' : 'success',
+        }),
+      );
+      setImportPreview(null);
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -200,6 +257,7 @@ const MarketplacesPage: React.FC = () => {
       onRequestDisconnect={() => setDisconnectOpen(true)}
       onConfigure={() => setConfigureOpen(true)}
       onSync={handleSync}
+      onImport={handleImportPreview}
     />
   ) : (
     <Card>
@@ -217,6 +275,15 @@ const MarketplacesPage: React.FC = () => {
         <Card>
           <ErrorRetry compact error={error} title="Marketplaces could not be loaded" onRetry={refetch} />
         </Card>
+      )}
+
+      {importPreview && (
+        <MarketplaceImportPanel
+          preview={importPreview}
+          busy={busy}
+          onImport={handleImport}
+          onClose={() => setImportPreview(null)}
+        />
       )}
 
       <Box

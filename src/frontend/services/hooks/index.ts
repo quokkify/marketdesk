@@ -32,6 +32,8 @@ import {
   useGetMarketplaceAppCredentialsQuery,
   useSaveMarketplaceAppCredentialsMutation,
   useSyncMarketplaceMutation,
+  useImportMarketplacePreviewMutation,
+  useImportMarketplaceAdvertsMutation,
   useConnectMarketplaceMutation,
   useCheckMarketplaceQuery,
   useLazyCheckMarketplaceQuery,
@@ -115,6 +117,8 @@ export const useMarketplace = useGetMarketplaceQuery;
 export const useMarketplaceAppCredentials = useGetMarketplaceAppCredentialsQuery;
 export const useSaveMarketplaceAppCredentials = useSaveMarketplaceAppCredentialsMutation;
 export const useSyncMarketplace = useSyncMarketplaceMutation;
+export const useImportMarketplacePreview = useImportMarketplacePreviewMutation;
+export const useImportMarketplaceAdverts = useImportMarketplaceAdvertsMutation;
 export const useConnectMarketplace = useConnectMarketplaceMutation;
 export const useCheckMarketplace = useLazyCheckMarketplaceQuery;
 // Subscribes to the OAuth check, the authoritative OLX connection state.

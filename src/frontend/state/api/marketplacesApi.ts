@@ -10,6 +10,10 @@ import type {
   MarketplaceAppCredentialStatus,
   SaveMarketplaceAppCredentialsArg,
   UpdateMarketplaceArg,
+  MarketplaceImportPreview,
+  MarketplaceImportPreviewInput,
+  MarketplaceImportApplyInput,
+  MarketplaceImportApplyResult,
 } from './dto.js';
 
 export const marketplacesApi = baseApi.injectEndpoints({
@@ -62,6 +66,36 @@ export const marketplacesApi = baseApi.injectEndpoints({
     }),
 
     // Starts provider OAuth. Connection is not marked successful until callback completes.
+    importMarketplacePreview: builder.mutation<
+      MarketplaceImportPreview,
+      MarketplaceImportPreviewInput
+    >({
+      query: ({ id, pageSize, statuses }) => ({
+        url: `/marketplaces/${id}/import-preview`,
+        method: 'POST',
+        body: { pageSize, statuses },
+      }),
+      transformResponse: (res: ApiResponse<MarketplaceImportPreview>) => unwrap(res),
+    }),
+
+    importMarketplaceAdverts: builder.mutation<
+      MarketplaceImportApplyResult,
+      MarketplaceImportApplyInput
+    >({
+      query: ({ id, pageSize, statuses, externalListingIds }) => ({
+        url: `/marketplaces/${id}/import`,
+        method: 'POST',
+        body: { pageSize, statuses, externalListingIds },
+      }),
+      transformResponse: (res: ApiResponse<MarketplaceImportApplyResult>) => unwrap(res),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Marketplace', id },
+        { type: 'Marketplace', id: 'LIST' },
+        { type: 'Product', id: 'LIST' },
+        { type: 'Listing', id: 'LIST' },
+      ],
+    }),
+
     connectMarketplace: builder.mutation<
       MarketplaceOAuthStart,
       { id: string; input?: ConnectMarketplaceInput }
@@ -110,6 +144,8 @@ export const {
   useGetMarketplaceAppCredentialsQuery,
   useSaveMarketplaceAppCredentialsMutation,
   useSyncMarketplaceMutation,
+  useImportMarketplacePreviewMutation,
+  useImportMarketplaceAdvertsMutation,
   useConnectMarketplaceMutation,
   useCheckMarketplaceQuery,
   useLazyCheckMarketplaceQuery,
