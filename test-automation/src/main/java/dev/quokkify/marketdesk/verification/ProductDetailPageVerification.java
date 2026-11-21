@@ -11,6 +11,8 @@ public class ProductDetailPageVerification
     extends Verification<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
 
   private static final String OFFLINE_USAGE_LINE = "Offline heuristics · no AI usage";
+  private static final String CONDITION_PLACEHOLDER = "Choose condition";
+  private static final String UNKNOWN_CONDITION_LABEL = "Requires confirmation";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
     super(steps, page);
@@ -29,11 +31,18 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The revival dialog asks for the condition and the apply button is disabled")
+  @Step("The revival dialog shows an empty condition with a placeholder and the apply button is disabled")
   public ProductDetailPageVerification revivalNeedsACondition() {
     page.revivalDialog().shouldBe(Condition.visible, getTimeout());
-    page.revivalConditionSelect().shouldBe(Condition.visible, getTimeout());
+    page.revivalConditionSelect().shouldHave(Condition.exactText(CONDITION_PLACEHOLDER), getTimeout());
     page.applyRevivalButton().shouldBe(Condition.disabled, getTimeout());
+    return this;
+  }
+
+  @Step("The revival condition list does not offer the unknown condition")
+  public ProductDetailPageVerification revivalConditionsOmitUnknown() {
+    page.conditionOption("Good").shouldBe(Condition.visible, getTimeout());
+    page.conditionOption(UNKNOWN_CONDITION_LABEL).shouldNot(Condition.exist);
     return this;
   }
 
