@@ -586,9 +586,10 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
   function setup(ai: StubAIProvider) {
     const productRepo = new InMemoryProductRepository();
     const eventRepo = new InMemoryEventRepository();
+    const listingRepo = new InMemoryListingRepository();
     const engine = new HermesDecisionEngine(
       productRepo,
-      new InMemoryListingRepository(),
+      listingRepo,
       eventRepo,
       new RecordingEventPublisher(),
       ai,
@@ -609,7 +610,12 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       }),
     );
     productRepo.items.set(product.id, product);
-    return { engine, eventRepo, workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })) };
+    return {
+      engine,
+      eventRepo,
+      listingRepo,
+      workspace: unwrap(Workspace.create({ id: 'w1', name: 'WS' })),
+    };
   }
 
   // Fingerprints, the source and the workspace and product ids are audit data. They stay in
@@ -632,6 +638,25 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
         recommendationFingerprint: expect.stringMatching(/\S/),
         outcome: 'suggested',
       }),
+    ]);
+  });
+
+  it('keeps the saved SEO events when the price estimate fails after the SEO answer', async () => {
+    const ai = new SourceStub('hermes');
+    jest.spyOn(ai, 'estimatePrice').mockRejectedValue(new Error('estimate failed'));
+    const { engine, eventRepo, listingRepo, workspace } = setup(ai);
+    const listing = unwrap(
+      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100) }),
+    );
+    listingRepo.items.set(listing.id, listing);
+
+    await expect(engine.runProductSeo(workspace, 'p1')).rejects.toThrow('estimate failed');
+
+    expect([...eventRepo.agentRecommendations.values()]).toEqual([
+      expect.objectContaining({ productId: 'p1', outcome: 'suggested' }),
+    ]);
+    expect([...eventRepo.items.values()]).toEqual([
+      expect.objectContaining({ type: 'suggested_better_title' }),
     ]);
   });
 

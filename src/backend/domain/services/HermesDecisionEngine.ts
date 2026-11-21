@@ -240,7 +240,6 @@ export class HermesDecisionEngine {
       throw error;
     }
     const events: HermesEvent[] = [];
-    const priceSuggestion = primary ? await this.priceEstimateSuggestion(product, primary) : null;
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const windowStart = Math.floor(Date.now() / (30 * 24 * 60 * 60 * 1000));
 
@@ -335,9 +334,18 @@ export class HermesDecisionEngine {
       }
     }
 
+    // Asked after the SEO events are saved, so a failing estimate never discards them. The source
+    // is asked before and after the estimate call, as for the SEO call.
+    const priceOfflineBefore = primary ? await this.aiAnswersOffline() : false;
+    const priceSuggestion = primary ? await this.priceEstimateSuggestion(product, primary) : null;
     if (priceSuggestion) {
       // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change.
-      const priceSource = priceSuggestion.change === null ? null : aiSource;
+      const priceSource =
+        priceSuggestion.change === null
+          ? null
+          : priceOfflineBefore || (await this.aiAnswersOffline())
+            ? 'offline'
+            : 'hermes';
       const created = HermesEvent.create({
         id: this.idFactory(),
         workspaceId: workspace.id,
