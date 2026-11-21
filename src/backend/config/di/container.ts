@@ -86,6 +86,9 @@ import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthPro
 import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsReader';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
+import { HermesReplyDraftAI } from '../../infrastructure/external/HermesReplyDraftAI';
+import { OfflineReplyDraftAI } from '../../infrastructure/external/OfflineReplyDraftAI';
+import { ReplyDraftAISelector } from '../../infrastructure/external/ReplyDraftAISelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
@@ -275,6 +278,12 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     usageSink: aiUsageSink,
   });
   const aiProvider: IAIProvider = overrides.aiProvider ?? aiProviderSelector;
+  const replyDraftAI = new ReplyDraftAISelector({
+    hermes: new HermesReplyDraftAI(new HermesCompletionClient(loadHermesConfig(), aiUsageSink)),
+    offline: new OfflineReplyDraftAI(),
+    mode: env.hermes.providerMode,
+    probe: new HermesHealthProbe(loadHermesConfig()),
+  });
   const buildOlxHeaders = (accessToken?: string): Record<string, string> => ({
     Accept: 'application/json',
     Version: '2.0',
@@ -764,6 +773,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     listingService,
     hermesService,
     hermesStatus: () => aiProviderSelector.status(),
+    replyDraftAI,
     aiUsageReport: async (workspaceId) => {
       const workspace = await workspaceRepo.findById(workspaceId);
       if (!workspace) throw new NotFoundError('Workspace not found');

@@ -1,0 +1,48 @@
+// Routes buyer-reply calls like AIProviderSelector: `offline` never contacts Hermes, `hermes`
+// always uses it (failures reach the caller), `auto` uses Hermes only while it is configured,
+// reachable and has no tools enabled. source() reports the provider of the latest call.
+
+import type { BuyerIntent } from '../../domain/conversations/types';
+import type { IReplyDraftAI, ReplyContext } from '../../domain/ports/IReplyDraftAI';
+import type { HermesProviderMode } from '../../../shared/types';
+import type { HermesHealthProbe } from './HermesHealthProbe';
+
+export interface ReplyDraftAISelectorDeps {
+  hermes: IReplyDraftAI;
+  offline: IReplyDraftAI;
+  mode: HermesProviderMode;
+  probe: Pick<HermesHealthProbe, 'isConfigured' | 'reachability'>;
+}
+
+export class ReplyDraftAISelector implements IReplyDraftAI {
+  private last: 'hermes' | 'offline';
+
+  constructor(private readonly deps: ReplyDraftAISelectorDeps) {
+    this.last = deps.mode === 'hermes' ? 'hermes' : 'offline';
+  }
+
+  source(): 'hermes' | 'offline' {
+    return this.last;
+  }
+
+  async classify(ctx: ReplyContext) {
+    return (await this.resolve()).classify(ctx);
+  }
+
+  async draft(ctx: ReplyContext, intent: BuyerIntent) {
+    return (await this.resolve()).draft(ctx, intent);
+  }
+
+  private async resolve(): Promise<IReplyDraftAI> {
+    const { mode, probe, hermes, offline } = this.deps;
+    let chosen = offline;
+    if (mode === 'hermes') {
+      chosen = hermes;
+    } else if (mode === 'auto' && probe.isConfigured()) {
+      const check = await probe.reachability();
+      if (check.reachable && check.toolsSafe) chosen = hermes;
+    }
+    this.last = chosen.source();
+    return chosen;
+  }
+}
