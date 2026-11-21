@@ -125,6 +125,17 @@ describe('SettingsPage sections', () => {
     expect(text).toContain('Save changes');
   });
 
+  it('renders the Change password card with three password inputs in General', async () => {
+    const html = await renderSettings('/settings');
+
+    expect(visibleText(html)).toContain('Change password');
+    expect(html.match(/type="password"/g)).toHaveLength(3);
+    expect(
+      html.match(/autoComplete="current-password"|autocomplete="current-password"/gi)
+    ).toHaveLength(1);
+    expect(html.match(/autoComplete="new-password"|autocomplete="new-password"/gi)).toHaveLength(2);
+  });
+
   it('ignores an unknown ?section= value', async () => {
     expect(currentSection(await renderSettings('/settings?section=nope'))).toBe('General');
   });

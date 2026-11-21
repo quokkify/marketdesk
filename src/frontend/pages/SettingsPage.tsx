@@ -43,6 +43,7 @@ import {
 import { APP_ROUTE_PATHS, TOPBAR_HEIGHT } from '../utils/constants.js';
 import { Card } from '../components/common/Card.js';
 import { ConnectionBadge } from '../components/common/Badge.js';
+import { ChangePasswordCard } from './ChangePasswordCard.js';
 
 const CURRENCIES = ['PLN', 'EUR', 'USD', 'GBP', 'CZK', 'UAH'];
 
@@ -550,6 +551,7 @@ const SettingsPage: React.FC = () => {
                   Save changes
                 </Button>
               </Stack>
+              <ChangePasswordCard />
             </Stack>
           </SettingsQueryState>
         );

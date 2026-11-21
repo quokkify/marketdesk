@@ -364,6 +364,18 @@ describe('password change', () => {
     expect(store.getState().ui.toasts).toEqual([]);
   });
 
+  it('keeps the session and shows no expiry warning when logout answers 401', async () => {
+    const store = newStore();
+    signIn(store, 'valid-token');
+    serve({ '/api/auth/logout': unauthorized });
+
+    const result = await store.dispatch(authApi.endpoints.logout.initiate());
+
+    expect(result).toMatchObject({ error: { status: 401 } });
+    expect(store.getState().auth.token).toBe('valid-token');
+    expect(store.getState().ui.toasts).toEqual([]);
+  });
+
   it('returns the unwrapped token of the new session', async () => {
     const store = newStore();
     signIn(store, 'valid-token');
