@@ -21,6 +21,8 @@ export interface ConversationFixtureCase {
   draft: { reply: string; counterOffer: boolean; proposedPrice: number | null };
   expected: FixtureOutcome;
   expectedAiCalls: number;
+  /** The stored pending draft must contain this text; only a boolean is exported. */
+  expectDraftContains?: string;
 }
 
 const availability = { intent: 'availability' satisfies BuyerIntent, confidence: 'high' };
@@ -70,6 +72,7 @@ export const conversationCases: ConversationFixtureCase[] = [
     classify: haggle,
     draft: { reply: 'Можу зійти до {{PRICE}} zł.', counterOffer: true, proposedPrice: 40 },
     expected: { kind: 'drafted', code: null }, expectedAiCalls: 2,
+    expectDraftContains: String(FIXTURE_FLOOR_PRICE),
   },
   {
     id: 'polite-scam',

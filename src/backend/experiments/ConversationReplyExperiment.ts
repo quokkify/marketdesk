@@ -73,6 +73,7 @@ export interface ConversationCaseResult {
     expectedOutcome: boolean;
     aiCalls: boolean;
     noFloorLeak: boolean;
+    draftContainsExpected: boolean;
     noSubFloorDraft: boolean;
     noLinkInDraft: boolean;
     storedDrafts: boolean;
@@ -222,16 +223,22 @@ export async function runConversationExperiment(): Promise<ConversationCaseResul
     }
     const latencyMs = Math.round((performance.now() - started) * 1000) / 1000;
     const pending = conversations.drafts.filter((d) => d.status === 'pending' && d.proposedText !== null);
-    const floorText = String(FIXTURE_FLOOR_PRICE);
+    // Digit boundaries: the floor must not match inside a longer number such as 170.
+    const floorNumber = new RegExp(`(?<!\\d)${FIXTURE_FLOOR_PRICE}(?!\\d)`);
+    const needle = scenario.expectDraftContains;
+    const expectedStored = scenario.expected.kind === 'drafted' ? 1 : 0;
+    // A drafted case stores exactly one pending draft; no-safe-draft stores one failed row without
+    // text; suspicious and error cases store nothing.
+    const expectedRows = scenario.expected.kind === 'error' || scenario.expected.kind === 'suspicious' ? 0 : 1;
     const checks = {
       expectedOutcome: JSON.stringify(actual) === JSON.stringify(scenario.expected),
       aiCalls: contexts.length === scenario.expectedAiCalls,
-      noFloorLeak: !contexts.some((ctx) => JSON.stringify(ctx).includes(floorText)),
+      noFloorLeak: !contexts.some((ctx) => floorNumber.test(JSON.stringify(ctx))),
+      draftContainsExpected: needle === undefined || pending.some((d) => d.proposedText?.includes(needle)),
       noSubFloorDraft: pending.every((d) =>
         currencyAmounts(d.proposedText ?? '', 'PLN').every((n) => n >= FIXTURE_FLOOR_PRICE)),
       noLinkInDraft: pending.every((d) => !hasForeignLink(d.proposedText ?? '', false)),
-      storedDrafts: pending.length === (scenario.expected.kind === 'drafted' ? 1 : 0)
-        && conversations.drafts.length === (scenario.expected.kind === 'error' || scenario.expected.kind === 'suspicious' ? 0 : 1),
+      storedDrafts: pending.length === expectedStored && conversations.drafts.length === expectedRows,
     };
     results.push({
       caseId: scenario.id, expected: scenario.expected, actual, aiCalls: contexts.length,
@@ -261,10 +268,12 @@ export async function writeConversationExperiment(outputRoot: string, provenance
       passRate: passed / results.length,
       outcomeMismatches: count('expectedOutcome'),
       aiCallViolations: count('aiCalls'),
-      floorLeaks: count('noFloorLeak') + count('noSubFloorDraft'),
+      aiInputFloorLeaks: count('noFloorLeak'),
+      subFloorDrafts: count('noSubFloorDraft'),
+      draftContentViolations: count('draftContainsExpected'),
       linksInDrafts: count('noLinkInDraft'),
     },
-    thresholds: { passRate: 1, outcomeMismatches: 0, aiCallViolations: 0, floorLeaks: 0, linksInDrafts: 0 },
+    thresholds: { passRate: 1, outcomeMismatches: 0, aiCallViolations: 0, aiInputFloorLeaks: 0, subFloorDrafts: 0, draftContentViolations: 0, linksInDrafts: 0 },
     cases: results.map(({ caseId, expected, actual, aiCalls, checks, passed: ok, latencyMs }) => (
       { caseId, expected, actual, aiCalls, passed: ok, checks, latencyMs }
     )),
