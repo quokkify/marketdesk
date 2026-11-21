@@ -6,6 +6,7 @@ import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 export const MAX_COMPARABLES = 10;
 export const MAX_SOURCE_LENGTH = 200;
 export const MAX_NOTE_LENGTH = 300;
+export const MAX_PRICE = 9_999_999_999.99;
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,9 +45,11 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
   };
 }
 
-function parsePositive(text: string): number | null {
+const PRICE_ERROR = 'Enter a price above zero and at most 9999999999.99';
+
+function parsePrice(text: string): number | null {
   const value = Number(text.trim().replace(',', '.'));
-  return Number.isFinite(value) && value > 0 ? value : null;
+  return Number.isFinite(value) && value > 0 && value <= MAX_PRICE ? value : null;
 }
 
 function isIsoDate(text: string): boolean {
@@ -61,8 +64,8 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
   const priceText = f.retailPrice.trim();
   let retailPrice: number | null = null;
   if (priceText) {
-    retailPrice = parsePositive(priceText);
-    if (retailPrice === null) errors.retailPrice = 'Enter a price above zero';
+    retailPrice = parsePrice(priceText);
+    if (retailPrice === null) errors.retailPrice = PRICE_ERROR;
   }
 
   const currency = f.retailCurrency.trim().toUpperCase();
@@ -82,9 +85,9 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
   if (rows.length > MAX_COMPARABLES) errors.comparables = `Keep at most ${MAX_COMPARABLES} comparables`;
   const comparables: { price: number; note: string }[] = [];
   for (const { row, index } of rows) {
-    const price = parsePositive(row.price);
+    const price = parsePrice(row.price);
     const note = row.note.trim();
-    if (price === null) errors[`comparables.${index}.price`] = 'Enter a price above zero';
+    if (price === null) errors[`comparables.${index}.price`] = PRICE_ERROR;
     if (note.length > MAX_NOTE_LENGTH) errors[`comparables.${index}.note`] = `Keep the note within ${MAX_NOTE_LENGTH} characters`;
     if (price !== null) comparables.push({ price, note });
   }

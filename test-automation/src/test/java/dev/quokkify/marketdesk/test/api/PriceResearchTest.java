@@ -39,6 +39,23 @@ public class PriceResearchTest extends BaseTest {
   }
 
   @Test
+  public void retailCheckedAtWithAnInvalidMonthIsRejected() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withRetailCheckedAt("2026-13-45")));
+  }
+
+  // Beyond what the NUMERIC(12,2) column holds.
+  @Test
+  public void retailPriceAboveTheStoredMaximumIsRejected() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withRetailPrice(1e13)));
+  }
+
+  @Test
   public void elevenComparablesAreRejected() {
     AccountPojo account = authSteps.registerNewAccount();
     String productId = priceResearchSteps.createProduct(account);

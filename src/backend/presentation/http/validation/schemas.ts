@@ -131,19 +131,26 @@ export const productImprovementSchema = z.object({
 }).strict();
 
 const MAX_COMPARABLES = 10;
+// Largest amount a NUMERIC(12,2) column holds.
+const MAX_RESEARCH_PRICE = 9_999_999_999.99;
+const researchPriceSchema = z.number().finite().positive().max(MAX_RESEARCH_PRICE);
+const isRealIsoDate = (value: string): boolean => {
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+};
 const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'retailCheckedAt must be an ISO date (YYYY-MM-DD)')
-  .refine((value) => new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'retailCheckedAt is not a real date');
+  .refine(isRealIsoDate, 'retailCheckedAt is not a real date');
 
 export const priceResearchSchema = z
   .object({
-    retailPrice: z.number().finite().positive().nullable(),
+    retailPrice: researchPriceSchema.nullable(),
     retailCurrency: z.string().regex(/^[A-Z]{3}$/, 'retailCurrency must be an ISO-4217 code').nullable(),
     retailSource: z.string().max(200).nullable(),
     retailCheckedAt: isoDateSchema.nullable(),
     comparables: z
-      .array(z.object({ price: z.number().finite().positive(), note: z.string().max(300) }).strict())
+      .array(z.object({ price: researchPriceSchema, note: z.string().max(300) }).strict())
       .max(MAX_COMPARABLES),
   })
   .strict()

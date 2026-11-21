@@ -69,6 +69,10 @@ describe('priceResearchModel', () => {
     expect(errorsOf({ retailPrice: 'abc' })).toHaveProperty('retailPrice');
     expect(errorsOf({ retailSource: 'x'.repeat(201) })).toHaveProperty('retailSource');
     expect(errorsOf({ retailCheckedAt: '21.11.2026' })).toHaveProperty('retailCheckedAt');
+    expect(errorsOf({ retailCheckedAt: '2026-13-45' })).toHaveProperty('retailCheckedAt');
+    expect(errorsOf({ retailPrice: '10000000000000' })).toHaveProperty('retailPrice');
+    expect(errorsOf({ retailPrice: '9999999999.99' })).not.toHaveProperty('retailPrice');
+    expect(errorsOf({ comparables: [{ price: '10000000000', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '-5', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '5', note: 'n'.repeat(301) }] })).toHaveProperty(['comparables.0.note']);
     expect(errorsOf({ comparables: Array.from({ length: 11 }, () => ({ price: '5', note: '' })) })).toHaveProperty('comparables');

@@ -25,6 +25,10 @@ public record PriceResearchPojo(Double retailPrice, String retailCurrency, Strin
     return new PriceResearchPojo(newRetailPrice, retailCurrency, retailSource, retailCheckedAt, comparables);
   }
 
+  public PriceResearchPojo withRetailCheckedAt(String newRetailCheckedAt) {
+    return new PriceResearchPojo(retailPrice, retailCurrency, retailSource, newRetailCheckedAt, comparables);
+  }
+
   public PriceResearchPojo withTooManyComparables() {
     List<Comparable> many = IntStream.rangeClosed(1, COMPARABLES_LIMIT + 1)
         .mapToObj(i -> new Comparable(100.0 + i, "Advert " + i)).toList();
