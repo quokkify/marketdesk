@@ -19,6 +19,7 @@ import {
   InMemoryEventRepository,
   RecordingEventPublisher,
   StubAIProvider,
+  InMemoryPriceResearchRepository,
   unwrap,
   money,
 } from '../../domain/testkit/support';
@@ -159,6 +160,7 @@ async function build(): Promise<Ctx> {
     eventRepo,
     events,
     aiProvider,
+    new InMemoryPriceResearchRepository(),
     idGenerator
   );
 

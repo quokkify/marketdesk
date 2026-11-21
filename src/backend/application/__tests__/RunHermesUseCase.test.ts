@@ -12,6 +12,7 @@ import {
   InMemoryEventRepository,
   RecordingEventPublisher,
   StubAIProvider,
+  InMemoryPriceResearchRepository,
   sequentialIdFactory,
   unwrap,
   money,
@@ -60,6 +61,7 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
     eventRepo,
     publisher,
     aiProvider,
+    new InMemoryPriceResearchRepository(),
     sequentialIdFactory('evt')
   );
 

@@ -13,6 +13,7 @@ import {
   InMemoryEventRepository,
   RecordingEventPublisher,
   StubAIProvider,
+  InMemoryPriceResearchRepository,
   sequentialIdFactory,
 } from '../testkit/support';
 import type { ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
@@ -25,6 +26,7 @@ function makeEngine(overrides?: {
   eventRepo?: InMemoryEventRepository;
   publisher?: RecordingEventPublisher;
   ai?: StubAIProvider;
+  priceResearchRepo?: InMemoryPriceResearchRepository;
 }) {
   const productRepo = overrides?.productRepo ?? new InMemoryProductRepository();
   const listingRepo = overrides?.listingRepo ?? new InMemoryListingRepository();
@@ -37,6 +39,7 @@ function makeEngine(overrides?: {
     eventRepo,
     publisher,
     ai,
+    overrides?.priceResearchRepo ?? new InMemoryPriceResearchRepository(),
     sequentialIdFactory(),
   );
   return { engine, productRepo, listingRepo, eventRepo, publisher, ai };
@@ -185,20 +188,62 @@ describe('HermesDecisionEngine.run', () => {
     expect(relist?.autonomyDecision).toBe('pending_review');
   });
 
-  it('gives the AI provider the product cost when it asks for a price suggestion', async () => {
-    const ai = new StubAIProvider();
-    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
-    const { engine, productRepo, listingRepo } = makeEngine({ ai });
-    seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
-    const listing = unwrap(
-      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(80) }),
-    );
-    listingRepo.items.set(listing.id, listing);
-    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS' }));
+  describe('price estimate', () => {
+    const research = {
+      productId: 'p1',
+      retailPrice: 469.99,
+      retailCurrency: 'PLN',
+      retailSource: 'MediaMarkt',
+      retailCheckedAt: '2026-11-21',
+      comparables: [{ price: 250, note: 'Szczecin, used half a year' }],
+      updatedAt: '2026-11-21T00:00:00.000Z',
+    };
 
-    await engine.run(workspace);
+    async function runWithListingIn(currency: string) {
+      const ai = new StubAIProvider();
+      const estimatePrice = jest.spyOn(ai, 'estimatePrice');
+      const priceResearchRepo = new InMemoryPriceResearchRepository();
+      priceResearchRepo.items.set('w1:p1', research);
+      const { engine, productRepo, listingRepo } = makeEngine({ ai, priceResearchRepo });
+      seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
+      const listing = unwrap(
+        Listing.create({
+          id: 'l1',
+          productId: 'p1',
+          marketplaceId: 'm1',
+          price: money(80, currency),
+        }),
+      );
+      listingRepo.items.set(listing.id, listing);
+      await engine.run(unwrap(Workspace.create({ id: 'w1', name: 'WS' })));
+      return estimatePrice;
+    }
 
-    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 50 }));
+    it('gives the estimate the saved research when the retail currency matches the listing', async () => {
+      const estimatePrice = await runWithListingIn('PLN');
+
+      expect(estimatePrice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          research: expect.objectContaining({ retailPrice: 469.99, retailCurrency: 'PLN' }),
+        }),
+      );
+    });
+
+    it('drops the retail anchor but keeps the comparables when its currency differs from the listing', async () => {
+      const estimatePrice = await runWithListingIn('EUR');
+
+      expect(estimatePrice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          research: expect.objectContaining({
+            retailPrice: null,
+            retailCurrency: null,
+            retailSource: null,
+            retailCheckedAt: null,
+            comparables: research.comparables,
+          }),
+        }),
+      );
+    });
   });
 });
 
@@ -242,6 +287,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       eventRepo,
       publisher,
       ai,
+      new InMemoryPriceResearchRepository(),
       sequentialIdFactory('g'),
     );
 
@@ -378,6 +424,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       new InMemoryEventRepository(),
       new RecordingEventPublisher(),
       ai,
+      new InMemoryPriceResearchRepository(),
       sequentialIdFactory('s'),
     );
     const product = unwrap(
@@ -545,6 +592,7 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       eventRepo,
       new RecordingEventPublisher(),
       ai,
+      new InMemoryPriceResearchRepository(),
       sequentialIdFactory('seo'),
     );
     const product = unwrap(

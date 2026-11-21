@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
+import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.test.BaseTest;
 
 import org.testng.annotations.Test;
@@ -64,5 +65,16 @@ public class PriceResearchTest extends BaseTest {
     priceResearchSteps.verify().isUnauthenticated(priceResearchSteps.getPriceResearchUnauthenticated(productId));
     priceResearchSteps.verify().isUnauthenticated(
         priceResearchSteps.savePriceResearchUnauthenticated(productId, PriceResearchPojo.sample()));
+  }
+
+  // The API stack has no Hermes, so the analysis runs offline and its estimate has low confidence.
+  @Test
+  public void analysisWithoutHermesProposesNoPriceChange() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
+    priceResearchSteps.verify().proposesNoPriceChange(
+        priceResearchSteps.runProductAnalysis(account, productListing.productId()));
   }
 }

@@ -13,11 +13,17 @@ import {
   OLX_SANDBOX_QUOTA_EVALUATION,
   OlxPublicationQuota,
 } from '../entities/OlxPublicationQuota';
-import type { HermesEventStatus, MarketplaceKey, PriceEstimate } from '../../../shared/types';
+import type {
+  HermesEventStatus,
+  MarketplaceKey,
+  PriceEstimate,
+  PriceResearch,
+} from '../../../shared/types';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../repositories/interfaces/IMarketplaceRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
+import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
 import type {
   AuthorizeOlxPublicationInput,
   IOlxPublicationQuotaRepository,
@@ -271,6 +277,21 @@ export class InMemoryEventRepository implements IEventRepository {
   }
 }
 
+export class InMemoryPriceResearchRepository implements IPriceResearchRepository {
+  readonly items = new Map<string, PriceResearch>();
+  async findByProduct(workspaceId: string, productId: string): Promise<PriceResearch | null> {
+    return this.items.get(`${workspaceId}:${productId}`) ?? null;
+  }
+  async upsert(
+    workspaceId: string,
+    research: Omit<PriceResearch, 'updatedAt'>,
+  ): Promise<PriceResearch> {
+    const saved = { ...research, updatedAt: new Date().toISOString() };
+    this.items.set(`${workspaceId}:${research.productId}`, saved);
+    return saved;
+  }
+}
+
 export class RecordingEventPublisher implements IEventPublisher {
   readonly published: DomainEvent[] = [];
   async publish(event: DomainEvent): Promise<void> {
@@ -299,14 +320,15 @@ export class StubAIProvider implements IAIProvider {
     return this.price;
   }
   async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
-    const price = context.listing.price.amount;
+    // A configured price suggestion doubles as the estimate; the default stays low confidence.
+    const start = this.price.suggestedPrice > 0 ? this.price.suggestedPrice : context.listing.price.amount;
     return {
-      startPrice: price,
-      floorPrice: price,
+      startPrice: start,
+      floorPrice: start,
       retailAnchor: null,
       usedRange: null,
-      reasoning: 'stub',
-      confidence: 'low',
+      reasoning: this.price.reasoning,
+      confidence: this.price.confidence,
     };
   }
   async generateTitle(): Promise<string> {

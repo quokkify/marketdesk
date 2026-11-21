@@ -412,12 +412,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         })
       )
   );
+  const priceResearchRepo = new PriceResearchRepository(pool);
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,
     eventRepo,
     eventPublisher,
     aiProvider,
+    priceResearchRepo,
     idGenerator
   );
 
@@ -796,7 +798,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     hermesLimits: () => hermesLimitsReader.read(new Date()),
     analyticsService,
     productRepo,
-    priceResearchRepo: new PriceResearchRepository(pool),
+    priceResearchRepo,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,

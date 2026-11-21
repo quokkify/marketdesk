@@ -45,6 +45,17 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  // The API stack has no Hermes, so the offline estimate has low confidence and must stay silent.
+  @Step("Analysis ran and proposes no price change and no price estimate notice")
+  public PriceResearchVerification proposesNoPriceChange(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_ACCEPTED);
+    response.body("success", Matchers.equalTo(true));
+    response.body("data", Matchers.not(Matchers.empty()));
+    response.body("data.proposedChange.kind", Matchers.not(Matchers.hasItem("price")));
+    response.body("data.type", Matchers.not(Matchers.hasItem("price_estimate_unavailable")));
+    return self();
+  }
+
   @Step("Request is rejected as invalid")
   public PriceResearchVerification isInvalid(ValidatableResponse response) {
     return failsWith(response, HttpStatus.SC_BAD_REQUEST, VALIDATION_ERROR);

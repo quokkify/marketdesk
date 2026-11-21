@@ -6,12 +6,13 @@
 // decisions. MarketDesk only uses a Hermes profile whose API server has no tools enabled
 // (checked by HermesHealthProbe) and sends seller content as a <seller_data> block.
 
-import type {
-  IAIProvider,
-  PriceEstimateContext,
-  PriceSuggestionContext,
-  PriceSuggestion,
-  ListingAnalysis,
+import {
+  PRICE_ESTIMATE_UNUSABLE_MESSAGE,
+  type IAIProvider,
+  type PriceEstimateContext,
+  type PriceSuggestionContext,
+  type PriceSuggestion,
+  type ListingAnalysis,
 } from '../../domain/ports/IAIProvider';
 import type { PriceEstimate } from '../../../shared/types';
 import {
@@ -133,7 +134,7 @@ export class HermesAI implements IAIProvider {
       jsonSchema: priceEstimateJsonSchema,
     });
     const estimate = parsePriceEstimate(this.parseJson(raw), context.listing.price.currency);
-    if (!estimate) throw new Error('Hermes price estimate was not usable');
+    if (!estimate) throw new Error(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
     return estimate;
   }
 
