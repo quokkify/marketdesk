@@ -21,7 +21,7 @@ This creates `.env` from `.env.example` and generates `JWT_SECRET`, `JWT_REFRESH
 
 The app will not start without a valid `JWT_SECRET` (at least 32 characters, not a placeholder) and `MARKETPLACE_CREDENTIALS_KEY` (base64 of 32 bytes). Do not replace `MARKETPLACE_CREDENTIALS_KEY` after you connect a marketplace account: stored marketplace credentials can no longer be decrypted with a different key.
 
-Hermes is optional. Keep the placeholder `HERMES_API_KEY` from `.env.example` and the app answers AI requests with built-in offline heuristics (`HERMES_PROVIDER_MODE=auto`). To use Hermes instead, set `HERMES_API_KEY` to the key configured by your local Hermes API server. Keep OLX in stub mode, which is the labelled sandbox, and live publishing disabled unless you intentionally configure approved credentials.
+Hermes is optional. Keep the placeholder `HERMES_API_KEY` from `.env.example` and the app answers AI requests with built-in offline heuristics (`HERMES_PROVIDER_MODE=auto`). To use Hermes instead, set `HERMES_API_KEY` to the key configured by your local Hermes API server. MarketDesk treats a Hermes API server with any toolset enabled as unavailable: in `auto` mode AI requests fall back to offline heuristics, in `hermes` mode they fail with 503. Use a Hermes profile without tools (see [Hermes profile without tools](caddy-cloudflare-vps.md#hermes-profile-without-tools)). Keep OLX in stub mode, which is the labelled sandbox, and live publishing disabled unless you intentionally configure approved credentials.
 
 Start the services:
 
@@ -66,5 +66,5 @@ Uploaded files are in `./uploads/` and are not removed by `down -v`.
 - Check `docker compose ps` and `docker compose logs app migrate postgres redis`.
 - If the app cannot reach PostgreSQL or Redis, confirm the services are healthy and `DB_SSL_MODE=disable` is set in `.env`.
 - If `docker compose up` stops with `MARKETPLACE_CREDENTIALS_KEY must be set`, or `docker compose ps` shows the app restarting, read `docker compose logs app`. It names each of `JWT_SECRET` and `MARKETPLACE_CREDENTIALS_KEY` that is empty, a placeholder, too short, or malformed, with the fix for that problem. `npm run env:init` fixes an empty or placeholder value. Replace a short or malformed value with the output of `openssl rand -base64 32`; if a marketplace account is already connected, restore the original `MARKETPLACE_CREDENTIALS_KEY` instead.
-- The UI/API runs without Hermes. With the default `HERMES_PROVIDER_MODE=auto` it answers AI requests with offline heuristics until a Hermes API server at `HERMES_API_URL` is reachable with a matching `HERMES_API_KEY`.
+- The UI/API runs without Hermes. With the default `HERMES_PROVIDER_MODE=auto` it answers AI requests with offline heuristics until a Hermes API server at `HERMES_API_URL` is reachable with a matching `HERMES_API_KEY`. A Hermes API server that has tools enabled (or whose toolsets cannot be read) counts as unavailable: `auto` falls back to offline heuristics, `hermes` fails AI requests with 503.
 - PostgreSQL data is stored in the Compose `postgres_data` volume. Do not remove it unless you intend to reset the local database.

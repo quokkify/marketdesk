@@ -97,6 +97,8 @@ MarketDesk connects to the native Hermes Agent API Server; it does not call a mo
 
 `HERMES_PROVIDER_MODE` chooses where AI calls go. `auto` (the default) uses Hermes while `HERMES_API_KEY` is a real value (not the `your_` placeholder) and the API server answers, and the built-in offline heuristics otherwise. `hermes` never falls back, so its failures reach the caller. `offline` never calls Hermes. Offline results say that Hermes was not consulted, and every title, price, or description change they propose waits for human review whatever the autonomy level. `GET /api/hermes/status` reports the mode, the provider in use, and whether Hermes is configured and reachable.
 
+MarketDesk requires a Hermes profile without tools: it refuses an API server that reports an enabled toolset. See [Hermes profile without tools](deployment/caddy-cloudflare-vps.md#hermes-profile-without-tools).
+
 The Hermes host must be reachable from Docker but must not be exposed publicly. If binding the server to `0.0.0.0` for host-gateway access, restrict port 8642 with host firewall/security-group rules to Docker traffic and trusted administration addresses. Authentication does not replace network isolation. Keep recommendations reviewable; approval, publish, relist, category changes, and quota overrides remain guarded operations.
 
 ## Data and deployment safety

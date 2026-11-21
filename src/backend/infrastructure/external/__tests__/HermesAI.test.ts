@@ -1,8 +1,14 @@
-import { HermesAI, AITextCompletionClient, AICompletionRequest, loadHermesConfig } from '../HermesAI';
+import {
+  HermesAI,
+  AITextCompletionClient,
+  AICompletionRequest,
+  loadHermesConfig,
+} from '../HermesAI';
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 import { Money } from '../../../domain/valueObjects/Money';
+import { SELLER_DATA_RULE, sellerDataBlock } from '../sellerData';
 import type { PriceSuggestionContext } from '../../../domain/ports/IAIProvider';
 
 function money(amount: number): Money {
@@ -58,6 +64,12 @@ function fakeClient(reply: string | ((req: AICompletionRequest) => string)): {
     },
   };
   return { client, calls };
+}
+
+function parseBlock(prompt: string): Record<string, unknown> {
+  const match = /<seller_data>\n([\s\S]*)\n<\/seller_data>/.exec(prompt);
+  if (!match) throw new Error('no seller_data block');
+  return JSON.parse(match[1]);
 }
 
 describe('HermesAI (IAIProvider)', () => {
@@ -118,7 +130,14 @@ describe('HermesAI (IAIProvider)', () => {
     const title = await ai.generateTitle(buildProduct(), buildMarketplace());
 
     expect(title).toBe('Retro Sneakers — Classic Lightly Worn');
-    expect(calls[0].prompt).toContain('OLX');
+    expect(parseBlock(calls[0].prompt)).toMatchObject({
+      name: 'Retro Sneakers',
+      marketplace: 'OLX',
+    });
+    const outside = calls[0].prompt.replace(/<seller_data>[\s\S]*<\/seller_data>/, '');
+    expect(outside).not.toContain('OLX');
+    expect(outside).not.toContain('Retro Sneakers');
+    expect(calls[0].system).toContain(SELLER_DATA_RULE);
   });
 
   it('generateTitle falls back to the product name on empty model output', async () => {
@@ -126,6 +145,22 @@ describe('HermesAI (IAIProvider)', () => {
     const ai = new HermesAI(client);
     const title = await ai.generateTitle(buildProduct(), null);
     expect(title).toBe('Retro Sneakers');
+  });
+
+  it('analyzeListing sends seller fields only inside the data block', async () => {
+    const { client, calls } = fakeClient(JSON.stringify({ score: 50, suggestions: [] }));
+    const ai = new HermesAI(client);
+
+    await ai.analyzeListing(buildProduct());
+
+    const outside = calls[0].prompt.replace(/<seller_data>[\s\S]*<\/seller_data>/, '');
+    expect(outside).not.toContain('Classic retro sneakers');
+    expect(outside).not.toContain('Retro Sneakers');
+    expect(outside).not.toContain('retro');
+    expect(Object.keys(parseBlock(calls[0].prompt))).toEqual(
+      expect.arrayContaining(['name', 'description', 'category', 'condition', 'tags', 'imageCount'])
+    );
+    expect(calls[0].system).toContain(SELLER_DATA_RULE);
   });
 
   it('analyzeListing clamps the score and returns string suggestions', async () => {
@@ -169,7 +204,9 @@ describe('HermesAI (IAIProvider)', () => {
     await ai.analyzeListingSeo(input, 'precise');
     await ai.analyzeListingSeo(input, 'creative');
 
-    expect(calls[0].prompt).toBe(JSON.stringify(input));
+    expect(calls[0].prompt).toBe(sellerDataBlock(input));
+    expect(calls[0].system).toContain(SELLER_DATA_RULE);
+    expect(calls[1].system).toContain(SELLER_DATA_RULE);
     expect(calls[0].system).not.toBe(calls[1].system);
     expect(calls[0]).not.toHaveProperty('temperature');
     expect(calls[0].prompt).not.toMatch(/token|credential|\/srv\//i);

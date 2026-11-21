@@ -137,6 +137,8 @@ describe('Hermes endpoints against the wire format', () => {
       activeProvider: 'offline',
       hermesConfigured: false,
       hermesReachable: null,
+      hermesToolsSafe: null,
+      hermesEnabledToolsets: [],
       checkedAt: '2026-10-24T10:00:00.000Z',
     };
     respond = () => ({ success: true, data: status });

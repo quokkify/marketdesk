@@ -111,6 +111,12 @@ describe('ListingDetailsPage presentation', () => {
     expect(productHermesAnalyzingNote('offline')).toBe(
       'Offline heuristics are analyzing this product only. Any recommendation will remain review-only.'
     );
+    expect(productHermesAnalyzingNote('hermes', true)).toBe(
+      'Hermes is analyzing this product only. Any recommendation will remain review-only.'
+    );
+    expect(productHermesAnalyzingNote('hermes', false)).toBe(
+      'Analyzing this product only. Any recommendation will remain review-only.'
+    );
     expect(productHermesAnalyzingNote(undefined)).toBe(
       'Analyzing this product only. Any recommendation will remain review-only.'
     );

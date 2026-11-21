@@ -2,6 +2,7 @@ import type { HermesEvent, HermesStatusView, Marketplace } from '@shared/types';
 import {
   HERMES_ACTIVITY_TABS,
   HERMES_OFFLINE_TOOLTIP,
+  HERMES_TOOLS_ON_TOOLTIP,
   buildHermesMetrics,
   countEventsSince,
   flattenHermesFeed,
@@ -117,6 +118,8 @@ describe('hermesStatusChip', () => {
     activeProvider: 'offline',
     hermesConfigured: false,
     hermesReachable: null,
+    hermesToolsSafe: null,
+    hermesEnabledToolsets: [],
     checkedAt: '2026-10-24T10:00:00.000Z',
     ...overrides,
   });
@@ -125,7 +128,42 @@ describe('hermesStatusChip', () => {
   it('says Hermes is connected only when Hermes answers and is the active provider', () => {
     expect(
       hermesStatusChip(
-        status({ activeProvider: 'hermes', hermesConfigured: true, hermesReachable: true }),
+        status({ activeProvider: 'hermes', hermesConfigured: true, hermesReachable: true, hermesToolsSafe: true }),
+        ready,
+      ),
+    ).toEqual({ label: 'Hermes connected', color: 'success' });
+  });
+
+  const toolsOn = {
+    hermesConfigured: true,
+    hermesReachable: true,
+    hermesToolsSafe: false,
+    hermesEnabledToolsets: ['terminal'],
+  };
+
+  it('explains an offline fallback caused by enabled Hermes tools', () => {
+    expect(hermesStatusChip(status({ mode: 'auto', activeProvider: 'offline', ...toolsOn }), ready)).toEqual({
+      label: 'Offline heuristics',
+      color: 'warning',
+      tooltip: HERMES_TOOLS_ON_TOOLTIP,
+    });
+    expect(HERMES_TOOLS_ON_TOOLTIP).toBe(
+      'Hermes answered, but its API server has tools enabled, so MarketDesk does not send it seller data. Point HERMES_API_URL at a Hermes profile without tools.',
+    );
+  });
+
+  it('marks Hermes refused in hermes mode when tools are enabled', () => {
+    expect(hermesStatusChip(status({ mode: 'hermes', activeProvider: 'hermes', ...toolsOn }), ready)).toEqual({
+      label: 'Hermes refused',
+      color: 'error',
+      tooltip: HERMES_TOOLS_ON_TOOLTIP,
+    });
+  });
+
+  it('says connected only when Hermes is reachable and tools-safe', () => {
+    expect(
+      hermesStatusChip(
+        status({ mode: 'hermes', activeProvider: 'hermes', ...toolsOn, hermesToolsSafe: true, hermesEnabledToolsets: [] }),
         ready,
       ),
     ).toEqual({ label: 'Hermes connected', color: 'success' });

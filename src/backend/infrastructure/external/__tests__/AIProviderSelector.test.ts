@@ -1,6 +1,7 @@
 // AIProviderSelector routes every AI call to Hermes or to the offline heuristics
 // according to HERMES_PROVIDER_MODE and the Hermes health probe.
 
+import { ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { AIProviderSelector } from '../AIProviderSelector';
 import { HermesHealthProbe } from '../HermesHealthProbe';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
@@ -57,18 +58,29 @@ const timingOutHermes: IAIProvider = {
 
 const PROBE_CHECKED_AT = new Date('2026-10-24T08:00:00.000Z');
 
-function probe(configured: boolean, reachable: boolean) {
+function probe(
+  configured: boolean,
+  reachable: boolean,
+  toolsSafe = true,
+  enabledToolsets: string[] = [],
+) {
   return {
     isConfigured: () => configured,
-    isReachable: async () => reachable,
-    reachability: async () => ({ reachable, checkedAt: PROBE_CHECKED_AT }),
+    reachability: async () => ({ reachable, toolsSafe, enabledToolsets, checkedAt: PROBE_CHECKED_AT }),
   };
 }
 
 const isoTimestamp = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 
 describe('AIProviderSelector', () => {
+  let offlineSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    offlineSpy = jest.spyOn(offline, 'generateTitle');
+  });
+
   afterEach(() => {
+    offlineSpy.mockRestore();
     globalThis.fetch = originalFetch;
   });
 
@@ -108,8 +120,12 @@ describe('AIProviderSelector', () => {
       mode: 'auto',
       probe: {
         isConfigured: () => true,
-        isReachable: async () => reachable,
-        reachability: async () => ({ reachable, checkedAt: new Date() }),
+        reachability: async () => ({
+          reachable,
+          toolsSafe: reachable,
+          enabledToolsets: [],
+          checkedAt: new Date(),
+        }),
       },
     });
 
@@ -121,12 +137,24 @@ describe('AIProviderSelector', () => {
     expect(afterRecovery).toBe('Title from Hermes');
   });
 
-  it('selector in hermes mode never falls back', async () => {
+  it('selector in auto mode uses offline when reachable Hermes has tools enabled', async () => {
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'auto',
+      probe: probe(true, true, false, ['terminal']),
+    });
+
+    await expect(selector.generateTitle(product, null)).resolves.toBe('Title from offline heuristics');
+    await expect(selector.activeProvider()).resolves.toBe('offline');
+  });
+
+  it('selector in hermes mode passes Hermes errors through when Hermes is tools-safe', async () => {
     const selector = new AIProviderSelector({
       hermes: timingOutHermes,
       offline,
       mode: 'hermes',
-      probe: probe(false, false),
+      probe: probe(true, true),
     });
     const priceContext = { listing, recentViews: 0, conversionRate: 0 };
 
@@ -135,6 +163,85 @@ describe('AIProviderSelector', () => {
     await expect(selector.analyzeListing(product)).rejects.toThrow('Hermes API request timed out');
     await expect(selector.analyzeListingSeo(seoInput, 'balanced')).rejects.toThrow(
       'Hermes API request timed out',
+    );
+  });
+
+  it('selector in hermes mode refuses every call when Hermes has tools enabled', async () => {
+    const guardedHermes: IAIProvider = {
+      suggestPrice: jest.fn(),
+      generateTitle: jest.fn(),
+      analyzeListing: jest.fn(),
+      analyzeListingSeo: jest.fn(),
+    };
+    const selector = new AIProviderSelector({
+      hermes: guardedHermes,
+      offline,
+      mode: 'hermes',
+      probe: probe(true, true, false, ['terminal', 'memory']),
+    });
+    const priceContext = { listing, recentViews: 0, conversionRate: 0 };
+    const calls = [
+      () => selector.suggestPrice(priceContext),
+      () => selector.generateTitle(product, null),
+      () => selector.analyzeListing(product),
+      () => selector.analyzeListingSeo(seoInput, 'balanced'),
+    ];
+
+    for (const call of calls) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ServiceUnavailableError);
+      expect((error as ServiceUnavailableError).message).toBe(
+        'Hermes AI is refused because its API server has tools enabled',
+      );
+      expect(((error as ServiceUnavailableError).cause as Error).message).toContain('terminal, memory');
+    }
+    for (const method of Object.values(guardedHermes)) expect(method).not.toHaveBeenCalled();
+  });
+
+  it('selector in hermes mode refuses every call when Hermes is unreachable', async () => {
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'hermes',
+      probe: probe(true, false, false),
+    });
+
+    const error = await selector.generateTitle(product, null).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect((error as ServiceUnavailableError).message).toBe('Hermes AI is not reachable in this environment');
+    expect(offlineSpy).not.toHaveBeenCalled();
+  });
+
+  it('selector in hermes mode refuses without asking the probe when Hermes is not configured', async () => {
+    const reachability = jest.fn();
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'hermes',
+      probe: { isConfigured: () => false, reachability },
+    });
+
+    const error = await selector.generateTitle(product, null).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect((error as ServiceUnavailableError).message).toBe('Hermes AI is not reachable in this environment');
+    expect(reachability).not.toHaveBeenCalled();
+  });
+
+  it('selector in hermes mode names an unreadable toolset list in the refusal cause', async () => {
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'hermes',
+      probe: probe(true, true, false, []),
+    });
+
+    const error = await selector.generateTitle(product, null).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect(((error as ServiceUnavailableError).cause as Error).message).toBe(
+      'Hermes did not return a readable toolset list',
     );
   });
 
@@ -171,20 +278,20 @@ describe('AIProviderSelector', () => {
   );
 
   it.each([
-    { mode: 'auto', configured: false, probeAnswer: true, activeProvider: 'offline', hermesReachable: null },
-    { mode: 'auto', configured: true, probeAnswer: true, activeProvider: 'hermes', hermesReachable: true },
-    { mode: 'auto', configured: true, probeAnswer: false, activeProvider: 'offline', hermesReachable: false },
-    { mode: 'hermes', configured: true, probeAnswer: false, activeProvider: 'hermes', hermesReachable: false },
-    { mode: 'hermes', configured: false, probeAnswer: true, activeProvider: 'hermes', hermesReachable: null },
-    { mode: 'offline', configured: true, probeAnswer: true, activeProvider: 'offline', hermesReachable: null },
+    { mode: 'auto', configured: false, probeAnswer: true, activeProvider: 'offline', hermesReachable: null, toolsSafe: null },
+    { mode: 'auto', configured: true, probeAnswer: true, activeProvider: 'hermes', hermesReachable: true, toolsSafe: true },
+    { mode: 'auto', configured: true, probeAnswer: false, activeProvider: 'offline', hermesReachable: false, toolsSafe: false },
+    { mode: 'hermes', configured: true, probeAnswer: false, activeProvider: 'hermes', hermesReachable: false, toolsSafe: false },
+    { mode: 'hermes', configured: false, probeAnswer: true, activeProvider: 'hermes', hermesReachable: null, toolsSafe: null },
+    { mode: 'offline', configured: true, probeAnswer: true, activeProvider: 'offline', hermesReachable: null, toolsSafe: null },
   ] as const)(
     'status in $mode mode with configured=$configured and probe=$probeAnswer reports $activeProvider',
-    async ({ mode, configured, probeAnswer, activeProvider, hermesReachable }) => {
+    async ({ mode, configured, probeAnswer, activeProvider, hermesReachable, toolsSafe }) => {
       const selector = new AIProviderSelector({
         hermes,
         offline,
         mode,
-        probe: probe(configured, probeAnswer),
+        probe: probe(configured, probeAnswer, probeAnswer),
       });
 
       await expect(selector.status()).resolves.toEqual({
@@ -192,10 +299,27 @@ describe('AIProviderSelector', () => {
         activeProvider,
         hermesConfigured: configured,
         hermesReachable,
+        hermesToolsSafe: toolsSafe,
+        hermesEnabledToolsets: [],
         checkedAt: isoTimestamp,
       });
     },
   );
+
+  it('status reports the toolset answer', async () => {
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'auto',
+      probe: probe(true, true, false, ['terminal']),
+    });
+
+    await expect(selector.status()).resolves.toMatchObject({
+      hermesReachable: true,
+      hermesToolsSafe: false,
+      hermesEnabledToolsets: ['terminal'],
+    });
+  });
 
   it('status reports the time of the probe check, not the time of the request', async () => {
     const selector = new AIProviderSelector({ hermes, offline, mode: 'auto', probe: probe(true, false) });

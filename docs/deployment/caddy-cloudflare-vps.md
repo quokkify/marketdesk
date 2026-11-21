@@ -364,6 +364,65 @@ Also check that the domain's authoritative nameservers at the registrar are Clou
 - Update marketplace OAuth redirect URIs to the public HTTPS callback URL.
 - Recreate the app container after `.env` changes and verify the container received the new values without printing secrets.
 
+## Hermes profile without tools
+
+MarketDesk sends seller-written text (product names, descriptions, tags and other seller-entered text) to Hermes. An agent with tools could be steered by that text, so MarketDesk uses a Hermes API server only when `GET /v1/toolsets` reports no enabled toolset. If any toolset is enabled, or the list cannot be read, the server is refused: in `HERMES_PROVIDER_MODE=auto` AI calls fall back to offline heuristics, and in `hermes` mode they fail with 503. The Hermes Activity status chip shows "Offline heuristics" (`auto`) or "Hermes refused" (`hermes`), with a tooltip saying the API server has tools enabled. Seller content is also wrapped in a `<seller_data>` block in every prompt.
+
+Run MarketDesk against a dedicated profile that has no tools. A gateway with `gateway.multiplex_profiles: true` serves each named profile at `/p/<profile>/v1/...` on the same port, and picks up a new profile without a restart.
+
+1. Create the profile without a shell alias. This copies config, `.env`, `SOUL.md`, skills and plugins, but not messaging channels:
+
+   ```bash
+   hermes profile create <profile> --clone-from default --no-alias
+   ```
+
+2. In `~/.hermes/profiles/<profile>/config.yaml` set:
+
+   ```yaml
+   toolsets: []
+   platform_toolsets:
+     api_server: []
+   mcp_servers: {}
+   memory:
+     memory_enabled: false
+     user_profile_enabled: false
+   known_plugin_toolsets:
+     api_server:
+       - <every plugin toolset, for example homeassistant>
+   hooks: {}
+   ```
+
+   An explicitly saved `platform_toolsets.api_server: []` means zero tools. Plugin toolsets stay on unless they are listed under `known_plugin_toolsets.api_server`. `hooks: {}` empties the hooks the clone copied.
+
+3. In `~/.hermes/profiles/<profile>/.env` add `API_SERVER_ENABLED=true` and a new key, for example the output of `openssl rand -hex 32`:
+
+   ```bash
+   API_SERVER_ENABLED=true
+   API_SERVER_KEY=<new key>
+   ```
+
+   The profile needs its own key: the default profile's key is rejected on the profile path (401), and the profile's key is rejected on the default path.
+
+4. Confirm that no toolset is enabled. `KEY` is the profile's `API_SERVER_KEY`; read it from the profile's `.env` without printing it:
+
+   ```bash
+   KEY=$(grep '^API_SERVER_KEY=' ~/.hermes/profiles/<profile>/.env | cut -d= -f2-)
+   curl -fsS -H "Authorization: Bearer $KEY" http://127.0.0.1:8642/p/<profile>/v1/toolsets | grep -E '"enabled" *: *true'
+   ```
+
+   `KEY` assumes an unquoted value in `.env`; strip the quotes if the key is quoted, otherwise `curl` gets a 401.
+
+   No output from `grep` means no toolset is enabled, but only if `curl` succeeded and returned a list. An HTTP error (`-f` makes `curl` print it and exit non-zero) or an empty response is a failure, not a pass; fix it before continuing. The response is `{ "data": [ { "name": ..., "enabled": true|false, ... } ] }`.
+
+5. Point MarketDesk at the profile in `.env`, using the profile's key, then recreate the app container:
+
+   ```bash
+   HERMES_API_URL=http://host.docker.internal:8642/p/<profile>/v1
+   HERMES_API_KEY=<the profile's API_SERVER_KEY>
+   ```
+
+Keep the Hermes API port bound to localhost, as the checklist above requires.
+
 ## Copy-paste Hermes Agent prompt
 
 Use this prompt when asking Hermes Agent to configure the setup on a VPS:
@@ -382,6 +441,7 @@ Safety requirements:
 Implementation requirements:
 - Install and enable Caddy on Ubuntu/Debian if it is missing.
 - Keep the MarketDesk app bound to localhost; do not expose app, PostgreSQL, Redis, or Hermes API ports publicly.
+- Run MarketDesk against a Hermes profile without tools (see "Hermes profile without tools"); MarketDesk refuses a Hermes API server that reports any enabled toolset.
 - Write a MarketDesk Caddyfile for the provided production domain, reverse_proxying to 127.0.0.1:${APP_PORT:-3000}.
 - Include a deliberate www-to-apex or apex-to-www redirect policy if both names are used.
 - Validate with `sudo caddy fmt --overwrite /etc/caddy/Caddyfile` and `sudo caddy validate --config /etc/caddy/Caddyfile` before reload.

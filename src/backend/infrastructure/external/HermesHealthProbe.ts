@@ -1,7 +1,8 @@
 // Readiness probe for the Hermes Agent API Server. isConfigured() is a local check;
-// isReachable() asks GET {apiUrl}/models and caches the answer, so auto mode in
-// AIProviderSelector costs at most one short request per minute. Callers that arrive
-// while a check runs share it instead of sending their own.
+// isReachable() asks GET {apiUrl}/models and, when that answers, GET {apiUrl}/toolsets
+// to learn whether any toolset is enabled (an unreadable answer counts as unsafe). The
+// answer is cached, so auto mode in AIProviderSelector costs at most two short requests
+// per minute. Callers that arrive while a check runs share it instead of sending their own.
 
 import type { HermesAIConfig } from './HermesAI';
 
@@ -10,6 +11,8 @@ const PROBE_CACHE_TTL_MS = 60_000;
 
 export interface HermesReachability {
   reachable: boolean;
+  toolsSafe: boolean;
+  enabledToolsets: string[];
   checkedAt: Date;
 }
 
@@ -39,10 +42,10 @@ export class HermesHealthProbe {
       return Promise.resolve(this.cached.result);
     }
     if (!this.inFlight) {
-      this.inFlight = this.requestModels()
-        .then((reachable) => {
+      this.inFlight = this.check()
+        .then((answer) => {
           const checkedAt = Date.now();
-          const result = { reachable, checkedAt: new Date(checkedAt) };
+          const result = { ...answer, checkedAt: new Date(checkedAt) };
           this.cached = { result, expiresAt: checkedAt + PROBE_CACHE_TTL_MS };
           return result;
         })
@@ -53,11 +56,55 @@ export class HermesHealthProbe {
     return this.inFlight;
   }
 
-  // Every failure (refused connection, timeout, non-2xx answer) means "unreachable":
-  // the status endpoint reports it and auto mode routes calls to the offline provider.
-  private async requestModels(): Promise<boolean> {
+  // Every failure (refused connection, timeout, non-2xx answer) on /models means
+  // "unreachable": the status endpoint reports it and auto mode routes calls to the
+  // offline provider. /toolsets is asked only once /models answered.
+  private async check(): Promise<Omit<HermesReachability, 'checkedAt'>> {
+    const models = await this.request('/models');
+    if (!models) {
+      return { reachable: false, toolsSafe: false, enabledToolsets: [] };
+    }
+    // Releasing the unread body only frees the socket; a failure there says nothing
+    // about whether Hermes answered.
+    await models.body?.cancel().catch(() => undefined);
+    return { reachable: true, ...(await this.requestToolsets()) };
+  }
+
+  // Fails closed: any error, non-2xx, non-JSON, list-less or oddly shaped answer is "not safe".
+  private async requestToolsets(): Promise<{ toolsSafe: boolean; enabledToolsets: string[] }> {
+    const unsafe = { toolsSafe: false, enabledToolsets: [] };
     try {
-      const response = await fetch(`${this.apiUrl}/models`, {
+      const response = await this.request('/toolsets');
+      if (!response) {
+        return unsafe;
+      }
+      const body: unknown = await response.json();
+      const list = Array.isArray(body) ? body : (body as { data?: unknown } | null)?.data;
+      if (!Array.isArray(list)) {
+        return unsafe;
+      }
+      const entries = list.map((entry) => entry as { name?: unknown; enabled?: unknown } | null);
+      const wellFormed = entries.filter(
+        (entry): entry is { name: string; enabled: boolean } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof entry.enabled === 'boolean' &&
+          typeof entry.name === 'string',
+      );
+      const enabledToolsets = wellFormed.filter((entry) => entry.enabled).map((entry) => entry.name);
+      return {
+        toolsSafe: wellFormed.length === entries.length && enabledToolsets.length === 0,
+        enabledToolsets,
+      };
+    } catch {
+      return unsafe;
+    }
+  }
+
+  // The response when Hermes answered 2xx; null on a thrown error or any other status.
+  private async request(path: string): Promise<Response | null> {
+    try {
+      const response = await fetch(`${this.apiUrl}${path}`, {
         method: 'GET',
         signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
         headers: {
@@ -65,13 +112,13 @@ export class HermesHealthProbe {
           ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
         },
       });
-      const reachable = response.ok;
-      // Releasing the unread body only frees the socket; a failure there says nothing
-      // about whether Hermes answered.
-      await response.body?.cancel().catch(() => undefined);
-      return reachable;
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      return response;
     } catch {
-      return false;
+      return null;
     }
   }
 }

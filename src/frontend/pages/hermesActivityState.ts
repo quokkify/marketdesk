@@ -148,13 +148,15 @@ export interface HermesStatusChip {
 
 export const HERMES_OFFLINE_TOOLTIP =
   'Hermes Agent API is not reachable; suggestions come from built-in heuristics and always wait for your review';
+export const HERMES_TOOLS_ON_TOOLTIP =
+  'Hermes answered, but its API server has tools enabled, so MarketDesk does not send it seller data. Point HERMES_API_URL at a Hermes profile without tools.';
 const HERMES_SWITCHED_OFF_TOOLTIP =
   'Hermes is switched off for this deployment; suggestions come from built-in heuristics and always wait for your review';
 const HERMES_DOWN_TOOLTIP =
   'Hermes is selected for this deployment but its API is not configured or did not answer; AI requests fail until it responds';
 
 // What the banner may claim about the AI provider. "Connected" needs Hermes to be the
-// active provider and to have answered its health check; a deployment that forces
+// active provider, to have answered its health check and to have no tools enabled; a deployment that forces
 // Hermes on while it is down must not read as connected.
 export function hermesStatusChip(
   status: HermesStatusView | undefined,
@@ -165,14 +167,20 @@ export function hermesStatusChip(
       ? { label: 'Status unavailable', color: 'default', tooltip: 'The Hermes status could not be loaded' }
       : { label: 'Checking Hermes…', color: 'default' };
   }
+  const toolsOn = status.hermesReachable === true && status.hermesToolsSafe === false;
   if (status.activeProvider === 'offline') {
     return {
       label: 'Offline heuristics',
       color: 'warning',
-      tooltip: status.mode === 'offline' ? HERMES_SWITCHED_OFF_TOOLTIP : HERMES_OFFLINE_TOOLTIP,
+      tooltip: toolsOn
+        ? HERMES_TOOLS_ON_TOOLTIP
+        : status.mode === 'offline'
+          ? HERMES_SWITCHED_OFF_TOOLTIP
+          : HERMES_OFFLINE_TOOLTIP,
     };
   }
-  if (status.hermesReachable === true) return { label: 'Hermes connected', color: 'success' };
+  if (toolsOn) return { label: 'Hermes refused', color: 'error', tooltip: HERMES_TOOLS_ON_TOOLTIP };
+  if (status.hermesReachable === true && status.hermesToolsSafe === true) return { label: 'Hermes connected', color: 'success' };
   return { label: 'Hermes unavailable', color: 'error', tooltip: HERMES_DOWN_TOOLTIP };
 }
 

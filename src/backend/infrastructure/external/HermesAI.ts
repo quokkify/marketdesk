@@ -3,7 +3,8 @@
 // The application does not call a vendor LLM directly. It talks to the local
 // Hermes Agent API Server through an injectable text-completion boundary, so the
 // same native Hermes instance running on this VPS owns model/provider/tooling
-// decisions.
+// decisions. MarketDesk only uses a Hermes profile whose API server has no tools enabled
+// (checked by HermesHealthProbe) and sends seller content as a <seller_data> block.
 
 import type {
   IAIProvider,
@@ -11,6 +12,7 @@ import type {
   PriceSuggestion,
   ListingAnalysis,
 } from '../../domain/ports/IAIProvider';
+import { SELLER_DATA_RULE, sellerDataBlock } from './sellerData';
 import type { Product } from '../../domain/entities/Product';
 import type { Marketplace } from '../../domain/entities/Marketplace';
 import {
@@ -118,18 +120,23 @@ export class HermesAI implements IAIProvider {
   ): Promise<string> {
     const prompt = [
       'Write a single SEO-optimized marketplace listing title.',
-      `Product: ${product.name}.`,
-      `Category: ${product.category}. Condition: ${product.condition}.`,
-      marketplace ? `Target marketplace: ${marketplace.name}.` : '',
+      sellerDataBlock({
+        name: product.name,
+        category: product.category,
+        condition: product.condition,
+        ...(marketplace ? { marketplace: marketplace.name } : {}),
+      }),
       'Return only the title text, no quotes, no preamble, max 80 characters.',
     ]
       .filter(Boolean)
       .join('\n');
 
     const raw = await this.client.complete({
-      system: creativityPreset
-        ? getMarketDeskAgent('listing-seo').instruction(creativityPreset)
-        : 'You are an SEO copywriter. Output only the requested title.',
+      system:
+        (creativityPreset
+          ? getMarketDeskAgent('listing-seo').instruction(creativityPreset)
+          : 'You are an SEO copywriter. Output only the requested title.') +
+        `\n${SELLER_DATA_RULE}`,
       prompt,
       maxTokens: this.maxTokens,
     });
@@ -140,16 +147,20 @@ export class HermesAI implements IAIProvider {
   async analyzeListing(product: Product): Promise<ListingAnalysis> {
     const prompt = [
       'Assess the quality of this product listing and suggest improvements.',
-      `Name: ${product.name}.`,
-      `Description: ${product.description}.`,
-      `Category: ${product.category}. Condition: ${product.condition}.`,
-      `Images: ${product.imageCount}. Tags: ${product.tags.join(', ') || 'none'}.`,
+      sellerDataBlock({
+        name: product.name,
+        description: product.description,
+        category: product.category,
+        condition: product.condition,
+        tags: product.tags,
+        imageCount: product.imageCount,
+      }),
       'Respond as JSON with keys "score" (integer 0-100) and',
       '"suggestions" (array of short actionable strings).',
     ].join('\n');
 
     const raw = await this.client.complete({
-      system: 'You output listing-quality assessments as strict JSON.',
+      system: `You output listing-quality assessments as strict JSON.\n${SELLER_DATA_RULE}`,
       prompt,
       maxTokens: this.maxTokens,
       jsonSchema: {
@@ -179,8 +190,8 @@ export class HermesAI implements IAIProvider {
     const profile = getMarketDeskAgent('listing-seo');
     const cleanInput = profile.inputSchema.parse(input);
     const raw = await this.client.complete({
-      system: profile.instruction(preset),
-      prompt: JSON.stringify(cleanInput),
+      system: `${profile.instruction(preset)}\n${SELLER_DATA_RULE}`,
+      prompt: sellerDataBlock(cleanInput),
       maxTokens: this.maxTokens,
       jsonSchema: {
         type: 'object',
