@@ -63,10 +63,14 @@ export class ConversationReplyGraph {
     const { conversations, products, limits, now } = this.deps;
     const thread = await conversations.findThreadForWorkspace(input.threadId, input.workspaceId);
     if (!thread) throw new NotFoundError(`Conversation thread not found: ${input.threadId}`);
+    if (thread.status === 'suspicious') return { kind: 'suspicious', reasons: thread.suspiciousReasons };
     const recent = await conversations.recentMessages(thread.id, limits.historyMessages);
-    const latestBuyer = recent.find((m) => m.direction === 'buyer');
-    if (!latestBuyer || latestBuyer.id !== input.messageId) return { kind: 'skipped', reason: 'not_latest' };
-    if (latestBuyer.text === null) throw new Error(`Buyer message text is no longer stored: ${input.messageId}`);
+    // Newest message of any direction: a later seller message means the buyer was already answered.
+    const latest = recent[0];
+    if (latest?.direction !== 'buyer' || latest.id !== input.messageId) {
+      return { kind: 'skipped', reason: 'not_latest' };
+    }
+    if (latest.text === null) throw new Error(`Buyer message text is no longer stored: ${input.messageId}`);
     const product = await products.findByIdForWorkspace(thread.productId, input.workspaceId);
     if (!product) throw new NotFoundError(`Product not found: ${thread.productId}`);
     if (product.isSold()) return { kind: 'skipped', reason: 'sold' };
@@ -77,7 +81,7 @@ export class ConversationReplyGraph {
     }
 
     const ctx: RunContext = {
-      thread, product, message: { ...latestBuyer, text: latestBuyer.text },
+      thread, product, message: { ...latest, text: latest.text },
       history: [...recent].reverse().flatMap((m) => (m.text === null ? [] : [{ direction: m.direction, text: m.text }])),
     };
     const { value } = await withAiUsageScope(

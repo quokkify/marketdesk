@@ -264,6 +264,29 @@ describe('ConversationReplyGraph', () => {
     expect(s.ai.contexts).toHaveLength(0);
   });
 
+  it('suspiciousThreadStaysSuspicious', async () => {
+    const s = await setup();
+    await s.conversations.upsertThread({
+      workspaceId: WORKSPACE, listingId: 'l1', productId: 'p1', externalThreadId: 'ext-1',
+      status: 'suspicious', suspiciousReasons: ['messenger_move'],
+    });
+    const m = await s.say('Aktualne?', 1);
+    expect(await s.run(m.id)).toEqual({ kind: 'suspicious', reasons: ['messenger_move'] });
+    expect(s.ai.contexts).toHaveLength(0);
+    expect(s.conversations.hashQueries).toHaveLength(0);
+    expect(s.transitions).toHaveLength(0);
+    expect(s.conversations.drafts).toHaveLength(0);
+  });
+
+  it('sellerAnsweredSkips', async () => {
+    const s = await setup();
+    const m = await s.say('Aktualne?', 5);
+    await s.say('Tak, aktualne.', 1, 'seller');
+    expect(await s.run(m.id)).toEqual({ kind: 'skipped', reason: 'not_latest' });
+    expect(s.ai.contexts).toHaveLength(0);
+    expect(s.conversations.drafts).toHaveLength(0);
+  });
+
   it('counts repeats over buyer messages of the last seven days by normalized hash', async () => {
     const s = await setup();
     const m = await s.say('Aktualne?', 1);
