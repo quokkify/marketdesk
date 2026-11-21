@@ -55,6 +55,14 @@ describe('revivalView', () => {
     expect(revivalView(below, form).priceRow).toMatchObject({ checkedByDefault: false, needsBelowCostConfirmation: true });
   });
 
+  it('ignores the below-cost guard once the price change is unticked', () => {
+    const below = { ...proposal, priceGuard: { status: 'below_cost' as const, costPrice: 50 } };
+    const unticked = revivalView(below, { ...form, usePrice: false });
+    expect(unticked.priceRow.needsBelowCostConfirmation).toBe(false);
+    expect(unticked.canApply).toBe(true);
+    expect(revivalView(below, form).priceRow.needsBelowCostConfirmation).toBe(true);
+  });
+
   it('asks for the below-cost confirmation until it is ticked', () => {
     const below = { ...proposal, priceGuard: { status: 'below_cost' as const, costPrice: 150 } };
     expect(revivalView(below, form).reasons).toEqual([BELOW_COST_REASON]);

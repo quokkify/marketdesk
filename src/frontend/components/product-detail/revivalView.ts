@@ -51,7 +51,8 @@ export function revivalView(proposal: RevivalProposal, form: RevivalForm): Reviv
   const proposedPrice = proposal.price;
   const effectivePrice = proposedPrice ? (form.usePrice ? proposedPrice.proposed : proposedPrice.current) : null;
   const needsBelowCostConfirmation =
-    proposal.priceGuard.status === 'below_cost' ||
+    // The guard judged the proposed price, so it only counts while that price is ticked.
+    (proposal.priceGuard.status === 'below_cost' && form.usePrice && proposedPrice !== undefined) ||
     (costPrice !== null && !Number.isNaN(costPrice) && effectivePrice !== null && costPrice > effectivePrice);
   if (needsBelowCostConfirmation && !form.allowBelowCost) reasons.push(BELOW_COST_REASON);
 

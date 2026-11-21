@@ -44,6 +44,19 @@ function initialForm(proposal: RevivalProposal, condition: Product['condition'])
   };
 }
 
+// Owner's choices carried over to a refreshed proposal, kept only where the field is still proposed.
+function keptForm(form: RevivalForm, proposal: RevivalProposal): RevivalForm {
+  return {
+    ...form,
+    useTitle: form.useTitle && proposal.title !== undefined,
+    useDescription: form.useDescription && proposal.description !== undefined,
+    usePrice: form.usePrice && proposal.price !== undefined,
+  };
+}
+
+const HTTP_CONFLICT = 409;
+const STALE_REFRESHED_MESSAGE = 'The product changed meanwhile — the proposal was refreshed, check it and apply again.';
+
 const Change: React.FC<{ label: string; current: string; proposed: string; rationale: string; checked: boolean; onChange: (checked: boolean) => void }> = ({
   label, current, proposed, rationale, checked, onChange,
 }) => (
@@ -67,28 +80,28 @@ export const RevivalDialog: React.FC<RevivalDialogProps> = ({ open, listingId, p
   const [loadError, setLoadError] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
 
+  const loadProposal = async (keep: RevivalForm | null): Promise<boolean> => {
+    try {
+      const next = await getProposal(listingId).unwrap();
+      setProposal(next);
+      setForm(keep ? keptForm(keep, next) : initialForm(next, product.condition));
+      setTimestamps({ productUpdatedAt: next.productUpdatedAt, listingUpdatedAt: next.listingUpdatedAt });
+      setLoadError(null);
+      return true;
+    } catch (err) {
+      setLoadError(requestErrorMessage(err));
+      return false;
+    }
+  };
+
   useEffect(() => {
-    if (!open) return undefined;
-    let cancelled = false;
+    if (!open) return;
     setProposal(null);
     setForm(null);
     setLoadError(null);
     setApplyError(null);
-    getProposal(listingId)
-      .unwrap()
-      .then((next) => {
-        if (cancelled) return;
-        setProposal(next);
-        setForm(initialForm(next, product.condition));
-        setTimestamps({ productUpdatedAt: next.productUpdatedAt, listingUpdatedAt: next.listingUpdatedAt });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(requestErrorMessage(err));
-      });
-    return () => {
-      cancelled = true;
-    };
     // The proposal is fetched once per opening; the product prop only seeds the condition.
+    void loadProposal(null);
   }, [open, listingId]);
 
   const view = proposal && form ? revivalView(proposal, form) : null;
@@ -118,6 +131,12 @@ export const RevivalDialog: React.FC<RevivalDialogProps> = ({ open, listingId, p
         setApplyError(revivalFailureMessage(result));
       }
     } catch (err) {
+      if ((err as { status?: unknown } | null)?.status === HTTP_CONFLICT) {
+        // Stale timestamps: a retry could never succeed, so fetch a fresh proposal and keep the choices.
+        setApplyError(null);
+        if (await loadProposal(form)) setApplyError(STALE_REFRESHED_MESSAGE);
+        return;
+      }
       setApplyError(requestErrorMessage(err));
     }
   };
