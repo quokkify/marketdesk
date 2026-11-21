@@ -7,7 +7,64 @@
 import { randomUUID } from 'crypto';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { AuthUserMapper, type AuthUserRow } from '../repositories/AuthUserRepository';
-import { PriceHistoryMapper, type PriceHistoryRow } from '../repositories/PriceHistoryRepository';
+import type { Pool } from 'pg';
+import {
+  PRICE_HISTORY_REASON_MAX,
+  PriceHistoryMapper,
+  PriceHistoryRepository as PriceHistoryRecorder,
+  fitPriceHistoryReason,
+  type PriceHistoryRow,
+} from '../repositories/PriceHistoryRepository';
+
+// Regression guard: approving a Hermes price on 2026-11-21 failed with Postgres 22001 because the
+// estimate's 302-character reasoning went into price_history.reason VARCHAR(255) as is.
+describe('fitPriceHistoryReason', () => {
+  it('matches the price_history.reason column width', () => {
+    expect(PRICE_HISTORY_REASON_MAX).toBe(255);
+  });
+
+  it('cuts a long Hermes reasoning to the column width', () => {
+    const fitted = fitPriceHistoryReason('a'.repeat(302));
+    expect(fitted).not.toBeNull();
+    expect(Array.from(fitted as string)).toHaveLength(255);
+    expect(fitted?.endsWith('…')).toBe(true);
+  });
+
+  it('counts characters, not UTF-16 units, so a cut never splits a symbol', () => {
+    // An odd prefix puts a naive UTF-16 cut in the middle of a surrogate pair.
+    const fitted = fitPriceHistoryReason('ł'.repeat(201) + '😀'.repeat(100)) as string;
+    expect(Array.from(fitted)).toHaveLength(255);
+    expect(fitted).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+
+  it('record() writes the fitted reason, so a long Hermes reasoning cannot overflow the column', async () => {
+    const sent: unknown[][] = [];
+    const recordingClient = {
+      query: async (_text: string, values: unknown[]) => {
+        sent.push(values);
+        return { rows: [], rowCount: 1 };
+      },
+    } as unknown as Pool;
+    await new PriceHistoryRecorder(recordingClient).record({
+      id: 'history-1',
+      listingId: 'listing-1',
+      oldPrice: 399,
+      newPrice: 319,
+      changedBy: 'hermes',
+      reason: 'r'.repeat(302),
+      createdAt: new Date('2026-11-21T21:56:00Z'),
+    });
+    expect(sent).toHaveLength(1);
+    expect(Array.from(sent[0][5] as string)).toHaveLength(PRICE_HISTORY_REASON_MAX);
+  });
+
+  it('keeps a short reason and passes null through', () => {
+    expect(fitPriceHistoryReason('Approved AI price')).toBe('Approved AI price');
+    expect(fitPriceHistoryReason('x'.repeat(255))).toBe('x'.repeat(255));
+    expect(fitPriceHistoryReason(null)).toBeNull();
+    expect(fitPriceHistoryReason(undefined)).toBeNull();
+  });
+});
 
 describe('AuthUserMapper', () => {
   const row: AuthUserRow = {

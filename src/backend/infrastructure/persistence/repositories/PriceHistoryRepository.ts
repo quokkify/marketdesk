@@ -31,6 +31,18 @@ const PRICE_HISTORY_SELECT = `
   FROM price_history
 `;
 
+// Width of price_history.reason (VARCHAR(255)); Postgres counts characters, not UTF-16 units.
+export const PRICE_HISTORY_REASON_MAX = 255;
+
+// The reason is an audit note: a longer one (e.g. a Hermes estimate's reasoning) is cut to the
+// column width with an ellipsis instead of failing the price change it records.
+export function fitPriceHistoryReason(reason: string | null | undefined): string | null {
+  if (reason === null || reason === undefined) return null;
+  const chars = Array.from(reason);
+  if (chars.length <= PRICE_HISTORY_REASON_MAX) return reason;
+  return `${chars.slice(0, PRICE_HISTORY_REASON_MAX - 1).join('')}…`;
+}
+
 export const PriceHistoryMapper = {
   // DECIMAL columns come back from node-pg as strings; created_at is serialized
   // to ISO for the shared PriceHistory view type.
@@ -80,7 +92,7 @@ export class PriceHistoryRepository
         entry.oldPrice ?? null,
         entry.newPrice,
         entry.changedBy,
-        entry.reason ?? null,
+        fitPriceHistoryReason(entry.reason),
         entry.createdAt,
       ],
       this.queryClient,
