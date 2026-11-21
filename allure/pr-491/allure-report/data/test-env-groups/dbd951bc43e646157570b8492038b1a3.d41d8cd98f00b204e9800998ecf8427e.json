@@ -1,0 +1,1 @@
+{"id":"dbd951bc43e646157570b8492038b1a3.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/reactivationOutcome.test.ts#reactivationOutcome maps OLX status null to unchanged","name":"maps OLX status null to unchanged","status":"passed","testResultsByEnv":{"default":"402f6c909ee8318649390aff6e7c928e"}}
