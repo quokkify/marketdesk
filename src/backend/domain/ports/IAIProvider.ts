@@ -5,7 +5,7 @@
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
-import type { PriceResearch } from '../../../shared/types';
+import type { PriceEstimate, PriceResearch } from '../../../shared/types';
 import type {
   CreativityPreset,
   ListingSeoInput,
@@ -40,6 +40,9 @@ export interface ListingAnalysis {
 }
 
 export interface IAIProvider {
+  // Estimate a start and a floor price from the product card, optional research and listing stats.
+  estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate>;
+
   // Generate a pricing suggestion for a listing.
   suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion>;
 

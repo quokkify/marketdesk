@@ -44,6 +44,9 @@ const fakeRedis = {
 } as unknown as Redis;
 
 const fakeAi: IAIProvider = {
+  estimatePrice: async () => {
+    throw new Error('not used');
+  },
   suggestPrice: async () => ({ suggestedPrice: 1, reasoning: 'x', confidence: 'low' }),
   generateTitle: async (product) => product.name,
   analyzeListing: async () => ({ score: 0, suggestions: [] }),

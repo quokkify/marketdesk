@@ -13,7 +13,7 @@ import {
   OLX_SANDBOX_QUOTA_EVALUATION,
   OlxPublicationQuota,
 } from '../entities/OlxPublicationQuota';
-import type { HermesEventStatus, MarketplaceKey } from '../../../shared/types';
+import type { HermesEventStatus, MarketplaceKey, PriceEstimate } from '../../../shared/types';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../repositories/interfaces/IMarketplaceRepository';
@@ -27,6 +27,7 @@ import type {
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import type {
   IAIProvider,
+  PriceEstimateContext,
   PriceSuggestion,
   ListingAnalysis,
 } from '../ports/IAIProvider';
@@ -296,6 +297,17 @@ export class StubAIProvider implements IAIProvider {
 
   async suggestPrice(): Promise<PriceSuggestion> {
     return this.price;
+  }
+  async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
+    const price = context.listing.price.amount;
+    return {
+      startPrice: price,
+      floorPrice: price,
+      retailAnchor: null,
+      usedRange: null,
+      reasoning: 'stub',
+      confidence: 'low',
+    };
   }
   async generateTitle(): Promise<string> {
     return this.title;
