@@ -15,7 +15,7 @@ starter names (`StarterConfig`, `starter.properties`, `TEST_MESSAGE`), which thi
 - Tests run in parallel through the q4j `SuiteListener` (see [docs/agents/test-execution.md](docs/agents/test-execution.md));
   keep steps and services free of per-test state, and mark a test that needs exclusive use of the stack with
   `@SingleThread`.
-- `verifyArchitecture` runs `HttpStatusConstantRule`: tests in `test.api` pass statuses as `HttpStatus` constants, and
+- `archgateCheck` runs `HttpStatusConstantRule` (from `dev.quokkify:archgate-rules`): tests in `test.api` pass statuses as `HttpStatus` constants, and
   the build fails on a number literal such as `200`.
 - Browser tests live in the `test.ui` package and run only in `./gradlew uiTest`; `./gradlew test` excludes that
   package. Page objects live in the package `page`.

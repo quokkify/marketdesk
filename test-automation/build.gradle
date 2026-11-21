@@ -2,11 +2,19 @@ plugins {
     id 'java'
     id 'checkstyle'
     alias(libs.plugins.spotbugs)
+    alias(libs.plugins.archgate)
 }
 
 apply from: 'gradle/compilation.gradle'
 apply from: 'gradle/code-analysis.gradle'
 apply from: 'gradle/dependencies.gradle'
 apply from: 'gradle/tests.gradle'
-apply from: 'gradle/architecture.gradle'
 apply from: 'gradle/allure.gradle'
+
+// ArchGate runs the rules listed in
+// src/test/resources/META-INF/services/dev.quokkify.archgate.api.ArchitectureRule as `archgateCheck`,
+// which `check` runs. See docs/agents/architecture-verification.md.
+archgate {
+    rootPackage = 'dev.quokkify.marketdesk'
+    failOn = 'ERROR'
+}

@@ -13,10 +13,10 @@ JDK 21. The Gradle wrapper downloads Gradle itself.
 Compile, then run Checkstyle, SpotBugs and the architecture rules without running tests:
 
 ```sh
-./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture
+./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest archgateCheck
 ```
 
-`verifyArchitecture` runs the [q4j architecture](https://github.com/quokkify/q4j/tree/main/architecture) rules listed in `tools/architecture`, and `./gradlew check` runs it too. The rules, the fixes for their findings, and the steps to add the gate to an older project are in [docs/agents/architecture-verification.md](docs/agents/architecture-verification.md).
+`archgateCheck` runs the [ArchGate](https://github.com/quokkify/archgate) rules listed in `src/test/resources/META-INF/services/dev.quokkify.archgate.api.ArchitectureRule`, and `./gradlew check` runs it too. The rules, the fixes for their findings, and the steps to add the gate to an older project are in [docs/agents/architecture-verification.md](docs/agents/architecture-verification.md).
 
 Run the tests. The q4j TestNG extensions registered in `src/test/resources/META-INF/services/org.testng.ITestNGListener` run them in parallel and retry failures; the environment or an optional `src/test/resources/testng.properties` sets `TEST_THREAD_COUNT` and `RETRY_COUNT`. The rules, including how to split test sets, are in [docs/agents/test-execution.md](docs/agents/test-execution.md).
 

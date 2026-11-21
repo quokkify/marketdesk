@@ -5,7 +5,7 @@ components:
     path: "test-automation"
     java_version: "21"
     "build_tool": "gradle"
-    "lint_command": "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest verifyArchitecture --console=plain"
+    "lint_command": "./gradlew assemble testClasses checkstyleMain checkstyleTest spotbugsMain spotbugsTest archgateCheck --console=plain"
     "run_build": false
     "test_artifact_name": "allure-results-marketdesk-java"
     "test_artifact_path": "build/allure-results"
