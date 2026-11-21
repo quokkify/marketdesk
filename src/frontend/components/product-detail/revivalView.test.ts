@@ -2,6 +2,8 @@ import type { RevivalProposal } from '@shared/types';
 import {
   BELOW_COST_REASON,
   CONDITION_REASON,
+  REVIVAL_CONDITIONS,
+  conditionSelectValue,
   DESCRIPTION_REASON,
   aiIssuesNote,
   parseCostPrice,
@@ -139,5 +141,18 @@ describe('revivalFailureMessage', () => {
       'Your changes are on OLX, but the advert is still expired: Nope. Try Reactivate on OLX.'
     );
     expect(revivalFailureMessage({ outcome: 'live', step: 'done', reason: null })).toBe('');
+  });
+});
+
+describe('revival condition select', () => {
+  // Regression guard for #485: an unknown condition read as a chosen value.
+  it('shows an empty select while the condition is unknown', () => {
+    expect(conditionSelectValue('unknown')).toBe('');
+    expect(conditionSelectValue('good')).toBe('good');
+  });
+
+  it('does not offer unknown as a choice', () => {
+    expect(REVIVAL_CONDITIONS).not.toContain('unknown');
+    expect(REVIVAL_CONDITIONS).toEqual(['new', 'like_new', 'good', 'fair', 'poor', 'refurbished']);
   });
 });

@@ -34,9 +34,17 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Open the condition list in the revival dialog")
+  public ProductDetailPageSteps openRevivalConditions() {
+    page.revivalConditionSelect().shouldBe(Condition.visible).click();
+    return this;
+  }
+
   @Step("Choose the condition {condition} in the revival dialog")
   public ProductDetailPageSteps chooseRevivalCondition(String condition) {
-    page.revivalConditionSelect().shouldBe(Condition.visible).click();
+    if (!page.conditionOption(condition).isDisplayed()) {
+      page.revivalConditionSelect().shouldBe(Condition.visible).click();
+    }
     page.conditionOption(condition).shouldBe(Condition.visible).click();
     return this;
   }

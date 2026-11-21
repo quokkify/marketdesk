@@ -2,6 +2,7 @@
 // below-cost confirmation, and the words for a refused OLX step.
 import type { ProductCondition, RevivalAiStep, RevivalProposal } from '@shared/types';
 import type { ReviveListingResult } from '../../state/api/listingsApi.js';
+import { CONDITION_LIST } from '../../utils/labels.js';
 
 export const DESCRIPTION_MIN_LENGTH = 20;
 export const DESCRIPTION_MAX_LENGTH = 2000;
@@ -26,6 +27,16 @@ export const CONDITION_REASON = "Choose the product's condition";
 export const COST_PRICE_REASON = 'Enter the cost price as a positive number';
 export const BELOW_COST_REASON = 'Confirm selling below cost, or change the prices';
 export const DESCRIPTION_REASON = `The description must be ${DESCRIPTION_MIN_LENGTH} to ${DESCRIPTION_MAX_LENGTH} characters`;
+
+export const CONDITION_PLACEHOLDER = 'Choose condition';
+
+// Unknown is the missing value, not a choice: offering it would read as a picked condition.
+export const REVIVAL_CONDITIONS: readonly ProductCondition[] = CONDITION_LIST.filter((condition) => condition !== 'unknown');
+
+/** The select's value: empty while the condition is unknown, so the placeholder shows. */
+export function conditionSelectValue(condition: ProductCondition): ProductCondition | '' {
+  return condition === 'unknown' ? '' : condition;
+}
 
 /** The entered cost price; null when empty, NaN when it is not a positive number. */
 export function parseCostPrice(text: string): number | null {

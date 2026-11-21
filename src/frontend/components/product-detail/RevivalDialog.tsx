@@ -8,9 +8,12 @@ import { aiUsageLine } from '../hermes/aiUsageText.js';
 import { useGetRevivalProposal, useReviveListing } from '../../services/hooks/index.js';
 import type { ReviveListingResult } from '../../state/api/listingsApi.js';
 import { formatMoney } from '../../utils/formatters.js';
-import { CONDITION_LABELS, CONDITION_LIST } from '../../utils/labels.js';
+import { CONDITION_LABELS } from '../../utils/labels.js';
 import {
+  CONDITION_PLACEHOLDER,
+  REVIVAL_CONDITIONS,
   aiIssuesNote,
+  conditionSelectValue,
   parseCostPrice,
   requestErrorMessage,
   revivalFailureMessage,
@@ -181,12 +184,25 @@ export const RevivalDialog: React.FC<RevivalDialogProps> = ({ open, listingId, p
                 select
                 fullWidth
                 label="Condition"
-                value={form.condition}
+                value={conditionSelectValue(form.condition)}
                 onChange={(event) => patch({ condition: event.target.value as RevivalForm['condition'] })}
                 helperText={proposal.missingFacts.find((fact) => fact.field === 'condition')?.note}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  select: {
+                    displayEmpty: true,
+                    renderValue: (value) =>
+                      value === '' ? (
+                        <Typography component="span" color="text.secondary">{CONDITION_PLACEHOLDER}</Typography>
+                      ) : (
+                        CONDITION_LABELS[value as RevivalForm['condition']]
+                      ),
+                  },
+                  formHelperText: form.condition === 'unknown' ? { sx: { color: 'warning.main' } } : undefined,
+                }}
                 data-testid="revival-condition"
               >
-                {CONDITION_LIST.map((condition) => (
+                {REVIVAL_CONDITIONS.map((condition) => (
                   <MenuItem key={condition} value={condition}>{CONDITION_LABELS[condition]}</MenuItem>
                 ))}
               </TextField>
