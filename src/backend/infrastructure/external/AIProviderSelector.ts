@@ -57,8 +57,9 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
     return (await this.resolve()).analyzeListingSeo(input, preset);
   }
 
-  // The single routing decision behind every AI call, status() and the decision
-  // engine's review-only rule for offline results.
+  // The routing decision behind every AI call, status() and the decision engine's
+  // review-only rule for offline results. In hermes mode resolve() additionally
+  // refuses the call when Hermes is unreachable or has tools enabled.
   async activeProvider(): Promise<'hermes' | 'offline'> {
     const { mode, probe } = this.deps;
     if (mode !== 'auto') return mode;
@@ -69,9 +70,10 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
 
   async status(): Promise<HermesStatusView> {
     const { mode, probe } = this.deps;
-    const activeProvider = await this.activeProvider();
     const hermesConfigured = probe.isConfigured();
     const check = mode !== 'offline' && hermesConfigured ? await probe.reachability() : null;
+    const activeProvider =
+      mode === 'auto' ? (check?.reachable && check.toolsSafe ? 'hermes' : 'offline') : mode;
     return {
       mode,
       activeProvider,

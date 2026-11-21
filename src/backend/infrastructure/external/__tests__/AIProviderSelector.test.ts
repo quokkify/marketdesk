@@ -73,7 +73,14 @@ function probe(
 const isoTimestamp = expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 
 describe('AIProviderSelector', () => {
+  let offlineSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    offlineSpy = jest.spyOn(offline, 'generateTitle');
+  });
+
   afterEach(() => {
+    offlineSpy.mockRestore();
     globalThis.fetch = originalFetch;
   });
 
@@ -192,7 +199,6 @@ describe('AIProviderSelector', () => {
   });
 
   it('selector in hermes mode refuses every call when Hermes is unreachable', async () => {
-    const offlineSpy = jest.spyOn(offline, 'generateTitle');
     const selector = new AIProviderSelector({
       hermes,
       offline,
@@ -205,7 +211,38 @@ describe('AIProviderSelector', () => {
     expect(error).toBeInstanceOf(ServiceUnavailableError);
     expect((error as ServiceUnavailableError).message).toBe('Hermes AI is not reachable in this environment');
     expect(offlineSpy).not.toHaveBeenCalled();
-    offlineSpy.mockRestore();
+  });
+
+  it('selector in hermes mode refuses without asking the probe when Hermes is not configured', async () => {
+    const reachability = jest.fn();
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'hermes',
+      probe: { isConfigured: () => false, reachability },
+    });
+
+    const error = await selector.generateTitle(product, null).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect((error as ServiceUnavailableError).message).toBe('Hermes AI is not reachable in this environment');
+    expect(reachability).not.toHaveBeenCalled();
+  });
+
+  it('selector in hermes mode names an unreadable toolset list in the refusal cause', async () => {
+    const selector = new AIProviderSelector({
+      hermes,
+      offline,
+      mode: 'hermes',
+      probe: probe(true, true, false, []),
+    });
+
+    const error = await selector.generateTitle(product, null).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect(((error as ServiceUnavailableError).cause as Error).message).toBe(
+      'Hermes did not return a readable toolset list',
+    );
   });
 
   it('selector in offline mode never routes to Hermes', async () => {
