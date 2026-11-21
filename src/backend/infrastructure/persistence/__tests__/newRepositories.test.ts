@@ -7,9 +7,11 @@
 import { randomUUID } from 'crypto';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { AuthUserMapper, type AuthUserRow } from '../repositories/AuthUserRepository';
+import type { Pool } from 'pg';
 import {
   PRICE_HISTORY_REASON_MAX,
   PriceHistoryMapper,
+  PriceHistoryRepository as PriceHistoryRecorder,
   fitPriceHistoryReason,
   type PriceHistoryRow,
 } from '../repositories/PriceHistoryRepository';
@@ -29,9 +31,31 @@ describe('fitPriceHistoryReason', () => {
   });
 
   it('counts characters, not UTF-16 units, so a cut never splits a symbol', () => {
-    const fitted = fitPriceHistoryReason('ł'.repeat(200) + '😀'.repeat(100)) as string;
+    // An odd prefix puts a naive UTF-16 cut in the middle of a surrogate pair.
+    const fitted = fitPriceHistoryReason('ł'.repeat(201) + '😀'.repeat(100)) as string;
     expect(Array.from(fitted)).toHaveLength(255);
     expect(fitted).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+
+  it('record() writes the fitted reason, so a long Hermes reasoning cannot overflow the column', async () => {
+    const sent: unknown[][] = [];
+    const recordingClient = {
+      query: async (_text: string, values: unknown[]) => {
+        sent.push(values);
+        return { rows: [], rowCount: 1 };
+      },
+    } as unknown as Pool;
+    await new PriceHistoryRecorder(recordingClient).record({
+      id: 'history-1',
+      listingId: 'listing-1',
+      oldPrice: 399,
+      newPrice: 319,
+      changedBy: 'hermes',
+      reason: 'r'.repeat(302),
+      createdAt: new Date('2026-11-21T21:56:00Z'),
+    });
+    expect(sent).toHaveLength(1);
+    expect(Array.from(sent[0][5] as string)).toHaveLength(PRICE_HISTORY_REASON_MAX);
   });
 
   it('keeps a short reason and passes null through', () => {
