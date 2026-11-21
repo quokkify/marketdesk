@@ -1,0 +1,1 @@
+{"id":"81317ccc1b04b9bedf3119cd99f1747c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API products returns 401 when unauthenticated","name":"returns 401 when unauthenticated","status":"passed","testResultsByEnv":{"default":"3ac03d3303c67e085cbfd050b5175b4e"}}
