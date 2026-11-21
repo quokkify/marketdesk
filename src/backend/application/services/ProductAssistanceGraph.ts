@@ -9,6 +9,7 @@ import type { IMarketplaceRepository } from '../../domain/repositories/interface
 import { NotFoundError } from '../../domain/shared/DomainError';
 import type { ProductAIDraftService } from './ProductAIDraftService';
 import type { ProductRecheckService, RecheckProductInput } from './ProductRecheckService';
+import { withAiUsageScope } from '../ai/aiUsageScope';
 
 export const PRODUCT_ASSISTANCE_GRAPH_VERSION = 'product-assistance@1';
 
@@ -99,34 +100,42 @@ export class ProductAssistanceGraph {
         if (listing && !marketplace) {
           throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
         }
-        const seo = listingSeoOutputSchema.parse(await this.ai.analyzeListingSeo({
-          product: {
-            id: product.id, name: product.name, description: product.description,
-            category: product.category, condition: product.condition,
-            tags: [...product.tags], imageCount: product.imageCount,
+        // One improvement is one analysis: the SEO and price calls are counted together.
+        const { value: { seo, price }, usage } = await withAiUsageScope(
+          { workspaceId, feature: 'improve', productId },
+          async () => {
+            const seo = listingSeoOutputSchema.parse(await this.ai.analyzeListingSeo({
+              product: {
+                id: product.id, name: product.name, description: product.description,
+                category: product.category, condition: product.condition,
+                tags: [...product.tags], imageCount: product.imageCount,
+              },
+              listing: listing ? {
+                id: listing.id, title: product.name, description: product.description,
+                marketplace: marketplace!.key,
+              } : null,
+            }, 'balanced'));
+            // The OLX sandbox simulates views on every sync. They are no demand signal, so a
+            // sandbox listing gets none and the price reasoning cannot cite them. A listing published
+            // in the sandbox keeps those views after a switch to real mode; only the sandbox
+            // taxonomy marks its category, so the marker still names it.
+            const simulatedViews =
+              listing?.marketplaceCategory?.sandbox === true ||
+              (this.options.sandboxMode === true && marketplace?.key === 'olx');
+            const price = listing ? priceSuggestionSchema.parse(await this.ai.suggestPrice({
+              listing, recentViews: simulatedViews ? 0 : listing.views ?? 0, conversionRate: 0,
+              costPrice: product.costPrice?.amount,
+            })) : undefined;
+            return { seo, price };
           },
-          listing: listing ? {
-            id: listing.id, title: product.name, description: product.description,
-            marketplace: marketplace!.key,
-          } : null,
-        }, 'balanced'));
-        // The OLX sandbox simulates views on every sync. They are no demand signal, so a
-        // sandbox listing gets none and the price reasoning cannot cite them. A listing published
-        // in the sandbox keeps those views after a switch to real mode; only the sandbox
-        // taxonomy marks its category, so the marker still names it.
-        const simulatedViews =
-          listing?.marketplaceCategory?.sandbox === true ||
-          (this.options.sandboxMode === true && marketplace?.key === 'olx');
-        const price = listing ? priceSuggestionSchema.parse(await this.ai.suggestPrice({
-          listing, recentViews: simulatedViews ? 0 : listing.views ?? 0, conversionRate: 0,
-          costPrice: product.costPrice?.amount,
-        })) : undefined;
+        );
         return { result: {
           graphVersion: PRODUCT_ASSISTANCE_GRAPH_VERSION,
           productId, productUpdatedAt: product.updatedAt.toISOString(),
           ...(listing ? { listingUpdatedAt: listing.updatedAt.toISOString() } : {}),
           reviewOnly: true as const, copy: seo.recommendations,
           ...(price ? { price } : {}),
+          aiUsage: usage,
         } };
       }))
       .addEdge(START, 'route')

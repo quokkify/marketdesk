@@ -23,19 +23,22 @@ import type {
 import type { HermesProviderMode, HermesStatusView } from '../../../shared/types';
 import { ServiceUnavailableError } from '../../domain/shared/DomainError';
 import type { HermesHealthProbe } from './HermesHealthProbe';
+import type { AiUsageSink } from '../../application/ai/AiCallRecord';
+import { inAiUsageScope, recordAiCall, withAiOperation } from '../../application/ai/aiUsageScope';
 
 export interface AIProviderSelectorDeps {
   hermes: IAIProvider;
   offline: IAIProvider;
   mode: HermesProviderMode;
   probe: Pick<HermesHealthProbe, 'isConfigured' | 'reachability'>;
+  usageSink?: AiUsageSink;
 }
 
 export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
   constructor(private readonly deps: AIProviderSelectorDeps) {}
 
   async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
-    return (await this.resolve()).suggestPrice(context);
+    return this.call('suggestPrice', (provider) => provider.suggestPrice(context));
   }
 
   async generateTitle(
@@ -43,18 +46,19 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
     marketplace: Marketplace | null,
     creativityPreset?: CreativityPreset
   ): Promise<string> {
-    return (await this.resolve()).generateTitle(product, marketplace, creativityPreset);
+    return this.call('generateTitle', (provider) =>
+      provider.generateTitle(product, marketplace, creativityPreset));
   }
 
   async analyzeListing(product: Product): Promise<ListingAnalysis> {
-    return (await this.resolve()).analyzeListing(product);
+    return this.call('analyzeListing', (provider) => provider.analyzeListing(product));
   }
 
   async analyzeListingSeo(
     input: ListingSeoInput,
     preset: CreativityPreset
   ): Promise<ListingSeoOutput> {
-    return (await this.resolve()).analyzeListingSeo(input, preset);
+    return this.call('analyzeListingSeo', (provider) => provider.analyzeListingSeo(input, preset));
   }
 
   // The routing decision behind every AI call, status() and the decision engine's
@@ -84,6 +88,29 @@ export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
       // When the probe asked Hermes; without a probe check, when this status was made.
       checkedAt: (check?.checkedAt ?? new Date()).toISOString(),
     };
+  }
+
+  // Hermes calls are recorded by the completion client. An offline answer inside a usage scope
+  // gets one record here, so the analysis reports that it ran on the heuristics.
+  private call<T>(operation: string, run: (provider: IAIProvider) => Promise<T>): Promise<T> {
+    return withAiOperation(operation, async () => {
+      const provider = await this.resolve();
+      if (provider !== this.deps.offline || !inAiUsageScope()) return run(provider);
+      const startedAt = Date.now();
+      const value = await run(provider);
+      recordAiCall(this.deps.usageSink, {
+        provider: 'offline',
+        model: null,
+        promptTokens: null,
+        completionTokens: null,
+        totalTokens: null,
+        latencyMs: Date.now() - startedAt,
+        outcome: 'ok',
+        httpStatus: null,
+        costStatus: 'not_applicable',
+      });
+      return value;
+    });
   }
 
   private async resolve(): Promise<IAIProvider> {

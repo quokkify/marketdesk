@@ -22,6 +22,7 @@ import {
   type ListingSeoInput,
   type ListingSeoOutput,
 } from '../../domain/agents/MarketDeskAgentCatalog';
+import { withAiOperation } from '../../application/ai/aiUsageScope';
 
 export const DEFAULT_HERMES_MODEL = 'hermes-agent';
 export const DEFAULT_HERMES_API_URL = 'http://127.0.0.1:8642/v1';
@@ -32,6 +33,8 @@ export interface HermesAIConfig {
   model: string;
   maxTokens: number;
   timeoutMs: number;
+  // HERMES_BILLING_MODE: `subscription_included` marks calls as included in the plan.
+  billingMode?: string;
 }
 
 export function loadHermesConfig(): HermesAIConfig {
@@ -41,6 +44,7 @@ export function loadHermesConfig(): HermesAIConfig {
     model: process.env.HERMES_MODEL ?? DEFAULT_HERMES_MODEL,
     maxTokens: Number.parseInt(process.env.HERMES_MAX_TOKENS ?? '2048', 10),
     timeoutMs: Number.parseInt(process.env.HERMES_REQUEST_TIMEOUT_MS ?? '30000', 10),
+    billingMode: process.env.HERMES_BILLING_MODE ?? '',
   };
 }
 
@@ -86,7 +90,7 @@ export class HermesAI implements IAIProvider {
       '"confidence" (one of "high", "medium", "low").',
     ].join('\n');
 
-    const raw = await this.client.complete({
+    const raw = await this.complete('suggestPrice', {
       system: 'You output concise, data-driven pricing recommendations as strict JSON.',
       prompt,
       maxTokens: this.maxTokens,
@@ -131,7 +135,7 @@ export class HermesAI implements IAIProvider {
       .filter(Boolean)
       .join('\n');
 
-    const raw = await this.client.complete({
+    const raw = await this.complete('generateTitle', {
       system:
         (creativityPreset
           ? getMarketDeskAgent('listing-seo').instruction(creativityPreset)
@@ -159,7 +163,7 @@ export class HermesAI implements IAIProvider {
       '"suggestions" (array of short actionable strings).',
     ].join('\n');
 
-    const raw = await this.client.complete({
+    const raw = await this.complete('analyzeListing', {
       system: `You output listing-quality assessments as strict JSON.\n${SELLER_DATA_RULE}`,
       prompt,
       maxTokens: this.maxTokens,
@@ -189,7 +193,7 @@ export class HermesAI implements IAIProvider {
   ): Promise<ListingSeoOutput> {
     const profile = getMarketDeskAgent('listing-seo');
     const cleanInput = profile.inputSchema.parse(input);
-    const raw = await this.client.complete({
+    const raw = await this.complete('analyzeListingSeo', {
       system: `${profile.instruction(preset)}\n${SELLER_DATA_RULE}`,
       prompt: sellerDataBlock(cleanInput),
       maxTokens: this.maxTokens,
@@ -224,6 +228,11 @@ export class HermesAI implements IAIProvider {
   }
 
   // --- helpers ---
+
+  // Names the call after the provider method, so usage records tell the analyses apart.
+  private complete(operation: string, request: AICompletionRequest): Promise<string> {
+    return withAiOperation(operation, () => this.client.complete(request));
+  }
 
   private parseJson(raw: string): Record<string, unknown> | null {
     const text = raw.trim();

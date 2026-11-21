@@ -303,6 +303,18 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
+export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';
+
+/** AI calls of one analysis. Token sums are null when any Hermes call did not report them. */
+export interface AiUsageSummary {
+  provider: 'hermes' | 'offline' | 'none';
+  calls: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  costStatus: AiCostStatus;
+}
+
 export interface ProductImprovementSuggestions {
   graphVersion: 'product-assistance@1';
   productId: string;
@@ -311,6 +323,7 @@ export interface ProductImprovementSuggestions {
   reviewOnly: true;
   copy: Array<{ field: 'title' | 'description'; proposedValue: string; rationale: string }>;
   price?: { suggestedPrice: number; reasoning: string; confidence: 'high' | 'medium' | 'low' };
+  aiUsage?: AiUsageSummary;
 }
 
 export type ProductAIDraftMode = 'photos' | 'title';
@@ -348,6 +361,7 @@ export interface ProductAIDraft {
   uncertainFields: Array<keyof ProductAIDraftFields>;
   missingInfoQuestions: string[];
   notes: string[];
+  aiUsage?: AiUsageSummary;
 }
 
 export interface Marketplace {

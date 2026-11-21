@@ -84,6 +84,7 @@ import { HermesCompletionClient } from '../../infrastructure/external/HermesComp
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
+import { loggingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 
@@ -252,11 +253,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
   // GET /api/hermes/status always reports this env-configured selector, even when a
   // test swaps the provider that services call through overrides.aiProvider.
+  // Every AI call is logged; the stored usage table joins this sink later.
+  const aiUsageSink = overrides.logger ? loggingAiUsageSink(overrides.logger) : undefined;
   const aiProviderSelector = new AIProviderSelector({
-    hermes: new HermesAI(new HermesCompletionClient()),
+    hermes: new HermesAI(new HermesCompletionClient(loadHermesConfig(), aiUsageSink)),
     offline: new OfflineHeuristicAIProvider(),
     mode: env.hermes.providerMode,
     probe: new HermesHealthProbe(loadHermesConfig()),
+    usageSink: aiUsageSink,
   });
   const aiProvider: IAIProvider = overrides.aiProvider ?? aiProviderSelector;
   const buildOlxHeaders = (accessToken?: string): Record<string, string> => ({

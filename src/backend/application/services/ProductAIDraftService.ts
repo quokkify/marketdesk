@@ -1,4 +1,5 @@
 import type {
+  AiUsageSummary,
   AIProviderSource,
   ProductAIDraft,
   ProductAIDraftRequest,
@@ -15,6 +16,7 @@ import { ValidationError } from '../../domain/shared/DomainError';
 import { redactSensitiveText } from '../../domain/shared/redactSensitiveText';
 import { Err, Ok, type Result } from '../../domain/shared/Result';
 import { Money } from '../../domain/valueObjects/Money';
+import { withAiUsageScope } from '../ai/aiUsageScope';
 
 interface DraftEnrichment {
   generatedTitle: string | null;
@@ -23,6 +25,8 @@ interface DraftEnrichment {
   source: AIProviderSource;
   // False when no provider is wired or it failed: only deterministic fields remain.
   usedProvider: boolean;
+  // The AI calls of the enrichment; absent when no provider is wired.
+  aiUsage?: AiUsageSummary;
 }
 
 const NO_ENRICHMENT: DraftEnrichment = {
@@ -167,6 +171,7 @@ export class ProductAIDraftService {
         ...ai.suggestions,
         'This is a review draft only; publishing still requires the normal confirmation flow.',
       ],
+      ...(ai.aiUsage ? { aiUsage: ai.aiUsage } : {}),
     });
   }
 
@@ -212,6 +217,7 @@ export class ProductAIDraftService {
         ...ai.suggestions,
         'The draft is not saved or published until the user applies it and creates the product.',
       ],
+      ...(ai.aiUsage ? { aiUsage: ai.aiUsage } : {}),
     });
   }
 
@@ -245,6 +251,19 @@ export class ProductAIDraftService {
     const provider = this.aiProvider;
     if (!provider) return NO_ENRICHMENT;
 
+    // The scope wraps the failure path too, so a failed draft still reports its calls.
+    const { value, usage } = await withAiUsageScope(
+      { workspaceId, feature: 'draft' },
+      () => this.runEnrichment(provider, workspaceId, fields),
+    );
+    return { ...value, aiUsage: usage };
+  }
+
+  private async runEnrichment(
+    provider: IAIProvider,
+    workspaceId: string,
+    fields: NonNullable<ProductAIDraft['fields']>,
+  ): Promise<DraftEnrichment> {
     try {
       const product = this.toSyntheticProduct(workspaceId, fields);
       // Asked before and after the calls, like HermesDecisionEngine: a switch to the

@@ -2,6 +2,7 @@ package dev.quokkify.marketdesk.step;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ListingRequestPojo;
+import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.service.ListingService;
 import dev.quokkify.marketdesk.service.ProductService;
@@ -26,14 +27,20 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   // Takes the account, not its token: Allure stores every step parameter in the published report.
   @Step("Create a product with an OLX listing")
   public String createOlxListing(AccountPojo account) {
+    return createOlxProductListing(account).listingId();
+  }
+
+  @Step("Create a product with an OLX listing and keep both ids")
+  public ProductListingPojo createOlxProductListing(AccountPojo account) {
     String productId = productService.createProduct(account.token(), ProductRequestPojo.sample())
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
         .path(DATA_ID);
-    return productService.createListing(account.token(), productId, ListingRequestPojo.olx())
+    String listingId = productService.createListing(account.token(), productId, ListingRequestPojo.olx())
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
         .path(DATA_ID);
+    return new ProductListingPojo(productId, listingId);
   }
 
   @Step("Reactivate listing {listingId} on OLX")
