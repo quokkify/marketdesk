@@ -1116,6 +1116,31 @@ describe('SyncMarketplaceHandler', () => {
       expect(recommendCategoryMismatch).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['outdated', 'expired'],
+      ['removed_by_user', 'expired'],
+      ['removed_by_moderator', 'expired'],
+      ['moderated', 'error'],
+      ['disabled', 'error'],
+    ])('applies the documented OLX advert status %s as %s', async (remoteStatus, expected) => {
+      const adapter = fakeAdapter({
+        sync: jest.fn(async (): Promise<SyncedListing[]> => [{
+          externalListingId: 'ext-status', status: 'live', remoteStatus,
+        }]),
+      });
+      const { listings, marketplaces } = await seedLiveListing({
+        listing: 'l-status', marketplace: 'm-status', external: 'ext-status',
+      });
+      const handler = new SyncMarketplaceHandler(resolverFor(adapter).resolver, {
+        listingStore: listings,
+        marketplaceStore: marketplaces,
+      });
+
+      await handler.handle({ marketplaceKey: 'olx', marketplaceId: 'm-status', externalListingIds: [] });
+
+      expect((await listings.findById('l-status'))?.status).toBe(expected);
+    });
+
     it('refreshes a re-verified unchanged category without proposing a mismatch', async () => {
       const reverified: MarketplaceCategoryMetadata = {
         ...verifiedCategory,

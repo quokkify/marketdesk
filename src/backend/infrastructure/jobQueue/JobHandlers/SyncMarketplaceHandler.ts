@@ -372,10 +372,16 @@ export class SyncMarketplaceHandler {
     if (synced.missing || remoteStatus === 'missing') return 'expired';
     if (['active', 'activated', 'live', 'published'].includes(remoteStatus)) return 'live';
     if (['new', 'moderation', 'pending', 'limited'].includes(remoteStatus)) return 'observe';
-    if (['expired', 'removed', 'deactivated', 'deleted', 'closed', 'sold', 'completed'].includes(remoteStatus)) {
+    if (
+      [
+        'expired', 'removed', 'deactivated', 'deleted', 'closed', 'sold', 'completed',
+        // Documented OLX Partner API statuses for adverts that are no longer live.
+        'outdated', 'removed_by_user', 'removed_by_moderator',
+      ].includes(remoteStatus)
+    ) {
       return 'expired';
     }
-    if (['rejected', 'blocked', 'error'].includes(remoteStatus)) return 'error';
+    if (['rejected', 'blocked', 'error', 'moderated', 'disabled'].includes(remoteStatus)) return 'error';
     if (synced.remoteStatus === undefined) {
       switch (synced.status) {
         case 'live':
