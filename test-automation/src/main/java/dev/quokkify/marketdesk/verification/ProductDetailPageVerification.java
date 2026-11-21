@@ -83,4 +83,17 @@ public class ProductDetailPageVerification
     page.discountLine().shouldHave(Condition.text("(" + source), getTimeout());
     return this;
   }
+
+  @Step("The page says {message}")
+  public ProductDetailPageVerification showsAlert(String message) {
+    page.alertWithText(message).shouldBe(Condition.visible, getTimeout());
+    return this;
+  }
+
+  @Step("The saved comparable shows an OLX link to {href}")
+  public ProductDetailPageVerification showsOlxLink(String href) {
+    page.comparableOlxLink().shouldHave(Condition.text("OLX"), getTimeout());
+    page.comparableOlxLink().shouldHave(Condition.attribute("href", href), getTimeout());
+    return this;
+  }
 }

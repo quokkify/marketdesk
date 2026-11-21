@@ -56,6 +56,7 @@ describe('AI rate limiter (regression guard)', () => {
     ['post', '/products/ai-draft'],
     ['post', '/products/p-1/recheck'],
     ['post', '/products/p-1/improvements'],
+    ['post', '/products/p-1/price-research/search'],
     ['post', '/hermes/products/p-1/run'],
   ];
 

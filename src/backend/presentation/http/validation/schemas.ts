@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { requireBelowCostConfirmation } from '../../../../shared/validation/pricing';
+import { normalizeOlxAdvertUrl } from '../../../../shared/olxAdvertUrl';
 import {
   PRODUCT_STATUS_LIST,
   AUTONOMY_LEVEL_LIST,
@@ -147,15 +148,27 @@ const isoDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'retailCheckedAt must be an ISO date (YYYY-MM-DD)')
   .refine(isRealIsoDate, 'retailCheckedAt is not a real date');
 
+const priceComparableSchema = z
+  .object({
+    price: researchPriceSchema,
+    note: z.string().max(300),
+    url: z.string().max(500).startsWith('https://').nullish(),
+    source: z.enum(['manual', 'web']).nullish(),
+  })
+  .strict()
+  .superRefine((comparable, ctx) => {
+    if (comparable.source === 'web' && (!comparable.url || normalizeOlxAdvertUrl(comparable.url) === null)) {
+      ctx.addIssue({ code: 'custom', path: ['url'], message: 'A web comparable needs an OLX advert link' });
+    }
+  });
+
 export const priceResearchSchema = z
   .object({
     retailPrice: researchPriceSchema.nullable(),
     retailCurrency: z.string().regex(/^[A-Z]{3}$/, 'retailCurrency must be an ISO-4217 code').nullable(),
     retailSource: z.string().max(200).nullable(),
     retailCheckedAt: isoDateSchema.nullable(),
-    comparables: z
-      .array(z.object({ price: researchPriceSchema, note: z.string().max(300) }).strict())
-      .max(MAX_COMPARABLES),
+    comparables: z.array(priceComparableSchema).max(MAX_COMPARABLES),
   })
   .strict()
   .superRefine((body, ctx) => {

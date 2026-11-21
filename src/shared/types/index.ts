@@ -115,9 +115,21 @@ export interface PriceEstimate {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export type PriceComparableSource = 'manual' | 'web';
+
 export interface PriceComparable {
   price: number;
   note: string;
+  url?: string | null;
+  source?: PriceComparableSource | null;
+}
+
+// An OLX advert found by the market search; nothing is stored until the seller picks it.
+export interface ComparableCandidate {
+  price: number;
+  currency: string;
+  title: string;
+  url: string;
 }
 
 export interface PriceResearch {
@@ -546,6 +558,7 @@ export interface Listing {
   marketplaceListingId?: string;
   externalUrl?: string;
   price: number;
+  currency?: string;
   status: ListingStatus;
   remoteStatus?: string;
   marketplaceCategory?: MarketplaceCategoryMetadata;

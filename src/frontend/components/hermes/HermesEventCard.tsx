@@ -22,11 +22,12 @@ import type {
   ProposedChange,
 } from '@shared/types';
 import { MARKETPLACE_NAMES } from '@shared/constants';
+import { useGetPriceResearchQuery } from '../../state/api/productsApi.js';
 import { useAppSelector } from '../../state/hooks.js';
 import { useExecuteCategoryRecreationOperation } from '../../services/hooks/index.js';
 import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
-import { estimateLines } from '../product-detail/priceResearchModel.js';
+import { estimateLines, usedRangeSourceNote } from '../product-detail/priceResearchModel.js';
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/formatters.js';
 import {
   hermesTypeLabel,
@@ -287,10 +288,12 @@ export const CategoryRecreationReview: React.FC<CategoryRecreationReviewProps> =
 export const ProposedChangeDiff: React.FC<{
   change: ProposedChange;
   currency: string;
+  usedRangeNote?: string | null;
   onCategoryAction?: CategoryRecreationReviewProps['onAction'];
 }> = ({
   change,
   currency,
+  usedRangeNote = null,
   onCategoryAction,
 }) => {
   if (!change) return null;
@@ -325,7 +328,7 @@ export const ProposedChangeDiff: React.FC<{
           </Stack>
           {change.estimate && (
             <Stack spacing={0.25} sx={{ mt: 1 }} data-testid="price-estimate-lines">
-              {estimateLines(change.estimate, currency).map((line) => (
+              {estimateLines(change.estimate, currency, usedRangeNote).map((line) => (
                 <Typography key={line} variant="caption" color="text.secondary">{line}</Typography>
               ))}
             </Stack>
@@ -392,6 +395,15 @@ export const ProposedChangeDiff: React.FC<{
     case 'category_recreation':
       return <CategoryRecreationReview change={change} onAction={onCategoryAction} />;
   }
+};
+
+// Only a price estimate needs the saved research, so only its card asks for it.
+const PriceEstimateDiff: React.FC<React.ComponentProps<typeof ProposedChangeDiff> & { productId: string }> = ({
+  productId,
+  ...props
+}) => {
+  const research = useGetPriceResearchQuery(productId).currentData;
+  return <ProposedChangeDiff {...props} usedRangeNote={usedRangeSourceNote(research ?? null)} />;
 };
 
 export const HermesEventCard: React.FC<HermesEventCardProps> = ({
@@ -553,13 +565,17 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
             </Stack>
           )}
 
-          <ProposedChangeDiff
-            change={event.proposedChange}
-            currency={currency}
-            onCategoryAction={showActions
-              ? (_intentId, action, operation) => setPendingOperation({ action, operation })
-              : undefined}
-          />
+          {event.productId && event.proposedChange?.kind === 'price' && event.proposedChange.estimate ? (
+            <PriceEstimateDiff productId={event.productId} change={event.proposedChange} currency={currency} />
+          ) : (
+            <ProposedChangeDiff
+              change={event.proposedChange}
+              currency={currency}
+              onCategoryAction={showActions
+                ? (_intentId, action, operation) => setPendingOperation({ action, operation })
+                : undefined}
+            />
+          )}
           {!event.proposedChange && event.status === 'pending_review' && (
             <Alert severity="info" sx={{ mt: 1.5 }}>
               This recommendation has no directly applicable product change. Dismiss it after review;

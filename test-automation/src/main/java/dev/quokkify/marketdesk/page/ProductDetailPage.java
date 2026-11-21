@@ -31,6 +31,9 @@ public class ProductDetailPage implements Page {
   private static final String SAVE_PRICE_RESEARCH = "[data-testid=\"price-research-save\"]";
   private static final String PRICE_RESEARCH_SAVED = "[data-testid=\"price-research-saved\"]";
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
+  private static final String FIND_COMPARABLES = "[data-testid=\"comparable-search-button\"]";
+  private static final String ALERT = "[role=\"alert\"]";
+  private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
@@ -107,5 +110,17 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement priceResearchSavedNote() {
     return Selenide.$(PRICE_RESEARCH_SAVED);
+  }
+
+  public SelenideElement findComparablesButton() {
+    return Selenide.$(FIND_COMPARABLES);
+  }
+
+  public SelenideElement alertWithText(String text) {
+    return Selenide.$$(ALERT).findBy(Condition.text(text));
+  }
+
+  public SelenideElement comparableOlxLink() {
+    return Selenide.$(COMPARABLE_OLX_LINK);
   }
 }

@@ -8,6 +8,7 @@ import io.restassured.response.ValidatableResponse;
 public class PriceResearchService extends MarketDeskApiService {
 
   private static final String PRICE_RESEARCH = "/api/products/%s/price-research";
+  private static final String COMPARABLE_SEARCH = "/api/products/%s/price-research/search";
   private static final String HERMES_RUN = "/api/hermes/products/%s/run";
   private static final String EMPTY_BODY = "{}";
 
@@ -31,5 +32,13 @@ public class PriceResearchService extends MarketDeskApiService {
   // The analyze button of the product page: the body only names the trigger.
   public ValidatableResponse runProductAnalysis(String token, String productId) {
     return post(authorized(token), HERMES_RUN.formatted(productId), EMPTY_BODY);
+  }
+
+  public ValidatableResponse searchComparables(String token, String productId) {
+    return post(authorized(token), COMPARABLE_SEARCH.formatted(productId), EMPTY_BODY);
+  }
+
+  public ValidatableResponse searchComparables(String productId) {
+    return post(anonymous(), COMPARABLE_SEARCH.formatted(productId), EMPTY_BODY);
   }
 }

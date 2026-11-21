@@ -14,6 +14,8 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   private static final String UNAUTHORIZED = "UNAUTHORIZED";
   private static final String NOT_FOUND = "NOT_FOUND";
   private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
+  private static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
+  private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
 
   @Override
   protected PriceResearchVerification self() {
@@ -35,6 +37,20 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("Price research is saved")
+  public PriceResearchVerification isSaved(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    return self();
+  }
+
+  @Step("Price research keeps the link and source of the comparable")
+  public PriceResearchVerification keepsComparableLink(ValidatableResponse response, PriceResearchPojo.Comparable expected) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.comparables[0].url", Matchers.equalTo(expected.url()));
+    response.body("data.comparables[0].source", Matchers.equalTo(expected.source()));
+    return self();
+  }
+
   @Step("Price research has no retail anchor")
   public PriceResearchVerification hasNoRetailAnchor(ValidatableResponse response) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
@@ -53,6 +69,14 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     response.body("data", Matchers.not(Matchers.empty()));
     response.body("data.proposedChange.kind", Matchers.not(Matchers.hasItem("price")));
     response.body("data.type", Matchers.not(Matchers.hasItem("price_estimate_unavailable")));
+    return self();
+  }
+
+  // The API stack has no research profile, so the market search cannot run.
+  @Step("Market search answers that it is not configured")
+  public PriceResearchVerification isSearchNotConfigured(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_SERVICE_UNAVAILABLE, SERVICE_UNAVAILABLE);
+    response.body("error.message", Matchers.equalTo(SEARCH_NOT_CONFIGURED));
     return self();
   }
 

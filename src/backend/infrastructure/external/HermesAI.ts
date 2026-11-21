@@ -47,6 +47,26 @@ export interface HermesAIConfig {
   billingMode?: string;
 }
 
+export const DEFAULT_HERMES_RESEARCH_TIMEOUT_MS = 120_000;
+
+// The web-enabled research profile, used only by the market search. null when its URL or key is
+// empty or the key is a your_-prefixed placeholder; it shares the model and billing mode.
+export function loadHermesResearchConfig(): HermesAIConfig | null {
+  const apiUrl = (process.env.HERMES_RESEARCH_API_URL ?? '').trim();
+  const apiKey = (process.env.HERMES_RESEARCH_API_KEY ?? '').trim();
+  if (apiUrl === '' || apiKey === '' || apiKey.startsWith('your_')) return null;
+  const timeoutMs = Number.parseInt(process.env.HERMES_RESEARCH_TIMEOUT_MS ?? '', 10);
+  const main = loadHermesConfig();
+  return {
+    apiUrl,
+    apiKey,
+    model: main.model,
+    maxTokens: main.maxTokens,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_HERMES_RESEARCH_TIMEOUT_MS,
+    billingMode: main.billingMode,
+  };
+}
+
 export function loadHermesConfig(): HermesAIConfig {
   return {
     apiUrl: process.env.HERMES_API_URL ?? DEFAULT_HERMES_API_URL,

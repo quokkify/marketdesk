@@ -1,11 +1,13 @@
 // Price research of one product: the form the owner fills in, the body the API takes, and the
 // lines that show an estimate. The limits mirror the server's rules.
-import type { PriceEstimate, PriceResearch } from '@shared/types';
+import type { ComparableCandidate, PriceComparable, PriceComparableSource, PriceEstimate, PriceResearch } from '@shared/types';
+import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 
 export const MAX_COMPARABLES = 10;
 export const MAX_SOURCE_LENGTH = 200;
 export const MAX_NOTE_LENGTH = 300;
+export const MAX_URL_LENGTH = 500;
 export const MAX_PRICE = 9_999_999_999.99;
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -17,7 +19,7 @@ export interface PriceResearchForm {
   retailCurrency: string;
   retailSource: string;
   retailCheckedAt: string;
-  comparables: { price: string; note: string }[];
+  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource }[];
 }
 
 export interface PriceResearchBody {
@@ -25,7 +27,7 @@ export interface PriceResearchBody {
   retailCurrency: string | null;
   retailSource: string | null;
   retailCheckedAt: string | null;
-  comparables: { price: number; note: string }[];
+  comparables: PriceComparable[];
 }
 
 export type PriceResearchBodyResult =
@@ -41,7 +43,12 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
     retailCurrency: r.retailCurrency ?? defaultCurrency,
     retailSource: r.retailSource ?? '',
     retailCheckedAt: r.retailCheckedAt ?? '',
-    comparables: r.comparables.map((c) => ({ price: String(c.price), note: c.note })),
+    comparables: r.comparables.map((c) => ({
+      price: String(c.price),
+      note: c.note,
+      ...(c.url ? { url: c.url } : {}),
+      ...(c.source ? { source: c.source } : {}),
+    })),
   };
 }
 
@@ -83,13 +90,21 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => row.price.trim() !== '' || row.note.trim() !== '');
   if (rows.length > MAX_COMPARABLES) errors.comparables = `Keep at most ${MAX_COMPARABLES} comparables`;
-  const comparables: { price: number; note: string }[] = [];
+  const comparables: PriceComparable[] = [];
   for (const { row, index } of rows) {
     const price = parsePrice(row.price);
     const note = row.note.trim();
     if (price === null) errors[`comparables.${index}.price`] = PRICE_ERROR;
     if (note.length > MAX_NOTE_LENGTH) errors[`comparables.${index}.note`] = `Keep the note within ${MAX_NOTE_LENGTH} characters`;
-    if (price !== null) comparables.push({ price, note });
+    const url = row.url?.trim() ?? '';
+    if (url && (url.length > MAX_URL_LENGTH || !url.startsWith('https://'))) {
+      errors[`comparables.${index}.url`] = `Enter an https link of at most ${MAX_URL_LENGTH} characters`;
+    } else if (row.source === 'web' && (!url || normalizeOlxAdvertUrl(url) === null)) {
+      errors[`comparables.${index}.url`] = 'Enter an OLX advert link';
+    }
+    if (price !== null) {
+      comparables.push({ price, note, ...(url ? { url } : {}), ...(row.source ? { source: row.source } : {}) });
+    }
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
@@ -124,7 +139,44 @@ export function discountLine(price: number, research: PriceResearch | null, curr
   return `${percentText(percent)} vs new · ${formatMoney(research.retailPrice, currency)}${origin ? ` (${origin})` : ''}`;
 }
 
-export function estimateLines(e: PriceEstimate, currency: string): string[] {
+const isBlankRow = (row: PriceResearchForm['comparables'][number]) => row.price.trim() === '' && row.note.trim() === '';
+
+export function mergeFoundComparables(form: PriceResearchForm, picked: ComparableCandidate[]): PriceResearchForm {
+  const known = new Set(form.comparables.map((row) => (row.url ? normalizeOlxAdvertUrl(row.url) : null)));
+  const added: PriceResearchForm['comparables'] = [];
+  for (const c of picked) {
+    const key = normalizeOlxAdvertUrl(c.url);
+    if (key === null || known.has(key)) continue;
+    known.add(key);
+    added.push({ price: String(c.price), note: c.title, url: c.url, source: 'web' });
+  }
+  return { ...form, comparables: [...form.comparables, ...added] };
+}
+
+// A price the owner types over a web row is no longer the advert's price, so the row becomes manual.
+export function editComparablePrice(
+  rows: PriceResearchForm['comparables'],
+  index: number,
+  price: string,
+): PriceResearchForm['comparables'] {
+  return rows.map((row, i) => {
+    if (i !== index) return row;
+    if (row.source !== 'web' || row.price === price) return { ...row, price };
+    const { source: _source, url: _url, ...manual } = row;
+    return { ...manual, price };
+  });
+}
+
+export function selectionFits(form: PriceResearchForm, pickedCount: number): boolean {
+  return form.comparables.filter((row) => !isBlankRow(row)).length + pickedCount <= MAX_COMPARABLES;
+}
+
+export function usedRangeSourceNote(research: PriceResearch | null): string | null {
+  const fromWeb = research?.comparables.filter((c) => c.source === 'web').length ?? 0;
+  return fromWeb > 0 ? `${fromWeb} from OLX` : null;
+}
+
+export function estimateLines(e: PriceEstimate, currency: string, sourceNote: string | null = null): string[] {
   const lines = [`Start ${formatMoney(e.startPrice, currency)}`, `Floor ${formatMoney(e.floorPrice, currency)}`];
   if (e.retailAnchor) {
     lines.push(`New price ${formatMoney(e.retailAnchor.amount, currency)} · ${e.retailAnchor.basis}`);
@@ -132,7 +184,8 @@ export function estimateLines(e: PriceEstimate, currency: string): string[] {
   if (e.usedRange) {
     const suffix = ` ${currencySymbol(currency)}`;
     const low = formatMoney(e.usedRange.low, currency).slice(0, -suffix.length);
-    lines.push(`Used range ${low}–${formatMoney(e.usedRange.high, currency)} · ${e.usedRange.basis}`);
+    const note = sourceNote && e.usedRange.basis === 'observed' ? ` (${sourceNote})` : '';
+    lines.push(`Used range ${low}–${formatMoney(e.usedRange.high, currency)} · ${e.usedRange.basis}${note}`);
   }
   if (e.retailAnchor) {
     const percent = discountVsNew(e.startPrice, e.retailAnchor.amount);

@@ -98,6 +98,7 @@ export function presentListing(listing: Listing, identity: ListingIdentity = {})
     marketplaceListingId: listing.marketplaceListingId ?? undefined,
     externalUrl: listing.isLive() ? safeExternalUrl(listing.externalUrl) : undefined,
     price: listing.price.amount,
+    currency: listing.price.currency,
     status: listing.status,
     remoteStatus: listing.remoteStatus ?? undefined,
     marketplaceCategory: listing.marketplaceCategory ?? undefined,

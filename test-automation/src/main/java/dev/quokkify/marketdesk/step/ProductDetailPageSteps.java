@@ -68,6 +68,12 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Find comparables on OLX")
+  public ProductDetailPageSteps findComparablesOnOlx() {
+    page.findComparablesButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Reload the product page")
   public ProductDetailPageSteps reloadPage() {
     Selenide.refresh();
