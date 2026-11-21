@@ -385,6 +385,9 @@ export interface RevivalCopyProposal {
   rationale: string;
 }
 
+/** A Hermes step of a revival proposal: the title/description copy or the price. */
+export type RevivalAiStep = 'copy' | 'price';
+
 /** POST /api/listings/:id/revival-proposal. Review-only: nothing is saved or sent to OLX. */
 export interface RevivalProposal {
   listingId: string;
@@ -396,6 +399,8 @@ export interface RevivalProposal {
   description?: RevivalCopyProposal;
   price?: { current: number; proposed: number; currency: string; rationale: string };
   priceGuard: RevivalPriceGuard;
+  /** Hermes steps that failed (unreachable, refused, invalid output); offline results are not failures. */
+  aiIssues: RevivalAiStep[];
   aiUsage: AiUsageSummary;
 }
 

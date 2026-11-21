@@ -1,7 +1,8 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { z } from 'zod';
 import type {
-  ProductAIDraft, ProductAIDraftRequest, ProductRecheckResult, ProductImprovementSuggestions, RevivalProposal,
+  ProductAIDraft, ProductAIDraftRequest, ProductRecheckResult, ProductImprovementSuggestions, RevivalAiStep,
+  RevivalProposal,
 } from '../../../shared/types';
 import { OFFLINE_AI_NOTICE, type IAIProvider } from '../../domain/ports/IAIProvider';
 import { listingSeoOutputSchema, type ListingSeoOutput } from '../../domain/agents/MarketDeskAgentCatalog';
@@ -13,7 +14,7 @@ import type { IListingRepository } from '../../domain/repositories/interfaces/IL
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { missingFacts, priceGuard } from '../../domain/services/revivalRules';
-import type { ProductAIDraftService } from './ProductAIDraftService';
+import type { ProductAIDraftService, ProductDraftLogger } from './ProductAIDraftService';
 import type { ProductRecheckService, RecheckProductInput } from './ProductRecheckService';
 import { withAiUsageScope } from '../ai/aiUsageScope';
 
@@ -28,6 +29,16 @@ const priceSuggestionSchema = z.object({
 type PriceSuggestionOutput = z.infer<typeof priceSuggestionSchema>;
 
 const REVIVAL_REFUSAL = 'Only an expired listing with an OLX advert can be revived';
+
+// Names the failure without Hermes text: a schema failure gives only the paths it failed at.
+function describeFailure(error: unknown): { name: string; message: string } {
+  if (error instanceof z.ZodError) {
+    return { name: 'ZodError', message: `Invalid output at ${error.issues.map((i) => i.path.join('.') || '(root)').join(', ')}` };
+  }
+  return error instanceof Error
+    ? { name: error.name, message: error.message }
+    : { name: 'Unknown', message: 'Non-error value thrown' };
+}
 
 type AssistanceInput =
   | { kind: 'draft'; workspaceId: string; request: ProductAIDraftRequest }
@@ -63,7 +74,8 @@ export class ProductAssistanceGraph {
     private readonly ai: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>,
     observe?: (transition: AssistanceTransition) => void,
     // sandboxMode: true while the OLX adapter is not real.
-    private readonly options: { sandboxMode?: boolean } = {},
+    // logger: the container's, for the Hermes steps a revival proposal survives without.
+    private readonly options: { sandboxMode?: boolean; logger?: ProductDraftLogger } = {},
   ) {
     // The observer receives node lifecycle only, never graph state or error text.
     const traced = (
@@ -144,13 +156,26 @@ export class ProductAssistanceGraph {
         const product = await this.products.findByIdForWorkspace(listing.productId, workspaceId);
         if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);
         // Each Hermes call may fail on its own (unreachable, refused, invalid output); the proposal
-        // then lacks that part but still names the missing facts and the price guard. A call that
-        // reached Hermes is recorded in the AI usage either way; a refused one leaves aiUsage at none.
+        // then lacks that part, names it in aiIssues so it does not read as "Hermes proposes no
+        // change", and still gives the missing facts and the price guard.
+        const aiIssues: RevivalAiStep[] = [];
+        const attempt = async <T>(step: RevivalAiStep, run: () => Promise<T>): Promise<T | null> => {
+          try {
+            return await run();
+          } catch (error) {
+            aiIssues.push(step);
+            this.options.logger?.warn(
+              { step, listingId: listing.id, error: describeFailure(error) },
+              'Revival proposal step failed',
+            );
+            return null;
+          }
+        };
         const { value: { seo, price }, usage } = await withAiUsageScope(
           { workspaceId, feature: 'revive', productId: product.id },
           async () => ({
-            seo: await this.listingSeo(product, { listing, marketplace }).catch(() => null),
-            price: await this.priceSuggestion(product, listing, marketplace).catch(() => null),
+            seo: await attempt('copy', () => this.listingSeo(product, { listing, marketplace })),
+            price: await attempt('price', () => this.priceSuggestion(product, listing, marketplace)),
           }),
         );
         // Offline heuristics are no proposal to bring an advert back with: only Hermes output is offered.
@@ -178,6 +203,7 @@ export class ProductAssistanceGraph {
             currency: listing.price.currency, rationale: hermesPrice.reasoning,
           } } : {}),
           priceGuard: priceGuard(hermesPrice?.suggestedPrice ?? null, costPrice),
+          aiIssues,
           aiUsage: usage,
         };
         return { result };

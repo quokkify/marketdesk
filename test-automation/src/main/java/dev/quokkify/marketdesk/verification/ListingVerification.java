@@ -67,6 +67,7 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     response.body("data.priceGuard.status", Matchers.oneOf("unchecked", "no_proposal"));
     response.body("data.priceGuard.costPrice", Matchers.nullValue());
     response.body("data.aiUsage.provider", Matchers.equalTo("offline"));
+    response.body("data.aiIssues", Matchers.empty());
     response.body("data.productUpdatedAt", Matchers.notNullValue());
     response.body("data.listingUpdatedAt", Matchers.notNullValue());
     return self();
