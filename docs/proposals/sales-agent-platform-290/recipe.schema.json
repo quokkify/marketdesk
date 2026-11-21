@@ -1,0 +1,499 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recipeId",
+    "version",
+    "status",
+    "syntheticExample",
+    "digestNotice",
+    "manifestDigest",
+    "applicationCompatibility",
+    "model",
+    "components",
+    "nodeToolAllowlist",
+    "gates",
+    "createdBy",
+    "approval",
+    "signatures"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "sales-recipe@0.1"
+    },
+    "recipeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "status": {
+      "enum": [
+        "proposed",
+        "candidate",
+        "approved",
+        "revoked"
+      ]
+    },
+    "syntheticExample": {
+      "type": "boolean"
+    },
+    "digestNotice": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "applicationCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineSha",
+        "runtime",
+        "stateSchemaVersion",
+        "lockfileDigest"
+      ],
+      "properties": {
+        "baselineSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "runtime": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stateSchemaVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lockfileDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "modelId",
+        "parameters"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "temperature",
+            "maxOutputTokens"
+          ],
+          "properties": {
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "maxOutputTokens": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph",
+        "prompts",
+        "policies",
+        "tools",
+        "guardrails",
+        "dataset",
+        "changelog"
+      ],
+      "properties": {
+        "graph": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "prompts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "policies": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "guardrails": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "dataset": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "changelog": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "nodeToolAllowlist": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "node",
+          "tools"
+        ],
+        "properties": {
+          "node": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tools": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criticalSuite",
+        "criticalMinCases",
+        "criticalRequiredPassRate",
+        "maxUnauthorizedEffects",
+        "maxDuplicateEffects",
+        "qualityMinCases",
+        "factualClaimMinRate",
+        "handoffMinRate",
+        "maxTaskSuccessDropPoints",
+        "draftP95LimitMs",
+        "draftCostLimitUsd"
+      ],
+      "properties": {
+        "criticalSuite": {
+          "type": "string",
+          "minLength": 1
+        },
+        "criticalMinCases": {
+          "type": "integer",
+          "minimum": 24
+        },
+        "criticalRequiredPassRate": {
+          "const": 1
+        },
+        "maxUnauthorizedEffects": {
+          "const": 0
+        },
+        "maxDuplicateEffects": {
+          "const": 0
+        },
+        "qualityMinCases": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "factualClaimMinRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "handoffMinRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxTaskSuccessDropPoints": {
+          "type": "number",
+          "minimum": 0
+        },
+        "draftP95LimitMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "draftCostLimitUsd": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "createdBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actorId",
+            "decidedAt",
+            "recordRef",
+            "manifestDigest"
+          ],
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decidedAt": {
+              "type": "string",
+              "minLength": 1
+            },
+            "recordRef": {
+              "type": "string",
+              "minLength": 1
+            },
+            "manifestDigest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signerId",
+          "algorithm",
+          "signature"
+        ],
+        "properties": {
+          "signerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "algorithm": {
+            "type": "string",
+            "minLength": 1
+          },
+          "signature": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Proposed Sales Agent recipe manifest (documentation contract)",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "syntheticExample": {
+            "const": false
+          },
+          "approval": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "actorId",
+              "decidedAt",
+              "recordRef",
+              "manifestDigest"
+            ],
+            "properties": {
+              "actorId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decidedAt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "recordRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "manifestDigest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "signatures": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
