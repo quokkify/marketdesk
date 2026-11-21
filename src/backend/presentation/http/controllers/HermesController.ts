@@ -3,7 +3,12 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import type { HermesApplicationService } from '../../../application/services/HermesApplicationService';
-import type { HermesEventStatus, HermesSeverity, HermesStatusView } from '../../../../shared/types';
+import type {
+  AiUsageReport,
+  HermesEventStatus,
+  HermesSeverity,
+  HermesStatusView,
+} from '../../../../shared/types';
 import type { ListEventsQueryDTO } from '../../../application/dto/HermesDTO';
 import { NotFoundError } from '../../../domain/shared/DomainError';
 import { ok, paginated } from '../formatters/ResponseFormatter';
@@ -28,12 +33,18 @@ export class HermesController {
   constructor(
     private readonly hermes: HermesApplicationService,
     private readonly categoryCorrections?: CategoryCorrectionOperationService,
-    private readonly hermesStatus?: () => Promise<HermesStatusView>
+    private readonly hermesStatus?: () => Promise<HermesStatusView>,
+    private readonly aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>
   ) {}
 
   status = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!this.hermesStatus) return next(new NotFoundError('Hermes status is unavailable'));
     ok(res, await this.hermesStatus());
+  };
+
+  usage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.aiUsageReport) return next(new NotFoundError('AI usage is unavailable'));
+    ok(res, await this.aiUsageReport(req.user!.workspaceId!));
   };
 
   private requireCategoryCorrections(next: NextFunction): CategoryCorrectionOperationService | null {

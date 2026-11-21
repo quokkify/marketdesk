@@ -84,14 +84,15 @@ import { HermesCompletionClient } from '../../infrastructure/external/HermesComp
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { OfflineHeuristicAIProvider } from '../../infrastructure/external/OfflineHeuristicAIProvider';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
-import { loggingAiUsageSink } from '../../application/ai/AiCallRecord';
+import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
+import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
-import { InvalidStateError } from '../../domain/shared/DomainError';
+import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
@@ -253,8 +254,13 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const idGenerator: IdGenerator = overrides.idGenerator ?? randomUUID;
   // GET /api/hermes/status always reports this env-configured selector, even when a
   // test swaps the provider that services call through overrides.aiProvider.
-  // Every AI call is logged; the stored usage table joins this sink later.
-  const aiUsageSink = overrides.logger ? loggingAiUsageSink(overrides.logger) : undefined;
+  // Every AI call is logged and, when attributed to a workspace, stored in ai_usage.
+  const aiUsageRepo = new AiUsageRepository(pool);
+  const loggingSink = overrides.logger ? loggingAiUsageSink(overrides.logger) : undefined;
+  const aiUsageSink = fanOutAiUsageSink([
+    ...(loggingSink ? [loggingSink] : []),
+    storingAiUsageSink(aiUsageRepo, (error) => loggingSink?.reportFailure?.(error)),
+  ]);
   const aiProviderSelector = new AIProviderSelector({
     hermes: new HermesAI(new HermesCompletionClient(loadHermesConfig(), aiUsageSink)),
     offline: new OfflineHeuristicAIProvider(),
@@ -746,6 +752,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     listingService,
     hermesService,
     hermesStatus: () => aiProviderSelector.status(),
+    aiUsageReport: async (workspaceId) => {
+      const workspace = await workspaceRepo.findById(workspaceId);
+      if (!workspace) throw new NotFoundError('Workspace not found');
+      return aiUsageRepo.summary(workspaceId, workspace.timezone, new Date());
+    },
     analyticsService,
     productRepo,
     listingRepo,

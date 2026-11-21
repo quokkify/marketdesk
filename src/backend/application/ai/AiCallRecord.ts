@@ -51,3 +51,49 @@ export function loggingAiUsageSink(logger: AiUsageLogger): AiUsageSink {
     },
   };
 }
+
+// Every sink gets every record; one that throws is reported and does not stop the others.
+export function fanOutAiUsageSink(sinks: AiUsageSink[]): AiUsageSink {
+  return {
+    record(r) {
+      for (const sink of sinks) {
+        try {
+          sink.record(r);
+        } catch (error) {
+          sinks.forEach((other) => {
+            try {
+              other.reportFailure?.(error);
+            } catch {
+              // Reporting failed as well; the remaining sinks still get the record.
+            }
+          });
+        }
+      }
+    },
+    reportFailure(error) {
+      for (const sink of sinks) {
+        try {
+          sink.reportFailure?.(error);
+        } catch {
+          // One sink failing to report must not hide the failure from the others.
+        }
+      }
+    },
+  };
+}
+
+export interface AiUsageStore {
+  insert(r: AiCallRecord & { workspaceId: string }): Promise<void>;
+}
+
+// Stores attributed calls without waiting for the database: a failed write is reported, never thrown.
+// Unattributed calls have no workspace to belong to and are left to the logging sink.
+export function storingAiUsageSink(store: AiUsageStore, onFailure: (error: unknown) => void): AiUsageSink {
+  return {
+    record(r) {
+      const { workspaceId } = r;
+      if (!workspaceId) return;
+      store.insert({ ...r, workspaceId }).catch(onFailure);
+    },
+  };
+}

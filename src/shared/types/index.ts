@@ -305,6 +305,27 @@ export interface ProductRecheckResult {
 
 export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';
 
+export type AiUsageReportCostStatus = AiCostStatus | 'mixed';
+
+export interface AiUsageTotals {
+  analyses: number;
+  hermesAnalyses: number;
+  offlineAnalyses: number;
+  failedAnalyses: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+}
+
+/** GET /api/hermes/usage. Day boundaries follow the workspace timezone; token sums skip calls that reported none. */
+export interface AiUsageReport {
+  timezone: string;
+  today: AiUsageTotals;
+  last7Days: AiUsageTotals;
+  byFeature: Array<{ feature: string; analyses: number; totalTokens: number | null }>;
+  costStatus: AiUsageReportCostStatus;
+}
+
 /** AI calls of one analysis. Token sums are null when any Hermes call did not report them. */
 export interface AiUsageSummary {
   provider: 'hermes' | 'offline' | 'none';
