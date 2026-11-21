@@ -314,12 +314,16 @@ export class StubAIProvider implements IAIProvider {
       ],
       disclaimer: 'Review only; no marketplace changes were applied.',
     },
+    // When set, the estimate answer as given, or the error the call fails with.
+    private readonly estimateAnswer?: PriceEstimate | Error,
   ) {}
 
   async suggestPrice(): Promise<PriceSuggestion> {
     return this.price;
   }
   async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
+    if (this.estimateAnswer instanceof Error) throw this.estimateAnswer;
+    if (this.estimateAnswer) return this.estimateAnswer;
     // A configured price suggestion doubles as the estimate; the default stays low confidence.
     const start = this.price.suggestedPrice > 0 ? this.price.suggestedPrice : context.listing.price.amount;
     return {

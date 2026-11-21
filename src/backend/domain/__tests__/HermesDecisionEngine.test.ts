@@ -3,8 +3,9 @@ import { Product } from '../entities/Product';
 import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
-import type { HermesGuardrails } from '../../../shared/types';
-import type { AIProviderSourceAware } from '../ports/IAIProvider';
+import type { HermesGuardrails, PriceEstimate, PriceResearch } from '../../../shared/types';
+import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type AIProviderSourceAware } from '../ports/IAIProvider';
+import { ServiceUnavailableError } from '../shared/DomainError';
 import {
   unwrap,
   money,
@@ -272,14 +273,14 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
   // live listing, and an AI stub that suggests a modest 10% price drop with high
   // confidence — an actionable, <20% change that requiresHumanReview() ignores,
   // so the guardrail is the only thing that can force review.
-  function seedPricingScenario() {
+  function seedPricingScenario(title = 'Widget') {
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const eventRepo = new InMemoryEventRepository();
     const publisher = new RecordingEventPublisher();
     const ai = new StubAIProvider(
       { suggestedPrice: 90, reasoning: 'test', confidence: 'high' },
-      'Widget', // equals product name -> no suggested_better_title event
+      title, // the default equals the product name -> no suggested_better_title event
     );
     const engine = new HermesDecisionEngine(
       productRepo,
@@ -325,23 +326,48 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
     return events.find((e) => e.type === 'suggested_lower_price');
   }
 
-  it('auto-applies a within-guardrail price change under full_auto', async () => {
+  it('keeps a within-guardrail price from an estimate for review under full_auto', async () => {
     const { engine, product } = seedPricingScenario();
     const events = await engine.run(makeWorkspace(OPEN));
     const evt = priceEvent(events);
-    expect(evt).toBeDefined();
-    expect(evt!.autonomyDecision).toBe('auto_apply');
-    expect(evt!.status).toBe('applied');
-    expect(product.sellingPrice.amount).toBe(90);
+    expect(evt?.proposedChange).toMatchObject({ kind: 'price', to: 90, estimate: expect.any(Object) });
+    expect(evt!.autonomyDecision).toBe('pending_review');
+    expect(evt!.status).toBe('pending_review');
+    expect(product.sellingPrice.amount).toBe(100);
   });
 
   it('persists failed when automatic application throws', async () => {
-    const { engine, productRepo, eventRepo } = seedPricingScenario();
+    const { engine, productRepo, eventRepo } = seedPricingScenario('Widget Pro');
     jest.spyOn(productRepo, 'save').mockRejectedValueOnce(new Error('database unavailable'));
 
     const events = await engine.run(makeWorkspace(OPEN));
-    expect(priceEvent(events)?.status).toBe('failed');
+    expect(events.find((e) => e.type === 'suggested_better_title')?.status).toBe('failed');
     expect(eventRepo.savedBatches.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('passesGuardrails still gates a price change by its switch, maxAutoPriceChangePct and margin', () => {
+    const { engine, product } = seedPricingScenario();
+    const priceChange = unwrap(
+      HermesEvent.create({
+        id: 'pc1',
+        workspaceId: 'w1',
+        productId: 'p1',
+        type: 'suggested_lower_price',
+        severity: 'warning',
+        title: 'lower price',
+        proposedChange: { kind: 'price', field: 'price', from: 100, to: 90 },
+      }),
+    );
+    expect(engine.passesGuardrails(product, priceChange, makeWorkspace(OPEN))).toBe(true);
+    expect(
+      engine.passesGuardrails(product, priceChange, makeWorkspace({ ...OPEN, autoAdjustPricing: false })),
+    ).toBe(false);
+    expect(
+      engine.passesGuardrails(product, priceChange, makeWorkspace({ ...OPEN, maxAutoPriceChangePct: 5 })),
+    ).toBe(false);
+    expect(
+      engine.passesGuardrails(product, priceChange, makeWorkspace({ ...OPEN, minMarginFloor: 60 })),
+    ).toBe(false);
   });
 
   it('forces review when autoAdjustPricing is disabled, even under full_auto', async () => {
@@ -641,16 +667,18 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
     ]);
   });
 
-  it('keeps the saved SEO events when the price estimate fails after the SEO answer', async () => {
+  it('keeps the saved SEO events when the price estimate is unavailable after the SEO answer', async () => {
     const ai = new SourceStub('hermes');
-    jest.spyOn(ai, 'estimatePrice').mockRejectedValue(new Error('estimate failed'));
+    jest
+      .spyOn(ai, 'estimatePrice')
+      .mockRejectedValue(new ServiceUnavailableError('Hermes is unavailable'));
     const { engine, eventRepo, listingRepo, workspace } = setup(ai);
     const listing = unwrap(
       Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100) }),
     );
     listingRepo.items.set(listing.id, listing);
 
-    await expect(engine.runProductSeo(workspace, 'p1')).rejects.toThrow('estimate failed');
+    await expect(engine.runProductSeo(workspace, 'p1')).rejects.toThrow('Hermes is unavailable');
 
     expect([...eventRepo.agentRecommendations.values()]).toEqual([
       expect.objectContaining({ productId: 'p1', outcome: 'suggested' }),
@@ -710,5 +738,200 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
     const [event] = await engine.runProductSeo(workspace, 'p1');
 
     expect(event?.detail?.split(OFFLINE_NOTICE)).toHaveLength(2);
+  });
+});
+
+describe('HermesDecisionEngine.runProductSeo price estimate', () => {
+  function estimate(overrides: Partial<PriceEstimate> = {}): PriceEstimate {
+    return {
+      startPrice: 90,
+      floorPrice: 80,
+      retailAnchor: null,
+      usedRange: null,
+      reasoning: 'Used units sell around 90.',
+      confidence: 'medium',
+      ...overrides,
+    };
+  }
+
+  function research(overrides: Partial<PriceResearch> = {}): PriceResearch {
+    return {
+      productId: 'p1',
+      retailPrice: 469.99,
+      retailCurrency: 'PLN',
+      retailSource: 'MediaMarkt',
+      retailCheckedAt: '2026-11-21',
+      comparables: [],
+      updatedAt: '2026-11-21T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  async function analyse(
+    answer: PriceEstimate | Error,
+    options: { price?: number; research?: PriceResearch } = {},
+  ) {
+    const price = options.price ?? 100;
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const eventRepo = new InMemoryEventRepository();
+    const priceResearchRepo = new InMemoryPriceResearchRepository();
+    if (options.research) priceResearchRepo.items.set('w1:p1', options.research);
+    const engine = new HermesDecisionEngine(
+      productRepo,
+      listingRepo,
+      eventRepo,
+      new RecordingEventPublisher(),
+      new StubAIProvider(undefined, '', undefined, undefined, answer),
+      priceResearchRepo,
+      sequentialIdFactory('pe'),
+    );
+    const product = unwrap(
+      Product.create({
+        id: 'p1',
+        workspaceId: 'w1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        description: 'A perfectly reasonable description over twenty chars.',
+        costPrice: money(1),
+        sellingPrice: money(price),
+        condition: 'good',
+        category: 'electronics',
+      }),
+    );
+    productRepo.items.set(product.id, product);
+    const listing = unwrap(
+      Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(price) }),
+    );
+    listingRepo.items.set(listing.id, listing);
+    const events = await engine.runProductSeo(
+      unwrap(Workspace.create({ id: 'w1', name: 'WS', autonomyLevel: 'full_auto' })),
+      'p1',
+    );
+    const priceEvent = events.find((e) => e.proposedChange?.kind === 'price');
+    const notice = events.find((e) => e.type === 'price_estimate_unavailable');
+    return { events, priceEvent, notice, product };
+  }
+
+  function estimateOf(event: HermesEvent | undefined): PriceEstimate | undefined {
+    const change = event?.proposedChange;
+    return change?.kind === 'price' ? change.estimate : undefined;
+  }
+
+  it('surfaces a medium-confidence estimate as a price event for review carrying the estimate', async () => {
+    const { priceEvent, product } = await analyse(estimate());
+
+    expect(priceEvent).toMatchObject({
+      type: 'suggested_lower_price',
+      status: 'pending_review',
+      autonomyDecision: 'pending_review',
+      proposedChange: { kind: 'price', from: 100, to: 90 },
+    });
+    expect(estimateOf(priceEvent)).toMatchObject({ startPrice: 90, floorPrice: 80, confidence: 'medium' });
+    expect(product.sellingPrice.amount).toBe(100);
+  });
+
+  it('proposes no price when the difference is under 5%', async () => {
+    const { priceEvent, notice } = await analyse(estimate({ startPrice: 96 }));
+    expect(priceEvent).toBeUndefined();
+    expect(notice).toBeUndefined();
+  });
+
+  it('proposes no price for a low-confidence estimate', async () => {
+    const { priceEvent, notice } = await analyse(estimate({ confidence: 'low' }));
+    expect(priceEvent).toBeUndefined();
+    expect(notice).toBeUndefined();
+  });
+
+  it.each([
+    { start: 11.4, surfaced: true },
+    { start: 12.6, surfaced: true },
+    { start: 11.41, surfaced: false },
+  ])('at a current price of 12 a start of $start is surfaced: $surfaced', async ({ start, surfaced }) => {
+    const { priceEvent } = await analyse(estimate({ startPrice: start, floorPrice: 10 }), { price: 12 });
+    expect(priceEvent !== undefined).toBe(surfaced);
+  });
+
+  it('turns an unusable answer into a price_estimate_unavailable notice', async () => {
+    const { priceEvent, notice } = await analyse(new Error(PRICE_ESTIMATE_UNUSABLE_MESSAGE));
+    expect(priceEvent).toBeUndefined();
+    expect(notice).toMatchObject({ detail: PRICE_ESTIMATE_UNUSABLE_MESSAGE, proposedChange: null, source: null });
+  });
+
+  it.each([
+    'Hermes completion returned a non-JSON success response: <html>raw body</html>',
+    'Hermes completion is missing assistant content',
+  ])('turns any other estimate failure into the notice with a fixed detail (%s)', async (message) => {
+    const { events, notice } = await analyse(new Error(message));
+    expect(notice?.detail).toBe(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
+    expect(events.find((e) => e.type === 'suggested_better_title')).toBeDefined();
+  });
+
+  it("rejects a start above the seller's retail price when the model returns no anchor", async () => {
+    const { priceEvent, notice } = await analyse(estimate({ startPrice: 90, retailAnchor: null }), {
+      research: research({ retailPrice: 85 }),
+    });
+    expect(priceEvent).toBeUndefined();
+    expect(notice?.type).toBe('price_estimate_unavailable');
+  });
+
+  describe('figure labels', () => {
+    it("labels the anchor observed when it is the seller's retail price, whatever the model said", async () => {
+      const { priceEvent } = await analyse(
+        estimate({ retailAnchor: { amount: 469.99, basis: 'estimated' } }),
+        { research: research() },
+      );
+      expect(estimateOf(priceEvent)?.retailAnchor).toEqual({ amount: 469.99, basis: 'observed' });
+    });
+
+    it("labels an anchor that differs from the seller's retail price estimated", async () => {
+      const { priceEvent } = await analyse(
+        estimate({ retailAnchor: { amount: 449, basis: 'observed' } }),
+        { research: research() },
+      );
+      expect(estimateOf(priceEvent)?.retailAnchor).toEqual({ amount: 449, basis: 'estimated' });
+    });
+
+    it('labels an anchor estimated when no retail price reached the provider', async () => {
+      const { priceEvent } = await analyse(estimate({ retailAnchor: { amount: 469.99, basis: 'observed' } }));
+      expect(estimateOf(priceEvent)?.retailAnchor?.basis).toBe('estimated');
+    });
+
+    it('labels an anchor estimated when the retail price was in another currency and was dropped', async () => {
+      const { priceEvent } = await analyse(
+        estimate({ retailAnchor: { amount: 469.99, basis: 'observed' } }),
+        { research: research({ retailCurrency: 'EUR' }) },
+      );
+      expect(estimateOf(priceEvent)?.retailAnchor?.basis).toBe('estimated');
+    });
+
+    const comparables = [
+      { price: 80, note: 'a' },
+      { price: 120, note: 'b' },
+    ];
+
+    it('labels a used range within the comparables observed', async () => {
+      const { priceEvent } = await analyse(
+        estimate({ usedRange: { low: 80, high: 120, basis: 'estimated' } }),
+        { research: research({ comparables }) },
+      );
+      expect(estimateOf(priceEvent)?.usedRange).toEqual({ low: 80, high: 120, basis: 'observed' });
+    });
+
+    it('labels a used range reaching outside the comparables estimated', async () => {
+      const { priceEvent } = await analyse(
+        estimate({ usedRange: { low: 75, high: 120, basis: 'observed' } }),
+        { research: research({ comparables }) },
+      );
+      expect(estimateOf(priceEvent)?.usedRange?.basis).toBe('estimated');
+    });
+
+    it('labels a used range estimated when there are no comparables', async () => {
+      const { priceEvent } = await analyse(
+        estimate({ usedRange: { low: 80, high: 120, basis: 'observed' } }),
+        { research: research({ comparables: [] }) },
+      );
+      expect(estimateOf(priceEvent)?.usedRange?.basis).toBe('estimated');
+    });
   });
 });

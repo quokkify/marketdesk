@@ -40,6 +40,22 @@ describe('validatePriceEstimate', () => {
   it('accepts a missing anchor', () => {
     expect(validatePriceEstimate(estimate({ retailAnchor: null })).ok).toBe(true);
   });
+
+  it("rejects a start above the seller's retail price even when the model returns no anchor", () => {
+    const result = validatePriceEstimate(estimate({ startPrice: 300, retailAnchor: null }), 299.99);
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts a start equal to the seller's retail price", () => {
+    expect(validatePriceEstimate(estimate({ startPrice: 279, retailAnchor: null }), 279).ok).toBe(true);
+  });
+
+  it('rejects a used range whose low exceeds its high', () => {
+    const result = validatePriceEstimate(
+      estimate({ usedRange: { low: 320, high: 250, basis: 'estimated' } }),
+    );
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe('shouldSurfacePriceEstimate', () => {
@@ -49,6 +65,23 @@ describe('shouldSurfacePriceEstimate', () => {
 
   it('hides low confidence', () => {
     expect(shouldSurfacePriceEstimate(estimate({ confidence: 'low' }), 399)).toBe(false);
+  });
+
+  it.each([
+    { current: 100, start: 95 },
+    { current: 12, start: 11.4 },
+    { current: 10.4, start: 9.88 },
+    { current: 12, start: 12.6 },
+  ])('surfaces a change of exactly 5% ($current -> $start)', ({ current, start }) => {
+    expect(
+      shouldSurfacePriceEstimate(estimate({ startPrice: start, confidence: 'medium' }), current),
+    ).toBe(true);
+  });
+
+  it('hides a change one cent under 5%', () => {
+    expect(
+      shouldSurfacePriceEstimate(estimate({ startPrice: 11.41, confidence: 'high' }), 12),
+    ).toBe(false);
   });
 
   it('hides a change under 5%', () => {

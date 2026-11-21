@@ -77,7 +77,8 @@ export function buildPriceEstimatePrompt(ctx: PriceEstimateContext): string {
       retailAnchor: anchor,
       comparables: research?.comparables ?? [],
     }),
-    `current price: ${listing.price.amount} ${currency}`,
+    // The engine compares the estimate with the product price, which an approval changes.
+    `current price: ${product.sellingPrice.amount} ${currency}`,
     `days live: ${counter(daysLive)}`,
     `views: ${counter(listing.views)}`,
     `watchers: ${counter(listing.watchers)}`,
@@ -101,6 +102,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function toCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 // Shape check only; range rules live in validatePriceEstimate. The currency is the
 // listing's, kept in the signature so a future multi-currency answer can be rejected here.
 export function parsePriceEstimate(raw: unknown, _currency: string): PriceEstimate | null {
@@ -115,7 +120,7 @@ export function parsePriceEstimate(raw: unknown, _currency: string): PriceEstima
     if (!isRecord(retailAnchor) || !isNumber(retailAnchor.amount) || !isBasis(retailAnchor.basis)) {
       return null;
     }
-    anchor = { amount: retailAnchor.amount, basis: retailAnchor.basis };
+    anchor = { amount: toCents(retailAnchor.amount), basis: retailAnchor.basis };
   }
 
   let range: PriceEstimate['usedRange'] = null;
@@ -128,12 +133,12 @@ export function parsePriceEstimate(raw: unknown, _currency: string): PriceEstima
     ) {
       return null;
     }
-    range = { low: usedRange.low, high: usedRange.high, basis: usedRange.basis };
+    range = { low: toCents(usedRange.low), high: toCents(usedRange.high), basis: usedRange.basis };
   }
 
   return {
-    startPrice,
-    floorPrice,
+    startPrice: toCents(startPrice),
+    floorPrice: toCents(floorPrice),
     retailAnchor: anchor,
     usedRange: range,
     reasoning: reasoning.trim(),

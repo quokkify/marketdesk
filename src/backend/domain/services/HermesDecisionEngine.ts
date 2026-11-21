@@ -29,6 +29,8 @@ import type {
   AutonomyDecision,
   HermesEventType,
   HermesSeverity,
+  PriceComparable,
+  PriceEstimate,
   ProposedChange,
 } from '../../../shared/types';
 import { BALANCED_SAFE_EVENT_TYPES } from '../../../shared/constants';
@@ -77,6 +79,31 @@ function unavailablePriceEstimate(detail: string): Suggestion {
   };
 }
 
+// The model's own basis labels are not trusted: a figure is observed only when it is the seller's
+// research that reached the provider, otherwise it is estimated.
+function labelEstimateFigures(
+  estimate: PriceEstimate,
+  researchAnchor: number | null,
+  comparables: readonly PriceComparable[],
+): PriceEstimate {
+  const retailAnchor = estimate.retailAnchor && {
+    amount: estimate.retailAnchor.amount,
+    basis: researchAnchor !== null && estimate.retailAnchor.amount === researchAnchor
+      ? ('observed' as const)
+      : ('estimated' as const),
+  };
+  let usedRange = estimate.usedRange;
+  if (usedRange) {
+    const prices = comparables.map((c) => c.price);
+    const withinComparables =
+      prices.length > 0 &&
+      usedRange.low >= Math.min(...prices) &&
+      usedRange.high <= Math.max(...prices);
+    usedRange = { low: usedRange.low, high: usedRange.high, basis: withinComparables ? 'observed' : 'estimated' };
+  }
+  return { ...estimate, retailAnchor, usedRange };
+}
+
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
 
 // Adds the offline notice unless the provider already wrote it into the detail.
@@ -115,8 +142,10 @@ export class HermesDecisionEngine {
         if (suggestion.change !== null && AI_MADE_CHANGE_KINDS.has(suggestion.change.kind)) {
           source = answeredOffline ? 'offline' : 'hermes';
         }
+        // A price from a Hermes estimate is never applied without the owner's approval.
+        const estimatedPrice = suggestion.change?.kind === 'price' && suggestion.change.estimate !== undefined;
         let decision: AutonomyDecision =
-          source === 'offline'
+          source === 'offline' || estimatedPrice
             ? 'pending_review'
             : this.determineAutonomy(workspace.autonomyLevel, suggestion.type, suggestion.severity);
         const created = HermesEvent.create({
@@ -463,7 +492,7 @@ export class HermesDecisionEngine {
   /**
    * Proposes a justified start price for the product's primary listing. Returns null when the
    * estimate is valid but not worth surfacing, and an info-only "unavailable" suggestion when it
-   * is unusable. Provider unavailability propagates.
+   * is unusable or the call failed for any other reason. Provider unavailability propagates.
    */
   private async priceEstimateSuggestion(
     product: Product,
@@ -490,15 +519,14 @@ export class HermesDecisionEngine {
       rawEstimate = await this.aiProvider.estimatePrice({ product, listing: primary, daysLive, research });
     } catch (error) {
       if (error instanceof ServiceUnavailableError) throw error;
-      if (error instanceof Error && error.message === PRICE_ESTIMATE_UNUSABLE_MESSAGE) {
-        return unavailablePriceEstimate(error.message);
-      }
-      throw error;
+      // A fixed message: raw error or model text never reaches the seller.
+      return unavailablePriceEstimate(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
     }
-    const validated = validatePriceEstimate(rawEstimate);
+    const researchAnchor = research?.retailPrice ?? null;
+    const validated = validatePriceEstimate(rawEstimate, researchAnchor);
     if (validated.isErr()) return unavailablePriceEstimate(validated.error.message);
 
-    const estimate = validated.value;
+    const estimate = labelEstimateFigures(validated.value, researchAnchor, research?.comparables ?? []);
     const currentPrice = product.sellingPrice.amount;
     if (!shouldSurfacePriceEstimate(estimate, currentPrice)) return null;
     const isLower = estimate.startPrice < currentPrice;
