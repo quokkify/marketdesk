@@ -41,11 +41,11 @@ const CYRILLIC = /\p{Script=Cyrillic}/u;
 const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 const ASCII_HOST = /^[a-z0-9.-]+$/;
 
-function stripZeroWidth(text: string): string {
+export function stripZeroWidth(text: string): string {
   return text.normalize('NFKC').replace(ZERO_WIDTH, '');
 }
 
-function fold(text: string, zeroWidthAs = ' '): string {
+export function fold(text: string, zeroWidthAs = ' '): string {
   return text
     .normalize('NFKC')
     .replace(ZERO_WIDTH, zeroWidthAs)
@@ -57,13 +57,13 @@ function fold(text: string, zeroWidthAs = ' '): string {
     .trim();
 }
 
-function latinFold(text: string): string {
+export function latinFold(text: string): string {
   let out = '';
   for (const ch of text) out += CYRILLIC_CONFUSABLES[ch] ?? ch;
   return out;
 }
 
-function joinObfuscated(folded: string): string {
+export function joinObfuscated(folded: string): string {
   return folded
     .replace(SPACED_LETTERS, (m) => m.replace(/[\s.\-_*]+/g, ''))
     .replace(INNER_SEPARATORS, '');
@@ -116,7 +116,7 @@ function isSentenceTypo(label: string, tldOriginal: string, hasPath: boolean): b
   );
 }
 
-function hasForeignLink(clean: string): boolean {
+export function hasForeignLink(clean: string, allowOfficial = true): boolean {
   let text = clean
     .replace(/hxxp(s?):\/\//gi, 'http$1://')
     .replace(BRACKETED_DOT, '.')
@@ -125,7 +125,7 @@ function hasForeignLink(clean: string): boolean {
 
   for (const match of text.matchAll(SCHEME_URL)) {
     const host = match[1].toLowerCase().replace(/\.+$/, '');
-    if (host && !isOfficialHost(host)) return true;
+    if (host && !(allowOfficial && isOfficialHost(host))) return true;
   }
   text = text.replace(SCHEME_URL, ' ');
 
@@ -137,7 +137,7 @@ function hasForeignLink(clean: string): boolean {
     const tld = labels[labels.length - 1];
     const label = labels[labels.length - 2];
     if (IPV4.test(host)) return true;
-    if (isOfficialHost(host)) continue;
+    if (allowOfficial && isOfficialHost(host)) continue;
     if (labels.includes('olx')) return true;
     if (host.startsWith('www.') || (hasPath && /^\p{L}{2,}$/u.test(tld))) return true;
     const tldOriginal = hostOriginal.slice(hostOriginal.lastIndexOf('.') + 1);
@@ -149,7 +149,7 @@ function hasForeignLink(clean: string): boolean {
   return false;
 }
 
-function hasCardNumber(text: string): boolean {
+export function hasCardNumber(text: string): boolean {
   for (const run of text.matchAll(CARD_RUN)) {
     const groups = run[0].split(/[ -]/);
     for (let i = 0; i < groups.length; i += 1) {
