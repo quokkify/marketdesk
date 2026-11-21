@@ -283,6 +283,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     offline: new OfflineReplyDraftAI(),
     mode: env.hermes.providerMode,
     probe: new HermesHealthProbe(loadHermesConfig()),
+    usageSink: aiUsageSink,
   });
   const buildOlxHeaders = (accessToken?: string): Record<string, string> => ({
     Accept: 'application/json',

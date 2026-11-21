@@ -56,7 +56,6 @@ import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandling
 import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
 import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
-
 import type { IReplyDraftAI } from '../../domain/ports/IReplyDraftAI';
 
 // Shape Group 6 must fulfil to build the HTTP surface.

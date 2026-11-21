@@ -9,6 +9,7 @@ import {
   replyDraftOutputSchema,
   REPLY_INTENTS,
 } from '../../domain/agents/buyerReplyProfile';
+import { MAX_REPLY_LENGTH } from '../../domain/conversations/draftValidation';
 import { withAiOperation } from '../../application/ai/aiUsageScope';
 import type { AITextCompletionClient } from './HermesAI';
 import { BUYER_THREAD_RULE, buyerThreadBlock } from './buyerThread';
@@ -52,7 +53,7 @@ export class HermesReplyDraftAI implements IReplyDraftAI {
         type: 'object',
         additionalProperties: false,
         properties: {
-          reply: { type: 'string', minLength: 1, maxLength: 1000 },
+          reply: { type: 'string', minLength: 1, maxLength: MAX_REPLY_LENGTH },
           counterOffer: { type: 'boolean' },
           proposedPrice: { type: ['number', 'null'], exclusiveMinimum: 0 },
         },

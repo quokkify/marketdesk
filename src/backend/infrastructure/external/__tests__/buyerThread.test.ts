@@ -1,4 +1,5 @@
 import { BUYER_THREAD_RULE, buyerThreadBlock } from '../buyerThread';
+import { ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { HermesReplyDraftAI } from '../HermesReplyDraftAI';
 import { ReplyDraftAISelector } from '../ReplyDraftAISelector';
 import type { AICompletionRequest } from '../HermesAI';
@@ -80,5 +81,33 @@ describe('ReplyDraftAISelector', () => {
     expect((await up.draft(ctx, 'other')).source).toBe('hermes');
     expect((await down.draft(ctx, 'other')).source).toBe('offline');
     expect((await down.classify(ctx)).source).toBe('offline');
+  });
+
+  describe('gating', () => {
+    const hermes = new HermesReplyDraftAI({ complete: async () => JSON.stringify({ intent: 'other', confidence: 'low' }) });
+    const offline = new OfflineReplyDraftAI();
+    const probeOf = (reachable: boolean, toolsSafe: boolean) => {
+      const reachability = jest.fn(async () => ({ reachable, toolsSafe, enabledToolsets: [], checkedAt: new Date() }));
+      return { probe: { isConfigured: () => true, reachability } as never, reachability };
+    };
+
+    it('hermes mode refuses an unreachable Hermes', async () => {
+      const { probe } = probeOf(false, false);
+      const sel = new ReplyDraftAISelector({ hermes, offline, mode: 'hermes', probe });
+      await expect(sel.classify(ctxWith('hi'))).rejects.toBeInstanceOf(ServiceUnavailableError);
+    });
+
+    it('hermes mode refuses a Hermes with tools enabled', async () => {
+      const { probe } = probeOf(true, false);
+      const sel = new ReplyDraftAISelector({ hermes, offline, mode: 'hermes', probe });
+      await expect(sel.draft(ctxWith('hi'), 'other')).rejects.toBeInstanceOf(ServiceUnavailableError);
+    });
+
+    it('offline mode never probes', async () => {
+      const { probe, reachability } = probeOf(true, true);
+      const sel = new ReplyDraftAISelector({ hermes, offline, mode: 'offline', probe });
+      expect((await sel.classify(ctxWith('hi'))).source).toBe('offline');
+      expect(reachability).not.toHaveBeenCalled();
+    });
   });
 });
