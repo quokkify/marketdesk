@@ -73,6 +73,13 @@ that ban under a retention rule.
    approval mutates the product and enqueues publication; a conversation has its own lifecycle, and
    `ApproveHermesEventUseCase` would grow another unrelated branch.
 
+4. LangChain built-in middleware (`piiMiddleware`, `humanInTheLoopMiddleware`,
+   `modelCallLimitMiddleware`). Rejected: per the LangChain JS docs (checked 2026-11-21) they attach
+   to `createAgent`, and the docs say nothing about a hand-built `StateGraph`; the project has no
+   `langchain` package; there is no built-in prompt-injection detection; and our rules are
+   domain-specific (OLX domain allowlist, BLIK, IBAN, messenger moves, the product floor). Borrowed
+   the idea only: rules with an action (redact / mask / block) and a Luhn check for card numbers.
+
 ## Design
 
 ### Data (new tables)
