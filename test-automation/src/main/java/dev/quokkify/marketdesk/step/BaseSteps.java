@@ -7,6 +7,7 @@ public abstract class BaseSteps {
   protected final LoginPageSteps loginPageSteps = new LoginPageSteps();
   protected final ProductSteps productSteps = new ProductSteps();
   protected final AiUsageSteps aiUsageSteps = new AiUsageSteps();
+  protected final PriceResearchSteps priceResearchSteps = new PriceResearchSteps();
   protected final HermesLimitsSteps hermesLimitsSteps = new HermesLimitsSteps();
   protected final ListingSteps listingSteps = new ListingSteps();
   protected final MarketplaceSteps marketplaceSteps = new MarketplaceSteps();

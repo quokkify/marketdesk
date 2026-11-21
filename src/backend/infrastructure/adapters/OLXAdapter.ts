@@ -26,7 +26,8 @@ import {
   sandboxThreadMessages,
   sandboxThreadsForAdvert,
 } from './olxSandboxConversations';
-import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
+import { evaluateOlxCategory, OLX_CONDITION_REQUIRED_MESSAGE } from '../../domain/services/OlxCategoryGuard';
+import { ValidationError } from '../../domain/shared/DomainError';
 import { OlxTaxonomyResolver, type OlxTrustedTaxonomyResolver } from './OlxTaxonomyResolver';
 import type { MarketplaceCategoryMetadata } from '../../../shared/types';
 
@@ -200,12 +201,14 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   }
 
   protected async doPublish(input: ListingPublishInput): Promise<PublishResult> {
+    this.assertConditionChosen(input);
     const categoryId = this.resolvePublishCategory(input);
     this.assertPublishDetails(categoryId);
     return this.sendPreparedAdvert(this.createAdvertRequest(this.buildAdvertPayload(input, categoryId)));
   }
 
   async preparePublish(input: ListingPublishInput): Promise<{ execute(): Promise<PublishResult> }> {
+    this.assertConditionChosen(input);
     const categoryId = this.resolvePublishCategory(input);
     this.assertPublishDetails(categoryId);
     const body = this.buildAdvertPayload(input, categoryId);
@@ -823,6 +826,13 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       this.config.defaultCategoryId ??
       (this.config.requirePublishDetails ? undefined : STUB_CATEGORY_MAP[key] ?? STUB_CATEGORY_MAP.electronics)
     );
+  }
+
+  // Create-only: an update of a live advert keeps working for a product whose condition is still unknown.
+  private assertConditionChosen(input: ListingPublishInput): void {
+    if (input.condition.toLowerCase() === 'unknown') {
+      throw new ValidationError(OLX_CONDITION_REQUIRED_MESSAGE);
+    }
   }
 
   private mapCondition(domainCondition: string): string {

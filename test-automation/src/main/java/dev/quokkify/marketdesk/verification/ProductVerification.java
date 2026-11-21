@@ -19,6 +19,16 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     return this;
   }
 
+  // A whole cost price comes back as a JSON integer, which JsonPath reads as Integer.
+  @Step("Product keeps condition {condition} and cost price {costPrice}")
+  public ProductVerification hasConditionAndCostPrice(ValidatableResponse response, String condition,
+      int costPrice) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.condition", Matchers.equalTo(condition));
+    response.body("data.costPrice", Matchers.equalTo(costPrice));
+    return self();
+  }
+
   @Step("Response reports success")
   public ProductVerification hasSucceeded(ValidatableResponse response) {
     response.body("success", Matchers.equalTo(true));

@@ -6,12 +6,21 @@
 // decisions. MarketDesk only uses a Hermes profile whose API server has no tools enabled
 // (checked by HermesHealthProbe) and sends seller content as a <seller_data> block.
 
-import type {
-  IAIProvider,
-  PriceSuggestionContext,
-  PriceSuggestion,
-  ListingAnalysis,
+import {
+  PRICE_ESTIMATE_UNUSABLE_MESSAGE,
+  type IAIProvider,
+  type PriceEstimateContext,
+  type PriceSuggestionContext,
+  type PriceSuggestion,
+  type ListingAnalysis,
 } from '../../domain/ports/IAIProvider';
+import type { PriceEstimate } from '../../../shared/types';
+import {
+  PRICE_ESTIMATE_OPERATION,
+  buildPriceEstimatePrompt,
+  parsePriceEstimate,
+  priceEstimateJsonSchema,
+} from './priceEstimatePrompt';
 import { SELLER_DATA_RULE, sellerDataBlock } from './sellerData';
 import type { Product } from '../../domain/entities/Product';
 import type { Marketplace } from '../../domain/entities/Marketplace';
@@ -116,6 +125,18 @@ export class HermesAI implements IAIProvider {
         : 'No reasoning provided by Hermes.';
 
     return { suggestedPrice, reasoning, confidence };
+  }
+
+  async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
+    const raw = await this.complete(PRICE_ESTIMATE_OPERATION, {
+      system: `You output used-item price estimates as strict JSON.\n${SELLER_DATA_RULE}`,
+      prompt: buildPriceEstimatePrompt(context),
+      maxTokens: this.maxTokens,
+      jsonSchema: priceEstimateJsonSchema,
+    });
+    const estimate = parsePriceEstimate(this.parseJson(raw), context.listing.price.currency);
+    if (!estimate) throw new Error(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
+    return estimate;
   }
 
   async generateTitle(

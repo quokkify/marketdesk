@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Migrations replay on every start: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, never `DROP`. Next free numbers: `046`, `047`.
+- Migrations replay on every start: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, never `DROP`. Next free numbers were `046`, `047`; after main took `046`, ours are `047`–`050`.
 - Buyer message text and draft text never reach logs, run records (`runRecorder`), experiment bundles, `ai_usage`, error details or activity-log payloads. Activity entries carry ids and statuses only.
 - Hermes stays on the no-tools profile; the reply profile declares `capabilities` all `false`, `tools: []` like `listingSeoProfile`.
 - The price floor (`products.min_acceptable_price`) is never part of any prompt.
@@ -48,7 +48,7 @@
 ### Task 1: Product price floor
 
 **Files:**
-- Create: `src/backend/persistence/migrations/046_product_min_acceptable_price.sql`
+- Create: `src/backend/persistence/migrations/047_product_min_acceptable_price.sql`
 - Modify: `src/backend/domain/entities/Product.ts`, `src/backend/infrastructure/persistence/mappers/ProductMapper.ts`, `mappers/rows.ts`, `repositories/ProductRepository.ts`, `application/dto/CreateProductDTO.ts`, `UpdateProductDTO.ts`, `application/validators/ProductValidator.ts`, `application/dto/presenters.ts`, `presentation/http/validation/schemas.ts`, `src/shared/types/index.ts`, `src/frontend/components/forms/PricingForm.tsx`, `productFormModel.ts`
 - Test: `test-automation/src/test/java/dev/quokkify/marketdesk/test/api/ProductPriceFloorTest.java` (+ steps/verification in `src/main`)
 
@@ -64,7 +64,7 @@
 ### Task 2: Conversation storage
 
 **Files:**
-- Create: `src/backend/persistence/migrations/047_conversations.sql`, `src/backend/domain/conversations/types.ts`, `src/backend/domain/repositories/interfaces/IConversationRepository.ts`, `src/backend/infrastructure/persistence/repositories/ConversationRepository.ts`
+- Create: `src/backend/persistence/migrations/048_conversations.sql`, `src/backend/domain/conversations/types.ts`, `src/backend/domain/repositories/interfaces/IConversationRepository.ts`, `src/backend/infrastructure/persistence/repositories/ConversationRepository.ts`
 - Test: `src/backend/infrastructure/persistence/repositories/__tests__/ConversationRepository.db.test.ts` (TEMP-table pattern of existing `__tests__`)
 
 **Interfaces:**

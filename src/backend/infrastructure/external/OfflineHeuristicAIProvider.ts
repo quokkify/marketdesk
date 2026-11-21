@@ -8,11 +8,12 @@ import {
   type AIProviderSourceAware,
   type IAIProvider,
   type ListingAnalysis,
+  type PriceEstimateContext,
   type PriceSuggestion,
   type PriceSuggestionContext,
 } from '../../domain/ports/IAIProvider';
 import type { Product } from '../../domain/entities/Product';
-import type { ProductCondition } from '../../../shared/types';
+import type { PriceEstimate, ProductCondition } from '../../../shared/types';
 import {
   listingSeoInputSchema,
   listingSeoOutputSchema,
@@ -108,6 +109,25 @@ export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSource
       currentPrice,
       'There is not enough sales signal to change the price, so the current price is kept.'
     );
+  }
+
+  // Never surfaced: low confidence by design, so it only restates the stored figures.
+  async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
+    const { listing, research } = context;
+    const price = listing.price.amount;
+    const prices = (research?.comparables ?? []).map((c) => c.price);
+    return {
+      startPrice: price,
+      floorPrice: price,
+      retailAnchor:
+        research?.retailPrice != null ? { amount: research.retailPrice, basis: 'observed' } : null,
+      usedRange:
+        prices.length > 0
+          ? { low: Math.min(...prices), high: Math.max(...prices), basis: 'observed' }
+          : null,
+      confidence: 'low',
+      reasoning: `${OFFLINE_AI_NOTICE} The current price is kept as both the start and the floor.`,
+    };
   }
 
   async generateTitle(product: Product): Promise<string> {

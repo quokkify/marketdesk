@@ -90,7 +90,8 @@ export const ProductIdentityHero: React.FC<{
   product: Product;
   onEdit: () => void;
   onDelete?: () => void;
-}> = ({ product, onEdit, onDelete }) => {
+  priceNote?: React.ReactNode;
+}> = ({ product, onEdit, onDelete, priceNote }) => {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const menuId = useId();
   return (
@@ -120,6 +121,7 @@ export const ProductIdentityHero: React.FC<{
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
             {`SKU ${product.sku || 'unavailable'} · Updated ${formatRelative(product.updatedAt)}`}
           </Typography>
+          {priceNote}
         </Box>
         <Stack direction="row" spacing={1} sx={{ alignSelf: { sm: 'flex-start' }, alignItems: 'center' }}>
           <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
@@ -243,12 +245,12 @@ export const ProductCategoryEvidence: React.FC<{ product: Product; conflictLines
   );
 };
 
-export type ProductPrimaryAction = 'publish' | 'relist' | 'reactivate' | 'connect' | 'edit';
+export type ProductPrimaryAction = 'publish' | 'relist' | 'revive' | 'connect' | 'edit';
 
 const PRIMARY_ACTION_LABEL: Record<Exclude<ProductPrimaryAction, 'edit'>, string> = {
   publish: 'Publish to OLX',
   relist: 'Relist on OLX',
-  reactivate: 'Reactivate on OLX',
+  revive: 'Revive on OLX',
   connect: 'Connect OLX',
 };
 
@@ -263,11 +265,15 @@ export const PricingSummaryCard: React.FC<{
   onEdit: () => void;
   onPublish?: () => void;
   onRelist?: () => void;
+  // An expired sandbox advert cannot be reactivated, so its second action is a relist.
+  sandboxRevival?: boolean;
+  onRevive?: () => void;
+  // Plain reactivation, kept beside the revival for an expired advert.
   onReactivate?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, busy = false, onEdit, onPublish, onRelist, onReactivate, onConnect }) => {
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
-  const primaryHandler = { publish: onPublish, relist: onRelist, reactivate: onReactivate, connect: onConnect }[
+  const primaryHandler = { publish: onPublish, relist: onRelist, revive: onRevive, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
   ];
   return (
@@ -309,6 +315,11 @@ export const PricingSummaryCard: React.FC<{
           </>
         )}
       </Stack>
+      {primaryAction === 'revive' && (sandboxRevival ? onRelist : onReactivate) && (
+        <Button fullWidth variant="text" disabled={busy} onClick={sandboxRevival ? onRelist : onReactivate} sx={{ mt: 1 }}>
+          {sandboxRevival ? 'Relist on OLX' : 'Reactivate on OLX'}
+        </Button>
+      )}
       {primaryAction === 'connect' && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Publishing needs a connected OLX account.

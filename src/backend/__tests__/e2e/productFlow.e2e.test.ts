@@ -22,6 +22,7 @@ import {
   InMemoryEventRepository,
   RecordingEventPublisher,
   StubAIProvider,
+  InMemoryPriceResearchRepository,
   money,
 } from '../../domain/testkit/support';
 import {
@@ -138,6 +139,7 @@ async function buildE2E(): Promise<E2EContext> {
     eventRepo,
     events,
     aiProvider,
+    new InMemoryPriceResearchRepository(),
     idGenerator
   );
 

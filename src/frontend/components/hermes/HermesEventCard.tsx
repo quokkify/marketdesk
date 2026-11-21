@@ -26,6 +26,7 @@ import { useAppSelector } from '../../state/hooks.js';
 import { useExecuteCategoryRecreationOperation } from '../../services/hooks/index.js';
 import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
+import { estimateLines } from '../product-detail/priceResearchModel.js';
 import { formatCurrency, formatDate, formatRelativeTime } from '../../utils/formatters.js';
 import {
   hermesTypeLabel,
@@ -66,6 +67,7 @@ const EVENT_ICONS: Record<HermesEvent['type'], React.ElementType> = {
   olx_category_mismatch: CategoryIcon,
   product_category_conflict: RuleIcon,
   relist: ReplayIcon,
+  price_estimate_unavailable: CompareArrowsIcon,
 };
 
 export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'>> = ({ type, severity }) => {
@@ -312,14 +314,23 @@ export const ProposedChangeDiff: React.FC<{
   switch (change.kind) {
     case 'price':
       return wrap(
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography variant="caption" color="text.secondary">Price</Typography>
-          <Typography variant="body2" sx={{ textDecoration: 'line-through', color: 'text.secondary' }}>
-            {formatCurrency(change.from, currency)}
-          </Typography>
-          {arrow}
-          <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(change.to, currency)}</Typography>
-        </Stack>,
+        <>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography variant="caption" color="text.secondary">Price</Typography>
+            <Typography variant="body2" sx={{ textDecoration: 'line-through', color: 'text.secondary' }}>
+              {formatCurrency(change.from, currency)}
+            </Typography>
+            {arrow}
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatCurrency(change.to, currency)}</Typography>
+          </Stack>
+          {change.estimate && (
+            <Stack spacing={0.25} sx={{ mt: 1 }} data-testid="price-estimate-lines">
+              {estimateLines(change.estimate, currency).map((line) => (
+                <Typography key={line} variant="caption" color="text.secondary">{line}</Typography>
+              ))}
+            </Stack>
+          )}
+        </>,
       );
     case 'title':
     case 'description': {

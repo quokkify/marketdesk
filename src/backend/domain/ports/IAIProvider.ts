@@ -5,6 +5,7 @@
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
+import type { PriceEstimate, PriceResearch } from '../../../shared/types';
 import type {
   CreativityPreset,
   ListingSeoInput,
@@ -20,6 +21,13 @@ export interface PriceSuggestionContext {
   costPrice?: number;
 }
 
+export interface PriceEstimateContext {
+  product: Product;
+  listing: Listing;
+  daysLive: number | null;
+  research: PriceResearch | null;
+}
+
 export interface PriceSuggestion {
   suggestedPrice: number;
   reasoning: string;
@@ -32,6 +40,9 @@ export interface ListingAnalysis {
 }
 
 export interface IAIProvider {
+  // Estimate a start and a floor price from the product card, optional research and listing stats.
+  estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate>;
+
   // Generate a pricing suggestion for a listing.
   suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion>;
 
@@ -49,6 +60,9 @@ export interface IAIProvider {
   // Run a MarketDesk-owned, tool-free listing SEO profile over sanitized input only.
   analyzeListingSeo(input: ListingSeoInput, preset: CreativityPreset): Promise<ListingSeoOutput>;
 }
+
+// Message of the plain error a provider throws when its price estimate answer cannot be used.
+export const PRICE_ESTIMATE_UNUSABLE_MESSAGE = 'Hermes price estimate was not usable';
 
 export { OFFLINE_AI_NOTICE } from '../../../shared/constants';
 

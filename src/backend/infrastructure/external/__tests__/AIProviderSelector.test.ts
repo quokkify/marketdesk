@@ -51,6 +51,7 @@ const hermesTimeout = async (): Promise<never> => {
 };
 const timingOutHermes: IAIProvider = {
   suggestPrice: hermesTimeout,
+  estimatePrice: hermesTimeout,
   generateTitle: hermesTimeout,
   analyzeListing: hermesTimeout,
   analyzeListingSeo: hermesTimeout,
@@ -169,6 +170,7 @@ describe('AIProviderSelector', () => {
   it('selector in hermes mode refuses every call when Hermes has tools enabled', async () => {
     const guardedHermes: IAIProvider = {
       suggestPrice: jest.fn(),
+      estimatePrice: jest.fn(),
       generateTitle: jest.fn(),
       analyzeListing: jest.fn(),
       analyzeListingSeo: jest.fn(),

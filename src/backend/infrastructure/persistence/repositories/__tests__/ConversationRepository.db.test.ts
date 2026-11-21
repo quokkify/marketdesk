@@ -21,7 +21,7 @@ const TABLES = [
 // The migration text runs unchanged except that its tables are created as session TEMP tables,
 // so the shared database is never written.
 function migrationAsTemp(): string {
-  const sql = ['047_conversations.sql', '048_reply_draft_source.sql', '049_reply_drafts_one_pending.sql']
+  const sql = ['048_conversations.sql', '049_reply_draft_source.sql', '050_reply_drafts_one_pending.sql']
     .map((file) => fs.readFileSync(path.resolve(process.cwd(), 'src/backend/persistence/migrations', file), 'utf8'))
     .join('\n');
   return sql.replace(/CREATE TABLE IF NOT EXISTS/g, 'CREATE TEMP TABLE');

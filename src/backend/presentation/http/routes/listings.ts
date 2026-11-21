@@ -1,5 +1,6 @@
 // Listing routes. Price-affecting operations (update/publish/relist) are guarded by
-// the sensitive rate limiter (§18: 10/min) when one is supplied.
+// the sensitive rate limiter (§18: 10/min) when one is supplied; routes that call the AI
+// provider by the AI rate limiter (see aiRateLimiter).
 
 import { Router, type RequestHandler } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
@@ -11,6 +12,8 @@ import {
   marketplaceCategorySchema,
   publishListingSchema,
   reactivateListingSchema,
+  revivalProposalSchema,
+  reviveListingSchema,
 } from '../validation/schemas';
 
 const passthrough: RequestHandler = (_req, _res, next) => next();
@@ -32,6 +35,7 @@ const categorySearchLimiter: RequestHandler = rateLimit({
 export function createListingRoutes(
   controller: ListingController,
   sensitiveLimiter: RequestHandler = passthrough,
+  aiLimiter: RequestHandler = passthrough,
 ): Router {
   const router = Router();
   router.get('/', asyncHandler(controller.list));
@@ -64,6 +68,21 @@ export function createListingRoutes(
     sensitiveLimiter,
     validateBody(reactivateListingSchema),
     asyncHandler(controller.reactivate),
+  );
+  router.post(
+    '/:id/revival-proposal',
+    aiLimiter,
+    validateBody(revivalProposalSchema),
+    asyncHandler(controller.revivalProposal),
+  );
+  // The workspace's listing is looked up before the body is validated, so an unknown or foreign
+  // listing reads as 404 whatever the body.
+  router.post(
+    '/:id/revive',
+    sensitiveLimiter,
+    asyncHandler(controller.requireListing),
+    validateBody(reviveListingSchema),
+    asyncHandler(controller.revive),
   );
   router.post(
     '/:id/relist',

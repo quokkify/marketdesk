@@ -42,6 +42,9 @@ class SourceAwareStub extends StubAIProvider implements AIProviderSourceAware {
 }
 
 const failingHermes: IAIProvider = {
+  estimatePrice: async () => {
+    throw new Error('Hermes AI is not reachable in this environment');
+  },
   suggestPrice: async () => {
     throw new Error('Hermes AI is not reachable in this environment');
   },
@@ -206,6 +209,7 @@ describe('ProductAIDraftService provider failure log', () => {
     };
     return {
       suggestPrice: fail,
+      estimatePrice: fail,
       generateTitle: fail,
       analyzeListing: fail,
       analyzeListingSeo: fail,

@@ -19,12 +19,12 @@ public class ProductService extends MarketDeskApiService {
     return get(authorized(token), PRODUCTS);
   }
 
-  public ValidatableResponse getProducts() {
-    return get(anonymous(), PRODUCTS);
-  }
-
   public ValidatableResponse getProduct(String token, String productId) {
     return get(authorized(token), PRODUCT.formatted(productId));
+  }
+
+  public ValidatableResponse getProducts() {
+    return get(anonymous(), PRODUCTS);
   }
 
   // A null value is sent as an explicit JSON null, which clears the field.
@@ -37,8 +37,9 @@ public class ProductService extends MarketDeskApiService {
     return patch(authorized(token), PRODUCT.formatted(productId), PRICE_PATCH.formatted("sellingPrice", sellingPrice));
   }
 
+  // Keeps nulls: the API requires costPrice and reads null as an unknown cost price.
   public ValidatableResponse createProduct(String token, ProductRequestPojo body) {
-    return post(authorized(token), PRODUCTS, JsonConverter.toJsonIgnoreNulls(body));
+    return post(authorized(token), PRODUCTS, JsonConverter.toJson(body));
   }
 
   public ValidatableResponse createListing(String token, String productId, ListingRequestPojo body) {

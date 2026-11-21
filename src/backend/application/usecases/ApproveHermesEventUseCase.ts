@@ -11,9 +11,11 @@ import { Result, Ok, Err } from '../../domain/shared/Result';
 import {
   GuardrailViolationError,
   NotFoundError,
+  ValidationError,
   InvalidStateError,
   ServiceUnavailableError,
 } from '../../domain/shared/DomainError';
+import { OLX_CONDITION_REQUIRED_MESSAGE } from '../../domain/services/OlxCategoryGuard';
 import { Money } from '../../domain/valueObjects/Money';
 import type { HermesEvent } from '../../domain/entities/HermesEvent';
 import type { Listing } from '../../domain/entities/Listing';
@@ -627,6 +629,10 @@ export class ApproveHermesEventUseCase {
     }
     if (candidates.length === 0 && listingIds.length > 0) {
       return Err(new InvalidStateError('relist event references no valid listings to publish'));
+    }
+
+    if (candidates.some(({ marketplace, product }) => marketplace.key === 'olx' && product.condition === 'unknown')) {
+      return Err(new ValidationError(OLX_CONDITION_REQUIRED_MESSAGE));
     }
 
     const hasOlxCandidate = candidates.some(({ marketplace }) => marketplace.key === 'olx');

@@ -39,6 +39,7 @@ export const HERMES_TYPE_LABELS: Record<HermesEventType, string> = {
   olx_category_mismatch: 'OLX category mismatch',
   product_category_conflict: 'Product category conflict',
   relist: 'Relist',
+  price_estimate_unavailable: 'Price estimate unavailable',
 };
 
 export function conditionLabel(condition: ProductCondition): string {

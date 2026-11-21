@@ -86,7 +86,8 @@ export type HermesEventType =
   | 'update_description'
   | 'olx_category_mismatch'
   | 'product_category_conflict'
-  | 'relist';
+  | 'relist'
+  | 'price_estimate_unavailable';
 
 export type ChangedBy = 'user' | 'hermes';
 
@@ -98,11 +99,43 @@ export type AnalyticsEventType = 'view' | 'message' | 'sale';
 // Proposed change payloads (fully typed JSONB for hermes_events.proposed_change)
 // ============================================================================
 
+export type FigureBasis = 'observed' | 'estimated';
+
+export interface LabelledAmount {
+  amount: number;
+  basis: FigureBasis;
+}
+
+export interface PriceEstimate {
+  startPrice: number;
+  floorPrice: number;
+  retailAnchor: LabelledAmount | null;
+  usedRange: { low: number; high: number; basis: FigureBasis } | null;
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface PriceComparable {
+  price: number;
+  note: string;
+}
+
+export interface PriceResearch {
+  productId: string;
+  retailPrice: number | null;
+  retailCurrency: string | null;
+  retailSource: string | null;
+  retailCheckedAt: string | null; // ISO date
+  comparables: PriceComparable[];
+  updatedAt: string;
+}
+
 export interface PriceChangePayload {
   kind: 'price';
   field: 'price';
   from: number;
   to: number;
+  estimate?: PriceEstimate;
 }
 
 export interface TitleChangePayload {
@@ -399,6 +432,46 @@ export interface ProductImprovementSuggestions {
   copy: Array<{ field: 'title' | 'description'; proposedValue: string; rationale: string }>;
   price?: { suggestedPrice: number; reasoning: string; confidence: 'high' | 'medium' | 'low' };
   aiUsage?: AiUsageSummary;
+}
+
+export interface RevivalMissingFact {
+  field: 'condition' | 'costPrice';
+  required: boolean;
+  note: string;
+}
+
+export interface RevivalPriceGuard {
+  status: 'ok' | 'below_cost' | 'unchecked' | 'no_proposal';
+  costPrice: number | null;
+}
+
+export interface RevivalCopyProposal {
+  current: string;
+  proposed: string;
+  rationale: string;
+}
+
+/** A Hermes step of a revival proposal: the title/description copy or the price. */
+export type RevivalAiStep = 'copy' | 'price';
+
+/** POST /api/listings/:id/revival-proposal. Review-only: nothing is saved or sent to OLX. */
+export interface RevivalProposal {
+  listingId: string;
+  productId: string;
+  productUpdatedAt: string;
+  listingUpdatedAt: string;
+  missingFacts: RevivalMissingFact[];
+  title?: RevivalCopyProposal;
+  description?: RevivalCopyProposal;
+  price?: { current: number; proposed: number; currency: string; rationale: string };
+  /** The advert's price now; the apply compares the cost price with it when no new price is ticked. */
+  currentPrice: number;
+  /** The product's selling price; the apply compares a new cost price with it. */
+  productSellingPrice: number;
+  priceGuard: RevivalPriceGuard;
+  /** Hermes steps that failed (unreachable, refused, invalid output); offline results are not failures. */
+  aiIssues: RevivalAiStep[];
+  aiUsage: AiUsageSummary;
 }
 
 export type ProductAIDraftMode = 'photos' | 'title';
