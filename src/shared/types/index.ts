@@ -368,6 +368,37 @@ export interface ProductImprovementSuggestions {
   aiUsage?: AiUsageSummary;
 }
 
+export interface RevivalMissingFact {
+  field: 'condition' | 'costPrice';
+  required: boolean;
+  note: string;
+}
+
+export interface RevivalPriceGuard {
+  status: 'ok' | 'below_cost' | 'unchecked' | 'no_proposal';
+  costPrice: number | null;
+}
+
+export interface RevivalCopyProposal {
+  current: string;
+  proposed: string;
+  rationale: string;
+}
+
+/** POST /api/listings/:id/revival-proposal. Review-only: nothing is saved or sent to OLX. */
+export interface RevivalProposal {
+  listingId: string;
+  productId: string;
+  productUpdatedAt: string;
+  listingUpdatedAt: string;
+  missingFacts: RevivalMissingFact[];
+  title?: RevivalCopyProposal;
+  description?: RevivalCopyProposal;
+  price?: { current: number; proposed: number; currency: string; rationale: string };
+  priceGuard: RevivalPriceGuard;
+  aiUsage: AiUsageSummary;
+}
+
 export type ProductAIDraftMode = 'photos' | 'title';
 
 export type ProductAIDraftFields = Partial<

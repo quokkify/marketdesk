@@ -122,7 +122,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   guard.push(requireWorkspace, currentPrincipalGuard);
 
   api.use('/products', ...guard, createProductRoutes(c.products, aiLimiter));
-  api.use('/listings', ...guard, createListingRoutes(c.listings, sensitiveLimiter));
+  api.use('/listings', ...guard, createListingRoutes(c.listings, sensitiveLimiter, aiLimiter));
   api.use('/marketplaces', ...guard, createMarketplaceRoutes(c.marketplaces));
   api.use('/hermes', ...guard, createHermesRoutes(c.hermes, aiLimiter));
   api.use('/analytics', ...guard, createAnalyticsRoutes(c.analytics));

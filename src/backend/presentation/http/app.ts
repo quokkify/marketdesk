@@ -227,6 +227,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       olxQuotaService: deps.olxPublicationQuotaService,
       categoryCorrectionOperationService: deps.categoryCorrectionOperationService,
       listingReactivationService: deps.listingReactivationService,
+      productAssistanceGraph: deps.productAssistanceGraph,
       olxAdapterMode: deps.olxAdapterMode,
     }),
     marketplaces: new MarketplaceController(

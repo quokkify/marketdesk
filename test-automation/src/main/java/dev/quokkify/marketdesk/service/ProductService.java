@@ -21,8 +21,9 @@ public class ProductService extends MarketDeskApiService {
     return get(anonymous(), PRODUCTS);
   }
 
+  // Keeps nulls: the API requires costPrice and reads null as an unknown cost price.
   public ValidatableResponse createProduct(String token, ProductRequestPojo body) {
-    return post(authorized(token), PRODUCTS, JsonConverter.toJsonIgnoreNulls(body));
+    return post(authorized(token), PRODUCTS, JsonConverter.toJson(body));
   }
 
   public ValidatableResponse createListing(String token, String productId, ListingRequestPojo body) {

@@ -16,6 +16,8 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String GUARDRAIL_VIOLATION = "GUARDRAIL_VIOLATION";
   private static final String CATEGORY_MESSAGE = "Select an exact OLX leaf category before publishing";
   private static final String CONDITION_MESSAGE = "Choose the product's condition before publishing to OLX";
+  private static final String REVIVAL_MESSAGE = "Only an expired listing with an OLX advert can be revived";
+  private static final String COST_PRICE_NOTE = "Without a cost price the price floor cannot be checked";
   private static final String SANDBOX_MESSAGE = "Reactivation is not available in sandbox mode";
 
   @Override
@@ -51,6 +53,29 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   public ListingVerification isCategoryGuardRefusal(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, GUARDRAIL_VIOLATION);
     response.body("error.message", Matchers.equalTo(CATEGORY_MESSAGE));
+    return self();
+  }
+
+  // The stack runs on the offline heuristics, which Hermes never reviewed, so there is no AI proposal to check.
+  @Step("Revival proposal asks for the condition and the cost price and proposes nothing from offline AI")
+  public ListingVerification isProposalWithMissingConditionAndCostPrice(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("success", Matchers.equalTo(true));
+    response.body("data.missingFacts.find { it.field == 'condition' }.required", Matchers.equalTo(true));
+    response.body("data.missingFacts.find { it.field == 'costPrice' }.required", Matchers.equalTo(false));
+    response.body("data.missingFacts.find { it.field == 'costPrice' }.note", Matchers.equalTo(COST_PRICE_NOTE));
+    response.body("data.priceGuard.status", Matchers.oneOf("unchecked", "no_proposal"));
+    response.body("data.priceGuard.costPrice", Matchers.nullValue());
+    response.body("data.aiUsage.provider", Matchers.equalTo("offline"));
+    response.body("data.productUpdatedAt", Matchers.notNullValue());
+    response.body("data.listingUpdatedAt", Matchers.notNullValue());
+    return self();
+  }
+
+  @Step("Revival is refused for a listing that has not expired on OLX")
+  public ListingVerification isRevivalRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
+    response.body("error.message", Matchers.equalTo(REVIVAL_MESSAGE));
     return self();
   }
 

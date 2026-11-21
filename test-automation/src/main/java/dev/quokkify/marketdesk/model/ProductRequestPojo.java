@@ -11,4 +11,8 @@ public record ProductRequestPojo(String name, String description, Double costPri
   public ProductRequestPojo withCondition(String newCondition) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, newCondition, category);
   }
+
+  public ProductRequestPojo withoutCostPrice() {
+    return new ProductRequestPojo(name, description, null, sellingPrice, condition, category);
+  }
 }

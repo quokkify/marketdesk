@@ -23,6 +23,7 @@ import { evaluateOlxCategory, type OlxCategoryGuardResult } from '../../../domai
 import type { OlxTrustedTaxonomyResolver } from '../../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 import type { ListingReactivationService } from '../../../application/services/ListingReactivationService';
+import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import { ok, paginated } from '../formatters/ResponseFormatter';
 import type { OlxAdapterMode } from '../../../config/env';
 
@@ -49,6 +50,7 @@ export interface ListingControllerDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   listingReactivationService?: ListingReactivationService;
+  productAssistanceGraph?: Pick<ProductAssistanceGraph, 'proposeRevival'>;
   // OLX adapter mode from OLX_ADAPTER_MODE.
   olxAdapterMode: OlxAdapterMode;
 }
@@ -303,6 +305,17 @@ export class ListingController {
       outcome: result.outcome,
       remoteStatus: result.remoteStatus,
     });
+  };
+
+  // Review-only: the proposal reads MarketDesk data and asks Hermes, it never reaches OLX, so the
+  // sandbox allows it.
+  revivalProposal = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const graph = this.deps.productAssistanceGraph;
+    if (!graph) return next(new ServiceUnavailableError('Product assistance is unavailable'));
+    ok(res, await graph.proposeRevival({
+      listingId: routeParam(req.params.id),
+      workspaceId: req.user!.workspaceId!,
+    }));
   };
 
   relist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

@@ -6,6 +6,7 @@ public class ListingService extends MarketDeskApiService {
 
   private static final String REACTIVATE = "/api/listings/%s/reactivate";
   private static final String PUBLISH = "/api/listings/%s/publish";
+  private static final String REVIVAL_PROPOSAL = "/api/listings/%s/revival-proposal";
   private static final String EMPTY_BODY = "{}";
 
   public ValidatableResponse reactivate(String token, String listingId) {
@@ -18,5 +19,13 @@ public class ListingService extends MarketDeskApiService {
 
   public ValidatableResponse publish(String token, String listingId) {
     return post(authorized(token), PUBLISH.formatted(listingId), EMPTY_BODY);
+  }
+
+  public ValidatableResponse revivalProposal(String token, String listingId) {
+    return post(authorized(token), REVIVAL_PROPOSAL.formatted(listingId), EMPTY_BODY);
+  }
+
+  public ValidatableResponse revivalProposal(String listingId) {
+    return post(anonymous(), REVIVAL_PROPOSAL.formatted(listingId), EMPTY_BODY);
   }
 }

@@ -1,5 +1,8 @@
 package dev.quokkify.marketdesk.step;
 
+import java.util.UUID;
+
+import dev.quokkify.marketdesk.helper.DatabaseHelper;
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ListingRequestPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
@@ -19,6 +22,7 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
 
   private final ListingService service = new ListingService();
   private final ProductService productService = new ProductService();
+  private final DatabaseHelper database = new DatabaseHelper();
 
   public ListingSteps() {
     this.verification = new ListingVerification();
@@ -38,6 +42,18 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Create a product with condition {condition} and an OLX listing")
   public String createOlxListingWithCondition(AccountPojo account, String condition) {
     return createOlxProductListing(account, ProductRequestPojo.sample().withCondition(condition)).listingId();
+  }
+
+  @Step("Create a product with condition {condition}, no cost price and an OLX listing")
+  public String createOlxListingWithoutCostPrice(AccountPojo account, String condition) {
+    return createOlxProductListing(account, ProductRequestPojo.sample().withCondition(condition).withoutCostPrice())
+        .listingId();
+  }
+
+  // The stub stack never expires an advert, so the listing is moved there in the database.
+  @Step("Listing {listingId} expired on OLX")
+  public void markExpiredOnOlx(String listingId) {
+    database.markListingExpired(listingId, "qa-olx-" + UUID.randomUUID());
   }
 
   private ProductListingPojo createOlxProductListing(AccountPojo account, ProductRequestPojo product) {
@@ -65,5 +81,15 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Publish listing {listingId} to OLX")
   public ValidatableResponse publish(AccountPojo account, String listingId) {
     return service.publish(account.token(), listingId);
+  }
+
+  @Step("Ask for a revival proposal for listing {listingId}")
+  public ValidatableResponse requestRevivalProposal(AccountPojo account, String listingId) {
+    return service.revivalProposal(account.token(), listingId);
+  }
+
+  @Step("Ask for a revival proposal for listing {listingId} without authentication")
+  public ValidatableResponse requestRevivalProposalUnauthenticated(String listingId) {
+    return service.revivalProposal(listingId);
   }
 }
