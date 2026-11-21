@@ -52,6 +52,7 @@ import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/O
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
+import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
 import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 
@@ -88,6 +89,8 @@ export interface AppDeps {
   priceHistoryRecorder?: IPriceHistoryRecorder;
   idGenerator?: IdGenerator;
   logger?: ErrorLogger;
+  // Writes one line per API request; absent in tests that do not care about the log.
+  requestLogger?: RequestLogger;
 }
 
 export interface AppOptions {
@@ -190,6 +193,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
   app.use(cors(createCorsOptions(options.corsOrigin)));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  if (deps.requestLogger) app.use(createRequestLoggingMiddleware(deps.requestLogger));
   const runRecorder = deps.runRecorder ?? noopRunRecorder;
   app.use(createRunContextMiddleware(runRecorder));
 

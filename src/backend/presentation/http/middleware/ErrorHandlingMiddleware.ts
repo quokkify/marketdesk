@@ -4,7 +4,7 @@
 // never leaked in production (see toErrorBody).
 
 import type { ErrorRequestHandler } from 'express';
-import { pgConstraintConflict, statusForError, toErrorBody } from '../formatters/ResponseFormatter';
+import { fail, pgConstraintConflict, statusForError } from '../formatters/ResponseFormatter';
 import { DomainError } from '../../../domain/shared/DomainError';
 import type { IRunRecorder } from '../../../application/ports/IRunRecorder';
 import { currentRun } from '../../../application/runs/runContext';
@@ -51,6 +51,6 @@ export function createErrorHandler(
         )
       );
     }
-    res.status(status).json({ success: false, error: toErrorBody(err) });
+    fail(res, err, status);
   };
 }
