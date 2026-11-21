@@ -1029,7 +1029,7 @@ describe('OLXAdapter', () => {
     const [first] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
     const [second] = await new OLXAdapter(undefined, fastOptions).sync(['olx-stub-metrics']);
 
-    expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 0, messages: 0 });
-    expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 0, messages: 0 });
+    expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 3, messages: 3 });
+    expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 3, messages: 3 });
   });
 });

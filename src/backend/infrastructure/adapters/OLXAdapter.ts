@@ -16,9 +16,16 @@ import type {
   ImportDiscoveryOptions,
   ImportedMarketplaceListing,
   ListingPublishInput,
+  MarketplaceMessage,
+  MarketplaceThread,
   PublishResult,
   SyncedListing,
 } from '../../domain/services/MarketplaceAdapter';
+import {
+  appendSandboxSellerMessage,
+  sandboxThreadMessages,
+  sandboxThreadsForAdvert,
+} from './olxSandboxConversations';
 import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
 import { OlxTaxonomyResolver, type OlxTrustedTaxonomyResolver } from './OlxTaxonomyResolver';
 import type { MarketplaceCategoryMetadata } from '../../../shared/types';
@@ -133,9 +140,26 @@ interface OlxAdvertStatisticsResponse extends Record<string, unknown> {
 }
 
 interface OlxThreadMetadata {
+  uuid?: unknown;
+  id?: unknown;
   advert_id?: unknown;
+  interlocutor_id?: unknown;
   total_count?: unknown;
 }
+
+interface OlxMessage {
+  uuid?: unknown;
+  id?: unknown;
+  created_at?: unknown;
+  type?: unknown;
+  text?: unknown;
+}
+
+type OlxMessageListResponse = OlxMessage[] | { data: OlxMessage[] };
+
+type OlxIdentified = { uuid?: unknown; id?: unknown };
+
+type OlxSendMessageResponse = OlxIdentified | { data?: OlxIdentified } | null;
 
 type OlxThreadListResponse = OlxThreadMetadata[] | {
   data: OlxThreadMetadata[];
@@ -438,60 +462,126 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     }
   }
 
+  // Throws on any transport or shape failure; callers decide how to degrade.
+  private async paginateThreads(externalListingId: string): Promise<OlxThreadMetadata[]> {
+    let offset = 0;
+    let pages = 0;
+    const result: OlxThreadMetadata[] = [];
+    for (;;) {
+      if (pages >= OLX_THREAD_MAX_PAGES) {
+        throw new Error('OLX thread metadata pagination exceeded the safety limit');
+      }
+      pages += 1;
+      const res = await this.http.request<OlxThreadListResponse>({
+        method: 'GET',
+        url: `${this.baseUrl}/threads`,
+        query: { advert_id: externalListingId, offset, limit: OLX_THREAD_PAGE_SIZE },
+      });
+      const envelope = Array.isArray(res.data) ? null : res.data;
+      const threads = Array.isArray(res.data) ? res.data : envelope?.data;
+      if (!Array.isArray(threads)) throw new Error('Malformed OLX thread metadata response');
+
+      for (const thread of threads) {
+        if (String(thread.advert_id) === externalListingId) result.push(thread);
+      }
+
+      const explicitNext = envelope?.links?.next;
+      const currentPage = envelope?.meta?.current_page;
+      const lastPage = envelope?.meta?.last_page;
+      const hasNext = explicitNext !== undefined
+        ? explicitNext !== null && explicitNext !== ''
+        : currentPage !== undefined && lastPage !== undefined
+          ? currentPage < lastPage
+          : threads.length === OLX_THREAD_PAGE_SIZE;
+      if (!hasNext) return result;
+      if (threads.length === 0) {
+        throw new Error('OLX thread metadata pagination did not advance');
+      }
+      offset += OLX_THREAD_PAGE_SIZE;
+    }
+  }
+
   private async fetchThreadMetrics(
     externalListingId: string,
   ): Promise<OlxThreadMetricsResult> {
-    let offset = 0;
     let conversations = 0;
     let messages = 0;
-    let pages = 0;
     try {
-      for (;;) {
-        if (pages >= OLX_THREAD_MAX_PAGES) {
-          throw new Error('OLX thread metadata pagination exceeded the safety limit');
-        }
-        pages += 1;
-        const res = await this.http.request<OlxThreadListResponse>({
-          method: 'GET',
-          url: `${this.baseUrl}/threads`,
-          query: { advert_id: externalListingId, offset, limit: OLX_THREAD_PAGE_SIZE },
-        });
-        const envelope = Array.isArray(res.data) ? null : res.data;
-        const threads = Array.isArray(res.data) ? res.data : envelope?.data;
-        if (!Array.isArray(threads)) throw new Error('Malformed OLX thread metadata response');
-
-        for (const thread of threads) {
-          if (String(thread.advert_id) !== externalListingId) continue;
-          conversations += 1;
-          const total = this.parseCounter(thread.total_count);
-          if (total !== null) {
-            if (!Number.isSafeInteger(messages + total)) {
-              throw new Error('OLX thread message count exceeds the safe integer range');
-            }
-            messages += total;
+      for (const thread of await this.paginateThreads(externalListingId)) {
+        conversations += 1;
+        const total = this.parseCounter(thread.total_count);
+        if (total !== null) {
+          if (!Number.isSafeInteger(messages + total)) {
+            throw new Error('OLX thread message count exceeds the safe integer range');
           }
+          messages += total;
         }
-
-        const explicitNext = envelope?.links?.next;
-        const currentPage = envelope?.meta?.current_page;
-        const lastPage = envelope?.meta?.last_page;
-        const hasNext = explicitNext !== undefined
-          ? explicitNext !== null && explicitNext !== ''
-          : currentPage !== undefined && lastPage !== undefined
-            ? currentPage < lastPage
-            : threads.length === OLX_THREAD_PAGE_SIZE;
-        if (!hasNext) return { status: 'success', conversations, messages };
-        if (threads.length === 0) {
-          throw new Error('OLX thread metadata pagination did not advance');
-        }
-        offset += OLX_THREAD_PAGE_SIZE;
       }
+      return { status: 'success', conversations, messages };
     } catch (error) {
       if (error instanceof HttpError && error.status === 404) {
         return { status: 'unavailable', conversations: null, messages: null };
       }
       return { status: 'error', conversations: null, messages: null };
     }
+  }
+
+  listThreads(externalListingId: string): Promise<MarketplaceThread[]> {
+    return this.execute('listThreads', async () => {
+      const threads: MarketplaceThread[] = [];
+      for (const thread of await this.paginateThreads(externalListingId)) {
+        const externalThreadId = this.olxId(thread);
+        if (externalThreadId === null) continue;
+        const buyer = thread.interlocutor_id;
+        threads.push({
+          externalThreadId,
+          externalBuyerId: buyer === undefined || buyer === null || buyer === '' ? null : String(buyer),
+        });
+      }
+      return threads;
+    });
+  }
+
+  listThreadMessages(externalThreadId: string): Promise<MarketplaceMessage[]> {
+    return this.execute('listThreadMessages', async () => {
+      const res = await this.http.request<OlxMessageListResponse>({
+        method: 'GET',
+        url: `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`,
+      });
+      const raw = Array.isArray(res.data) ? res.data : res.data?.data;
+      if (!Array.isArray(raw)) throw new Error('Malformed OLX thread messages response');
+      const messages: MarketplaceMessage[] = [];
+      for (const message of raw) {
+        const direction = message.type === 'received' ? 'buyer' : message.type === 'sent' ? 'seller' : null;
+        const externalMessageId = this.olxId(message);
+        const sentAt = typeof message.created_at === 'string' ? new Date(message.created_at) : null;
+        if (!direction || typeof message.text !== 'string' || externalMessageId === null) continue;
+        if (!sentAt || Number.isNaN(sentAt.getTime())) continue;
+        messages.push({ externalMessageId, direction, text: message.text, sentAt });
+      }
+      return messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime());
+    });
+  }
+
+  // OLX documents no response body and no idempotency key, so a lost response must never re-send.
+  sendThreadMessage(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }> {
+    return this.execute('sendThreadMessage', async () => {
+      const res = await this.http.request<OlxSendMessageResponse>({
+        method: 'POST',
+        url: `${this.baseUrl}/threads/${encodeURIComponent(externalThreadId)}/messages`,
+        body: { text },
+      });
+      const body = res.data;
+      const payload = body && typeof body === 'object' && 'data' in body ? body.data : body;
+      return { externalMessageId: payload && typeof payload === 'object' ? this.olxId(payload as OlxIdentified) : null };
+    }, { retry: false });
+  }
+
+  // OLX prefers `uuid`; `id` is deprecated but still sent by some endpoints.
+  private olxId(entity: OlxIdentified): string | null {
+    if (typeof entity.uuid === 'string' && entity.uuid !== '') return entity.uuid;
+    if (typeof entity.id === 'string' || typeof entity.id === 'number') return String(entity.id);
+    return null;
   }
 
   private withStatistics(
@@ -726,6 +816,18 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   }
 
   private static stubResponder: StubResponder = (config): HttpResponse => {
+    const threadMessages = config.url.match(/\/threads\/([^/?]+)\/messages$/);
+    if (threadMessages) {
+      const threadUuid = decodeURIComponent(threadMessages[1]);
+      const known = sandboxThreadMessages(threadUuid);
+      if (!known) return { status: 404, data: {} };
+      if (config.method === 'POST') {
+        const text = (config.body as { text?: unknown } | undefined)?.text;
+        if (typeof text !== 'string') return { status: 400, data: {} };
+        return { status: 200, data: { data: { uuid: appendSandboxSellerMessage(threadUuid, text) } } };
+      }
+      return { status: 200, data: [...known] };
+    }
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
     // The random part keeps two publishes in one millisecond apart, so they never share metrics.
     const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -737,7 +839,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       return { status: 204, data: {} };
     }
     if (config.method === 'GET' && config.url.endsWith('/threads')) {
-      return { status: 200, data: [] };
+      const advert = config.query?.advert_id;
+      return { status: 200, data: advert === undefined ? [] : sandboxThreadsForAdvert(String(advert)) };
     }
     if (config.method === 'GET' && config.url.endsWith('/statistics')) {
       // Statistics repeat the counts of the latest advert read without adding a read.
