@@ -128,14 +128,14 @@ function setup(
     withQuotaService ? quotaService : undefined,
     options.sandboxMode === undefined ? undefined : { sandboxMode: options.sandboxMode },
   );
-  return { useCase, publishQueue, activityLog, quotaService };
+  return { useCase, publishQueue, activityLog, quotaService, listingRepo, productRepo, marketplaceRepo };
 }
 
 describe('PublishListingUseCase', () => {
   it('rejects publishing when the marketplace is not connected', async () => {
     const { useCase, publishQueue } = setup(false);
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.code).toBe('GUARDRAIL_VIOLATION');
@@ -145,7 +145,7 @@ describe('PublishListingUseCase', () => {
   it('enqueues a publish job and logs intent when connected', async () => {
     const { useCase, publishQueue, activityLog } = setup(true);
 
-    const result = await useCase.execute({ listingId: 'lst-1', actorId: 'user-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1', actorId: 'user-1' });
 
     expect(result.isOk()).toBe(true);
     expect(publishQueue.jobs).toHaveLength(1);
@@ -166,7 +166,7 @@ describe('PublishListingUseCase', () => {
   it('enqueues with marketplaceId when the OAuth account is connected', async () => {
     const { useCase, publishQueue } = setup(true, 'connected');
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isOk()).toBe(true);
     expect(publishQueue.jobs).toHaveLength(1);
@@ -184,7 +184,7 @@ describe('PublishListingUseCase', () => {
       reason: 'quota_exhausted', requiresOverride: true,
     });
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error).toBeInstanceOf(GuardrailViolationError);
@@ -200,6 +200,7 @@ describe('PublishListingUseCase', () => {
 
     const result = await useCase.execute({
       listingId: 'lst-1',
+      workspaceId: 'ws-1',
       actorId: 'user-1',
       quotaOverride: { confirmed: true, reason: 'Accept possible OLX publication fee' },
     });
@@ -223,6 +224,7 @@ describe('PublishListingUseCase', () => {
 
       const result = await useCase.execute({
         listingId: 'lst-1',
+        workspaceId: 'ws-1',
         mode: 'relist',
         quotaOverride: { confirmed: true, reason: 'Accept possible OLX publication fee' },
       });
@@ -239,7 +241,7 @@ describe('PublishListingUseCase', () => {
     async (listingStatus) => {
       const { useCase, publishQueue } = setup(true, 'legacy', true, { listingStatus });
 
-      const result = await useCase.execute({ listingId: 'lst-1', mode: 'relist' });
+      const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1', mode: 'relist' });
 
       expect(result.isOk()).toBe(true);
       expect(publishQueue.jobs).toHaveLength(1);
@@ -254,7 +256,7 @@ describe('PublishListingUseCase', () => {
     });
     const authorize = jest.spyOn(quotaService, 'authorize');
 
-    const result = await useCase.execute({ listingId: 'lst-1', mode: 'relist' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1', mode: 'relist' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error).toBeInstanceOf(InvalidStateError);
@@ -265,7 +267,7 @@ describe('PublishListingUseCase', () => {
   it('fails closed without enqueueing when the OLX quota service is unavailable', async () => {
     const { useCase, publishQueue } = setup(true, 'legacy', false);
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error).toBeInstanceOf(GuardrailViolationError);
@@ -275,7 +277,7 @@ describe('PublishListingUseCase', () => {
   it('rejects publishing when the local flag is true but no OAuth account exists', async () => {
     const { useCase, publishQueue } = setup(true, 'missing');
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.code).toBe('GUARDRAIL_VIOLATION');
@@ -298,6 +300,7 @@ describe('PublishListingUseCase', () => {
 
     const result = await useCase.execute({
       listingId: 'lst-1',
+      workspaceId: 'ws-1',
       quotaOverride: { confirmed: true, reason: 'Accept possible OLX publication fee' },
     });
 
@@ -313,7 +316,7 @@ describe('PublishListingUseCase', () => {
     const { useCase, publishQueue, quotaService } = setup(true, 'legacy', true, { category });
     const authorize = jest.spyOn(quotaService, 'authorize');
 
-    const result = await useCase.execute({ listingId: 'lst-1' });
+    const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
     expect(result.isErr()).toBe(true);
     expect(authorize).not.toHaveBeenCalled();
@@ -337,6 +340,7 @@ describe('PublishListingUseCase', () => {
 
         const result = await useCase.execute({
           listingId: 'lst-1',
+          workspaceId: 'ws-1',
           mode,
           quotaOverride: { confirmed: true, reason: 'Accept possible OLX publication fee' },
         });
@@ -359,7 +363,7 @@ describe('PublishListingUseCase', () => {
         sandboxMode: true,
       });
 
-      const result = await useCase.execute({ listingId: 'lst-1' });
+      const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
 
       expect(result.isOk()).toBe(true);
       expect(publishQueue.jobs).toHaveLength(1);
@@ -369,8 +373,55 @@ describe('PublishListingUseCase', () => {
 
   it('returns NOT_FOUND for an unknown listing', async () => {
     const { useCase } = setup(true);
-    const result = await useCase.execute({ listingId: 'missing' });
+    const result = await useCase.execute({ listingId: 'missing', workspaceId: 'ws-1' });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  // Regression guards (2026-11-20 audit, defence in depth): the listing, its product and its
+  // marketplace are loaded in the caller's workspace, so a foreign id reads as not found.
+  describe('with ids that belong to another workspace', () => {
+    it('treats a listing owned by another workspace as not found', async () => {
+      const { useCase, listingRepo, publishQueue } = setup(true);
+      listingRepo.listingWorkspaces.set('lst-1', 'ws-other');
+
+      const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.code).toBe('NOT_FOUND');
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
+
+    it('treats a product from another workspace as not found', async () => {
+      const { useCase, publishQueue } = setup(true);
+
+      const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-other' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe('NOT_FOUND');
+        expect(result.error.message).toBe('Product not found: prod-1');
+      }
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
+
+    it('treats a marketplace from another workspace as not found', async () => {
+      const { useCase, marketplaceRepo, publishQueue } = setup(true);
+      marketplaceRepo.items.set(
+        'mp-1',
+        unwrap(
+          Marketplace.create({ id: 'mp-1', workspaceId: 'ws-other', key: 'olx', name: 'OLX', connected: true })
+        )
+      );
+
+      const result = await useCase.execute({ listingId: 'lst-1', workspaceId: 'ws-1' });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe('NOT_FOUND');
+        expect(result.error.message).toBe('Marketplace not found: mp-1');
+      }
+      expect(publishQueue.jobs).toHaveLength(0);
+    });
   });
 });
