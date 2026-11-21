@@ -95,8 +95,17 @@ export function buildComparableSearchPrompt(input: {
 
 // The array in the agent's answer, or null when the answer holds no JSON array.
 export function parseComparableCandidates(raw: string): unknown[] | null {
-  const value = parseHermesJson(raw);
-  return Array.isArray(value) ? value : null;
+  const strict = parseHermesJson(raw);
+  if (strict !== null) return Array.isArray(strict) ? strict : null;
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start === -1 || end <= start) return null;
+  try {
+    const value: unknown = JSON.parse(raw.slice(start, end + 1));
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export function filterComparableCandidates(

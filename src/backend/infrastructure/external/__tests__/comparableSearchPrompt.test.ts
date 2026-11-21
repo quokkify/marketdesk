@@ -105,6 +105,18 @@ describe('parseComparableCandidates', () => {
     ]);
   });
 
+  it('findsBareArrayInsideProse', () => {
+    const raw = 'Here are the adverts: [{"price":340,"currency":"PLN","title":"AirPods","url":"x"}] Hope it helps.';
+    expect(parseComparableCandidates(raw)).toEqual([
+      { price: 340, currency: 'PLN', title: 'AirPods', url: 'x' },
+    ]);
+  });
+
+  it('proseWithoutArrayIsNull', () => {
+    expect(parseComparableCandidates('I found nothing useful.')).toBeNull();
+    expect(parseComparableCandidates('Nothing [here')).toBeNull();
+  });
+
   it('nonArrayIsNull', () => {
     expect(parseComparableCandidates('{"a":1}')).toBeNull();
     expect(parseComparableCandidates('not json')).toBeNull();
