@@ -2,7 +2,7 @@
 // answer is parsed against strict schemas, and no prompt or model text ever reaches an error.
 
 import type { BuyerIntent } from '../../domain/conversations/types';
-import type { IReplyDraftAI, ReplyContext } from '../../domain/ports/IReplyDraftAI';
+import type { IReplyDraftAI, ReplyClassification, ReplyContext, ReplyDraftResult } from '../../domain/ports/IReplyDraftAI';
 import {
   buyerReplyProfile,
   replyClassifyOutputSchema,
@@ -19,11 +19,7 @@ const MAX_TOKENS = 1024;
 export class HermesReplyDraftAI implements IReplyDraftAI {
   constructor(private readonly client: AITextCompletionClient) {}
 
-  source(): 'hermes' {
-    return 'hermes';
-  }
-
-  async classify(ctx: ReplyContext): Promise<{ intent: BuyerIntent; confidence: 'high' | 'medium' | 'low' }> {
+  async classify(ctx: ReplyContext): Promise<ReplyClassification> {
     const raw = await withAiOperation('replyClassify', () => this.client.complete({
       system: `${buyerReplyProfile.instruction()}\n${BUYER_THREAD_RULE}\nTask: classify the buyer's last message intent.`,
       prompt: buyerThreadBlock(ctx),
@@ -40,14 +36,14 @@ export class HermesReplyDraftAI implements IReplyDraftAI {
       sessionKey: sessionKey(ctx),
     }));
     const parsed = replyClassifyOutputSchema.safeParse(parseJsonObject(raw));
-    if (parsed.success) return parsed.data;
+    if (parsed.success) return { ...parsed.data, source: 'hermes' };
     throw new Error('Hermes buyer-reply classification failed strict schema validation');
   }
 
   async draft(
     ctx: ReplyContext,
     intent: BuyerIntent,
-  ): Promise<{ reply: string; counterOffer: boolean; proposedPrice: number | null }> {
+  ): Promise<ReplyDraftResult> {
     const raw = await withAiOperation('replyDraft', () => this.client.complete({
       system: `${buyerReplyProfile.instruction()}\n${BUYER_THREAD_RULE}\nTask: draft the seller's reply. The buyer's intent is: ${intent}.`,
       prompt: buyerThreadBlock(ctx),
@@ -65,11 +61,11 @@ export class HermesReplyDraftAI implements IReplyDraftAI {
       sessionKey: sessionKey(ctx),
     }));
     const parsed = replyDraftOutputSchema.safeParse(parseJsonObject(raw));
-    if (parsed.success) return parsed.data;
+    if (parsed.success) return { ...parsed.data, source: 'hermes' };
     throw new Error('Hermes buyer-reply draft failed strict schema validation');
   }
 }
 
 function sessionKey(ctx: ReplyContext): string {
-  return `marketdesk:buyer-reply:${ctx.product.id}`;
+  return `marketdesk:buyer-reply:${ctx.threadId}`;
 }

@@ -28,10 +28,11 @@ describe('buyerReplyProfile', () => {
 
   it('floorIsNotAReplyContextField', () => {
     const ctx: ReplyContext = {
+      threadId: 't1',
       product: { id: 'p', title: 't', description: 'd', condition: 'new', price: 10, currency: 'PLN' },
       messages: [{ direction: 'buyer', text: 'hi' }],
     };
-    expect(Object.keys(ctx).sort()).toEqual(['messages', 'product']);
+    expect(Object.keys(ctx).sort()).toEqual(['messages', 'product', 'threadId']);
     expect(Object.keys(ctx.product).some((k) => /floor|min/i.test(k))).toBe(false);
   });
 });

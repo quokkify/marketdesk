@@ -1,6 +1,6 @@
 // Routes buyer-reply calls like AIProviderSelector: `offline` never contacts Hermes, `hermes`
 // always uses it (failures reach the caller), `auto` uses Hermes only while it is configured,
-// reachable and has no tools enabled. source() reports the provider of the latest call.
+// reachable and has no tools enabled. Each result names the provider that produced it.
 
 import type { BuyerIntent } from '../../domain/conversations/types';
 import type { IReplyDraftAI, ReplyContext } from '../../domain/ports/IReplyDraftAI';
@@ -15,15 +15,7 @@ export interface ReplyDraftAISelectorDeps {
 }
 
 export class ReplyDraftAISelector implements IReplyDraftAI {
-  private last: 'hermes' | 'offline';
-
-  constructor(private readonly deps: ReplyDraftAISelectorDeps) {
-    this.last = deps.mode === 'hermes' ? 'hermes' : 'offline';
-  }
-
-  source(): 'hermes' | 'offline' {
-    return this.last;
-  }
+  constructor(private readonly deps: ReplyDraftAISelectorDeps) {}
 
   async classify(ctx: ReplyContext) {
     return (await this.resolve()).classify(ctx);
@@ -35,14 +27,11 @@ export class ReplyDraftAISelector implements IReplyDraftAI {
 
   private async resolve(): Promise<IReplyDraftAI> {
     const { mode, probe, hermes, offline } = this.deps;
-    let chosen = offline;
-    if (mode === 'hermes') {
-      chosen = hermes;
-    } else if (mode === 'auto' && probe.isConfigured()) {
+    if (mode === 'hermes') return hermes;
+    if (mode === 'auto' && probe.isConfigured()) {
       const check = await probe.reachability();
-      if (check.reachable && check.toolsSafe) chosen = hermes;
+      if (check.reachable && check.toolsSafe) return hermes;
     }
-    this.last = chosen.source();
-    return chosen;
+    return offline;
   }
 }

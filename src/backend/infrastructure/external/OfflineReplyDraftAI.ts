@@ -3,7 +3,7 @@
 // so the graph offers the selling price.
 
 import type { BuyerIntent } from '../../domain/conversations/types';
-import type { IReplyDraftAI, ReplyContext } from '../../domain/ports/IReplyDraftAI';
+import type { IReplyDraftAI, ReplyClassification, ReplyContext, ReplyDraftResult } from '../../domain/ports/IReplyDraftAI';
 import { PRICE_PLACEHOLDER } from '../../domain/conversations/draftValidation';
 
 type Language = 'pl' | 'uk' | 'ru' | 'en';
@@ -60,20 +60,16 @@ export function detectIntent(text: string): BuyerIntent {
 }
 
 export class OfflineReplyDraftAI implements IReplyDraftAI {
-  source(): 'offline' {
-    return 'offline';
-  }
-
-  async classify(ctx: ReplyContext): Promise<{ intent: BuyerIntent; confidence: 'high' | 'medium' | 'low' }> {
+  async classify(ctx: ReplyContext): Promise<ReplyClassification> {
     const intent = detectIntent(lastBuyerText(ctx));
-    return { intent, confidence: intent === 'other' ? 'low' : 'medium' };
+    return { intent, confidence: intent === 'other' ? 'low' : 'medium', source: 'offline' };
   }
 
   async draft(
     ctx: ReplyContext,
     intent: BuyerIntent,
-  ): Promise<{ reply: string; counterOffer: boolean; proposedPrice: number | null }> {
+  ): Promise<ReplyDraftResult> {
     const reply = TEMPLATES[intent][detectLanguage(lastBuyerText(ctx))];
-    return { reply, counterOffer: false, proposedPrice: null };
+    return { reply, counterOffer: false, proposedPrice: null, source: 'offline' };
   }
 }

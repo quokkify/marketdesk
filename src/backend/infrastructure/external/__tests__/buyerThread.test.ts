@@ -1,8 +1,12 @@
 import { BUYER_THREAD_RULE, buyerThreadBlock } from '../buyerThread';
+import { HermesReplyDraftAI } from '../HermesReplyDraftAI';
+import { ReplyDraftAISelector } from '../ReplyDraftAISelector';
+import type { AICompletionRequest } from '../HermesAI';
 import { OfflineReplyDraftAI } from '../OfflineReplyDraftAI';
 import type { ReplyContext } from '../../../domain/ports/IReplyDraftAI';
 
-const ctxWith = (text: string): ReplyContext => ({
+const ctxWith = (text: string, threadId = 'thread-1'): ReplyContext => ({
+  threadId,
   product: { id: 'p', title: 't', description: 'd', condition: 'new', price: 10, currency: 'PLN' },
   messages: [{ direction: 'buyer', text }],
 });
@@ -40,5 +44,41 @@ describe('OfflineReplyDraftAI', () => {
     expect(draft.proposedPrice).toBeNull();
     expect(draft.counterOffer).toBe(false);
   });
-  it('reports offline', () => expect(ai.source()).toBe('offline'));
+  it('reports offline', () => expect(ai.classify(ctxWith('hi'))).resolves.toMatchObject({ source: 'offline' }));
+});
+
+describe('HermesReplyDraftAI', () => {
+  it('sessionKeyIsPerThread', async () => {
+    const requests: AICompletionRequest[] = [];
+    const ai = new HermesReplyDraftAI({
+      complete: async (request) => {
+        requests.push(request);
+        return JSON.stringify({ intent: 'other', confidence: 'low' });
+      },
+    });
+    await ai.classify(ctxWith('hi', 'thread-a'));
+    await ai.classify(ctxWith('hi', 'thread-b'));
+    expect(requests[0].sessionKey).toBe('marketdesk:buyer-reply:thread-a');
+    expect(requests[1].sessionKey).toBe('marketdesk:buyer-reply:thread-b');
+    expect(requests[0].prompt).not.toContain('thread-a');
+  });
+});
+
+describe('ReplyDraftAISelector', () => {
+  it('selectorReportsSourcePerCall', async () => {
+    const hermes = new HermesReplyDraftAI({
+      complete: async () => JSON.stringify({ reply: 'Hi', counterOffer: false, proposedPrice: null }),
+    });
+    const offline = new OfflineReplyDraftAI();
+    const probe = (ok: boolean) => ({
+      isConfigured: () => true,
+      reachability: async () => ({ reachable: ok, toolsSafe: ok, enabledToolsets: [], checkedAt: new Date() }),
+    });
+    const ctx = ctxWith('hi');
+    const up = new ReplyDraftAISelector({ hermes, offline, mode: 'auto', probe: probe(true) as never });
+    const down = new ReplyDraftAISelector({ hermes, offline, mode: 'auto', probe: probe(false) as never });
+    expect((await up.draft(ctx, 'other')).source).toBe('hermes');
+    expect((await down.draft(ctx, 'other')).source).toBe('offline');
+    expect((await down.classify(ctx)).source).toBe('offline');
+  });
 });
