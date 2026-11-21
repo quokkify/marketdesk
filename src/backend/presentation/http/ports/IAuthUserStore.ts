@@ -8,6 +8,7 @@ export interface AuthUserRecord {
   email: string;
   passwordHash: string;
   workspaceId?: string | null;
+  tokenVersion: number;
   createdAt: Date;
 }
 
@@ -21,4 +22,8 @@ export interface IAuthUserStore {
   findByEmail(email: string): Promise<AuthUserRecord | null>;
   findById(id: string): Promise<AuthUserRecord | null>;
   create(input: CreateAuthUserInput): Promise<AuthUserRecord>;
+  /** Returns the new version; rejects NotFoundError when the user does not exist. */
+  bumpTokenVersion(userId: string): Promise<number>;
+  /** Sets the hash and bumps the version; returns the new version; rejects NotFoundError. */
+  updatePassword(userId: string, passwordHash: string): Promise<number>;
 }

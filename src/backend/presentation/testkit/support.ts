@@ -6,6 +6,7 @@ import type {
   AuthUserRecord,
   CreateAuthUserInput,
 } from '../http/ports/IAuthUserStore';
+import { NotFoundError } from '../../domain/shared/DomainError';
 
 export class InMemoryAuthStore implements IAuthUserStore {
   readonly users: AuthUserRecord[] = [];
@@ -21,9 +22,21 @@ export class InMemoryAuthStore implements IAuthUserStore {
       email: input.email,
       passwordHash: input.passwordHash,
       workspaceId: input.workspaceId,
+      tokenVersion: 0,
       createdAt: new Date(),
     };
     this.users.push(user);
     return user;
+  }
+  async bumpTokenVersion(userId: string): Promise<number> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) throw new NotFoundError(`User ${userId} not found`);
+    user.tokenVersion += 1;
+    return user.tokenVersion;
+  }
+  async updatePassword(userId: string, passwordHash: string): Promise<number> {
+    const version = await this.bumpTokenVersion(userId);
+    this.users.find((u) => u.id === userId)!.passwordHash = passwordHash;
+    return version;
   }
 }
