@@ -259,7 +259,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const loggingSink = overrides.logger ? loggingAiUsageSink(overrides.logger) : undefined;
   const aiUsageSink = fanOutAiUsageSink([
     ...(loggingSink ? [loggingSink] : []),
-    storingAiUsageSink(aiUsageRepo, (error) => loggingSink?.reportFailure?.(error)),
+    storingAiUsageSink(aiUsageRepo, (error) => {
+      if (loggingSink?.reportFailure) return loggingSink.reportFailure(error);
+      // Without a logger a failed write must still leave a trace.
+      console.warn('AI usage could not be recorded', error instanceof Error ? error.message : String(error));
+    }),
   ]);
   const aiProviderSelector = new AIProviderSelector({
     hermes: new HermesAI(new HermesCompletionClient(loadHermesConfig(), aiUsageSink)),

@@ -24,17 +24,19 @@ public class AiUsageTest extends BaseTest {
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     productSteps.proposeImprovements(account, productListing);
-    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsage(account), 1);
+    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
   }
 
   @Test
   public void usageIsScopedToTheWorkspace() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    productSteps.proposeImprovements(account, productListing);
+    productSteps.proposeImprovements(account, listingSteps.createOlxProductListing(account));
     AccountPojo other = authSteps.registerNewAccount();
-    aiUsageSteps.verify().countsNoAnalysesToday(aiUsageSteps.getUsage(other));
+    marketplaceSteps.connectSandboxOlx(other);
+    productSteps.proposeImprovements(other, listingSteps.createOlxProductListing(other));
+    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
+    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(other, 1), 1);
   }
 
   @Test
