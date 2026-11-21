@@ -13,7 +13,7 @@ import type { IProductRepository } from '../../domain/repositories/interfaces/IP
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
-import { missingFacts, priceGuard } from '../../domain/services/revivalRules';
+import { missingFacts, priceGuard, REVIVAL_REFUSAL_MESSAGE } from '../../domain/services/revivalRules';
 import type { ProductAIDraftService, ProductDraftLogger } from './ProductAIDraftService';
 import type { ProductRecheckService, RecheckProductInput } from './ProductRecheckService';
 import { withAiUsageScope } from '../ai/aiUsageScope';
@@ -27,8 +27,6 @@ const priceSuggestionSchema = z.object({
 }).strict();
 
 type PriceSuggestionOutput = z.infer<typeof priceSuggestionSchema>;
-
-const REVIVAL_REFUSAL = 'Only an expired listing with an OLX advert can be revived';
 
 // Names the failure without Hermes text: a schema failure gives only the paths it failed at.
 function describeFailure(error: unknown): { name: string; message: string } {
@@ -151,7 +149,7 @@ export class ProductAssistanceGraph {
         const marketplace = await this.marketplaces.findByIdForWorkspace(listing.marketplaceId, workspaceId);
         if (!marketplace) throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
         if (listing.status !== 'expired' || !listing.marketplaceListingId || marketplace.key !== 'olx') {
-          throw new InvalidStateError(REVIVAL_REFUSAL);
+          throw new InvalidStateError(REVIVAL_REFUSAL_MESSAGE);
         }
         const product = await this.products.findByIdForWorkspace(listing.productId, workspaceId);
         if (!product) throw new NotFoundError(`Product not found: ${listing.productId}`);

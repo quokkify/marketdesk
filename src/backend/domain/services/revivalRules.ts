@@ -3,6 +3,8 @@
 import type { Product } from '../entities/Product';
 import type { RevivalMissingFact, RevivalPriceGuard } from '../../../shared/types';
 
+export const REVIVAL_REFUSAL_MESSAGE = 'Only an expired listing with an OLX advert can be revived';
+
 export function missingFacts(product: Pick<Product, 'condition' | 'costPrice'>): RevivalMissingFact[] {
   const facts: RevivalMissingFact[] = [];
   if (product.condition === 'unknown') {

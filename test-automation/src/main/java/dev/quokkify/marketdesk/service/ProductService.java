@@ -10,11 +10,16 @@ import io.restassured.response.ValidatableResponse;
 public class ProductService extends MarketDeskApiService {
 
   private static final String PRODUCTS = "/api/products";
+  private static final String PRODUCT = PRODUCTS + "/%s";
   private static final String PRODUCT_LISTINGS = PRODUCTS + "/%s/listings";
   private static final String PRODUCT_IMPROVEMENTS = PRODUCTS + "/%s/improvements";
 
   public ValidatableResponse getProducts(String token) {
     return get(authorized(token), PRODUCTS);
+  }
+
+  public ValidatableResponse getProduct(String token, String productId) {
+    return get(authorized(token), PRODUCT.formatted(productId));
   }
 
   public ValidatableResponse getProducts() {

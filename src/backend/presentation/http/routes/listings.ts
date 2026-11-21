@@ -13,6 +13,7 @@ import {
   publishListingSchema,
   reactivateListingSchema,
   revivalProposalSchema,
+  reviveListingSchema,
 } from '../validation/schemas';
 
 const passthrough: RequestHandler = (_req, _res, next) => next();
@@ -73,6 +74,15 @@ export function createListingRoutes(
     aiLimiter,
     validateBody(revivalProposalSchema),
     asyncHandler(controller.revivalProposal),
+  );
+  // The workspace's listing is looked up before the body is validated, so an unknown or foreign
+  // listing reads as 404 whatever the body.
+  router.post(
+    '/:id/revive',
+    sensitiveLimiter,
+    asyncHandler(controller.requireListing),
+    validateBody(reviveListingSchema),
+    asyncHandler(controller.revive),
   );
   router.post(
     '/:id/relist',

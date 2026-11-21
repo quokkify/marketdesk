@@ -144,6 +144,21 @@ export const reactivateListingSchema = z.object({}).strict();
 
 export const revivalProposalSchema = z.object({}).strict();
 
+// Only the ticked changes are sent. Condition `unknown` passes the shape check and is refused by
+// the revival service with the publishing copy; the timestamps come from the proposal.
+export const reviveListingSchema = z
+  .object({
+    condition: conditionEnum,
+    costPrice: z.number().nonnegative().optional(),
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().min(1).max(9000).optional(),
+    price: z.number().positive().optional(),
+    allowBelowCost: z.boolean().optional(),
+    productUpdatedAt: z.iso.datetime(),
+    listingUpdatedAt: z.iso.datetime(),
+  })
+  .strict();
+
 export const delistListingToDraftSchema = z.object({
   operationId: z.string().uuid(),
   confirmed: z.literal(true),

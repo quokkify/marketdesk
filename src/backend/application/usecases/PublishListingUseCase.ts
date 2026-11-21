@@ -16,6 +16,7 @@ import {
 import type { Listing } from '../../domain/entities/Listing';
 import type { Product } from '../../domain/entities/Product';
 import type { Marketplace } from '../../domain/entities/Marketplace';
+import type { ListingPublishInput } from '../../domain/services/MarketplaceAdapter';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
@@ -37,6 +38,21 @@ const PreflightState = Annotation.Root({
 
 type PreflightGraphState = typeof PreflightState.State;
 export const PUBLICATION_PREFLIGHT_GRAPH_VERSION = 'publication-preflight@1';
+
+// What the marketplace receives for a listing: the product's copy, condition and photos at the
+// listing's price and category. A revival sends the same input to the advert update.
+export function buildListingPublishInput(product: Product, listing: Listing): ListingPublishInput {
+  return {
+    productName: product.name,
+    description: product.description,
+    price: listing.price.amount,
+    currency: listing.price.currency,
+    category: product.category,
+    marketplaceCategory: listing.marketplaceCategory,
+    condition: product.condition,
+    imageUrls: [...product.images],
+  };
+}
 
 export interface PublishEligibility {
   canPublish: boolean;
@@ -210,16 +226,7 @@ export class PublishListingUseCase {
         marketplaceKey: marketplace.key,
         marketplaceId: marketplace.id,
         listingId: listing.id,
-        input: {
-          productName: product.name,
-          description: product.description,
-          price: listing.price.amount,
-          currency: listing.price.currency,
-          category: product.category,
-          marketplaceCategory: listing.marketplaceCategory,
-          condition: product.condition,
-          imageUrls: [...product.images],
-        },
+        input: buildListingPublishInput(product, listing),
       },
       { jobId: `publish:${operationId}` }
     );

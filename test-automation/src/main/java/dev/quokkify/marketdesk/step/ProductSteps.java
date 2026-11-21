@@ -29,6 +29,11 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
     return service.getProducts(account.token());
   }
 
+  @Step("Get product {productId}")
+  public ValidatableResponse getProduct(AccountPojo account, String productId) {
+    return service.getProduct(account.token(), productId);
+  }
+
   @Step("Ask for improvements of the product and its listing")
   public ValidatableResponse proposeImprovements(AccountPojo account, ProductListingPojo productListing) {
     return service.proposeImprovements(account.token(), productListing.productId(),

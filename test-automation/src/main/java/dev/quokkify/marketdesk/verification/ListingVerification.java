@@ -14,11 +14,17 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   private static final String INVALID_STATE = "INVALID_STATE";
   private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
   private static final String GUARDRAIL_VIOLATION = "GUARDRAIL_VIOLATION";
+  private static final String CONFLICT = "CONFLICT";
   private static final String CATEGORY_MESSAGE = "Select an exact OLX leaf category before publishing";
   private static final String CONDITION_MESSAGE = "Choose the product's condition before publishing to OLX";
   private static final String REVIVAL_MESSAGE = "Only an expired listing with an OLX advert can be revived";
   private static final String COST_PRICE_NOTE = "Without a cost price the price floor cannot be checked";
   private static final String SANDBOX_MESSAGE = "Reactivation is not available in sandbox mode";
+  private static final String REVIVAL_SANDBOX_MESSAGE = "Revival is not available in sandbox mode";
+  private static final String STALE_REVIVAL_MESSAGE =
+      "The product or listing changed since the proposal; open the revival again";
+  private static final String BELOW_COST_MESSAGE =
+      "The price is below the cost price; confirm selling below cost to apply it";
 
   @Override
   protected ListingVerification self() {
@@ -77,6 +83,27 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
   public ListingVerification isRevivalRefusal(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
     response.body("error.message", Matchers.equalTo(REVIVAL_MESSAGE));
+    return self();
+  }
+
+  @Step("Revival is refused because the product or listing changed since the proposal")
+  public ListingVerification isStaleRevivalRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_CONFLICT, CONFLICT);
+    response.body("error.message", Matchers.equalTo(STALE_REVIVAL_MESSAGE));
+    return self();
+  }
+
+  @Step("Revival is refused in sandbox mode")
+  public ListingVerification isRevivalSandboxRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, INVALID_STATE);
+    response.body("error.message", Matchers.equalTo(REVIVAL_SANDBOX_MESSAGE));
+    return self();
+  }
+
+  @Step("Revival is refused because the price is below the cost price without confirmation")
+  public ListingVerification isBelowCostRefusal(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_UNPROCESSABLE_ENTITY, GUARDRAIL_VIOLATION);
+    response.body("error.message", Matchers.equalTo(BELOW_COST_MESSAGE));
     return self();
   }
 

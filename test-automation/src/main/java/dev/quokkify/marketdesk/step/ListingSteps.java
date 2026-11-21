@@ -7,6 +7,7 @@ import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ListingRequestPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
+import dev.quokkify.marketdesk.model.RevivalRequestPojo;
 import dev.quokkify.marketdesk.service.ListingService;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.ListingVerification;
@@ -37,6 +38,13 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Create a product with an OLX listing and keep both ids")
   public ProductListingPojo createOlxProductListing(AccountPojo account) {
     return createOlxProductListing(account, ProductRequestPojo.sample());
+  }
+
+  @Step("Create a product with an OLX listing that expired on OLX and keep both ids")
+  public ProductListingPojo createExpiredOlxProductListing(AccountPojo account) {
+    ProductListingPojo productListing = createOlxProductListing(account);
+    markExpiredOnOlx(productListing.listingId());
+    return productListing;
   }
 
   @Step("Create a product with condition {condition} and an OLX listing")
@@ -91,5 +99,23 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Ask for a revival proposal for listing {listingId} without authentication")
   public ValidatableResponse requestRevivalProposalUnauthenticated(String listingId) {
     return service.revivalProposal(listingId);
+  }
+
+  // The proposal carries the timestamps an apply must quote to show it is not stale.
+  @Step("Prepare a revival of listing {listingId} with condition {condition} from a fresh proposal")
+  public RevivalRequestPojo freshRevival(AccountPojo account, String listingId, String condition) {
+    ValidatableResponse proposal = service.revivalProposal(account.token(), listingId).statusCode(HttpStatus.SC_OK);
+    return RevivalRequestPojo.of(condition, proposal.extract().path("data.productUpdatedAt"),
+        proposal.extract().path("data.listingUpdatedAt"));
+  }
+
+  @Step("Revive listing {listingId} on OLX")
+  public ValidatableResponse revive(AccountPojo account, String listingId, RevivalRequestPojo body) {
+    return service.revive(account.token(), listingId, body);
+  }
+
+  @Step("Revive listing {listingId} without authentication")
+  public ValidatableResponse reviveUnauthenticated(String listingId, RevivalRequestPojo body) {
+    return service.revive(listingId, body);
   }
 }

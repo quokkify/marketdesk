@@ -23,6 +23,7 @@ import { evaluateOlxCategory, type OlxCategoryGuardResult } from '../../../domai
 import type { OlxTrustedTaxonomyResolver } from '../../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 import type { ListingReactivationService } from '../../../application/services/ListingReactivationService';
+import type { ListingRevivalService } from '../../../application/services/ListingRevivalService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import { ok, paginated } from '../formatters/ResponseFormatter';
 import type { OlxAdapterMode } from '../../../config/env';
@@ -50,6 +51,7 @@ export interface ListingControllerDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   listingReactivationService?: ListingReactivationService;
+  listingRevivalService?: ListingRevivalService;
   productAssistanceGraph?: Pick<ProductAssistanceGraph, 'proposeRevival'>;
   // OLX adapter mode from OLX_ADAPTER_MODE.
   olxAdapterMode: OlxAdapterMode;
@@ -316,6 +318,26 @@ export class ListingController {
       listingId: routeParam(req.params.id),
       workspaceId: req.user!.workspaceId!,
     }));
+  };
+
+  requireListing = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    const listingId = routeParam(req.params.id);
+    const listing = await this.listingRepo.findByIdForWorkspace(listingId, req.user!.workspaceId!);
+    next(listing ? undefined : new NotFoundError(`Listing not found: ${listingId}`));
+  };
+
+  // Answers 200 for a completed revival and for a refused OLX step (`step` names it, `reason` carries
+  // OLX's answer); refusals before anything is saved are errors.
+  revive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const service = this.deps.listingRevivalService;
+    if (!service) return next(new ServiceUnavailableError('Listing revival is unavailable'));
+    const result = await service.revive({
+      listingId: routeParam(req.params.id),
+      workspaceId: req.user!.workspaceId!,
+      actorId: req.user?.userId,
+      changes: req.body,
+    });
+    ok(res, { ...result, listing: presentListing(result.listing) });
   };
 
   relist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
