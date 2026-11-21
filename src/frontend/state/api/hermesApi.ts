@@ -93,6 +93,7 @@ export const hermesApi = baseApi.injectEndpoints({
     getHermesUsage: builder.query<AiUsageReport, void>({
       query: () => '/hermes/usage',
       transformResponse: (res: ApiResponse<AiUsageReport>) => unwrap(res),
+      providesTags: ['AiUsage'],
     }),
 
     // The AI provider account's limits: the same for every workspace.

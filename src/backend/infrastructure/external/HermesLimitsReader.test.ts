@@ -87,6 +87,14 @@ describe('HermesLimitsReader', () => {
     expect((await new HermesLimitsReader(file).read(now)).reason).toBeTruthy();
   });
 
+  it('drops a reset time that is not a date', async () => {
+    const body = real(at(1));
+    body.windows[0].resets_at = 'soon';
+    write(body);
+    const result = await new HermesLimitsReader(file).read(now);
+    expect(result.windows).toEqual([{ label: 'Session', usedPercent: 0, resetsAt: null }]);
+  });
+
   it('is unknown when the file is missing', async () => {
     expect((await new HermesLimitsReader(join(dir, 'nope.json')).read(now)).state).toBe('unknown');
   });

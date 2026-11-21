@@ -64,7 +64,10 @@ function parseWindows(raw: unknown[]): HermesLimitWindow[] {
     windows.push({
       label: parsed.data.label,
       usedPercent: parsed.data.used_percent,
-      resetsAt: parsed.data.resets_at,
+      resetsAt:
+        parsed.data.resets_at !== null && Number.isNaN(Date.parse(parsed.data.resets_at))
+          ? null
+          : parsed.data.resets_at,
     });
   }
   return windows;

@@ -61,7 +61,7 @@ export const baseQueryWithAuth: typeof rawBaseQuery = async (args, api, extraOpt
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithAuth,
-  tagTypes: ['Product', 'Listing', 'Marketplace', 'HermesEvent', 'Analytics', 'Settings'],
+  tagTypes: ['Product', 'Listing', 'Marketplace', 'HermesEvent', 'Analytics', 'Settings', 'AiUsage'],
   endpoints: () => ({}),
 });
 
