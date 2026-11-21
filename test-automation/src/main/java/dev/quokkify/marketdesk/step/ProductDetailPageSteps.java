@@ -27,4 +27,17 @@ public class ProductDetailPageSteps
     page.suggestImprovementsButton().shouldBe(Condition.enabled).click();
     return this;
   }
+
+  @Step("Open the revival dialog")
+  public ProductDetailPageSteps openRevivalDialog() {
+    page.reviveButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
+  @Step("Choose the condition {condition} in the revival dialog")
+  public ProductDetailPageSteps chooseRevivalCondition(String condition) {
+    page.revivalConditionSelect().shouldBe(Condition.visible).click();
+    page.conditionOption(condition).shouldBe(Condition.visible).click();
+    return this;
+  }
 }

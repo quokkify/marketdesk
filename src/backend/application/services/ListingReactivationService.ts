@@ -43,7 +43,8 @@ export interface ListingReactivationServiceDeps {
 }
 
 // Marketplace adapter failures carry a transport-neutral `code` (infrastructure MarketplaceError).
-function providerFailure(error: unknown): Error {
+// `action` names the refused OLX step in the message; the revival reuses this for its update step.
+export function providerFailure(error: unknown, action: 'reactivate' | 'update' = 'reactivate'): Error {
   const code = (error as { code?: unknown } | null)?.code;
   const message = error instanceof Error ? error.message : String(error);
   switch (code) {
@@ -54,7 +55,7 @@ function providerFailure(error: unknown): Error {
     case 'NOT_FOUND':
       return new InvalidStateError('The advert no longer exists on OLX');
     case 'PROVIDER_REJECTION':
-      return new InvalidStateError(`OLX refused to reactivate the advert: ${message}`);
+      return new InvalidStateError(`OLX refused to ${action} the advert: ${message}`);
     case 'RATE_LIMIT':
     case 'TRANSIENT':
       return new ServiceUnavailableError(

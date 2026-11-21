@@ -10,6 +10,7 @@ import io.restassured.response.ValidatableResponse;
 public class ProductService extends MarketDeskApiService {
 
   private static final String PRODUCTS = "/api/products";
+  private static final String PRODUCT = PRODUCTS + "/%s";
   private static final String PRODUCT_LISTINGS = PRODUCTS + "/%s/listings";
   private static final String PRODUCT_IMPROVEMENTS = PRODUCTS + "/%s/improvements";
 
@@ -17,12 +18,17 @@ public class ProductService extends MarketDeskApiService {
     return get(authorized(token), PRODUCTS);
   }
 
+  public ValidatableResponse getProduct(String token, String productId) {
+    return get(authorized(token), PRODUCT.formatted(productId));
+  }
+
   public ValidatableResponse getProducts() {
     return get(anonymous(), PRODUCTS);
   }
 
+  // Keeps nulls: the API requires costPrice and reads null as an unknown cost price.
   public ValidatableResponse createProduct(String token, ProductRequestPojo body) {
-    return post(authorized(token), PRODUCTS, JsonConverter.toJsonIgnoreNulls(body));
+    return post(authorized(token), PRODUCTS, JsonConverter.toJson(body));
   }
 
   public ValidatableResponse createListing(String token, String productId, ListingRequestPojo body) {

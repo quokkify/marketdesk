@@ -368,6 +368,46 @@ export interface ProductImprovementSuggestions {
   aiUsage?: AiUsageSummary;
 }
 
+export interface RevivalMissingFact {
+  field: 'condition' | 'costPrice';
+  required: boolean;
+  note: string;
+}
+
+export interface RevivalPriceGuard {
+  status: 'ok' | 'below_cost' | 'unchecked' | 'no_proposal';
+  costPrice: number | null;
+}
+
+export interface RevivalCopyProposal {
+  current: string;
+  proposed: string;
+  rationale: string;
+}
+
+/** A Hermes step of a revival proposal: the title/description copy or the price. */
+export type RevivalAiStep = 'copy' | 'price';
+
+/** POST /api/listings/:id/revival-proposal. Review-only: nothing is saved or sent to OLX. */
+export interface RevivalProposal {
+  listingId: string;
+  productId: string;
+  productUpdatedAt: string;
+  listingUpdatedAt: string;
+  missingFacts: RevivalMissingFact[];
+  title?: RevivalCopyProposal;
+  description?: RevivalCopyProposal;
+  price?: { current: number; proposed: number; currency: string; rationale: string };
+  /** The advert's price now; the apply compares the cost price with it when no new price is ticked. */
+  currentPrice: number;
+  /** The product's selling price; the apply compares a new cost price with it. */
+  productSellingPrice: number;
+  priceGuard: RevivalPriceGuard;
+  /** Hermes steps that failed (unreachable, refused, invalid output); offline results are not failures. */
+  aiIssues: RevivalAiStep[];
+  aiUsage: AiUsageSummary;
+}
+
 export type ProductAIDraftMode = 'photos' | 'title';
 
 export type ProductAIDraftFields = Partial<

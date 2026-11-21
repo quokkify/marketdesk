@@ -51,6 +51,7 @@ import type { OlxPublicationQuotaService } from '../../application/services/OlxP
 import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/OlxTaxonomyResolver';
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { ListingReactivationService } from '../../application/services/ListingReactivationService';
+import type { ListingRevivalService } from '../../application/services/ListingRevivalService';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
 import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
@@ -83,6 +84,7 @@ export interface AppDeps {
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
   listingReactivationService?: ListingReactivationService;
+  listingRevivalService?: ListingRevivalService;
   marketplaceOAuthReturnUrl: string;
   // OLX adapter mode from OLX_ADAPTER_MODE; 'stub' is the sandbox.
   olxAdapterMode: OlxAdapterMode;
@@ -227,6 +229,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       olxQuotaService: deps.olxPublicationQuotaService,
       categoryCorrectionOperationService: deps.categoryCorrectionOperationService,
       listingReactivationService: deps.listingReactivationService,
+      listingRevivalService: deps.listingRevivalService,
+      productAssistanceGraph: deps.productAssistanceGraph,
       olxAdapterMode: deps.olxAdapterMode,
     }),
     marketplaces: new MarketplaceController(
