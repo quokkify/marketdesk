@@ -31,6 +31,35 @@ public class PriceResearchTest extends BaseTest {
   }
 
   @Test
+  public void webComparableWithOlxUrlIsSaved() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    PriceResearchPojo.Comparable comparable = new PriceResearchPojo.Comparable(250.0, "AirPods 4",
+        "https://www.olx.pl/d/oferta/airpods-4-bez-anc-CID99-ID1d1eUB.html", "web");
+    priceResearchSteps.verify().isSaved(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withComparable(comparable)));
+    priceResearchSteps.verify().keepsComparableLink(priceResearchSteps.getPriceResearch(account, productId), comparable);
+  }
+
+  @Test
+  public void webComparableWithForeignUrlIsRejected() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withComparable(new PriceResearchPojo.Comparable(250.0, "AirPods 4",
+            "https://evil.example/d/oferta/a-CID99-ID1a.html", "web"))));
+  }
+
+  @Test
+  public void manualComparableWithoutUrlStillWorks() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    PriceResearchPojo research = PriceResearchPojo.sample();
+    priceResearchSteps.verify().isSaved(priceResearchSteps.savePriceResearch(account, productId, research));
+    priceResearchSteps.verify().holds(priceResearchSteps.getPriceResearch(account, productId), research);
+  }
+
+  @Test
   public void negativeRetailPriceIsRejected() {
     AccountPojo account = authSteps.registerNewAccount();
     String productId = priceResearchSteps.createProduct(account);

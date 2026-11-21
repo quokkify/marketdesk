@@ -35,6 +35,20 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("Price research is saved")
+  public PriceResearchVerification isSaved(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    return self();
+  }
+
+  @Step("Price research keeps the link and source of the comparable")
+  public PriceResearchVerification keepsComparableLink(ValidatableResponse response, PriceResearchPojo.Comparable expected) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.comparables[0].url", Matchers.equalTo(expected.url()));
+    response.body("data.comparables[0].source", Matchers.equalTo(expected.source()));
+    return self();
+  }
+
   @Step("Price research has no retail anchor")
   public PriceResearchVerification hasNoRetailAnchor(ValidatableResponse response) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);

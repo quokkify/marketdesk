@@ -45,6 +45,16 @@ describe('priceResearchModel', () => {
     });
   });
 
+  it('keeps the link and source of a web comparable through the form', () => {
+    const url = 'https://www.olx.pl/d/oferta/airpods-4-CID99-ID1d1eUB.html';
+    const withWeb: PriceResearch = { ...research, comparables: [{ price: 250, note: 'AirPods 4', url, source: 'web' }] };
+    const result = toPriceResearchBody(toPriceResearchForm(withWeb));
+    expect(result).toEqual({
+      ok: true,
+      body: expect.objectContaining({ comparables: [{ price: 250, note: 'AirPods 4', url, source: 'web' }] }),
+    });
+  });
+
   it('turns an empty form into an empty body', () => {
     expect(toPriceResearchBody(toPriceResearchForm(null))).toEqual({
       ok: true,

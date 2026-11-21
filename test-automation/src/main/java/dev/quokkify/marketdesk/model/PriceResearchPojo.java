@@ -7,7 +7,11 @@ import java.util.stream.IntStream;
 public record PriceResearchPojo(Double retailPrice, String retailCurrency, String retailSource,
     String retailCheckedAt, List<Comparable> comparables) {
 
-  public record Comparable(Double price, String note) {
+  public record Comparable(Double price, String note, String url, String source) {
+
+    public Comparable(Double price, String note) {
+      this(price, note, null, null);
+    }
   }
 
   private static final int COMPARABLES_LIMIT = 10;
@@ -15,6 +19,10 @@ public record PriceResearchPojo(Double retailPrice, String retailCurrency, Strin
   public static PriceResearchPojo sample() {
     return new PriceResearchPojo(469.99, "PLN", "MediaMarkt", "2026-11-21",
         List.of(new Comparable(250.0, "Szczecin, used half a year")));
+  }
+
+  public PriceResearchPojo withComparable(Comparable comparable) {
+    return new PriceResearchPojo(retailPrice, retailCurrency, retailSource, retailCheckedAt, List.of(comparable));
   }
 
   public PriceResearchPojo withoutRetailAnchor() {

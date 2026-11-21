@@ -1,11 +1,13 @@
 // Price research of one product: the form the owner fills in, the body the API takes, and the
 // lines that show an estimate. The limits mirror the server's rules.
-import type { PriceEstimate, PriceResearch } from '@shared/types';
+import type { PriceComparable, PriceComparableSource, PriceEstimate, PriceResearch } from '@shared/types';
+import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 
 export const MAX_COMPARABLES = 10;
 export const MAX_SOURCE_LENGTH = 200;
 export const MAX_NOTE_LENGTH = 300;
+export const MAX_URL_LENGTH = 500;
 export const MAX_PRICE = 9_999_999_999.99;
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
@@ -17,7 +19,7 @@ export interface PriceResearchForm {
   retailCurrency: string;
   retailSource: string;
   retailCheckedAt: string;
-  comparables: { price: string; note: string }[];
+  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource }[];
 }
 
 export interface PriceResearchBody {
@@ -25,7 +27,7 @@ export interface PriceResearchBody {
   retailCurrency: string | null;
   retailSource: string | null;
   retailCheckedAt: string | null;
-  comparables: { price: number; note: string }[];
+  comparables: PriceComparable[];
 }
 
 export type PriceResearchBodyResult =
@@ -41,7 +43,12 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
     retailCurrency: r.retailCurrency ?? defaultCurrency,
     retailSource: r.retailSource ?? '',
     retailCheckedAt: r.retailCheckedAt ?? '',
-    comparables: r.comparables.map((c) => ({ price: String(c.price), note: c.note })),
+    comparables: r.comparables.map((c) => ({
+      price: String(c.price),
+      note: c.note,
+      ...(c.url ? { url: c.url } : {}),
+      ...(c.source ? { source: c.source } : {}),
+    })),
   };
 }
 
@@ -83,13 +90,21 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => row.price.trim() !== '' || row.note.trim() !== '');
   if (rows.length > MAX_COMPARABLES) errors.comparables = `Keep at most ${MAX_COMPARABLES} comparables`;
-  const comparables: { price: number; note: string }[] = [];
+  const comparables: PriceComparable[] = [];
   for (const { row, index } of rows) {
     const price = parsePrice(row.price);
     const note = row.note.trim();
     if (price === null) errors[`comparables.${index}.price`] = PRICE_ERROR;
     if (note.length > MAX_NOTE_LENGTH) errors[`comparables.${index}.note`] = `Keep the note within ${MAX_NOTE_LENGTH} characters`;
-    if (price !== null) comparables.push({ price, note });
+    const url = row.url?.trim() ?? '';
+    if (url && (url.length > MAX_URL_LENGTH || !url.startsWith('https://'))) {
+      errors[`comparables.${index}.url`] = `Enter an https link of at most ${MAX_URL_LENGTH} characters`;
+    } else if (row.source === 'web' && (!url || normalizeOlxAdvertUrl(url) === null)) {
+      errors[`comparables.${index}.url`] = 'Enter an OLX advert link';
+    }
+    if (price !== null) {
+      comparables.push({ price, note, ...(url ? { url } : {}), ...(row.source ? { source: row.source } : {}) });
+    }
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };

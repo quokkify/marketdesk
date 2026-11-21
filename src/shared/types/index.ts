@@ -115,9 +115,13 @@ export interface PriceEstimate {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export type PriceComparableSource = 'manual' | 'web';
+
 export interface PriceComparable {
   price: number;
   note: string;
+  url?: string | null;
+  source?: PriceComparableSource | null;
 }
 
 export interface PriceResearch {
