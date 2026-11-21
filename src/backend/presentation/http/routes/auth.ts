@@ -12,7 +12,7 @@ import { authMiddleware } from '../middleware/AuthMiddleware';
 import { requireCurrentPrincipal } from '../middleware/CurrentPrincipalMiddleware';
 import type { IAuthUserStore } from '../ports/IAuthUserStore';
 import { validateBody } from '../middleware/ValidationMiddleware';
-import { loginSchema, registerSchema } from '../validation/schemas';
+import { changePasswordSchema, loginSchema, registerSchema } from '../validation/schemas';
 import { fail } from '../formatters/ResponseFormatter';
 import { ERROR_CODES } from '../../../../shared/constants';
 
@@ -28,13 +28,19 @@ const registrationDisabled: RequestHandler = (_req, res) => {
 export interface AuthRouteOptions {
   currentUserStore: IAuthUserStore;
   loginLimiter?: RequestHandler;
+  passwordLimiter?: RequestHandler;
   registrationEnabled?: boolean;
 }
 
 export function createAuthRoutes(
   controller: AuthController,
   meLimiter: RequestHandler = passthrough,
-  { currentUserStore, loginLimiter = passthrough, registrationEnabled = true }: AuthRouteOptions
+  {
+    currentUserStore,
+    loginLimiter = passthrough,
+    passwordLimiter = passthrough,
+    registrationEnabled = true,
+  }: AuthRouteOptions
 ): Router {
   const router = Router();
 
@@ -61,6 +67,17 @@ export function createAuthRoutes(
     meLimiter,
     requireCurrentPrincipal(currentUserStore, { renew: false }),
     asyncHandler(controller.logout)
+  );
+  // No renewal here: the response carries the new token, and a second one would be redundant.
+  // Per-user limiter after validation: only failed attempts count (successes are skipped).
+  router.post(
+    '/password',
+    authMiddleware,
+    meLimiter,
+    requireCurrentPrincipal(currentUserStore, { renew: false }),
+    validateBody(changePasswordSchema),
+    passwordLimiter,
+    asyncHandler(controller.changePassword)
   );
   return router;
 }

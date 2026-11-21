@@ -1132,6 +1132,110 @@ describe('Presentation API', () => {
     });
   });
 
+  describe('change password', () => {
+    const bearerOf = (t: string) => ({ Authorization: `Bearer ${t}` });
+    const current = 'secret123';
+    const changed = `${current}-changed`;
+    const loginToken = async (app: Parameters<typeof request>[0], password = current) => {
+      const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password });
+      return login.body.data.token as string;
+    };
+    const change = (
+      app: Parameters<typeof request>[0],
+      token: string,
+      body: { currentPassword: string; newPassword: string }
+    ) => request(app).post('/api/auth/password').set(bearerOf(token)).send(body);
+
+    it('changes the password, keeps this device and signs out the others', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+      const b = await loginToken(app);
+
+      const res = await change(app, a, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(200);
+      const c = res.body.data.token as string;
+      for (const t of [a, b]) {
+        expect((await request(app).get('/api/products').set(bearerOf(t))).status).toBe(401);
+      }
+      expect((await request(app).get('/api/products').set(bearerOf(c))).status).toBe(200);
+      const oldLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: current });
+      const newLogin = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'demo@example.com', password: changed });
+      expect(oldLogin.status).toBe(401);
+      expect(newLogin.status).toBe(200);
+    });
+
+    it('answers an old token without a renewed one next to the returned token', async () => {
+      const { app } = await buildTestApp();
+      const old = jwt.sign(
+        { userId: 'u-1', workspaceId: 'ws-1', tv: 0, iat: Math.floor(Date.now() / 1000) - 13 * 3600 },
+        env.jwt.secret,
+        { expiresIn: '24h' }
+      );
+
+      const res = await change(app, old, { currentPassword: current, newPassword: changed });
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body.data.token).toBe('string');
+      expect(res.headers['x-renewed-token']).toBeUndefined();
+    });
+
+    it('refuses a wrong current password without revoking anything', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+
+      const res = await change(app, a, { currentPassword: `${current}-wrong`, newPassword: changed });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toBe('Current password is incorrect');
+      expect((await request(app).get('/api/products').set(bearerOf(a))).status).toBe(200);
+    });
+
+    it('validates the new password', async () => {
+      const { app } = await buildTestApp();
+      const a = await loginToken(app);
+
+      const short = await change(app, a, { currentPassword: current, newPassword: 'a'.repeat(7) });
+      const same = await change(app, a, { currentPassword: current, newPassword: current });
+
+      for (const res of [short, same]) {
+        expect(res.status).toBe(400);
+        expect(res.body.error.details).toEqual([expect.objectContaining({ field: 'newPassword' })]);
+      }
+    });
+
+    it('limits failed password changes per user', async () => {
+      const { app } = await buildTestApp({ enableRateLimit: true });
+      const a = await loginToken(app);
+      const wrong = { currentPassword: `${current}-wrong`, newPassword: changed };
+
+      for (let i = 0; i < 5; i += 1) {
+        expect((await change(app, a, wrong)).status).toBe(401);
+      }
+      const blocked = await change(app, a, wrong);
+
+      expect(blocked.status).toBe(429);
+    });
+
+    it('does not count a successful change against the allowance', async () => {
+      const { app } = await buildTestApp({ enableRateLimit: true });
+      const a = await loginToken(app);
+      const ok = await change(app, a, { currentPassword: current, newPassword: changed });
+      const c = ok.body.data.token as string;
+
+      for (let i = 0; i < 5; i += 1) {
+        const res = await change(app, c, { currentPassword: current, newPassword: `${changed}-2` });
+        expect(res.status).toBe(401);
+      }
+    });
+  });
+
   describe('token renewal', () => {
     const tokenAged = (hours: number, tv = 0) =>
       jwt.sign(

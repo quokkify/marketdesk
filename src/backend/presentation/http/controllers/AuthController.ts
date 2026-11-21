@@ -148,6 +148,34 @@ export class AuthController {
     ok(res, toUserView(req.currentUser));
   };
 
+  // updatePassword bumps the version in the same statement, so every other device is signed
+  // out; the returned token belongs to the new version and keeps this one.
+  changePassword = async (req: Request, res: Response): Promise<void> => {
+    if (!req.currentUser) {
+      throw new Error('requireCurrentPrincipal must run before AuthController.changePassword');
+    }
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    const user = req.currentUser;
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      fail(res, undefined, 401, {
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Current password is incorrect',
+      });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const tokenVersion = await this.users.updatePassword(user.id, passwordHash);
+    const token = signToken({
+      userId: user.id,
+      workspaceId: user.workspaceId ?? undefined,
+      tokenVersion,
+    });
+    ok(res, { token });
+  };
+
   // Bumping the version invalidates every token of the user, on all devices.
   logout = async (req: Request, res: Response): Promise<void> => {
     if (!req.currentUser) {

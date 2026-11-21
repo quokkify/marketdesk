@@ -236,6 +236,16 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8),
+  })
+  .refine((body) => body.newPassword !== body.currentPassword, {
+    message: 'New password must differ from the current one',
+    path: ['newPassword'],
+  });
+
 export const registerSchema = z.object({
   email: z.string().max(EMAIL_MAX_LENGTH).email(),
   password: z.string().min(8),

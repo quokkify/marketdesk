@@ -26,6 +26,7 @@ import {
   uploadRateLimiter,
   aiRateLimiter,
   loginFailureRateLimiter,
+  passwordChangeRateLimiter,
 } from '../middleware/RateLimitMiddleware';
 import { createAuthRoutes } from './auth';
 import { createProductRoutes } from './products';
@@ -86,6 +87,9 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
   const loginLimiter: RequestHandler | undefined = rateLimit
     ? loginFailureRateLimiter()
     : undefined;
+  const passwordLimiter: RequestHandler | undefined = rateLimit
+    ? passwordChangeRateLimiter()
+    : undefined;
 
   // Public
   api.get('/application-info', ...(publicLimiter ? [publicLimiter] : []), (_req, res) =>
@@ -101,6 +105,7 @@ export function createApiRouter(c: ApiControllers, options: ApiRouterOptions): R
     createAuthRoutes(c.auth, meLimiter, {
       currentUserStore: options.currentUserStore,
       loginLimiter,
+      passwordLimiter,
       registrationEnabled: options.registrationEnabled,
     })
   );
