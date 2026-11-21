@@ -251,3 +251,30 @@ defaults, the sandbox fixture texts, and file layout following existing conventi
 - Follow-ups to silent buyers, drafted through the same approval.
 - Evaluation dataset: scam recall, floor violations (must stay 0), reply quality by LLM judge.
 - Gradual autopilot: auto-send only `availability` replies with every check green.
+
+## Step 0 findings (2026-11-21)
+
+Read-only probe on production (owner's OLX connection, structure only, no message text read) plus
+the official OpenAPI spec `https://developer.olx.pl/swagger/v2/partner_api.yaml`. The owner chose
+read-only: no message was sent.
+
+- `GET /threads?offset&limit[&advert_id&interlocutor_id]` answered 200. Production returned the
+  envelope `{ "data": [] }` (the spec documents a bare array; the adapter must accept both, as
+  `fetchThreadMetrics` already does). The account had 0 threads, so the real message shape could
+  not be observed; shapes below come from the spec.
+- Thread: `uuid` (preferred; `id` deprecated), `advert_id`, `interlocutor_id`, `total_count`,
+  `unread_count`, `created_at`, `is_favourite`.
+- `GET /threads/{threadId}/messages` → array of Message: `uuid` (`id` deprecated), `thread_uuid`,
+  `created_at`, `type` (`sent` = seller, `received` = buyer), `text`, `is_read`, `attachments[]`
+  (`name`, `url`). No pagination documented.
+- `POST /threads/{threadId}/messages` body `{ text, attachments? }`, needs scope `v2 write`;
+  response 200 with no documented body, so the new message id may be absent. No idempotency key.
+  The send flow must therefore re-read the thread to learn the sent message id (the reconcile step
+  already does this).
+- `POST /threads/{threadId}/commands` `{ command: 'mark-as-read' | 'set-favourite' }` → 204.
+  Reading messages is not documented to mark them read; MarketDesk never sends `mark-as-read`.
+- Headers `Version: 2.0`, `Authorization: Bearer`. No rate-limit headers were returned; only a
+  generic 429 is documented.
+- **Not verified on the real API:** the message list shape and the send response. The first real
+  buyer conversation must be checked by hand (owner), and the first real send is done by the owner
+  from the UI and verified on olx.pl. Recorded in the PR test plan.
