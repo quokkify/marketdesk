@@ -336,7 +336,10 @@ export class ApproveHermesEventUseCase {
   ): Promise<Result<void>> {
     for (const listing of listings) {
       if (!this.isListingSeoLiveTarget(listing)) continue;
-      const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+        listing.marketplaceId,
+        event.workspaceId
+      );
       if (!marketplace || !marketplace.isConnected()) {
         await this.recordListingSeoReconciliationFailure(event, 'marketplace_not_connected');
         return Err(
@@ -698,7 +701,10 @@ export class ApproveHermesEventUseCase {
     for (const listing of listings) {
       if (!this.isListingSeoLiveTarget(listing)) continue;
 
-      const marketplace = await this.marketplaceRepo.findById(listing.marketplaceId);
+      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
+        listing.marketplaceId,
+        product.workspaceId
+      );
       if (!marketplace || !marketplace.isConnected()) {
         skippedLiveListings.push({ listingId: listing.id, reason: 'marketplace_not_connected' });
         continue;
