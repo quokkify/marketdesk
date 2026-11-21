@@ -11,6 +11,7 @@ import {
   productAIDraftSchema,
   productRecheckSchema,
   productImprovementSchema,
+  priceResearchSchema,
   updateProductSchema,
 } from '../validation/schemas';
 
@@ -30,6 +31,8 @@ export function createProductRoutes(
   router.post('/:id/recheck', aiLimiter, validateBody(productRecheckSchema), asyncHandler(controller.recheck));
   router.post('/:id/improvements', aiLimiter, validateBody(productImprovementSchema), asyncHandler(controller.proposeImprovements));
   router.delete('/:id', asyncHandler(controller.remove));
+  router.get('/:id/price-research', asyncHandler(controller.getPriceResearch));
+  router.put('/:id/price-research', validateBody(priceResearchSchema), asyncHandler(controller.putPriceResearch));
   router.get('/:id/listings', asyncHandler(controller.getListings));
   router.post('/:id/listings', validateBody(createListingSchema), asyncHandler(controller.createListing));
   return router;

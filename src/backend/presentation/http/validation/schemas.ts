@@ -130,6 +130,29 @@ export const productImprovementSchema = z.object({
   listingId: z.string().trim().min(1).optional(),
 }).strict();
 
+const MAX_COMPARABLES = 10;
+const isoDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'retailCheckedAt must be an ISO date (YYYY-MM-DD)')
+  .refine((value) => new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'retailCheckedAt is not a real date');
+
+export const priceResearchSchema = z
+  .object({
+    retailPrice: z.number().finite().positive().nullable(),
+    retailCurrency: z.string().regex(/^[A-Z]{3}$/, 'retailCurrency must be an ISO-4217 code').nullable(),
+    retailSource: z.string().max(200).nullable(),
+    retailCheckedAt: isoDateSchema.nullable(),
+    comparables: z
+      .array(z.object({ price: z.number().finite().positive(), note: z.string().max(300) }).strict())
+      .max(MAX_COMPARABLES),
+  })
+  .strict()
+  .superRefine((body, ctx) => {
+    if (body.retailPrice !== null && body.retailCurrency === null) {
+      ctx.addIssue({ code: 'custom', path: ['retailCurrency'], message: 'retailCurrency is required with retailPrice' });
+    }
+  });
+
 export const publishListingSchema = z.object({
   actorId: z.string().optional(),
   dryRun: z.boolean().optional(),

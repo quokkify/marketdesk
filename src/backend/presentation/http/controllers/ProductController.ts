@@ -9,6 +9,7 @@ import type { ProductAIDraftService } from '../../../application/services/Produc
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
+import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { CreateProductDTO } from '../../../application/dto/CreateProductDTO';
@@ -83,6 +84,7 @@ export class ProductController {
     private readonly idGenerator: () => string,
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
+    private readonly priceResearchRepo?: IPriceResearchRepository,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -179,6 +181,34 @@ export class ProductController {
       ok(res, result);
     } catch (error) { next(error); }
   };
+
+  getPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const productId = routeParam(req.params.id);
+      const workspaceId = req.user!.workspaceId!;
+      await this.requireProduct(productId, workspaceId);
+      ok(res, await this.requirePriceResearchRepo().findByProduct(workspaceId, productId));
+    } catch (error) { next(error); }
+  };
+
+  putPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const productId = routeParam(req.params.id);
+      const workspaceId = req.user!.workspaceId!;
+      await this.requireProduct(productId, workspaceId);
+      ok(res, await this.requirePriceResearchRepo().upsert(workspaceId, { ...req.body, productId }));
+    } catch (error) { next(error); }
+  };
+
+  private async requireProduct(productId: string, workspaceId: string): Promise<void> {
+    const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
+    if (!product) throw new NotFoundError(`Product not found: ${productId}`);
+  }
+
+  private requirePriceResearchRepo(): IPriceResearchRepository {
+    if (!this.priceResearchRepo) throw new ServiceUnavailableError('Price research is unavailable');
+    return this.priceResearchRepo;
+  }
 
   remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const result = await this.products.deleteProduct(
