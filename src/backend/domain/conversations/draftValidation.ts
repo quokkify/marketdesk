@@ -30,7 +30,12 @@ const DELIVERY_WORDS = [
   'dostawa', 'dostawy', 'wysylka', 'wysyłka', 'przesylka', 'przesyłka', 'kurier', 'paczkomat', 'inpost',
   'доставка', 'відправка', 'delivery', 'shipping',
 ];
-const DELIVERY_WINDOW = 4;
+const DELIVERY_FILLER_WINDOW = 2;
+const DELIVERY_FILLERS = new Set([
+  'kurierem', 'kurier', 'inpost', 'paczkomat', 'paczkomatem', 'dpd', 'dhl', 'poczta', 'pocztą', 'koszt',
+  'kosztuje', 'to', 'wynosi', 'ok', 'około', 'okolo',
+]);
+const CLAUSE_PUNCT = /[.,;!?—]/;
 const PRICE_WORD_WINDOW = 3;
 const SEP = '[\\u00a0\\u202f .]';
 const NUMBER = `\\d{1,3}(?:${SEP}\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?`;
@@ -43,10 +48,10 @@ const PRICE_WORD_NUMBER = new RegExp(
   `(?<![\\p{L}\\p{N}])(?:${PRICE_WORDS.join('|')})(?![\\p{L}\\p{N}])((?:[^\\p{L}\\p{N}]*\\p{L}+){0,${PRICE_WORD_WINDOW - 1}}[^\\p{L}\\p{N}]*)(${NUMBER})`,
   'gu',
 );
-const TOKEN_EDGE_PUNCT = /^[^\p{L}\p{N}€$]+|[^\p{L}\p{N}€$]+$/gu;
-const CURRENCY_TOKENS = new Set(BASE_CURRENCIES);
-const DELIVERY_TOKENS = new Set(DELIVERY_WORDS);
-const PRICE_TOKENS = new Set([...PRICE_WORDS, 'za']);
+const DELIVERY_WORD_REGEX = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:${DELIVERY_WORDS.join('|')})(?![\\p{L}\\p{N}])`,
+  'gu',
+);
 const IN_PERSON_MARKERS = [
   'przy odbiorze', 'osobiscie', 'odbior osobisty', 'при отриманні', 'при встрече', 'in person',
 ];
@@ -116,17 +121,16 @@ function toNumber(raw: string): number {
 }
 
 function isDeliveryAmount(before: string): boolean {
-  const tokens = before
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((t) => t.replace(TOKEN_EDGE_PUNCT, ''))
-    .slice(-DELIVERY_WINDOW);
-  for (let i = tokens.length - 1; i >= 0; i -= 1) {
-    const token = tokens[i];
-    if (DELIVERY_TOKENS.has(token)) return true;
-    if (PRICE_TOKENS.has(token) || CURRENCY_TOKENS.has(token)) return false;
-  }
-  return false;
+  let last: RegExpMatchArray | undefined;
+  for (const m of before.matchAll(DELIVERY_WORD_REGEX)) last = m;
+  if (!last) return false;
+  const between = before
+    .slice((last.index ?? 0) + last[0].length)
+    .replace(/(?<![\p{L}\p{N}])ok\./gu, 'ok')
+    .replace(/[:~]/g, ' ');
+  if (CLAUSE_PUNCT.test(between)) return false;
+  const tokens = between.split(/\s+/).filter(Boolean);
+  return tokens.length <= DELIVERY_FILLER_WINDOW && tokens.every((t) => DELIVERY_FILLERS.has(t));
 }
 
 function priceNumbers(text: string, currency: string): number[] {

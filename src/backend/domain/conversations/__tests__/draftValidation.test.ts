@@ -83,8 +83,8 @@ describe('validateDraft', () => {
     expect(rule('Cena 1 000 zł')).toBe('ok');
     expect(rule('Cena 1.000 zł')).toBe('ok');
     expect(rule('Cena 1 000,50 zł')).toBe('ok');
-    expect(rule('Cena 1 000 zł')).toBe('ok');
-    expect(rule('Cena 1 000 zł')).toBe('ok');
+    expect(rule(`Cena 1${String.fromCharCode(0xA0)}000 zł`)).toBe('ok');
+    expect(rule(`Cena 1${String.fromCharCode(0x202F)}000 zł`)).toBe('ok');
     expect(rule('Cena 1 000')).toBe('ok');
   });
   it('recognisesCurrencyWords', () => {
@@ -119,5 +119,30 @@ describe('validateDraft', () => {
     expect(rule('Wyślij kod blik')).toBe('off_platform_payment');
     expect(rule('Zapłać przez link')).toBe('off_platform_payment');
     expect(rule('переказ на карту')).toBe('off_platform_payment');
+  });
+
+  it('doesNotLetDeliveryWordsMaskLowPrice', () => {
+    for (const text of [
+      'Dostawa 15 zł',
+      'dostawa: 15 zł',
+      'Wysyłka kurierem 15 zł',
+      'Dostawa kurierem InPost 15 zł',
+      'dostawa 15 zł, produkt 80 zł',
+      'wysyłka: 50 zł',
+    ]) {
+      expect(rule(text)).toBe('ok');
+    }
+    for (const text of [
+      'wysyłka gratis, 50 zł',
+      'dostawa gratis, 50 zł',
+      'dostawa gratis 50 zł',
+      'dostawa, 50 zł',
+      'dostawa gratis. Dam 50 zł',
+      'Wysyłka możliwa, ale dam 50 zł',
+      'dostawa i cena razem 50 zł',
+      'cena z dostawą 50 zł',
+    ]) {
+      expect(rule(text)).toBe('below_floor');
+    }
   });
 });
