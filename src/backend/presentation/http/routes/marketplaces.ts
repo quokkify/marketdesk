@@ -5,7 +5,12 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { MarketplaceController } from '../controllers/MarketplaceController';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { validateBody } from '../middleware/ValidationMiddleware';
-import { setOlxPublicationQuotaSchema, updateMarketplaceSchema } from '../validation/schemas';
+import {
+  importMarketplaceAdvertsSchema,
+  importMarketplacePreviewSchema,
+  setOlxPublicationQuotaSchema,
+  updateMarketplaceSchema,
+} from '../validation/schemas';
 
 const categorySearchLimiter: RequestHandler = rateLimit({
   windowMs: 60 * 1000,
@@ -28,6 +33,16 @@ export function createMarketplaceRoutes(controller: MarketplaceController): Rout
   );
   router.post('/:id/sync', asyncHandler(controller.sync));
   router.post('/:id/connect', asyncHandler(controller.connect));
+  router.post(
+    '/:id/import-preview',
+    validateBody(importMarketplacePreviewSchema),
+    asyncHandler(controller.importPreview)
+  );
+  router.post(
+    '/:id/import',
+    validateBody(importMarketplaceAdvertsSchema),
+    asyncHandler(controller.importApply)
+  );
   router.get('/:id/app-credentials', asyncHandler(controller.getAppCredentials));
   router.put('/:id/app-credentials', asyncHandler(controller.saveAppCredentials));
   router.delete('/:id/app-credentials', asyncHandler(controller.removeAppCredentials));

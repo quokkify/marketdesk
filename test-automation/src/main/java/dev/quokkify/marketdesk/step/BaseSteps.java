@@ -6,4 +6,5 @@ public abstract class BaseSteps {
   protected final AuthSteps authSteps = new AuthSteps();
   protected final LoginPageSteps loginPageSteps = new LoginPageSteps();
   protected final ProductSteps productSteps = new ProductSteps();
+  protected final MarketplaceSteps marketplaceSteps = new MarketplaceSteps();
 }

@@ -9,6 +9,7 @@ import type { ListingApplicationService } from '../../../application/services/Li
 import type { MarketplaceOAuthService } from '../../../application/services/MarketplaceOAuthService';
 import type { MarketplaceSyncScheduler } from '../../../application/services/MarketplaceSyncScheduler';
 import type { OlxPublicationQuotaService } from '../../../application/services/OlxPublicationQuotaService';
+import type { MarketplaceImportService } from '../../../application/services/MarketplaceImportService';
 import type { SyncMode } from '../../../../shared/types';
 import type { OlxTaxonomyResolverFactory } from '../../../application/services/ProductRecheckService';
 import {
@@ -28,12 +29,19 @@ function routeParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
+// The sandbox account has no OLX adverts to read, and its token must never reach the
+// OLX partner API, so import is refused while the OLX adapter is not real.
+function sandboxImportUnavailable(): InvalidStateError {
+  return new InvalidStateError('Marketplace import is not available in sandbox mode');
+}
+
 export class MarketplaceController {
   constructor(
     private readonly marketplaceRepo: IMarketplaceRepository,
     private readonly listings: ListingApplicationService,
     private readonly oauth: MarketplaceOAuthService,
     private readonly syncScheduler: MarketplaceSyncScheduler,
+    private readonly imports: MarketplaceImportService,
     private readonly olxQuotas: OlxPublicationQuotaService | undefined,
     private readonly oauthReturnUrl: string,
     private readonly olxAdapterMode: OlxAdapterMode,
@@ -133,6 +141,32 @@ export class MarketplaceController {
     });
     if (result.isErr()) return next(result.error);
     ok(res, result.value, 202);
+  };
+
+  importPreview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (this.olxSandbox) return next(sandboxImportUnavailable());
+    const result = await this.imports.preview({
+      marketplaceId: routeParam(req.params.id),
+      workspaceId: req.user!.workspaceId!,
+      pageSize: req.body.pageSize,
+      statuses: req.body.statuses,
+    });
+    if (result.isErr()) return next(result.error);
+    ok(res, result.value);
+  };
+
+  importApply = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (this.olxSandbox) return next(sandboxImportUnavailable());
+    const result = await this.imports.import({
+      marketplaceId: routeParam(req.params.id),
+      workspaceId: req.user!.workspaceId!,
+      pageSize: req.body.pageSize,
+      statuses: req.body.statuses,
+      externalListingIds: req.body.externalListingIds,
+      actorId: req.user?.userId,
+    });
+    if (result.isErr()) return next(result.error);
+    ok(res, result.value, 201);
   };
 
   connect = async (req: Request, res: Response, _next: NextFunction): Promise<void> => {

@@ -43,6 +43,7 @@ import { WorkspaceController } from './controllers/WorkspaceController';
 import { SettingsController } from './controllers/SettingsController';
 
 import { AuthController } from './controllers/AuthController';
+import type { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import { ProductImageUploadController } from './controllers/ProductImageUploadController';
 import type { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
 import type { MarketplaceSyncScheduler } from '../../application/services/MarketplaceSyncScheduler';
@@ -71,6 +72,7 @@ export interface AppDeps {
   marketplaceRepo: IMarketplaceRepository;
   marketplaceOAuthService: MarketplaceOAuthService;
   marketplaceSyncScheduler: MarketplaceSyncScheduler;
+  marketplaceImportService: MarketplaceImportService;
   olxPublicationQuotaService?: OlxPublicationQuotaService;
   olxTaxonomyResolver?: (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
   categoryCorrectionOperationService?: CategoryCorrectionOperationService;
@@ -220,6 +222,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.listingService,
       deps.marketplaceOAuthService,
       deps.marketplaceSyncScheduler,
+      deps.marketplaceImportService,
       deps.olxPublicationQuotaService,
       deps.marketplaceOAuthReturnUrl,
       deps.olxAdapterMode,

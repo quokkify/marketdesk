@@ -12,6 +12,8 @@
 
 ## Global Constraints
 
+- Owner ruling (2026-11-21): tests for this feature are live, non-mock tests in `test-automation` on q4j (`./gradlew apiTest` against the Compose stack), not Jest mocks. The stack runs OLX in stub mode, so the success path (real OLX adverts) is verified by hand on production after deploy.
+
 - Endpoints: `POST /api/marketplaces/:id/import-preview` (200) and `POST /api/marketplaces/:id/import` (201).
 - In OLX sandbox mode both return 422 `Marketplace import is not available in sandbox mode` without calling the service.
 - No write to OLX during preview or import; `MarketplaceImportService` behaviour is unchanged.

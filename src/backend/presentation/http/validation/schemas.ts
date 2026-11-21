@@ -227,6 +227,30 @@ export const updateMarketplaceSchema = z
     message: 'At least one field must be provided',
   });
 
+// OLX takes the statuses as one comma-joined query value, so an entry must be a bare token.
+const OLX_IMPORT_STATUS = z.string().regex(/^[a-z_]{1,32}$/);
+const OLX_IMPORT_MAX_PAGE_SIZE = 100;
+const OLX_IMPORT_MAX_STATUSES = 10;
+const OLX_IMPORT_MAX_LISTING_IDS = 500;
+const OLX_IMPORT_LISTING_ID_MAX_LENGTH = 64;
+
+const importDiscoveryShape = {
+  pageSize: z.number().int().min(1).max(OLX_IMPORT_MAX_PAGE_SIZE).optional(),
+  statuses: z.array(OLX_IMPORT_STATUS).max(OLX_IMPORT_MAX_STATUSES).optional(),
+};
+
+export const importMarketplacePreviewSchema = z.object(importDiscoveryShape).strict();
+
+export const importMarketplaceAdvertsSchema = z
+  .object({
+    ...importDiscoveryShape,
+    externalListingIds: z
+      .array(z.string().min(1).max(OLX_IMPORT_LISTING_ID_MAX_LENGTH))
+      .max(OLX_IMPORT_MAX_LISTING_IDS)
+      .optional(),
+  })
+  .strict();
+
 // RFC 5321 caps an address at 254 characters. No trim: whitespace around an address is still
 // rejected, as before, so the set of accepted logins does not change.
 const EMAIL_MAX_LENGTH = 254;
