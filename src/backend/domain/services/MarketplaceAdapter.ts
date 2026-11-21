@@ -69,6 +69,8 @@ export interface ImportDiscoveryOptions {
 export interface MarketplaceThread {
   externalThreadId: string;
   externalBuyerId: string | null;
+  // Messages the marketplace counts in the thread; null when it does not say.
+  totalCount: number | null;
 }
 
 export interface MarketplaceMessage {

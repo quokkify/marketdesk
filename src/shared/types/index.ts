@@ -268,6 +268,37 @@ export interface Product {
   updatedAt: string;
 }
 
+// Buyer conversations of a product (GET /api/products/:id/conversations).
+export type ConversationThreadStatus = 'open' | 'suspicious' | 'closed';
+export type ConversationScreeningReason =
+  | 'foreign_link'
+  | 'payment_data_request'
+  | 'messenger_move'
+  | 'fake_payment_confirmation'
+  | 'prompt_injection'
+  | 'repeated_text'
+  | 'message_flood';
+export type ReplyDraftStatus = 'pending' | 'sending' | 'sent' | 'dismissed' | 'superseded' | 'failed';
+export type BuyerIntent = 'availability' | 'haggle' | 'logistics' | 'other';
+
+export interface ConversationThreadView {
+  id: string;
+  status: ConversationThreadStatus;
+  suspiciousReasons: ConversationScreeningReason[];
+  // Oldest first; text is null once the retention period has deleted it.
+  messages: Array<{ id: string; direction: 'buyer' | 'seller'; text: string | null; sentAt: string }>;
+  draft: {
+    id: string;
+    status: ReplyDraftStatus;
+    intent: BuyerIntent | null;
+    text: string | null;
+    filledPrice: number | null;
+    failureReason: string | null;
+    // Written by the built-in offline templates instead of Hermes.
+    offline: boolean;
+  } | null;
+}
+
 export type ProductRecheckItemStatus = 'ready' | 'fix' | 'review';
 
 export interface ProductRecheckItem {

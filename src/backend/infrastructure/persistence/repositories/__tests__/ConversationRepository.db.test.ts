@@ -345,4 +345,31 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
     }
     expect((await repo.findDraft(kept.id, thread.id))?.proposedText).toBe('one');
   });
+
+  it('upsertThreadKeepsFirstRetentionStart', async () => {
+    const first = new Date('2026-11-01T00:00:00Z');
+    await repo.upsertThread({ workspaceId, listingId, productId, externalThreadId: 'ext-r' });
+    const started = await repo.upsertThread({
+      workspaceId, listingId, productId, externalThreadId: 'ext-r', retentionStartsAt: first,
+    });
+    expect(started.retentionStartsAt).toEqual(first);
+    const later = await repo.upsertThread({
+      workspaceId, listingId, productId, externalThreadId: 'ext-r', retentionStartsAt: new Date('2026-11-20T00:00:00Z'),
+    });
+    expect(later.retentionStartsAt).toEqual(first);
+  });
+
+  it('latestDraftSkipsSupersededDrafts', async () => {
+    const thread = await newThread();
+    expect(await repo.latestDraft(thread.id)).toBeNull();
+    const [m1] = await repo.upsertMessages(thread.id, [message('m1')]);
+    const old = await repo.insertDraft({ threadId: thread.id, answersMessageId: m1.id, proposedText: 'old' });
+    expect((await repo.latestDraft(thread.id))?.id).toBe(old.id);
+    await repo.supersedePendingDrafts(thread.id);
+    expect(await repo.latestDraft(thread.id)).toBeNull();
+    const failed = await repo.insertDraft({
+      threadId: thread.id, answersMessageId: m1.id, status: 'failed', failureReason: 'link',
+    });
+    expect((await repo.latestDraft(thread.id))?.id).toBe(failed.id);
+  });
 });

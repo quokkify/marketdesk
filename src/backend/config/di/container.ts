@@ -94,6 +94,7 @@ import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../..
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
+import { ConversationReplyHandler } from '../../infrastructure/jobQueue/JobHandlers/ConversationReplyHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
@@ -126,6 +127,8 @@ import { HermesApplicationService } from '../../application/services/HermesAppli
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
 import { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
 import { ConversationRetentionService } from '../../application/services/ConversationRetentionService';
+import { ConversationSyncService } from '../../application/services/ConversationSyncService';
+import { ConversationReplyGraph } from '../../application/services/ConversationReplyGraph';
 import { MarketplaceSyncScheduler } from '../../application/services/MarketplaceSyncScheduler';
 import { MarketplaceImportService } from '../../application/services/MarketplaceImportService';
 import {
@@ -139,6 +142,7 @@ import type { IdGenerator } from '../../application/ports/IdGenerator';
 import { noopRunRecorder, type IRunRecorder } from '../../application/ports/IRunRecorder';
 import { recordedProcessor, stampRun } from './recordedQueue';
 import type {
+  ConversationReplyJob,
   IJobQueue,
   JobEnqueueOptions,
   PublishListingJob,
@@ -157,6 +161,33 @@ export interface ManagedQueue<T> extends IJobQueue<T> {
   registerHandler(handler: (data: T) => Promise<unknown>): void;
   close(): Promise<void>;
 }
+
+// The reply graph reads outside a transaction (its AI calls must not hold one open) and writes
+// each change in its own transaction on the container pool: replacePendingDraft needs a caller
+// transaction, never the module-level pool.
+class ReplyGraphConversationRepository extends ConversationRepository {
+  constructor(private readonly writePool: Pool) {
+    super(writePool);
+  }
+
+  override upsertThread(
+    ...args: Parameters<ConversationRepository['upsertThread']>
+  ): ReturnType<ConversationRepository['upsertThread']> {
+    return withPoolTransaction(this.writePool, (client) =>
+      new ConversationRepository(this.writePool, client).upsertThread(...args)
+    );
+  }
+
+  override replacePendingDraft(
+    ...args: Parameters<ConversationRepository['replacePendingDraft']>
+  ): ReturnType<ConversationRepository['replacePendingDraft']> {
+    return withPoolTransaction(this.writePool, (client) =>
+      new ConversationRepository(this.writePool, client).replacePendingDraft(...args)
+    );
+  }
+}
+
+const CONVERSATION_SYNC_FAILURE_MESSAGE = 'Conversation sync failed for a listing';
 
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -409,6 +440,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const syncQueue = createQueue<SyncMarketplaceJob>('sync-marketplace');
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
+  const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -657,10 +689,24 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   publishQueue.registerHandler((data) => publishHandler.handle(data));
 
+  // Each thread is stored in its own transaction; new buyer messages queue reply runs.
+  const conversationSync = new ConversationSyncService({
+    inTransaction: (work) =>
+      withPoolTransaction(pool, (client) => work(new ConversationRepository(pool, client))),
+    products: productRepo,
+    replyQueue: conversationReplyQueue,
+    now: () => new Date(),
+  });
   // The sync handler persists fetched listing stats and updates the marketplace
   // lastSyncAt/errorCount via the injected repositories (C5).
   const syncHandler = new SyncMarketplaceHandler(adapterFactory, {
     listingStore: listingRepo,
+    conversationSync,
+    // The listing id and a fixed code only: buyer text must never reach a log.
+    onConversationSyncFailure: (failure) => {
+      if (overrides.logger) overrides.logger.warn(failure, CONVERSATION_SYNC_FAILURE_MESSAGE);
+      else console.warn(CONVERSATION_SYNC_FAILURE_MESSAGE, failure);
+    },
     marketplaceStore: marketplaceRepo,
     accessTokens: env.marketplaces.olx.adapterMode === 'real' ? marketplaceOAuthService : undefined,
     authenticatedHttpClient:
@@ -765,6 +811,23 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   syncQueue.registerHandler((data) => syncHandler.handle(data));
 
+  const replyHandler = new ConversationReplyHandler(
+    () =>
+      new ConversationReplyGraph({
+        conversations: new ReplyGraphConversationRepository(pool),
+        products: productRepo,
+        ai: replyDraftAI,
+        limits: {
+          dailyRunCap: env.replies.dailyRunCap,
+          historyMessages: env.replies.historyMessages,
+          repeatThreshold: env.replies.spamRepeatThreshold,
+          floodPerHour: env.replies.floodPerHour,
+        },
+        now: () => new Date(),
+      })
+  );
+  conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
+
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
   void conversationRetentionQueue
@@ -792,6 +855,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     hermesService,
     hermesStatus: () => aiProviderSelector.status(),
     replyDraftAI,
+    conversationRepo: new ConversationRepository(pool),
     aiUsageReport: async (workspaceId) => {
       const workspace = await workspaceRepo.findById(workspaceId);
       if (!workspace) throw new NotFoundError('Workspace not found');
@@ -826,6 +890,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     publishQueue as ManagedQueue<unknown>,
     syncQueue as ManagedQueue<unknown>,
     conversationRetentionQueue as ManagedQueue<unknown>,
+    conversationReplyQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

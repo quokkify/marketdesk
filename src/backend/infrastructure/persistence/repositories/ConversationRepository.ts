@@ -140,7 +140,7 @@ export class ConversationRepository implements IConversationRepository {
          status = COALESCE($6, conversation_threads.status),
          suspicious_reasons = COALESCE($7::text[], conversation_threads.suspicious_reasons),
          last_external_message_id = COALESCE($8, conversation_threads.last_external_message_id),
-         retention_starts_at = COALESCE($9, conversation_threads.retention_starts_at),
+         retention_starts_at = COALESCE(conversation_threads.retention_starts_at, $9),
          updated_at = now()
        RETURNING *`,
       [
@@ -249,6 +249,16 @@ export class ConversationRepository implements IConversationRepository {
     const { rows } = await query<DraftRow>(
       'SELECT * FROM reply_drafts WHERE id = $1 AND thread_id = $2',
       [draftId, threadId],
+      this.queryClient,
+    );
+    return rows[0] ? toDraft(rows[0]) : null;
+  }
+
+  async latestDraft(threadId: string): Promise<ReplyDraft | null> {
+    const { rows } = await query<DraftRow>(
+      `SELECT * FROM reply_drafts WHERE thread_id = $1 AND status <> 'superseded'
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [threadId],
       this.queryClient,
     );
     return rows[0] ? toDraft(rows[0]) : null;

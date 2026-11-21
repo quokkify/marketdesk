@@ -12,4 +12,9 @@ public record ProductRequestPojo(String name, String description, Double costPri
     return new ProductRequestPojo("QA price floor camera", "A camera created by the price floor API test.", 50.0,
         sellingPrice, "good", "electronics", minAcceptablePrice);
   }
+
+  public static ProductRequestPojo conversationSample() {
+    return new ProductRequestPojo("QA conversation camera", "A camera created by the conversation sync API test.",
+        50.0, 100.0, "good", "electronics", null);
+  }
 }

@@ -43,6 +43,7 @@ export type ReplyDraftPatch = Partial<
 >;
 
 export interface IConversationRepository {
+  // An existing retention start is kept; a later one never moves it.
   upsertThread(thread: NewConversationThread): Promise<ConversationThread>;
   findThreadForWorkspace(threadId: string, workspaceId: string): Promise<ConversationThread | null>;
   listThreadsForProduct(productId: string, workspaceId: string): Promise<ConversationThread[]>;
@@ -55,6 +56,8 @@ export interface IConversationRepository {
   countBuyerMessagesSince(threadId: string, since: Date): Promise<number>;
   insertDraft(draft: NewReplyDraft): Promise<ReplyDraft>;
   findDraft(draftId: string, threadId: string): Promise<ReplyDraft | null>;
+  // Newest draft of the thread that a newer buyer message has not superseded.
+  latestDraft(threadId: string): Promise<ReplyDraft | null>;
   // Compare-and-set on status: false when the row is not in expectedStatus.
   updateDraft(id: string, patch: ReplyDraftPatch, expectedStatus: ReplyDraft['status']): Promise<boolean>;
   supersedePendingDrafts(threadId: string): Promise<number>;

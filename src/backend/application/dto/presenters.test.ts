@@ -1,4 +1,4 @@
-import { presentHermesEvent, presentListing, presentMarketplace } from './presenters';
+import { presentConversationThread, presentHermesEvent, presentListing, presentMarketplace } from './presenters';
 import { Listing } from '../../domain/entities/Listing';
 import { Marketplace } from '../../domain/entities/Marketplace';
 import { HermesEvent } from '../../domain/entities/HermesEvent';
@@ -112,5 +112,47 @@ describe('presentHermesEvent', () => {
 
   it('leaves the source out when no provider is recorded', () => {
     expect(presentHermesEvent(titleEvent()).source).toBeUndefined();
+  });
+});
+
+describe('presentConversationThread', () => {
+  const at = new Date('2026-11-21T10:00:00.000Z');
+  const thread = {
+    id: 't1', workspaceId: 'w1', listingId: 'l1', productId: 'p1', externalThreadId: 'ext-1',
+    externalBuyerId: 'b1', status: 'open' as const, suspiciousReasons: [], lastExternalMessageId: 'm2',
+    retentionStartsAt: null, textPurgedAt: null, createdAt: at, updatedAt: at,
+  };
+  const draft = {
+    id: 'd1', threadId: 't1', answersMessageId: 'm1', intent: 'haggle' as const, proposedText: 'I can offer 90 zł.',
+    sentText: null, filledPrice: 90, status: 'pending' as const, failureReason: null, source: 'offline' as const,
+    attemptKey: null, attemptStartedAt: null, externalMessageId: null, createdAt: at, updatedAt: at,
+  };
+
+  it('maps messages and the draft, flagging an offline draft', () => {
+    const view = presentConversationThread(thread, [
+      { id: 'm1', threadId: 't1', externalMessageId: 'x1', direction: 'buyer', text: 'Hi', textHash: 'h', sentAt: at },
+    ], draft);
+
+    expect(view).toEqual({
+      id: 't1', status: 'open', suspiciousReasons: [],
+      messages: [{ id: 'm1', direction: 'buyer', text: 'Hi', sentAt: '2026-11-21T10:00:00.000Z' }],
+      draft: {
+        id: 'd1', status: 'pending', intent: 'haggle', text: 'I can offer 90 zł.', filledPrice: 90,
+        failureReason: null, offline: true,
+      },
+    });
+  });
+
+  it('keeps purged text null, shows the sent text and reports no draft as null', () => {
+    const purged = presentConversationThread(thread, [
+      { id: 'm1', threadId: 't1', externalMessageId: 'x1', direction: 'buyer', text: null, textHash: null, sentAt: at },
+    ], { ...draft, proposedText: null, sentText: null, source: 'hermes' });
+    expect(purged.messages[0].text).toBeNull();
+    expect(purged.draft).toMatchObject({ text: null, offline: false });
+
+    const sent = presentConversationThread(thread, [], { ...draft, status: 'sent', sentText: 'edited' });
+    expect(sent.draft?.text).toBe('edited');
+
+    expect(presentConversationThread(thread, [], null).draft).toBeNull();
   });
 });

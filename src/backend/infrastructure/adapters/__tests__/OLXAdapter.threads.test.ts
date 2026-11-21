@@ -16,19 +16,19 @@ function fakeClient(handler: (config: HttpRequestConfig) => HttpResponse | Promi
 }
 
 describe('OLXAdapter thread reading', () => {
-  it('lists threads from a bare array, preferring uuid over id and stringifying the buyer id', async () => {
+  it('lists threads from a bare array, preferring uuid over id, stringifying the buyer id and keeping total_count', async () => {
     const { client, request } = fakeClient(async () => ({
       status: 200,
       data: [
-        { uuid: 'thr-1', id: 5, advert_id: 'A1', interlocutor_id: 77 },
+        { uuid: 'thr-1', id: 5, advert_id: 'A1', interlocutor_id: 77, total_count: 4 },
         { id: 6, advert_id: 'A1' },
         { uuid: 'other', advert_id: 'A2', interlocutor_id: 1 },
       ],
     }));
     const threads = await new OLXAdapter(client, fastOptions).listThreads('A1');
     expect(threads).toEqual([
-      { externalThreadId: 'thr-1', externalBuyerId: '77' },
-      { externalThreadId: '6', externalBuyerId: null },
+      { externalThreadId: 'thr-1', externalBuyerId: '77', totalCount: 4 },
+      { externalThreadId: '6', externalBuyerId: null, totalCount: null },
     ]);
     expect(request.mock.calls[0][0]).toMatchObject({ method: 'GET', query: { advert_id: 'A1', offset: 0 } });
   });

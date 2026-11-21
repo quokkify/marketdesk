@@ -536,6 +536,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         threads.push({
           externalThreadId,
           externalBuyerId: buyer === undefined || buyer === null || buyer === '' ? null : String(buyer),
+          totalCount: this.parseCounter(thread.total_count),
         });
       }
       return threads;

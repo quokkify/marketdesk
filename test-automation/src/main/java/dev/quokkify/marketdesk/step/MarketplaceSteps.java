@@ -1,18 +1,25 @@
 package dev.quokkify.marketdesk.step;
 
+import java.time.Duration;
+
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.MarketplaceImportRequestPojo;
 import dev.quokkify.marketdesk.service.MarketplaceService;
 import dev.quokkify.marketdesk.verification.MarketplaceVerification;
 import dev.quokkify.step.ApiSteps;
+import dev.quokkify.util.Waiter;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
+import org.hamcrest.Matchers;
 
 public class MarketplaceSteps extends ApiSteps<MarketplaceVerification> {
 
   private static final String OLX_ID_PATH = "data.find { it.key == 'olx' }.id";
+  private static final String OLX_LAST_SYNC_PATH = "data.find { it.key == 'olx' }.lastSyncAt";
+  private static final Duration SYNC_TIMEOUT = Duration.ofSeconds(30);
+  private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
 
   private final MarketplaceService service = new MarketplaceService();
 
@@ -33,6 +40,32 @@ public class MarketplaceSteps extends ApiSteps<MarketplaceVerification> {
   @Step("Connect the sandbox OLX account")
   public void connectSandboxOlx(AccountPojo account) {
     service.connect(account.token(), getOlxMarketplaceId(account)).statusCode(HttpStatus.SC_OK);
+  }
+
+  @Step("Start a sync of the OLX marketplace")
+  public void syncOlx(AccountPojo account) {
+    service.sync(account.token(), getOlxMarketplaceId(account)).statusCode(HttpStatus.SC_ACCEPTED);
+  }
+
+  // Waits for a finished sync, so a later sync can be told apart by its newer time.
+  @Step("Wait until the OLX marketplace has synced and read when")
+  public String awaitOlxLastSyncAt(AccountPojo account) {
+    return Waiter.awaitCondition(() -> readOlxLastSyncAt(account), Matchers.notNullValue(),
+        "the OLX marketplace has synced", SYNC_TIMEOUT, POLL_INTERVAL);
+  }
+
+  @Step("Start a sync of the OLX marketplace and wait until it finishes after {previousSyncAt}")
+  public void resyncOlx(AccountPojo account, String previousSyncAt) {
+    syncOlx(account);
+    Waiter.awaitCondition(() -> readOlxLastSyncAt(account), Matchers.not(Matchers.equalTo(previousSyncAt)),
+        "the OLX marketplace synced again", SYNC_TIMEOUT, POLL_INTERVAL);
+  }
+
+  private String readOlxLastSyncAt(AccountPojo account) {
+    return service.getMarketplaces(account.token())
+        .statusCode(HttpStatus.SC_OK)
+        .extract()
+        .path(OLX_LAST_SYNC_PATH);
   }
 
   @Step("Preview the OLX import without authentication")

@@ -196,7 +196,7 @@ describe('buildContainer (composition root)', () => {
     expect('subscriber' in build()).toBe(false);
   });
 
-  it('creates exactly the publish, sync and conversation-retention queues', () => {
+  it('creates exactly the publish, sync, conversation-retention and conversation-reply queues', () => {
     const names: string[] = [];
     const scheduled: Array<{ name: string; options: unknown }> = [];
     buildContainer({
@@ -219,7 +219,7 @@ describe('buildContainer (composition root)', () => {
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply']);
     expect(scheduled).toEqual([
       {
         name: 'conversation-retention',
@@ -233,7 +233,7 @@ describe('buildContainer (composition root)', () => {
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
     expect('cache' in container).toBe(false);
-    expect(container.queues).toHaveLength(3);
+    expect(container.queues).toHaveLength(4);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

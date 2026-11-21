@@ -35,6 +35,7 @@ import { env, isProduction, type OlxAdapterMode } from '../../config/env';
 import { ProductImageUploadService as DefaultProductImageUploadService } from '../../application/services/ProductImageUploadService';
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { ProductController } from './controllers/ProductController';
+import { ConversationController } from './controllers/ConversationController';
 import { ListingController } from './controllers/ListingController';
 import { MarketplaceController } from './controllers/MarketplaceController';
 import { HermesController } from './controllers/HermesController';
@@ -57,6 +58,7 @@ import { createRequestLoggingMiddleware, type RequestLogger } from './middleware
 import { RENEWED_TOKEN_HEADER } from './middleware/CurrentPrincipalMiddleware';
 import { createRunContextMiddleware } from './middleware/RunContextMiddleware';
 import type { IReplyDraftAI } from '../../domain/ports/IReplyDraftAI';
+import type { IConversationRepository } from '../../domain/repositories/interfaces/IConversationRepository';
 
 // Shape Group 6 must fulfil to build the HTTP surface.
 export interface AppDeps {
@@ -71,6 +73,8 @@ export interface AppDeps {
   hermesStatus?: () => Promise<HermesStatusView>;
   // Buyer-reply drafting AI; consumed by the conversation graph.
   replyDraftAI?: IReplyDraftAI;
+  // Buyer conversations read by GET /api/products/:id/conversations.
+  conversationRepo?: IConversationRepository;
   // Stored AI usage of one workspace (GET /api/hermes/usage).
   aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>;
   // Account-wide limits of the AI provider, read from the Hermes usage file (GET /api/hermes/limits).
@@ -261,6 +265,9 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.olxAdapterMode
     ),
     uploads: new ProductImageUploadController(productImageUploadService),
+    conversations: deps.conversationRepo
+      ? new ConversationController(deps.productRepo, deps.conversationRepo)
+      : undefined,
   };
 
   app.use(
