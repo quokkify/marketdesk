@@ -2,34 +2,60 @@
 
 ## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-11-21)
 
+<!-- project-toolkit:release-notes v2 -->
+**At a glance:** ⚠️ 4 breaking · 4 new · 2 fixed
 
-### ⚠ BREAKING CHANGES
+### ⚠️ Breaking changes
 
-* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467))
-* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458))
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
-* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447))
+> [!WARNING]
+> create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/pull/458))
 
-### ✨ Features
+> [!WARNING]
+> cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/pull/447))
+>
+> The Dashboard, Analytics and Listings pages, the notifications control, the bulk-action placeholders, the Notifications, API Keys, Telegram, Security and Hermes AI settings sections, the roadmap marketplace cards and the import panel are no longer part of the interface. The listing SEO agent and its creativity preset keep their stored values and can still be changed through `PATCH /api/settings/hermes`; no screen edits them.
 
-* **ai:** show tokens per analysis, AI usage and Hermes limits ([#479](https://github.com/quokkify/marketdesk/issues/479)) ([2faac88](https://github.com/quokkify/marketdesk/commit/2faac88e7e68190f7f05063233ea6fd517abab15))
-* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458)) ([ca0eb69](https://github.com/quokkify/marketdesk/commit/ca0eb697cf0b34feaba4317bc82b5638b7f06f25))
-* **olx:** import adverts already live on OLX ([#469](https://github.com/quokkify/marketdesk/issues/469)) ([81194c0](https://github.com/quokkify/marketdesk/commit/81194c0d09f1406420833df50db50b046e3bcc7b))
-* **olx:** reactivate expired OLX adverts instead of duplicating them ([#478](https://github.com/quokkify/marketdesk/issues/478)) ([a43bcaf](https://github.com/quokkify/marketdesk/commit/a43bcaf39d3cfa054b1e8f4bb128a4199bdac930))
-* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+> [!WARNING]
+> remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/pull/448))
+>
+> These endpoints no longer exist and answer 404 with the error code `NOT_FOUND`: `GET` and `PATCH /api/settings/notifications`, `GET /api/analytics/revenue`, `GET /api/analytics/listings`, `POST /api/hermes/run`, `POST /api/marketplaces/:id/import-preview`, `POST /api/marketplaces/:id/import`. `GET /api/settings/integrations` no longer returns the `telegram` and `api_keys` items.
+>
+> An API client that analysed the whole catalogue with `POST /api/hermes/run` calls `POST /api/hermes/products/:productId/run` once per product instead. The other removed endpoints have no replacement at this stage.
 
+> [!WARNING]
+> **security:** refuse a Hermes agent that has tools enabled — MarketDesk now refuses a Hermes Agent whose API server has any tool enabled (terminal, files, browser, memory), so seller text can no longer steer an agent that acts on your server. In `auto` mode AI falls back to offline heuristics, in `hermes` mode AI requests fail until Hermes runs without tools. ([#467](https://github.com/quokkify/marketdesk/pull/467))
+>
+> 1. Create a Hermes profile without tools as described in `docs/deployment/caddy-cloudflare-vps.md` ("Hermes profile without tools"), with its own `API_SERVER_KEY`.
+> 2. Confirm with `GET /p/<profile>/v1/toolsets` that no toolset is enabled.
+> 3. Set `HERMES_API_URL` to `http://<hermes-host>:8642/p/<profile>/v1` and `HERMES_API_KEY` to that profile's key, then restart MarketDesk.
+> 4. On a production instance also set `REGISTRATION_ENABLED=false`.
 
-### 🐛 Bug Fixes
+### ✨ New
 
-* **olx:** give imported OLX adverts their category and status ([#475](https://github.com/quokkify/marketdesk/issues/475)) ([f57264c](https://github.com/quokkify/marketdesk/commit/f57264c255a3b8414d8e42a521368865a6eb6323))
-* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467)) ([5a9157d](https://github.com/quokkify/marketdesk/commit/5a9157dba98d9307b3d6054397452a9d663b78af))
-* **security:** sign out every device and expire idle sessions ([#468](https://github.com/quokkify/marketdesk/issues/468)) ([217e377](https://github.com/quokkify/marketdesk/commit/217e377dd5a493a466a543c2e6c296342da53c11))
+- reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) — - MarketDesk runs end to end without OLX credentials: an OLX sandbox account, stub categories and simulated metrics, all labelled Sandbox. - Hermes AI degrades to labelled, review-only offline heuristics when the Hermes server is unreachable. - Boot refuses placeholder secrets and explains how to fix them; `npm run env:init` generates them. ([#434](https://github.com/quokkify/marketdesk/pull/434))
 
+  > **Migration**
+  >
+  > - Migrations 042 (`hermes_events.source`) and 043 (`category_correction_operations.listing_id` nullable, `ON DELETE SET NULL`) run through the Compose `migrate` service or `npm run db:migrate`; both are idempotent.
+  > - Run `npm run env:init` (or set `JWT_SECRET` ≥ 32 chars and a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`) before the first boot.
+  > - For a real OLX deployment set `OLX_ADAPTER_MODE=real` and a publicly reachable `PUBLIC_BASE_URL`; the default `stub` mode labels everything Sandbox.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+  >
+  > https://claude.ai/code/session_01G7RDWHiEDE7j584o2tQQSL
+- **ai:** show tokens per analysis, AI usage and Hermes limits — See what AI analyses use: each analysis on the product page shows its tokens, and the Hermes page shows AI usage for today and the last 7 days plus the AI provider's account limits (5-hour and weekly windows, reset times). Unknown values are shown as unknown, never as 0. ([#479](https://github.com/quokkify/marketdesk/pull/479))
+- **olx:** import adverts already live on OLX — A connected OLX account can import the adverts already live on OLX again: "Import from OLX" on the Marketplaces page previews every advert with its status, then imports the new and changed ones as products. Nothing is written to OLX. ([#469](https://github.com/quokkify/marketdesk/pull/469))
+- **olx:** reactivate expired OLX adverts instead of duplicating them — An expired OLX advert can be brought back from its product page with "Reactivate on OLX": the same advert, link and history return instead of a duplicate. If OLX's free limit for the category is used up, MarketDesk says so and buys nothing. ([#478](https://github.com/quokkify/marketdesk/pull/478))
 
-### ♻️ Refactoring
+### 🐛 Fixed
 
-* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447)) ([2112b0a](https://github.com/quokkify/marketdesk/commit/2112b0aad98f52a9d26d9d928e0f23c2416e6996))
-* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+- **olx:** give imported OLX adverts their category and status — Importing from OLX no longer marks every advert as unsupported: MarketDesk now reads the category OLX actually sends (`category_id`), and expired, removed and moderation-blocked OLX adverts get the matching MarketDesk status on import and sync. ([#475](https://github.com/quokkify/marketdesk/pull/475))
+- **security:** sign out every device and expire idle sessions — Sign out now ends the session on every device, Settings has a Change password card that signs out your other devices, and operators can revoke a user's sessions with `npm run auth:revoke -- <email>`. Sessions expire after 24 h of inactivity and renew while in use. ([#468](https://github.com/quokkify/marketdesk/pull/468))
+
+  > **Migration**
+  >
+  > 1. If your `.env` still has `JWT_EXPIRATION=7d` (copied from the old example), change it to `24h`; the app keeps 7d but logs a warning at boot.
+  > 2. `JWT_EXPIRATION` and the new `JWT_RENEW_AFTER` (default `12h`) accept `<integer><unit>` with `s`, `m`, `h` or `d` only; rewrite values such as `2 days` as `2d`, or the app refuses to start and names the variable.
 
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
