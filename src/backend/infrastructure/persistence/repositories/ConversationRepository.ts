@@ -124,7 +124,8 @@ const DRAFT_PATCH_COLUMNS: Record<keyof ReplyDraftPatch, string> = {
 export class ConversationRepository implements IConversationRepository {
   private readonly queryClient?: PoolClient | Pool;
 
-  constructor(private readonly pool?: Pool, private readonly client?: PoolClient) {
+  // A client passed in means the caller owns a transaction on it; replacePendingDraft relies on that.
+  constructor(pool?: Pool, private readonly client?: PoolClient) {
     this.queryClient = client || pool;
   }
 
@@ -297,23 +298,24 @@ export class ConversationRepository implements IConversationRepository {
       return this.insertDraft({ ...draft, threadId }, client);
     };
     try {
-      // A client passed in belongs to a caller that owns the transaction.
-      if (this.client) return await run(this.client);
-      if (!this.pool) return await withTransaction(run);
-      const client = await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        const result = await run(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
+      return this.client ? await this.inSavepoint(this.client, run) : await withTransaction(run);
     } catch (error) {
       if ((error as { code?: unknown }).code === UNIQUE_VIOLATION) return null;
+      throw error;
+    }
+  }
+
+  // Runs inside the caller's transaction; a failure rolls back only this work, so the caller's
+  // transaction stays usable.
+  private async inSavepoint<T>(client: PoolClient, run: (client: PoolClient) => Promise<T>): Promise<T> {
+    await client.query('SAVEPOINT replace_pending_draft');
+    try {
+      const result = await run(client);
+      await client.query('RELEASE SAVEPOINT replace_pending_draft');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK TO SAVEPOINT replace_pending_draft');
+      await client.query('RELEASE SAVEPOINT replace_pending_draft');
       throw error;
     }
   }

@@ -93,6 +93,19 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
   const newThread = (externalThreadId = 'ext-1') =>
     repo.upsertThread({ workspaceId, listingId, productId, externalThreadId, externalBuyerId: 'buyer-1' });
 
+  // The repository's client contract: the caller owns the transaction.
+  const inTransaction = async <T>(fn: () => Promise<T>): Promise<T> => {
+    await client.query('BEGIN');
+    try {
+      const result = await fn();
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  };
+
   it('upsertMessagesReturnsOnlyNew', async () => {
     const thread = await newThread();
     const first = await repo.upsertMessages(thread.id, [message('m1'), message('m2')]);
@@ -259,11 +272,12 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
   it('replacePendingDraftKeepsOnePending', async () => {
     const thread = await newThread();
     const [m1] = await repo.upsertMessages(thread.id, [message('m1', { sentAt: new Date('2026-11-20T10:00:00Z') })]);
-    const first = await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' });
+    const first = await inTransaction(() =>
+      repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' }));
     const [m2] = await repo.upsertMessages(thread.id, [message('m2', { sentAt: new Date('2026-11-20T11:00:00Z') })]);
-    const second = await repo.replacePendingDraft(thread.id, m2.id, {
+    const second = await inTransaction(() => repo.replacePendingDraft(thread.id, m2.id, {
       answersMessageId: m2.id, proposedText: 'two', source: 'hermes',
-    });
+    }));
     expect(second).toMatchObject({ status: 'pending', proposedText: 'two', source: 'hermes' });
     expect((await repo.findDraft(first!.id, thread.id))?.status).toBe('superseded');
 
@@ -274,11 +288,38 @@ describeDb('ConversationRepository (PostgreSQL TEMP tables)', () => {
   it('replacePendingDraftRefusesStaleMessage', async () => {
     const thread = await newThread();
     const [m1] = await repo.upsertMessages(thread.id, [message('m1', { sentAt: new Date('2026-11-20T10:00:00Z') })]);
-    const kept = await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' });
+    const kept = await inTransaction(() =>
+      repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'one' }));
     await repo.upsertMessages(thread.id, [
       message('s1', { direction: 'seller', sentAt: new Date('2026-11-20T11:00:00Z') }),
     ]);
-    expect(await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'late' })).toBeNull();
+    expect(await inTransaction(() =>
+      repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'late' }))).toBeNull();
     expect((await repo.findDraft(kept!.id, thread.id))?.status).toBe('pending');
+  });
+
+  it('replacePendingDraftMapsUniqueViolationToNull', async () => {
+    const thread = await newThread();
+    const [m1] = await repo.upsertMessages(thread.id, [message('m1')]);
+    const kept = await repo.insertDraft({ threadId: thread.id, answersMessageId: m1.id, proposedText: 'one' });
+    // A session-local trigger makes the supersede miss the pending row, so the insert hits the unique index.
+    await client.query('CREATE OR REPLACE FUNCTION pg_temp.keep_pending() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$');
+    await client.query(
+      'CREATE TRIGGER keep_pending BEFORE UPDATE ON reply_drafts FOR EACH ROW EXECUTE FUNCTION pg_temp.keep_pending()',
+    );
+
+    await client.query('BEGIN');
+    try {
+      expect(await repo.replacePendingDraft(thread.id, m1.id, { answersMessageId: m1.id, proposedText: 'two' })).toBeNull();
+      const { rows } = await client.query<{ status: string }>(
+        'SELECT status FROM reply_drafts WHERE thread_id = $1', [thread.id],
+      );
+      expect(rows.map((r) => r.status)).toEqual(['pending']);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+    expect((await repo.findDraft(kept.id, thread.id))?.proposedText).toBe('one');
   });
 });
