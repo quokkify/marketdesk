@@ -3,7 +3,7 @@ import React from 'react';
 import { Box, Skeleton, Stack, Typography } from '@mui/material';
 import type { AiUsageReport } from '@shared/types';
 import { Card } from '../common/Card.js';
-import { totalTokensText } from './aiUsageText.js';
+import { REFRESH_FAILED_NOTE, totalTokensText } from './aiUsageText.js';
 
 export interface AiUsageCardProps {
   usage: AiUsageReport | undefined;
@@ -33,6 +33,11 @@ export const AiUsageCard: React.FC<AiUsageCardProps> = ({ usage, loading, failed
         </Typography>
       ) : (
         <Stack spacing={1}>
+          {failed && (
+            <Typography variant="body2" color="warning.main">
+              {REFRESH_FAILED_NOTE}
+            </Typography>
+          )}
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               Analyses today

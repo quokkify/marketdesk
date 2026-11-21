@@ -1,5 +1,5 @@
 import type { AiUsageSummary, HermesLimits } from '@shared/types';
-import { aiUsageLine, limitsView } from './aiUsageText.js';
+import { aiUsageLine, limitsView, REFRESH_FAILED_NOTE } from './aiUsageText.js';
 
 const hermes = (over: Partial<AiUsageSummary>): AiUsageSummary => ({
   provider: 'hermes',
@@ -80,5 +80,21 @@ describe('limitsView', () => {
     expect(limitsView(limits({ state: 'not_configured', windows: [] })).note).toBe(
       'Limits unavailable'
     );
+  });
+  it('does not invent an age for a stale reading without one', () => {
+    expect(limitsView(limits({ state: 'stale', ageSeconds: null })).note).toBe('may be out of date');
+  });
+  it('keeps percent null for a window that reported none', () => {
+    const view = limitsView(limits({ windows: [{ label: 'Weekly', usedPercent: null, resetsAt: null }] }));
+    expect(view.bars[0].percent).toBeNull();
+  });
+  it('says so when a reading has no windows', () => {
+    expect(limitsView(limits({ windows: [] })).note).toBe('No limit windows reported');
+  });
+  it('marks the last reading when a later refresh failed', () => {
+    const view = limitsView(limits({}), true);
+    expect(view.note).toBe(REFRESH_FAILED_NOTE);
+    expect(view.stale).toBe(true);
+    expect(view.bars).toHaveLength(1);
   });
 });

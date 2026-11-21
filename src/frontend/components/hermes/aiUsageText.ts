@@ -32,11 +32,19 @@ export interface LimitBar {
   tone: 'ok' | 'warning' | 'error';
 }
 
-export function limitsView(limits: HermesLimits): { bars: LimitBar[]; note: string } {
+export const REFRESH_FAILED_NOTE = "Couldn't refresh — showing the last reading";
+export const NO_WINDOWS_NOTE = 'No limit windows reported';
+
+/** `refreshFailed`: a later poll failed, so the values shown are the last good reading. */
+export function limitsView(
+  limits: HermesLimits,
+  refreshFailed = false,
+): { bars: LimitBar[]; note: string; stale: boolean } {
   if (limits.state === 'unknown' || limits.state === 'not_configured') {
     return {
       bars: [],
       note: limits.reason ? `${LIMITS_UNAVAILABLE} — ${limits.reason}` : LIMITS_UNAVAILABLE,
+      stale: false,
     };
   }
   const bars = limits.windows.map((w): LimitBar => ({
@@ -50,11 +58,17 @@ export function limitsView(limits: HermesLimits): { bars: LimitBar[]; note: stri
           ? 'warning'
           : 'ok',
   }));
-  const minutes = Math.round((limits.ageSeconds ?? 0) / SECONDS_PER_MINUTE);
-  return {
-    bars,
-    note: limits.state === 'stale' ? `checked ${minutes} min ago — may be out of date` : '',
-  };
+  const notes: string[] = [];
+  if (limits.state === 'stale') {
+    notes.push(
+      limits.ageSeconds === null
+        ? 'may be out of date'
+        : `checked ${Math.round(limits.ageSeconds / SECONDS_PER_MINUTE)} min ago — may be out of date`,
+    );
+  }
+  if (bars.length === 0) notes.push(NO_WINDOWS_NOTE);
+  if (refreshFailed) notes.push(REFRESH_FAILED_NOTE);
+  return { bars, note: notes.join('. '), stale: limits.state === 'stale' || refreshFailed };
 }
 
 /** Token total of a usage report, or the honest "not reported". */

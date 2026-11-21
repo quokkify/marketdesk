@@ -11,9 +11,10 @@ public class HermesActivityPageVerification
     extends Verification<HermesActivityPageSteps, HermesActivityPageVerification, HermesActivityPage> {
 
   private static final String PLAN = "Plus";
+  private static final String SESSION_ROW = "Session 4%";
+  private static final String WEEKLY_ROW = "Weekly 10%";
   private static final String SESSION_WINDOW = "Session";
-  private static final String SESSION_PERCENT = "4%";
-  private static final String WEEKLY_PERCENT = "10%";
+  private static final String WEEKLY_WINDOW = "Weekly";
   private static final String ACCOUNT_WIDE = "account-wide, shared with all Hermes use";
 
   public HermesActivityPageVerification(HermesActivityPageSteps steps, HermesActivityPage page) {
@@ -24,10 +25,9 @@ public class HermesActivityPageVerification
   public HermesActivityPageVerification limitsCardShowsPlanAndWindows() {
     page.limitsCard().shouldBe(Condition.visible, getTimeout())
         .shouldHave(Condition.text(PLAN), getTimeout())
-        .shouldHave(Condition.text(SESSION_WINDOW), getTimeout())
-        .shouldHave(Condition.text(SESSION_PERCENT), getTimeout())
-        .shouldHave(Condition.text(WEEKLY_PERCENT), getTimeout())
         .shouldHave(Condition.text(ACCOUNT_WIDE), getTimeout());
+    page.limitRow(SESSION_WINDOW).shouldHave(Condition.exactText(SESSION_ROW), getTimeout());
+    page.limitRow(WEEKLY_WINDOW).shouldHave(Condition.exactText(WEEKLY_ROW), getTimeout());
     return this;
   }
 

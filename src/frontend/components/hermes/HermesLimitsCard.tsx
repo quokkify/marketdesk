@@ -17,7 +17,7 @@ export interface HermesLimitsCardProps {
 const TONE_COLOR = { ok: 'primary', warning: 'warning', error: 'error' } as const;
 
 export const HermesLimitsCard: React.FC<HermesLimitsCardProps> = ({ limits, loading, failed }) => {
-  const view = limits ? limitsView(limits) : undefined;
+  const view = limits ? limitsView(limits, failed) : undefined;
   return (
     <Box data-testid="hermes-limits-card" sx={{ height: '100%' }}>
       <Card
@@ -32,10 +32,14 @@ export const HermesLimitsCard: React.FC<HermesLimitsCardProps> = ({ limits, load
             {failed ? `${LIMITS_UNAVAILABLE} — the request failed` : LIMITS_UNAVAILABLE}
           </Typography>
         ) : (
-          <Stack spacing={1.5}>
+          <Stack spacing={1.5} sx={{ opacity: view.stale ? 0.6 : 1 }}>
             {view.bars.map((bar) => (
               <Box key={bar.label}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                <Stack
+                  data-testid="limit-row"
+                  direction="row"
+                  sx={{ justifyContent: 'space-between' }}
+                >
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {bar.label}
                   </Typography>
@@ -43,12 +47,14 @@ export const HermesLimitsCard: React.FC<HermesLimitsCardProps> = ({ limits, load
                     {bar.percent === null ? 'not reported' : `${Math.round(bar.percent)}%`}
                   </Typography>
                 </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  color={TONE_COLOR[bar.tone]}
-                  value={bar.percent === null ? 0 : Math.min(PERCENT_MAX, bar.percent)}
-                  aria-label={`${bar.label} used`}
-                />
+                {bar.percent !== null && (
+                  <LinearProgress
+                    variant="determinate"
+                    color={TONE_COLOR[bar.tone]}
+                    value={Math.min(PERCENT_MAX, bar.percent)}
+                    aria-label={`${bar.label} used`}
+                  />
+                )}
                 {bar.resetsAt && (
                   <Typography variant="caption" color="text.secondary">
                     resets {new Date(bar.resetsAt).toLocaleString()}
@@ -59,7 +65,7 @@ export const HermesLimitsCard: React.FC<HermesLimitsCardProps> = ({ limits, load
             {view.note && (
               <Typography
                 variant="body2"
-                color={limits?.state === 'stale' ? 'warning.main' : 'text.secondary'}
+                color={view.stale ? 'warning.main' : 'text.secondary'}
               >
                 {view.note}
               </Typography>
