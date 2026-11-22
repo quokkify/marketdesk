@@ -1,7 +1,7 @@
 import type { ProductRecheckResult, SaleVerdict } from '../../../../../shared/types';
 import type { CompletedVerdictFields, ISaleVerdictRepository, NewVerdictRun } from '../../../../domain/repositories/interfaces/ISaleVerdictRepository';
 import type { SaleVerdictJob } from '../../../ports/IJobQueue';
-import { SaleVerdictRuns, VERDICT_RUN_TTL_MS } from '../SaleVerdictRuns';
+import { SaleVerdictRuns, VERDICT_QUEUED_TTL_MS } from '../SaleVerdictRuns';
 
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 const WS = 'w1';
@@ -10,6 +10,22 @@ const PID = 'p1';
 class Verdicts implements Partial<ISaleVerdictRepository> {
   rows: SaleVerdict[] = [];
   errorCodes = new Map<string, string>();
+  leases = new Map<string, string>();
+  async claim(runId: string, _startedAt: string, leaseUntil: string): Promise<SaleVerdict | null> {
+    const row = this.rows.find((r) => r.id === runId && r.status === 'queued');
+    if (!row) return null;
+    row.status = 'running';
+    this.leases.set(runId, leaseUntil);
+    return row;
+  }
+  async failExpired(_ws: string, _pid: string, now: string, queuedBefore: string, errorCode: string): Promise<boolean> {
+    const row = this.rows.find(
+      (r) =>
+        (r.status === 'running' && (this.leases.get(r.id) ?? '') < now) ||
+        (r.status === 'queued' && r.createdAt < queuedBefore),
+    );
+    return row ? this.fail(row.id, now, errorCode) : false;
+  }
   async insertQueued(run: NewVerdictRun): Promise<SaleVerdict | null> {
     if (this.rows.some((r) => r.status === 'queued' || r.status === 'running')) return null;
     const row: SaleVerdict = {
@@ -99,18 +115,53 @@ describe('SaleVerdictRuns', () => {
     expect(jobs).toHaveLength(1);
   });
 
-  it('expires a run stuck past the TTL before queueing a new one', async () => {
+  const stuck = (status: SaleVerdict['status'], queuedAgoMs: number): SaleVerdict => ({
+    id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status,
+    overall: null, checks: {}, createdAt: new Date(NOW.getTime() - queuedAgoMs).toISOString(), completedAt: null,
+  });
+  const MIN = 60 * 1000;
+
+  it('does not expire a running run that was queued long ago while its lease holds', async () => {
     const { runs, verdicts, jobs } = setup();
-    verdicts.rows.push({
-      id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status: 'running',
-      overall: null, checks: {}, createdAt: new Date(NOW.getTime() - VERDICT_RUN_TTL_MS - 1000).toISOString(), completedAt: null,
-    });
+    verdicts.rows.push(stuck('running', 20 * MIN));
+    verdicts.leases.set('old', new Date(NOW.getTime() + 4 * MIN).toISOString());
+
+    const out = await runs.request(WS, PID, ['info'], 'manual');
+
+    expect(out).toMatchObject({ enqueued: false, run: { id: 'old' } });
+    expect(verdicts.errorCodes.has('old')).toBe(false);
+    expect(jobs).toHaveLength(0);
+  });
+
+  it('expires a running run past its lease before queueing a new one', async () => {
+    const { runs, verdicts, jobs } = setup();
+    verdicts.rows.push(stuck('running', 20 * MIN));
+    verdicts.leases.set('old', new Date(NOW.getTime() - MIN).toISOString());
 
     const out = await runs.request(WS, PID, ['info'], 'manual');
 
     expect(verdicts.errorCodes.get('old')).toBe('expired');
     expect(out.enqueued).toBe(true);
     expect(jobs).toHaveLength(1);
+  });
+
+  it('does not expire a queued run within the queued TTL', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(stuck('queued', 30 * MIN));
+
+    const view = await runs.view(WS, PID);
+
+    expect(view.active?.id).toBe('old');
+  });
+
+  it('view expires a queued run older than the queued TTL', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(stuck('queued', VERDICT_QUEUED_TTL_MS + 1000));
+
+    const view = await runs.view(WS, PID);
+
+    expect(view.active).toBeNull();
+    expect(verdicts.errorCodes.get('old')).toBe('expired');
   });
 
   it('fails a run that could not be enqueued and rethrows', async () => {
@@ -120,18 +171,6 @@ describe('SaleVerdictRuns', () => {
 
     expect(verdicts.errorCodes.get('run-1')).toBe('enqueue_failed');
     expect(errors).toEqual(['Sale verdict run not queued']);
-  });
-
-  it('view expires a stuck active run before answering', async () => {
-    const { runs, verdicts } = setup();
-    verdicts.rows.push({
-      id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status: 'queued',
-      overall: null, checks: {}, createdAt: new Date(NOW.getTime() - VERDICT_RUN_TTL_MS - 1000).toISOString(), completedAt: null,
-    });
-
-    const view = await runs.view(WS, PID);
-
-    expect(view.active).toBeNull();
   });
 
   it('recheckInfo returns the Recheck result and stores a completed info verdict', async () => {
@@ -150,5 +189,7 @@ describe('SaleVerdictRuns', () => {
     await expect(runs.recheckInfo(WS, PID, 'l1')).resolves.toBe(result);
 
     expect(errors).toEqual(['Storing the sale verdict of a recheck failed']);
+    expect(verdicts.rows[0]).toMatchObject({ status: 'failed' });
+    expect(verdicts.errorCodes.get('run-1')).toBe('store_failed');
   });
 });

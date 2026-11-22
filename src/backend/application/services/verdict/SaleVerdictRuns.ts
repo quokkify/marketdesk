@@ -1,5 +1,5 @@
 // Starts and reads sale verdict runs. A request checks the product, frees the product from a run
-// stuck past the TTL (its job crashed or was lost), records a queued run and enqueues its ids; the
+// stuck (its lease ended or its job was lost), records a queued run and enqueues its ids; the
 // graph runs only in the sale-verdict job. A product has at most one queued or running run.
 // recheckInfo is the synchronous Recheck: its result is the Recheck's own, and the info check over
 // it is stored as a completed verdict run.
@@ -21,8 +21,11 @@ import type { IJobQueue, SaleVerdictJob } from '../../ports/IJobQueue';
 import type { ProductRecheckService } from '../ProductRecheckService';
 import { SALE_VERDICT_GRAPH_VERSION, type CheckGraph } from './SaleVerdictGraph';
 
-// Above the handler's lease, so a live run is never expired.
-export const VERDICT_RUN_TTL_MS = 15 * 60 * 1000;
+// A running run ends with its lease. A queued run may wait behind other jobs (one job at a time per
+// process, each up to the run budget), so only a long wait means its job was lost.
+export const VERDICT_QUEUED_TTL_MS = 60 * 60 * 1000;
+// The lease of a synchronous Recheck write.
+const RECHECK_LEASE_MS = 2 * 60 * 1000;
 export const VERDICT_EXPIRED = 'expired';
 
 export type VerdictTrigger = 'manual' | 'research';
@@ -71,6 +74,8 @@ export class SaleVerdictRuns {
       queuedAt: now.toISOString(),
     });
     if (!run) {
+      // One active run per product is the rule: a request whose scope the active run does not cover
+      // (e.g. a synchronous Recheck write) gets that run back with enqueued: false and asks again.
       const active = await this.deps.verdicts.findActive(workspaceId, productId);
       if (!active) throw new ConflictError('The sale verdict run just ended, please try again');
       return { run: active, enqueued: false };
@@ -108,11 +113,15 @@ export class SaleVerdictRuns {
     return this.deps.verdicts.findLatestCompletedForProducts(workspaceId, productIds);
   }
 
-  // A run stuck past the TTL would block the product for good: written as failed before anything reads or inserts.
+  // A run stuck for good would block the product: written as failed before anything reads or inserts.
   private async expireStuck(workspaceId: string, productId: string, now: Date): Promise<void> {
-    const active = await this.deps.verdicts.findActive(workspaceId, productId);
-    if (!active || Date.parse(active.createdAt) >= now.getTime() - VERDICT_RUN_TTL_MS) return;
-    await this.deps.verdicts.fail(active.id, now.toISOString(), VERDICT_EXPIRED);
+    await this.deps.verdicts.failExpired(
+      workspaceId,
+      productId,
+      now.toISOString(),
+      new Date(now.getTime() - VERDICT_QUEUED_TTL_MS).toISOString(),
+      VERDICT_EXPIRED,
+    );
   }
 
   // A run that never reached the queue would block the product: failed before the error is reported.
@@ -164,9 +173,16 @@ export class SaleVerdictRuns {
     });
     // A run holds the product: its own result will include the info check.
     if (!queued) return;
-    await this.deps.verdicts.setListing(id, listingId);
-    const previous = (await this.deps.verdicts.findLatestCompleted(workspaceId, productId))?.checks ?? {};
-    const { checks, overall } = combineVerdict([info], previous);
-    await this.deps.verdicts.complete(id, { checks, overall, completedAt: now });
+    // Claimed at once with a short lease, so a crash here frees the product when the lease ends.
+    try {
+      await this.deps.verdicts.claim(id, now, new Date(this.deps.now().getTime() + RECHECK_LEASE_MS).toISOString());
+      await this.deps.verdicts.setListing(id, listingId);
+      const previous = (await this.deps.verdicts.findLatestCompleted(workspaceId, productId))?.checks ?? {};
+      const { checks, overall } = combineVerdict([info], previous);
+      await this.deps.verdicts.complete(id, { checks, overall, completedAt: now });
+    } catch (error) {
+      await this.deps.verdicts.fail(id, this.deps.now().toISOString(), 'store_failed');
+      throw error;
+    }
   }
 }

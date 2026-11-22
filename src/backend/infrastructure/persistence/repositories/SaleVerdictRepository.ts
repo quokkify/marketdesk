@@ -120,6 +120,25 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     return rowCount > 0;
   }
 
+  async failExpired(
+    workspaceId: string,
+    productId: string,
+    now: string,
+    queuedBefore: string,
+    errorCode: string,
+  ): Promise<boolean> {
+    const { rowCount } = await query(
+      `UPDATE product_sale_verdicts
+       SET status = 'failed', error_code = $5, completed_at = ${UTC('$3')}, lease_until = NULL
+       WHERE workspace_id = $1 AND product_id = $2
+         AND ((status = 'running' AND lease_until < ${UTC('$3')})
+           OR (status = 'queued' AND queued_at < ${UTC('$4')}))`,
+      [workspaceId, productId, now, queuedBefore, errorCode],
+      this.queryClient,
+    );
+    return rowCount > 0;
+  }
+
   async findById(workspaceId: string, runId: string): Promise<SaleVerdict | null> {
     const { rows } = await query<VerdictRow>(
       `SELECT ${COLUMNS} FROM product_sale_verdicts WHERE workspace_id = $1 AND id = $2`,

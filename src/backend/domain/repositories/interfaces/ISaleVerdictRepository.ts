@@ -33,6 +33,9 @@ export interface ISaleVerdictRepository {
   complete(runId: string, fields: CompletedVerdictFields): Promise<boolean>;
   // queued or running → failed; false when the run already left those states.
   fail(runId: string, completedAt: string, errorCode: string): Promise<boolean>;
+  // Fails the product's running run whose lease ended, or queued run queued before queuedBefore (its
+  // job was lost); true when one was failed.
+  failExpired(workspaceId: string, productId: string, now: string, queuedBefore: string, errorCode: string): Promise<boolean>;
   findById(workspaceId: string, runId: string): Promise<SaleVerdict | null>;
   findLatestCompleted(workspaceId: string, productId: string): Promise<SaleVerdict | null>;
   findLatestCompletedForProducts(

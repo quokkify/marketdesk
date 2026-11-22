@@ -59,6 +59,9 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
     Object.assign(row, { status: 'failed', completedAt });
     return true;
   }
+  async failExpired(): Promise<boolean> {
+    return false;
+  }
   async findById(_workspaceId: string, runId: string): Promise<SaleVerdict | null> {
     return this.rows.find((r) => r.id === runId) ?? null;
   }
