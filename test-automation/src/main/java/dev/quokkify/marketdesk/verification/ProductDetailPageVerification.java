@@ -19,6 +19,8 @@ public class ProductDetailPageVerification
   private static final String SEARCH_AGAIN = "Search again";
   private static final String YOURS = "yours";
   private static final String RELOAD = "Reload";
+  private static final String CONFIRM_PUBLICATION = "Confirm publication request";
+  private static final String OLX_FEE = "Confirm possible OLX fee";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
     super(steps, page);
@@ -27,6 +29,36 @@ public class ProductDetailPageVerification
   @Step("The revival proposal says it used offline heuristics and no AI usage")
   public ProductDetailPageVerification showsOfflineUsageLine() {
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
+    return this;
+  }
+
+  @Step("The product page shows the publication readiness check")
+  public ProductDetailPageVerification showsPublicationReadinessCheck() {
+    page.publicationReadinessButton().shouldBe(Condition.visible, getTimeout());
+    return this;
+  }
+
+  @Step("The product page says the publication was queued and shows no dialog")
+  public ProductDetailPageVerification showsPublicationQueued() {
+    page.publicationQueuedNotice().shouldBe(Condition.visible, getTimeout());
+    page.publicationDialog().shouldNot(Condition.exist, getTimeout());
+    return this;
+  }
+
+  @Step("The publication review asks to confirm a possible OLX fee")
+  public ProductDetailPageVerification showsOlxFeeConfirmation() {
+    page.publicationDialog()
+        .shouldBe(Condition.visible, getTimeout())
+        .shouldHave(Condition.text(OLX_FEE), getTimeout());
+    return this;
+  }
+
+  @Step("The publication confirmation dialog is shown")
+  public ProductDetailPageVerification showsPublicationConfirmation() {
+    page.publicationDialog()
+        .shouldBe(Condition.visible, getTimeout())
+        .shouldHave(Condition.text(CONFIRM_PUBLICATION), getTimeout());
+    page.confirmPublicationButton().shouldBe(Condition.visible, getTimeout());
     return this;
   }
 

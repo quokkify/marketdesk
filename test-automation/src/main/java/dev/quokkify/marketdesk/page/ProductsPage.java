@@ -1,21 +1,33 @@
 package dev.quokkify.marketdesk.page;
 
 import dev.quokkify.annotation.PageUrl;
+import dev.quokkify.elements.table.Table;
+import dev.quokkify.elements.table.TableLayout;
+import dev.quokkify.elements.table.TableRow;
 import dev.quokkify.impl.Page;
 
-import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.ElementsCollection;
+import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.TextMatchOptions;
+import com.codeborne.selenide.WebDriverRunner;
+import org.openqa.selenium.By;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.FindBy;
 
 @PageUrl("/products")
 public class ProductsPage implements Page {
 
   private static final String CATALOGUE_TABLE = "table[aria-label=\"Products catalogue\"]";
-  private static final String HEADER_CELLS = CATALOGUE_TABLE + " thead th";
-  private static final String BODY_ROWS = CATALOGUE_TABLE + " tbody tr";
-  private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
+  private static final String PRODUCT_COLUMN = "Product";
+  // Price is a plain cell: a click there reaches the row, unlike the cells marked data-row-stop.
+  private static final String PRICE_COLUMN = "Price";
+  private static final String AI_COLUMN = "AI analysis";
+  // The q4j table snapshot accepts only XPath and CSS item locators.
+  private static final By PRODUCT_LINK = By.cssSelector("a");
   private static final String FILTERS_PANEL = "#products-filters .MuiCard-root";
   private static final String FILTERS_ENTERED = "#products-filters.MuiCollapse-entered";
   private static final String ANALYZE_BUTTON = "button[aria-label=\"Analyze with AI: %s\"]";
@@ -27,24 +39,154 @@ public class ProductsPage implements Page {
   private static final String ROW_ACTIONS = "button[aria-label=\"Actions for %s\"]";
   private static final String MENU_ITEM = "[role=\"menuitem\"]";
   private static final String ANALYZE_WITH_AI = "Analyze with AI";
-  private static final String BUTTON = "button";
-  private static final String APPROVE = "Approve";
-  private static final String DISMISS = "Dismiss";
+  private static final String DIALOG = "[role=\"dialog\"]";
+  private static final String INNER_WIDTH_SCRIPT = "return window.innerWidth;";
+  private static final String INNER_HEIGHT_SCRIPT = "return window.innerHeight;";
+  private static final String CLICK_TWICE_SCRIPT = "arguments[0].click(); arguments[0].click();";
+  // Typing and picking scroll the dialog content, so it is scrolled back to the top before measuring:
+  // the button must fit without any scrolling.
+  private static final String FULLY_IN_VIEWPORT_SCRIPT =
+      "const content = arguments[0].closest('[role=\"dialog\"]').querySelector('.MuiDialogContent-root');"
+          + "if (content) { content.scrollTop = 0; }"
+          + "window.scrollTo(0, 0);"
+          + "const r = arguments[0].getBoundingClientRect();"
+          + "return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;";
+  private static final String PHOTO_INPUT = "input[type=\"file\"]";
+  private static final String REVIEW_AND_PUBLISH = "Review and publish";
+  private static final String NAME = "Name";
+  private static final String DESCRIPTION = "Description";
+  private static final String SELLING_PRICE = "Selling price";
+  private static final String OLX_CATEGORY = "OLX category";
   private static final String GAP_SCRIPT =
       "const panel = document.querySelector(arguments[0]);"
           + "const table = document.querySelector(arguments[1]).closest('.MuiCard-root');"
           + "return Math.round(table.getBoundingClientRect().top - panel.getBoundingClientRect().bottom);";
 
+  @FindBy(css = "button[aria-controls=\"products-filters\"]")
+  private SelenideElement filtersButton;
+  // Wide screens show a text button, phones an icon button with the same accessible name.
+  @FindBy(xpath = "//button[normalize-space(.)='New product' or @aria-label='New product']")
+  private ElementsCollection newProductButtons;
+  @FindBy(xpath = "//*[@role='dialog']//button[@aria-label='Close']")
+  private SelenideElement closeDialogButton;
+  @FindBy(xpath = "//*[@role='dialog']//button[normalize-space(.)='Continue']")
+  private SelenideElement continueButton;
+  @FindBy(xpath = "//*[@role='dialog']//button[normalize-space(.)='Publish to OLX']")
+  private SelenideElement publishToOlxButton;
+  @FindBy(xpath = "//*[starts-with(@id, 'product-review-')]//button[contains(normalize-space(.), 'Approve')]")
+  private SelenideElement approveButton;
+  @FindBy(xpath = "//*[starts-with(@id, 'product-review-')]//button[contains(normalize-space(.), 'Dismiss')]")
+  private SelenideElement dismissButton;
+
   public void open() {
     Selenide.open(getUrl());
   }
 
-  public ElementsCollection headerCells() {
-    return Selenide.$$(HEADER_CELLS);
+  public Table catalogue() {
+    return Table.of(Selenide.$(CATALOGUE_TABLE), TableLayout.html());
+  }
+
+  // The Product cell also shows the SKU, so the row is found by the name inside that column, not by exact text.
+  public TableRow row(String productName) {
+    Table catalogue = catalogue();
+    return catalogue.row(catalogue.column(PRODUCT_COLUMN).findBy(Condition.text(productName)).closest("tr"));
+  }
+
+  public SelenideElement priceCell(String productName) {
+    return row(productName).cell(PRICE_COLUMN);
+  }
+
+  public SelenideElement aiCell(String productName) {
+    return row(productName).cell(AI_COLUMN);
+  }
+
+  public By productLink() {
+    return PRODUCT_LINK;
+  }
+
+  public String productColumn() {
+    return PRODUCT_COLUMN;
   }
 
   public SelenideElement filtersButton() {
-    return Selenide.$(FILTERS_BUTTON);
+    return filtersButton;
+  }
+
+  public SelenideElement newProductButton() {
+    return newProductButtons.filterBy(Condition.visible).first();
+  }
+
+  // On phones the sidebar is a kept-mounted MUI Drawer, which also carries role="dialog", so only the visible
+  // dialog is the wizard.
+  public SelenideElement newProductDialog() {
+    return Selenide.$$(DIALOG).findBy(Condition.visible);
+  }
+
+  public SelenideElement closeDialogButton() {
+    return closeDialogButton;
+  }
+
+  public SelenideElement photoInput() {
+    return newProductDialog().$(PHOTO_INPUT);
+  }
+
+  public SelenideElement continueButton() {
+    return continueButton;
+  }
+
+  public SelenideElement reviewHeading() {
+    return newProductDialog().$(Selectors.byText(REVIEW_AND_PUBLISH));
+  }
+
+  // Required MUI fields append " *" to the label, so labels match as partial text.
+  public SelenideElement nameField() {
+    return newProductDialog().$(Selectors.byLabel(NAME, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement descriptionField() {
+    return newProductDialog().$(Selectors.byLabel(DESCRIPTION, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement sellingPriceField() {
+    return newProductDialog().$(Selectors.byLabel(SELLING_PRICE, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement olxCategoryField() {
+    return newProductDialog().$(Selectors.byLabel(OLX_CATEGORY, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement olxCategoryResult(String path) {
+    return newProductDialog().$(Selectors.byText(path));
+  }
+
+  public SelenideElement publishToOlxButton() {
+    return publishToOlxButton;
+  }
+
+  // Both clicks run in one script, so React cannot re-render the button as disabled between them.
+  public void clickTwiceAtOnce(SelenideElement element) {
+    Selenide.executeJavaScript(CLICK_TWICE_SCRIPT, element);
+  }
+
+  public boolean isFullyInViewport(WebElement element) {
+    return Boolean.TRUE.equals(Selenide.executeJavaScript(FULLY_IN_VIEWPORT_SCRIPT, element));
+  }
+
+  public long viewportWidth() {
+    return readNumber(INNER_WIDTH_SCRIPT);
+  }
+
+  public long viewportHeight() {
+    return readNumber(INNER_HEIGHT_SCRIPT);
+  }
+
+  private static long readNumber(String script) {
+    Number value = Selenide.executeJavaScript(script);
+    return value == null ? -1 : value.longValue();
+  }
+
+  public void resizeWindow(int width, int height) {
+    WebDriverRunner.getWebDriver().manage().window().setSize(new Dimension(width, height));
   }
 
   public SelenideElement filtersFullyOpen() {
@@ -60,17 +202,12 @@ public class ProductsPage implements Page {
     return gap == null ? Long.MIN_VALUE : gap.longValue();
   }
 
-  public SelenideElement row(String productName) {
-    return Selenide.$$(BODY_ROWS).shouldHave(CollectionCondition.sizeGreaterThan(0))
-        .findBy(Condition.text(productName));
-  }
-
   public SelenideElement analyzeButton(String productName) {
     return Selenide.$(String.format(ANALYZE_BUTTON, productName));
   }
 
   public SelenideElement reviewToggle(String productName) {
-    return row(productName).$(REVIEW_TOGGLE);
+    return row(productName).self().$(REVIEW_TOGGLE);
   }
 
   public SelenideElement reviewRegion() {
@@ -78,11 +215,11 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement approveButton() {
-    return reviewRegion().$$(BUTTON).findBy(Condition.text(APPROVE));
+    return approveButton;
   }
 
   public SelenideElement dismissButton() {
-    return reviewRegion().$$(BUTTON).findBy(Condition.text(DISMISS));
+    return dismissButton;
   }
 
   public SelenideElement rowActionsButton(String productName) {
@@ -94,7 +231,7 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement rowVerdict(String productName) {
-    return row(productName).$(VERDICT_SUMMARY);
+    return row(productName).self().$(VERDICT_SUMMARY);
   }
 
   public SelenideElement rowVerdictCheck(String productName, String check) {

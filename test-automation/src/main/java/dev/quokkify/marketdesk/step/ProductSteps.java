@@ -1,6 +1,9 @@
 package dev.quokkify.marketdesk.step;
 
+import java.util.List;
+
 import dev.quokkify.marketdesk.model.AccountPojo;
+import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.ProductVerification;
@@ -8,6 +11,7 @@ import dev.quokkify.step.ApiSteps;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
+import org.apache.http.HttpStatus;
 
 public class ProductSteps extends ApiSteps<ProductVerification> {
 
@@ -26,6 +30,22 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
   @Step("Get products as an authenticated user")
   public ValidatableResponse getProducts(AccountPojo account) {
     return service.getProducts(account.token());
+  }
+
+  // The product is looked up by name because the wizard creates it through the UI.
+  @Step("Find the product named {name} and its listing")
+  public ProductListingPojo findProductListing(AccountPojo account, String name) {
+    List<String> ids = service.getProducts(account.token())
+        .statusCode(HttpStatus.SC_OK)
+        .extract()
+        .jsonPath()
+        .getList("data.findAll { it.name == '%s' }.id".formatted(name), String.class);
+    String productId = ids.getFirst();
+    String listingId = service.getListings(account.token(), productId)
+        .statusCode(HttpStatus.SC_OK)
+        .extract()
+        .path("data[0].id");
+    return new ProductListingPojo(productId, listingId);
   }
 
   @Step("Get product statistics")

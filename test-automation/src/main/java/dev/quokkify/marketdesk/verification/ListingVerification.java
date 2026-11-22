@@ -35,6 +35,20 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     return this;
   }
 
+  @Step("Listing has the OLX category {providerCategoryId}")
+  public ListingVerification hasOlxCategory(ValidatableResponse response, String providerCategoryId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.marketplaceCategory.providerCategoryId", Matchers.equalTo(providerCategoryId));
+    return self();
+  }
+
+  @Step("Listing has status {status}")
+  public ListingVerification hasStatus(ValidatableResponse response, String status) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.status", Matchers.equalTo(status));
+    return self();
+  }
+
   @Step("Request is rejected as unauthenticated")
   public ListingVerification isUnauthenticated(ValidatableResponse response) {
     return failsWith(response, HttpStatus.SC_UNAUTHORIZED, UNAUTHORIZED);

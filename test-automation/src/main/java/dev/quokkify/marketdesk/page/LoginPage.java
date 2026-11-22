@@ -5,14 +5,17 @@ import dev.quokkify.impl.Page;
 
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import org.openqa.selenium.support.FindBy;
 
 @PageUrl("/login")
 public class LoginPage implements Page {
 
   private static final String EMAIL_INPUT = "input[type=email]";
   private static final String PASSWORD_INPUT = "input[type=password]";
-  private static final String SUBMIT_BUTTON = "button[type=submit]";
   private static final String SEARCH_PRODUCTS = "[aria-label=\"Search products\"]";
+
+  @FindBy(css = "button[type=submit]")
+  private SelenideElement submitButton;
 
   public void open() {
     Selenide.open(getUrl());
@@ -27,7 +30,7 @@ public class LoginPage implements Page {
   }
 
   public void submit() {
-    Selenide.$(SUBMIT_BUTTON).click();
+    submitButton.click();
   }
 
   public SelenideElement searchProductsField() {

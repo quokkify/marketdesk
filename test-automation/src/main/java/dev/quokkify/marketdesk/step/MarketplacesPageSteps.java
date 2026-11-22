@@ -5,13 +5,14 @@ import dev.quokkify.marketdesk.verification.MarketplacesPageVerification;
 import dev.quokkify.model.PageSteps;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selenide;
 import io.qameta.allure.Step;
 
 public class MarketplacesPageSteps
     extends PageSteps<MarketplacesPageSteps, MarketplacesPageVerification, MarketplacesPage> {
 
   public MarketplacesPageSteps() {
-    this.page = new MarketplacesPage();
+    this.page = Selenide.page(new MarketplacesPage());
     this.verification = new MarketplacesPageVerification(this, page);
   }
 
