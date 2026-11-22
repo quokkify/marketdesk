@@ -138,6 +138,7 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
     };
     const storedResearch = {
       lastEstimate: {
+        hiddenReason: null,
         estimate: { startPrice: 95, reasoning: 'Synthetic fixture.', confidence: 'low' },
       },
     } as unknown as PriceResearch;

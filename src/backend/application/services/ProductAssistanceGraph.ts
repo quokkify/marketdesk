@@ -127,8 +127,8 @@ export class ProductAssistanceGraph {
           () => attempt('copy', () => this.listingSeo(product, { listing, marketplace })),
         );
         // The price is the stored research estimate; no research run is requested for a proposal.
-        const price = await this.storedPrice(product);
-        if (!price) aiIssues.push('price');
+        const price = await attempt('price', () => this.storedPrice(product));
+        if (!price && !aiIssues.includes('price')) aiIssues.push('price');
         // Offline heuristics are no proposal to bring an advert back with: only Hermes output is offered.
         const hermesSeo = seo && !seo.disclaimer.includes(OFFLINE_AI_NOTICE) ? seo : null;
         const hermesPrice = price && !price.reasoning.includes(OFFLINE_AI_NOTICE) ? price : null;
@@ -190,10 +190,11 @@ export class ProductAssistanceGraph {
   }
 
   private async storedPrice(product: Product): Promise<StoredPrice | null> {
-    const estimate = (await this.research.findByProduct(product.workspaceId, product.id))?.lastEstimate?.estimate;
-    return estimate
-      ? { suggestedPrice: estimate.startPrice, reasoning: estimate.reasoning, confidence: estimate.confidence }
-      : null;
+    const stored = (await this.research.findByProduct(product.workspaceId, product.id))?.lastEstimate;
+    // An estimate the price check hides (low confidence, within the threshold) is no proposal either.
+    if (!stored || stored.hiddenReason !== null) return null;
+    const { startPrice, reasoning, confidence } = stored.estimate;
+    return { suggestedPrice: startPrice, reasoning, confidence };
   }
 
   async generateDraft(workspaceId: string, request: ProductAIDraftRequest): Promise<ProductAIDraft> {

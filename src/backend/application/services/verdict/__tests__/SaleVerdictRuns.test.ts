@@ -1,7 +1,8 @@
 import type { ProductRecheckResult, SaleVerdict } from '../../../../../shared/types';
 import type { CompletedVerdictFields, ISaleVerdictRepository, NewVerdictRun } from '../../../../domain/repositories/interfaces/ISaleVerdictRepository';
 import type { SaleVerdictJob } from '../../../ports/IJobQueue';
-import { SaleVerdictRuns, VERDICT_QUEUED_TTL_MS } from '../SaleVerdictRuns';
+import { InMemoryPriceResearchRunRepository } from '../../../../domain/testkit/support';
+import { ANALYSIS_RUNNING, SaleVerdictRuns, VERDICT_QUEUED_TTL_MS } from '../SaleVerdictRuns';
 
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 const WS = 'w1';
@@ -62,6 +63,7 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
 
 function setup(options: { enqueue?: () => Promise<void>; recheck?: () => Promise<ProductRecheckResult> } = {}) {
   const verdicts = new Verdicts();
+  const researchRuns = new InMemoryPriceResearchRunRepository();
   const jobs: SaleVerdictJob[] = [];
   const errors: string[] = [];
   const result = { productId: PID, listingId: 'l1', status: 'ready', items: [] } as unknown as ProductRecheckResult;
@@ -72,6 +74,7 @@ function setup(options: { enqueue?: () => Promise<void>; recheck?: () => Promise
     marketplaces: { findByIdForWorkspace: async () => null },
     workspaces: { findById: async () => ({ id: WS } as never) },
     verdicts: verdicts as unknown as ISaleVerdictRepository,
+    researchRuns,
     queue: {
       enqueue: async (job) => {
         if (options.enqueue) await options.enqueue();
@@ -85,7 +88,7 @@ function setup(options: { enqueue?: () => Promise<void>; recheck?: () => Promise
     now: () => NOW,
     logger: { error: (_context, message) => errors.push(message) },
   });
-  return { runs, verdicts, jobs, errors, result };
+  return { runs, verdicts, researchRuns, jobs, errors, result };
 }
 
 describe('SaleVerdictRuns', () => {
@@ -96,7 +99,58 @@ describe('SaleVerdictRuns', () => {
 
     expect(out.enqueued).toBe(true);
     expect(out.run).toMatchObject({ status: 'queued', scope: ['price'] });
-    expect(jobs).toEqual([{ workspaceId: WS, productId: PID, runId: 'run-1', forceResearch: true }]);
+    expect(jobs).toEqual([{ workspaceId: WS, productId: PID, runId: 'run-1', forceResearch: true, researchRunId: 'run-2' }]);
+  });
+
+  it('records the forced research as a queued manual run before the job runs', async () => {
+    const { runs, researchRuns } = setup();
+
+    await runs.request(WS, PID, ['price'], 'manual', { forceResearch: true });
+
+    await expect(researchRuns.findActive(WS, PID)).resolves.toMatchObject({
+      id: 'run-2', status: 'queued', trigger: 'manual', queuedAt: NOW.toISOString(),
+    });
+  });
+
+  it('records no research run for a request that does not force research', async () => {
+    const { runs, researchRuns, jobs } = setup();
+
+    await runs.request(WS, PID, ['price'], 'manual');
+
+    expect(researchRuns.runs).toHaveLength(0);
+    expect(jobs[0]?.researchRunId).toBeUndefined();
+  });
+
+  it('finishes the queued research run when the job cannot be enqueued', async () => {
+    const { runs, researchRuns } = setup({ enqueue: async () => { throw new Error('redis down'); } });
+
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toThrow('redis down');
+
+    expect(researchRuns.runs[0]).toMatchObject({ status: 'finished', outcome: 'failed', errorCode: 'enqueue_failed' });
+    await expect(researchRuns.findActive(WS, PID)).resolves.toBeNull();
+  });
+
+  it('joins an active run that already forces the price research', async () => {
+    const { runs, jobs } = setup();
+    await runs.request(WS, PID, ['info', 'price'], 'manual', { forceResearch: true });
+
+    const out = await runs.request(WS, PID, ['price'], 'manual', { forceResearch: true });
+
+    expect(out).toMatchObject({ enqueued: false, run: { id: 'run-1' } });
+    expect(jobs).toHaveLength(1);
+  });
+
+  it.each([
+    ['an analysis without forced research', ['info', 'price'], false],
+    ['a run without the price scope', ['info'], true],
+  ])('refuses a forced refresh while %s is active', async (_name, scope, force) => {
+    const { runs, jobs } = setup();
+    await runs.request(WS, PID, scope as never, 'manual', { forceResearch: force });
+
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toMatchObject({
+      message: ANALYSIS_RUNNING,
+    });
+    expect(jobs).toHaveLength(1);
   });
 
   it('rejects a missing product with not found', async () => {

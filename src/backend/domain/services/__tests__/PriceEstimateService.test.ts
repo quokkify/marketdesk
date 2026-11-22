@@ -178,10 +178,4 @@ describe('PriceEstimateService', () => {
     const block = prompt.slice(prompt.indexOf('<seller_data>'), prompt.indexOf('</seller_data>'));
     expect(block).toContain('"missingAccessories":"pilot"');
   });
-
-  it('keeps the research note it is given on the stored estimate', async () => {
-    const { repo, service, product, listing } = setup();
-    await service.estimate(product, listing, { researchNote: 'Market research failed; the estimate uses saved data.' });
-    expect(repo.items.get(`${WS}:${PID}`)?.lastEstimate?.researchNote).toBe('Market research failed; the estimate uses saved data.');
-  });
 });

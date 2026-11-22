@@ -32,8 +32,6 @@ export interface IPriceResearchRunRepository {
   insertQueued(run: NewResearchRun): Promise<ResearchRun | null>;
   findActive(workspaceId: string, productId: string): Promise<ResearchRun | null>;
   findLastFinished(workspaceId: string, productId: string): Promise<ResearchRun | null>;
-  // Queued runs of the workspace queued at or after queuedSince; older ones count as lost jobs.
-  countQueued(workspaceId: string, queuedSince: string): Promise<number>;
   // queued → running for this run only; null when the run is no longer queued.
   claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null>;
   saveNode(runId: string, node: ResearchNode, status: NodeStatus): Promise<void>;

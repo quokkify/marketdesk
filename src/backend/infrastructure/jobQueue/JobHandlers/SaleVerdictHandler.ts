@@ -43,7 +43,7 @@ export class SaleVerdictHandler {
         productId: job.productId,
         runId: job.runId,
         scope: run.scope,
-        options: { forceResearch: job.forceResearch },
+        options: { forceResearch: job.forceResearch, researchRunId: job.researchRunId },
         signal: AbortSignal.timeout(RUN_BUDGET_MS),
       });
       return { kind: 'finished', status: verdict.status };

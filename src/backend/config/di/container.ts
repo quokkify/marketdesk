@@ -664,6 +664,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaces: marketplaceRepo,
     workspaces: workspaceRepo,
     verdicts: saleVerdictRepo,
+    researchRuns: priceResearchRunRepo,
     queue: saleVerdictQueue,
     recheck: productRecheckService,
     infoCheckFor: (recheck) => buildInfoCheck({ recheck, seo: listingSeoProposals, logger: overrides.logger }),

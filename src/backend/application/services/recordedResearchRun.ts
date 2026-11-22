@@ -56,12 +56,17 @@ function refusalCode(error: unknown): string {
 export class RecordedResearchRun {
   constructor(private readonly deps: RecordedResearchRunDeps) {}
 
-  // Records a new queued run and executes it at once; 'active' when the product already has a queued
-  // or running run.
+  // Executes the run queued at request time when there is one still queued; otherwise records a new
+  // queued run and executes it at once ('active' when the product already has a queued or running run).
   async start(
     run: { id: string; workspaceId: string; productId: string; trigger: RunTrigger },
     signal: AbortSignal,
+    queuedRunId?: string,
   ): Promise<RecordedRun | { kind: 'active' }> {
+    if (queuedRunId) {
+      const claimed = await this.execute(queuedRunId, signal);
+      if (claimed.kind !== 'skipped') return claimed;
+    }
     const queued = await this.deps.runs.insertQueued({ ...run, queuedAt: this.deps.now().toISOString() });
     if (!queued) return { kind: 'active' };
     return this.execute(queued.id, signal);

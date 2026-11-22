@@ -64,7 +64,7 @@ export function buildPriceCheck(deps: PriceCheckDeps): CheckGraph {
       if (!deps.configured) return hasResearch ? { hasResearch } : { input: { kind: 'not_configured' } };
       const { active, last } = await deps.runs.latest(workspace.id, product.id);
       const due = ctx.options.forceResearch || researchDue(last, research?.lastAttemptAt, ctx.now());
-      if (due && active) return { input: { kind: 'research_running' } };
+      if (due && active && active.id !== ctx.options.researchRunId) return { input: { kind: 'research_running' } };
       return { hasResearch, runResearch: due };
     };
 
@@ -77,6 +77,7 @@ export function buildPriceCheck(deps: PriceCheckDeps): CheckGraph {
           trigger: ctx.options.forceResearch ? 'manual' : 'analyze',
         },
         ctx.signal,
+        ctx.options.researchRunId,
       );
       // Another run holds the product (a research job, or one queued just before this).
       if (recorded.kind !== 'finished') return { input: { kind: 'research_running' } };

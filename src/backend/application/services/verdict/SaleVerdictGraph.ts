@@ -33,6 +33,8 @@ export interface CheckOptions {
   forceResearch: boolean;
   // The info check without its Hermes call.
   infoCodeOnly: boolean;
+  // The queued research run this verdict run executes instead of recording a new one.
+  researchRunId?: string;
 }
 
 export interface CheckContext {

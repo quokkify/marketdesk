@@ -15,8 +15,10 @@ import type { IListingRepository } from '../../../domain/repositories/interfaces
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { IWorkspaceRepository } from '../../../domain/repositories/interfaces/IWorkspaceRepository';
 import type { ISaleVerdictRepository } from '../../../domain/repositories/interfaces/ISaleVerdictRepository';
+import type { IPriceResearchRunRepository } from '../../../domain/repositories/interfaces/IPriceResearchRunRepository';
 import { ConflictError, NotFoundError } from '../../../domain/shared/DomainError';
 import { combineVerdict } from '../../../domain/services/saleVerdictRules';
+import { nextAutoAt } from '../../../domain/services/researchSchedule';
 import type { IJobQueue, SaleVerdictJob } from '../../ports/IJobQueue';
 import type { ProductRecheckService } from '../ProductRecheckService';
 import { SALE_VERDICT_GRAPH_VERSION, type CheckGraph } from './SaleVerdictGraph';
@@ -27,6 +29,8 @@ export const VERDICT_QUEUED_TTL_MS = 60 * 60 * 1000;
 // The lease of a synchronous Recheck write.
 const RECHECK_LEASE_MS = 2 * 60 * 1000;
 export const VERDICT_EXPIRED = 'expired';
+
+export const ANALYSIS_RUNNING = 'An analysis is already running for this product. Try again when it finishes.';
 
 export type VerdictTrigger = 'manual' | 'research';
 
@@ -41,6 +45,8 @@ export interface SaleVerdictRunsDeps {
   marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>;
   workspaces: Pick<IWorkspaceRepository, 'findById'>;
   verdicts: ISaleVerdictRepository;
+  // A forced research is recorded as a queued run at request time, so readers see it at once.
+  researchRuns: Pick<IPriceResearchRunRepository, 'insertQueued' | 'findActive' | 'findLastFinished' | 'finish'>;
   queue: IJobQueue<SaleVerdictJob>;
   recheck: Pick<ProductRecheckService, 'recheck'>;
   // The info check over a given Recheck; the container builds it code-only.
@@ -78,9 +84,12 @@ export class SaleVerdictRuns {
       // (e.g. a synchronous Recheck write) gets that run back with enqueued: false and asks again.
       const active = await this.deps.verdicts.findActive(workspaceId, productId);
       if (!active) throw new ConflictError('The sale verdict run just ended, please try again');
+      // A forced research joins an active run that already forces it; any other active run would drop it.
+      if (opts.forceResearch && !(await this.forcesPriceResearch(workspaceId, productId, active))) throw new ConflictError(ANALYSIS_RUNNING);
       return { run: active, enqueued: false };
     }
-    await this.enqueue(workspaceId, run, trigger, opts.forceResearch ?? false);
+    const researchRunId = opts.forceResearch ? await this.queueResearch(workspaceId, productId, now) : undefined;
+    await this.enqueue(workspaceId, run, trigger, opts.forceResearch ?? false, researchRunId);
     return { run, enqueued: true };
   }
 
@@ -116,6 +125,25 @@ export class SaleVerdictRuns {
     return this.deps.verdicts.findLatestCompletedForProducts(workspaceId, productIds);
   }
 
+  // Manual research runs exist only for a forced research.
+  private async forcesPriceResearch(workspaceId: string, productId: string, active: SaleVerdict): Promise<boolean> {
+    if (!active.scope.includes('price')) return false;
+    const research = await this.deps.researchRuns.findActive(workspaceId, productId);
+    return research?.trigger === 'manual';
+  }
+
+  // Null id when the product already has a queued or running research run.
+  private async queueResearch(workspaceId: string, productId: string, now: Date): Promise<string | undefined> {
+    const queued = await this.deps.researchRuns.insertQueued({
+      id: this.deps.newId(),
+      workspaceId,
+      productId,
+      trigger: 'manual',
+      queuedAt: now.toISOString(),
+    });
+    return queued?.id;
+  }
+
   // A run stuck for good would block the product: written as failed before anything reads or inserts.
   private async expireStuck(workspaceId: string, productId: string, now: Date): Promise<void> {
     await this.deps.verdicts.failExpired(
@@ -128,14 +156,36 @@ export class SaleVerdictRuns {
   }
 
   // A run that never reached the queue would block the product: failed before the error is reported.
-  private async enqueue(workspaceId: string, run: SaleVerdict, trigger: VerdictTrigger, forceResearch: boolean): Promise<void> {
+  private async enqueue(
+    workspaceId: string,
+    run: SaleVerdict,
+    trigger: VerdictTrigger,
+    forceResearch: boolean,
+    researchRunId?: string,
+  ): Promise<void> {
     try {
-      await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch });
+      await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch, researchRunId });
     } catch (error) {
+      if (researchRunId) await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
       this.deps.logger?.error({ productId: run.productId, runId: run.id, trigger, err: error }, 'Sale verdict run not queued');
       await this.deps.verdicts.fail(run.id, this.deps.now().toISOString(), 'enqueue_failed');
       throw error;
     }
+  }
+
+  private async failQueuedResearch(workspaceId: string, productId: string, researchRunId: string): Promise<void> {
+    const finishedAt = this.deps.now();
+    const consecutiveFailures =
+      ((await this.deps.researchRuns.findLastFinished(workspaceId, productId))?.consecutiveFailures ?? 0) + 1;
+    await this.deps.researchRuns.finish(researchRunId, {
+      outcome: 'failed',
+      nodes: {},
+      failedTiers: [],
+      errorCode: 'enqueue_failed',
+      consecutiveFailures,
+      finishedAt: finishedAt.toISOString(),
+      nextAutoAt: nextAutoAt('failed', consecutiveFailures, finishedAt).toISOString(),
+    });
   }
 
   private async storeInfoVerdict(

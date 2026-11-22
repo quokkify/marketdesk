@@ -96,4 +96,6 @@ export interface SaleVerdictJob {
   runId: string;
   // Research even when the schedule says it is not due.
   forceResearch: boolean;
+  // The queued research run recorded at request time for a forced research; the price check claims it.
+  researchRunId?: string;
 }
