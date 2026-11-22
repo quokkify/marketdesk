@@ -1,14 +1,21 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Pagination, Typography } from '@mui/material';
+import { MemoryRouter } from 'react-router-dom';
 import type { Product } from '@shared/types';
 import {
   CatalogueFooter,
   ProductRowActions,
   ProductsCards,
+  PRODUCT_TABLE_COLUMNS,
   ProductsTable,
   productRowMenuItems,
+  rowClickIntent,
 } from './ProductsTable';
+import { withoutStyleTags } from '../../testkit/staticMarkup';
+
+const markup = (node: React.ReactElement) =>
+  withoutStyleTags(renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>));
 
 type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
 
@@ -48,37 +55,71 @@ const product: Product = {
 };
 
 describe('ProductsTable catalogue hierarchy', () => {
-  it('renders product identity, fallback, price/profit/margin/tags and honest marketplace absence', () => {
-    const html = renderToStaticMarkup(
+  it('renders product identity, fallback initials and price', () => {
+    const html = markup(
       <ProductsTable products={[product]} currency="PLN" selectedIds={new Set(['p-1'])} />
     );
     expect(html).toContain('Wireless Headphones');
     expect(html).toContain('SKU-100');
     expect(html).toContain('WH');
-    expect(html).toContain('150 zł');
-    expect(html).toContain('60% margin');
-    expect(html).toContain('featured');
-    expect(html).toContain('Marketplace count unavailable');
+    expect(html).toContain('250 zł');
     expect(html).toContain('Select all products on this page');
+  });
+
+  it('renders only the stage 1 columns', () => {
+    expect(PRODUCT_TABLE_COLUMNS.map((column) => column.key)).toEqual([
+      'select', 'product', 'status', 'price', 'updated', 'ai', 'actions',
+    ]);
+    const html = markup(<ProductsTable products={[product]} currency="PLN" />);
+    for (const gone of ['Markets', 'Cost', 'Profit', 'Tags', 'featured', 'margin', 'Marketplace count unavailable']) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it('draws a seven-cell skeleton row while loading', () => {
+    const html = markup(<ProductsTable products={[]} loading />);
+    const firstRow = html.split('<tr').find((row) => row.includes('MuiSkeleton')) ?? '';
+    expect(firstRow.match(/<td/g)).toHaveLength(7);
+  });
+
+  it('shows the short listing id with the full SKU as its title', () => {
+    const imported = { ...product, sku: 'OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120' };
+    const html = markup(<ProductsTable products={[imported]} />);
+    expect(html).toContain('OLX · 1085784120');
+    expect(html).toContain('title="OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120"');
+  });
+
+  it('links the product title to its page', () => {
+    const html = markup(<ProductsTable products={[product]} onOpen={() => {}} />);
+    expect(html).toContain('href="/products/p-1"');
+  });
+
+  it.each([
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false }, 'open'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: false }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: true, button: 0, insideStop: false }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 1, insideStop: false }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: true }, 'ignore'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: true }, 'ignore'],
+  ] as const)('row click %o opens as %s', (event, intent) => {
+    expect(rowClickIntent(event)).toBe(intent);
   });
 
   it('formats money in PLN style and shows when each product was last updated', () => {
     const updatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const html = renderToStaticMarkup(
+    const html = markup(
       <ProductsTable
         products={[{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }]}
         currency="PLN"
       />
     );
-    expect(html).toContain('800 zł');
     expect(html).toContain('1 050 zł');
-    expect(html).toContain('250 zł');
-    expect(html).toContain('24% margin');
+    expect(html).not.toContain('800 zł');
     expect(html).toContain('2h ago');
   });
 
   it('offers a row actions menu instead of navigating from the overflow control', () => {
-    const html = renderToStaticMarkup(
+    const html = markup(
       <ProductsTable
         products={[product]}
         currency="PLN"
@@ -91,8 +132,8 @@ describe('ProductsTable catalogue hierarchy', () => {
   });
 
   it('distinguishes an empty catalogue from an empty filtered result', () => {
-    const empty = renderToStaticMarkup(<ProductsTable products={[]} />);
-    const filtered = renderToStaticMarkup(
+    const empty = markup(<ProductsTable products={[]} />);
+    const filtered = markup(
       <ProductsTable
         products={[]}
         emptyFiltered
@@ -105,17 +146,17 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(filtered).toContain('Clear filters');
   });
 
-  it('keeps cost, price, profit, tags, updated date and the actions menu in card view', () => {
-    const html = renderToStaticMarkup(
+  it('keeps price, updated date and the actions menu in card view without cost, profit, markets or tags', () => {
+    const html = markup(
       <ProductsCards products={[product]} currency="PLN" onEdit={() => undefined} />
     );
     expect(html).toContain('Wireless Headphones');
-    expect(html).toContain('Cost');
-    expect(html).toContain('100 zł');
-    expect(html).toContain('60% margin');
+    expect(html).toContain('250 zł');
     expect(html).toContain('Updated');
     expect(html).toContain('aria-label="Actions for Wireless Headphones"');
-    expect(html).toContain('Marketplace count unavailable');
+    for (const gone of ['Cost', 'Profit', 'Markets', 'featured', 'margin']) {
+      expect(html).not.toContain(gone);
+    }
   });
 });
 
