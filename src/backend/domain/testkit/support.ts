@@ -330,9 +330,16 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
     this.items.set(key, saved);
     return saved;
   }
+  // Mirrors the SQL guard: an estimate from older research is not written (null is oldest), and the
+  // estimate does not move the research version of an existing row.
   async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
     const key = `${workspaceId}:${productId}`;
-    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastEstimate: stored, updatedAt: new Date().toISOString() });
+    const current = this.items.get(key);
+    const currentVersion = current?.lastEstimate?.researchUpdatedAt ?? null;
+    if (currentVersion !== null && (stored.researchUpdatedAt === null || Date.parse(stored.researchUpdatedAt) < Date.parse(currentVersion))) {
+      return;
+    }
+    this.items.set(key, { ...this.blank(productId), ...current, lastEstimate: stored });
   }
   private blank(productId: string): PriceResearch {
     return {

@@ -2,8 +2,11 @@ package dev.quokkify.marketdesk.test.api;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
+import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.test.BaseTest;
 
+import io.restassured.response.ValidatableResponse;
+import org.apache.http.HttpStatus;
 import org.testng.annotations.Test;
 
 // The API stack has no Hermes and no research profile: the offline heuristic provider keeps the
@@ -16,6 +19,7 @@ public class PriceEstimateLadderTest extends BaseTest {
   private static final double SUBSTITUTE_CEILING = 210.0;
   private static final String LOW = "low";
   private static final String LOW_CONFIDENCE = "low_confidence";
+  private static final String ACCESSORIES = "pilot";
 
   @Test
   public void runStoresLastEstimate() {
@@ -49,5 +53,22 @@ public class PriceEstimateLadderTest extends BaseTest {
     priceResearchSteps.runProductAnalysis(account, productListing.productId());
     priceResearchSteps.verify().lastEstimateIsHidden(
         priceResearchSteps.getPriceResearch(account, productListing.productId()), LOW, LOW_CONFIDENCE);
+  }
+
+  // The offline provider does not echo reasoning, so the prompt carrying the accessories is checked in
+  // Jest; here the field survives an analysis that stores an estimate.
+  @Test
+  public void estimateKeepsMissingAccessories() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account,
+        ProductRequestPojo.withPriceFloor(PRODUCT_PRICE, null).withMissingAccessories(ACCESSORIES));
+    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.verify().hasLastEstimate(
+        priceResearchSteps.getPriceResearch(account, productListing.productId()));
+    ValidatableResponse product = productSteps.getProduct(account, productListing.productId());
+    productSteps.verify()
+        .verifyResponseStatusCode(product, HttpStatus.SC_OK)
+        .hasMissingAccessories(product, ACCESSORIES);
   }
 }

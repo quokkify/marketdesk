@@ -201,7 +201,7 @@ describe('price anchors by tier', () => {
 
 describe('storedEstimateLines', () => {
   const stored = (hiddenReason: StoredPriceEstimate['hiddenReason'], researchNote: string | null): StoredPriceEstimate => ({
-    estimate, estimatedAt: '2026-11-22T10:00:00.000Z', hiddenReason, researchNote,
+    estimate, estimatedAt: '2026-11-22T10:00:00.000Z', hiddenReason, researchNote, researchUpdatedAt: null,
   });
 
   it('is empty without a stored estimate', () => {

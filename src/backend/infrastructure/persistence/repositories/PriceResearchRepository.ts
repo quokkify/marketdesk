@@ -42,7 +42,8 @@ function toPriceResearch(row: PriceResearchRow): PriceResearch {
     specs: row.specs,
     dismissedUrls: row.dismissed_urls,
     lastAttemptAt: row.last_attempt_at,
-    lastEstimate: row.last_estimate,
+    // Estimates stored before researchUpdatedAt existed count as computed from no research.
+    lastEstimate: row.last_estimate && { ...row.last_estimate, researchUpdatedAt: row.last_estimate.researchUpdatedAt ?? null },
     updatedAt: row.updated_at,
   };
 }
@@ -191,15 +192,21 @@ export class PriceResearchRepository implements IPriceResearchRepository {
     }
   }
 
+  // An estimate computed from older research than the stored one's is not written (null is oldest), so
+  // an Analyze that read the ladder before a run saved cannot overwrite the run's re-estimate. The
+  // estimate is not part of the research version: updated_at moves only when the row is created.
   async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
     await query(
       `INSERT INTO product_price_research (product_id, workspace_id, last_estimate, updated_at)
        VALUES ($1, $2, $3::jsonb, ${NOW_UTC})
        ON CONFLICT (product_id) DO UPDATE SET
-         last_estimate = EXCLUDED.last_estimate,
-         updated_at = ${NOW_UTC}
-       WHERE product_price_research.workspace_id = EXCLUDED.workspace_id`,
-      [productId, workspaceId, JSON.stringify(stored)],
+         last_estimate = EXCLUDED.last_estimate
+       WHERE product_price_research.workspace_id = EXCLUDED.workspace_id
+         AND (
+           product_price_research.last_estimate->>'researchUpdatedAt' IS NULL
+           OR $4::timestamptz >= (product_price_research.last_estimate->>'researchUpdatedAt')::timestamptz
+         )`,
+      [productId, workspaceId, JSON.stringify(stored), stored.researchUpdatedAt],
       this.queryClient,
     );
   }

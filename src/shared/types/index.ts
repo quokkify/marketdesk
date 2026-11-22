@@ -169,6 +169,8 @@ export interface StoredPriceEstimate {
   estimatedAt: string;
   hiddenReason: EstimateHiddenReason | null;
   researchNote: string | null;
+  // The research row's updatedAt the estimate was computed from; null when there was no research.
+  researchUpdatedAt: string | null;
 }
 
 export interface PriceResearch {

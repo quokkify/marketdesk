@@ -1122,3 +1122,170 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     });
   });
 });
+
+describe('HermesDecisionEngine pending price events', () => {
+  const PRICE_TYPES = ['suggested_lower_price', 'suggested_higher_price', 'price_estimate_unavailable'];
+
+  function priceAnswer(startPrice: number): PriceEstimate {
+    return { startPrice, floorPrice: startPrice - 5, retailAnchor: null, usedRange: null, reasoning: 'Used units.', confidence: 'medium' };
+  }
+
+  // Answers the estimates in order; the last answer repeats.
+  class SequencedAI extends StubAIProvider {
+    private calls = 0;
+    constructor(private readonly answers: PriceEstimate[]) {
+      super(undefined, 'A better title for search');
+    }
+    async estimatePrice(): Promise<PriceEstimate> {
+      const answer = this.answers[Math.min(this.calls, this.answers.length - 1)];
+      this.calls += 1;
+      return answer;
+    }
+  }
+
+  function addProduct(productRepo: InMemoryProductRepository, listingRepo: InMemoryListingRepository, id: string) {
+    const product = unwrap(Product.create({
+      id, workspaceId: 'w1', sku: `SKU-${id}`, name: 'Widget',
+      description: 'A perfectly reasonable description over twenty chars.',
+      costPrice: money(1), sellingPrice: money(100), condition: 'good', category: 'electronics',
+    }));
+    productRepo.items.set(id, product);
+    const listing = unwrap(Listing.create({ id: `l-${id}`, productId: id, marketplaceId: 'm1', price: money(100) }));
+    listingRepo.items.set(listing.id, listing);
+  }
+
+  function setup(answers: PriceEstimate[], runs: IPriceResearchRuns | null = null) {
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const eventRepo = new InMemoryEventRepository();
+    const priceResearchRepo = new EvidencedResearchRepository();
+    const engine = new HermesDecisionEngine(
+      productRepo, listingRepo, eventRepo, new RecordingEventPublisher(), new SequencedAI(answers),
+      priceResearchRepo, runs, sequentialIdFactory('pp'),
+    );
+    addProduct(productRepo, listingRepo, 'p1');
+    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS', autonomyLevel: 'suggest_only' }));
+    const pendingPrice = (productId = 'p1') =>
+      [...eventRepo.items.values()].filter(
+        (e) => e.productId === productId && PRICE_TYPES.includes(e.type) && e.status === 'pending_review',
+      );
+    return { engine, eventRepo, productRepo, listingRepo, priceResearchRepo, workspace, pendingPrice };
+  }
+
+  it('a second Analyze leaves exactly one pending price event for the product', async () => {
+    const { engine, workspace, pendingPrice, eventRepo } = setup([priceAnswer(90), priceAnswer(80)]);
+
+    await engine.runProductSeo(workspace, 'p1');
+    await engine.runProductSeo(workspace, 'p1');
+
+    expect(pendingPrice().map((e) => e.proposedChange?.kind === 'price' && e.proposedChange.to)).toEqual([80]);
+    expect([...eventRepo.items.values()].filter((e) => e.status === 'dismissed').map((e) => e.type))
+      .toEqual(['suggested_lower_price']);
+  });
+
+  it('a second workspace run leaves exactly one pending price event for the product', async () => {
+    const { engine, workspace, pendingPrice } = setup([priceAnswer(90), priceAnswer(80)]);
+
+    await engine.run(workspace);
+    await engine.run(workspace);
+
+    expect(pendingPrice().map((e) => e.proposedChange?.kind === 'price' && e.proposedChange.to)).toEqual([80]);
+  });
+
+  it("the job re-estimate supersedes Analyze's pending price event", async () => {
+    const { engine, workspace, pendingPrice } = setup([priceAnswer(90), priceAnswer(70)]);
+    await engine.runProductSeo(workspace, 'p1');
+
+    const event = await engine.reestimatePrice('w1', 'p1');
+
+    expect(event).toMatchObject({ type: 'suggested_lower_price', status: 'pending_review', autonomyDecision: 'pending_review', source: 'hermes' });
+    expect(pendingPrice().map((e) => e.id)).toEqual([event!.id]);
+  });
+
+  it('the job re-estimate closes the pending notice when research was still running at Analyze', async () => {
+    const active = {
+      id: 'r1', workspaceId: 'w1', productId: 'p1', trigger: 'analyze' as const, status: 'running' as const, nodes: {},
+      outcome: null, failedTiers: [], errorCode: null, consecutiveFailures: 0, queuedAt: '2026-11-22T00:00:00.000Z',
+      startedAt: null, finishedAt: null, leaseUntil: null, nextAutoAt: null,
+    };
+    let running = true;
+    const runs: IPriceResearchRuns = {
+      request: async () => ({ run: active, enqueued: true, reason: 'enqueued' }),
+      latest: async () => ({ active: running ? active : null, last: null }),
+    };
+    const { engine, workspace, pendingPrice, priceResearchRepo } = setup([priceAnswer(70)], runs);
+    // No ladder until the run lands; then the repository supplies its evidence again.
+    const stored = priceResearchRepo.findByProduct.bind(priceResearchRepo);
+    priceResearchRepo.findByProduct = async (workspaceId, productId) => (running ? null : stored(workspaceId, productId));
+
+    const analyzed = await engine.runProductSeo(workspace, 'p1');
+    const notice = analyzed.find((e) => e.type === 'price_estimate_unavailable');
+    expect(notice).toMatchObject({
+      title: 'Price estimate pending',
+      detail: 'Searching prices, about 2–4 min. The estimate appears when it finishes.',
+      proposedChange: null,
+      status: 'pending_review',
+    });
+
+    running = false;
+    const event = await engine.reestimatePrice('w1', 'p1');
+
+    expect(pendingPrice().map((e) => e.id)).toEqual([event!.id]);
+    expect(notice!.status).toBe('dismissed');
+  });
+
+  it('the job re-estimate with nothing worth surfacing still closes the pending notice', async () => {
+    const active = {
+      id: 'r1', workspaceId: 'w1', productId: 'p1', trigger: 'analyze' as const, status: 'running' as const, nodes: {},
+      outcome: null, failedTiers: [], errorCode: null, consecutiveFailures: 0, queuedAt: '2026-11-22T00:00:00.000Z',
+      startedAt: null, finishedAt: null, leaseUntil: null, nextAutoAt: null,
+    };
+    let running = true;
+    const runs: IPriceResearchRuns = {
+      request: async () => ({ run: active, enqueued: true, reason: 'enqueued' }),
+      latest: async () => ({ active: running ? active : null, last: null }),
+    };
+    // Within 5 % of the current price: the estimate is stored but not surfaced.
+    const { engine, workspace, pendingPrice, priceResearchRepo } = setup([priceAnswer(98)], runs);
+    const stored = priceResearchRepo.findByProduct.bind(priceResearchRepo);
+    priceResearchRepo.findByProduct = async (workspaceId, productId) => (running ? null : stored(workspaceId, productId));
+    await engine.runProductSeo(workspace, 'p1');
+    expect(pendingPrice()).toHaveLength(1);
+
+    running = false;
+    const event = await engine.reestimatePrice('w1', 'p1');
+
+    expect(event).toBeNull();
+    expect(pendingPrice()).toEqual([]);
+  });
+
+  it('leaves approved price events, other products and other event types untouched', async () => {
+    const { engine, workspace, eventRepo, productRepo, listingRepo, pendingPrice } = setup([priceAnswer(90), priceAnswer(80)]);
+    addProduct(productRepo, listingRepo, 'p2');
+    const approved = unwrap(HermesEvent.create({
+      id: 'approved', workspaceId: 'w1', productId: 'p1', type: 'suggested_lower_price', severity: 'warning',
+      title: 'AI suggests price 95', proposedChange: { kind: 'price', field: 'price', from: 100, to: 95 },
+    }));
+    unwrap(approved.approve());
+    unwrap(approved.markApplied());
+    const otherProduct = unwrap(HermesEvent.create({
+      id: 'other-product', workspaceId: 'w1', productId: 'p2', type: 'suggested_lower_price', severity: 'warning',
+      title: 'AI suggests price 85', proposedChange: { kind: 'price', field: 'price', from: 100, to: 85 },
+    }));
+    const title = unwrap(HermesEvent.create({
+      id: 'title', workspaceId: 'w1', productId: 'p1', type: 'suggested_better_title', severity: 'info',
+      title: 'Improve product title for search', proposedChange: { kind: 'title', field: 'title', from: 'Widget', to: 'Widget X' },
+    }));
+    await eventRepo.saveAll([approved, otherProduct, title]);
+
+    await engine.runProductSeo(workspace, 'p1');
+    await engine.reestimatePrice('w1', 'p1');
+
+    expect(approved.status).toBe('applied');
+    expect(otherProduct.status).toBe('pending_review');
+    expect(title.status).toBe('pending_review');
+    expect([...eventRepo.items.values()].filter((e) => e.productId === 'p1' && e.type === 'suggested_better_title' && e.status === 'pending_review')).toHaveLength(2);
+    expect(pendingPrice()).toHaveLength(1);
+    expect(pendingPrice('p2').map((e) => e.id)).toEqual(['other-product']);
+  });
+});

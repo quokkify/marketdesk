@@ -18,7 +18,6 @@ import {
   ValidationError,
   InvalidStateError,
   NotFoundError,
-  ServiceUnavailableError,
   TooManyRequestsError,
 } from '../shared/DomainError';
 import { HermesEvent } from '../entities/HermesEvent';
@@ -30,10 +29,6 @@ import type {
   AutonomyDecision,
   HermesEventType,
   HermesSeverity,
-  AnchorTier,
-  EstimateHiddenReason,
-  PriceComparable,
-  PriceEstimate,
   ProposedChange,
 } from '../../../shared/types';
 import { BALANCED_SAFE_EVENT_TYPES } from '../../../shared/constants';
@@ -43,13 +38,12 @@ import type { IListingRepository } from '../repositories/interfaces/IListingRepo
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
 import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
 import type { Listing } from '../entities/Listing';
-import { applyLadderRules, estimateHiddenReason, validatePriceEstimate } from './priceEstimate';
 import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
+import { PriceEstimateService } from '../../application/services/PriceEstimateService';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import {
   isAIProviderSourceAware,
   OFFLINE_AI_NOTICE,
-  PRICE_ESTIMATE_UNUSABLE_MESSAGE,
   type IAIProvider,
 } from '../ports/IAIProvider';
 import {
@@ -72,42 +66,30 @@ interface Suggestion {
 export type IdFactory = () => string;
 
 const RESEARCH_UNAVAILABLE_NOTE = 'Market research failed; the estimate uses saved data.';
-const USED_TIERS: ReadonlySet<AnchorTier> = new Set(['same_model_used', 'substitute_used']);
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const PRICE_ESTIMATE_PENDING: Suggestion = {
+  type: 'price_estimate_unavailable',
+  severity: 'info',
+  title: 'Price estimate pending',
+  detail: 'Searching prices, about 2–4 min. The estimate appears when it finishes.',
+  change: null,
+};
 
-function unavailablePriceEstimate(detail: string): Suggestion {
-  return {
-    type: 'price_estimate_unavailable',
-    severity: 'info',
-    title: 'Price estimate unavailable',
-    detail,
-    change: null,
-  };
-}
+// One pending price event per product: a new one closes the earlier pending ones (applied or
+// otherwise resolved events are never touched).
+const PRICE_EVENT_TYPES: ReadonlySet<HermesEventType> = new Set([
+  'suggested_lower_price',
+  'suggested_higher_price',
+  'price_estimate_unavailable',
+]);
 
-// The model's own basis labels are not trusted: a figure is observed only when it is the seller's
-// research that reached the provider, otherwise it is estimated.
-function labelEstimateFigures(
-  estimate: PriceEstimate,
-  researchAnchor: number | null,
-  comparables: readonly PriceComparable[],
-): PriceEstimate {
-  const retailAnchor = estimate.retailAnchor && {
-    amount: estimate.retailAnchor.amount,
-    basis: researchAnchor !== null && estimate.retailAnchor.amount === researchAnchor
-      ? ('observed' as const)
-      : ('estimated' as const),
-  };
-  let usedRange = estimate.usedRange;
-  if (usedRange) {
-    const prices = comparables.map((c) => c.price);
-    const withinComparables =
-      prices.length > 0 &&
-      usedRange.low >= Math.min(...prices) &&
-      usedRange.high <= Math.max(...prices);
-    usedRange = { low: usedRange.low, high: usedRange.high, basis: withinComparables ? 'observed' : 'estimated' };
-  }
-  return { ...estimate, retailAnchor, usedRange };
+function closePendingPriceEvents(pending: readonly HermesEvent[], productId: string): HermesEvent[] {
+  return pending.filter(
+    (e) =>
+      e.productId === productId &&
+      PRICE_EVENT_TYPES.has(e.type) &&
+      e.status === 'pending_review' &&
+      e.dismiss().isOk(),
+  );
 }
 
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
@@ -136,11 +118,23 @@ export class HermesDecisionEngine {
     private readonly researchRuns: IPriceResearchRuns | null,
     private readonly idFactory: IdFactory,
     private readonly logger?: HermesEngineLogger
-  ) {}
+  ) {
+    this.priceEstimates = new PriceEstimateService({
+      ai: aiProvider,
+      research: priceResearchRepo,
+      runs: researchRuns,
+      logger,
+    });
+  }
+
+  private readonly priceEstimates: PriceEstimateService;
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
     const events: HermesEvent[] = [];
+    const closed: HermesEvent[] = [];
     const products = await this.productRepo.findByWorkspace(workspace.id);
+    // Read before any of this run's events are saved, so only earlier ones are closed.
+    const pending = await this.eventRepo.findPendingReview(workspace.id);
 
     for (const product of products) {
       // Asked before and after the AI calls, so a switch to the offline heuristics at
@@ -175,6 +169,7 @@ export class HermesDecisionEngine {
         });
         if (created.isErr()) continue;
         const event = created.value;
+        if (PRICE_EVENT_TYPES.has(event.type)) closed.push(...closePendingPriceEvents(pending, product.id));
 
         event.setAutonomyDecision(decision);
         const unsupportedAutomaticChange =
@@ -216,7 +211,7 @@ export class HermesDecisionEngine {
       }
     }
 
-    await this.eventRepo.saveAll(events);
+    await this.eventRepo.saveAll([...closed, ...events]);
     await this.eventPublisher.publish(this.runCompletedEvent(workspace.id, events.length));
 
     return events;
@@ -381,37 +376,63 @@ export class HermesDecisionEngine {
     const priceOfflineBefore = primary ? await this.aiAnswersOffline() : false;
     const priceSuggestion = primary ? await this.priceEstimateSuggestion(product, primary) : null;
     if (priceSuggestion) {
-      // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change.
-      const priceSource =
-        priceSuggestion.change === null
-          ? null
-          : priceOfflineBefore || (await this.aiAnswersOffline())
-            ? 'offline'
-            : 'hermes';
-      const created = HermesEvent.create({
-        id: this.idFactory(),
-        workspaceId: workspace.id,
-        productId: product.id,
-        type: priceSuggestion.type,
-        severity: priceSuggestion.severity,
-        title: priceSuggestion.title,
-        detail:
-          priceSource === 'offline'
-            ? withOfflineNotice(priceSuggestion.detail)
-            : priceSuggestion.detail,
-        proposedChange: priceSuggestion.change,
-        status: 'pending_review',
-        autonomyDecision: 'pending_review',
-        source: priceSource,
-      });
-      if (created.isOk()) {
-        await this.eventRepo.saveAll([created.value]);
-        events.push(created.value);
-      }
+      const priceEvent = await this.savePriceEvent(product, priceSuggestion, priceOfflineBefore);
+      if (priceEvent) events.push(priceEvent);
     }
 
     await this.eventPublisher.publish(this.runCompletedEvent(workspace.id, events.length));
     return events;
+  }
+
+  /**
+   * The research job's re-estimate: estimates from the stored research without requesting a run or
+   * running SEO, and replaces the product's pending price event. An estimate not worth surfacing
+   * still closes the pending ones: they predate the research the job just stored. Null when the
+   * product or its listing is gone, or nothing is surfaced.
+   */
+  async reestimatePrice(workspaceId: string, productId: string): Promise<HermesEvent | null> {
+    const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
+    if (!product) return null;
+    const [primary] = await this.listingRepo.findByProduct(product.id);
+    if (!primary) return null;
+    const offlineBefore = await this.aiAnswersOffline();
+    const { suggestion } = await this.priceEstimates.estimate(product, primary);
+    if (suggestion) return this.savePriceEvent(product, suggestion, offlineBefore);
+    const closed = closePendingPriceEvents(await this.eventRepo.findPendingReview(workspaceId), product.id);
+    if (closed.length > 0) await this.eventRepo.saveAll(closed);
+    return null;
+  }
+
+  // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change. The earlier
+  // pending price events of the product are closed in the same save.
+  private async savePriceEvent(
+    product: Product,
+    suggestion: Suggestion,
+    offlineBefore: boolean,
+  ): Promise<HermesEvent | null> {
+    const source =
+      suggestion.change === null
+        ? null
+        : offlineBefore || (await this.aiAnswersOffline())
+          ? 'offline'
+          : 'hermes';
+    const created = HermesEvent.create({
+      id: this.idFactory(),
+      workspaceId: product.workspaceId,
+      productId: product.id,
+      type: suggestion.type,
+      severity: suggestion.severity,
+      title: suggestion.title,
+      detail: source === 'offline' ? withOfflineNotice(suggestion.detail) : suggestion.detail,
+      proposedChange: suggestion.change,
+      status: 'pending_review',
+      autonomyDecision: 'pending_review',
+      source,
+    });
+    if (created.isErr()) return null;
+    const pending = await this.eventRepo.findPendingReview(product.workspaceId);
+    await this.eventRepo.saveAll([...closePendingPriceEvents(pending, product.id), created.value]);
+    return created.value;
   }
 
   private agentRecommendationRecord(params: {
@@ -502,7 +523,6 @@ export class HermesDecisionEngine {
     }
   }
 
-  // The stored estimate is display-only, so a failed write is logged and the price path goes on.
   // Asks for a background research run when one is due and never waits for it: the estimate uses
   // the stored research. A run that could not even be requested is noted on the estimate.
   private async requestResearch(product: Product): Promise<string | null> {
@@ -521,98 +541,17 @@ export class HermesDecisionEngine {
     }
   }
 
-  private async rememberEstimate(
-    product: Product,
-    estimate: PriceEstimate,
-    hiddenReason: EstimateHiddenReason | null,
-    researchNote: string | null,
-  ): Promise<void> {
-    try {
-      await this.priceResearchRepo.saveEstimate(product.workspaceId, product.id, {
-        estimate,
-        estimatedAt: new Date().toISOString(),
-        hiddenReason,
-        researchNote,
-      });
-    } catch (error) {
-      this.logger?.warn({ productId: product.id, err: error }, 'Storing the last price estimate failed');
-    }
-  }
-
   /**
-   * Proposes a justified start price for the product's primary listing. Returns null when the
-   * estimate is valid but not worth surfacing, and an info-only "unavailable" suggestion when it
-   * is unusable or the call failed for any other reason. Provider unavailability propagates.
+   * Requests a research run (never waits for it), then estimates from the stored research. With no
+   * ladder stored and a run active, the seller gets the pending notice; the job estimates later.
    */
   private async priceEstimateSuggestion(
     product: Product,
     primary: Listing
   ): Promise<Suggestion | null> {
     const researchNote = await this.requestResearch(product);
-    const stored = await this.priceResearchRepo.findByProduct(product.workspaceId, product.id);
-    // A retail anchor in another currency must not be compared against the listing price.
-    const research =
-      stored && stored.retailCurrency && stored.retailCurrency !== primary.price.currency
-        ? {
-            ...stored,
-            retailPrice: null,
-            retailCurrency: null,
-            retailSource: null,
-            retailCheckedAt: null,
-          }
-        : stored;
-    const daysLive = primary.publishedAt
-      ? Math.floor((Date.now() - primary.publishedAt.getTime()) / MS_PER_DAY)
-      : null;
-
-    let rawEstimate: Awaited<ReturnType<IAIProvider['estimatePrice']>>;
-    try {
-      rawEstimate = await this.aiProvider.estimatePrice({ product, listing: primary, daysLive, research });
-    } catch (error) {
-      if (error instanceof ServiceUnavailableError) throw error;
-      // A fixed message: raw error or model text never reaches the seller.
-      return unavailablePriceEstimate(PRICE_ESTIMATE_UNUSABLE_MESSAGE);
-    }
-    const researchAnchor = research?.retailPrice ?? null;
-    const validated = validatePriceEstimate(rawEstimate, researchAnchor);
-    if (validated.isErr()) return unavailablePriceEstimate(validated.error.message);
-
-    const rows = research?.comparables ?? [];
-    const capped = applyLadderRules(validated.value, rows, researchAnchor);
-    // Only used prices describe what the item itself sells for; new prices are not a used range.
-    const usedRows = rows.filter((r) => r.tier == null || USED_TIERS.has(r.tier));
-    const labelled = labelEstimateFigures(capped, researchAnchor, usedRows);
-    const currentPrice = product.sellingPrice.amount;
-    // A drop never goes below the seller's lowest acceptable price, and a drop the floor cancels
-    // is not turned into a raise. Without an explicit floor, the estimate stands as it was.
-    const sellerFloor = product.minAcceptablePrice?.amount;
-    let estimate = labelled;
-    if (sellerFloor !== undefined) {
-      const startPrice =
-        labelled.startPrice < currentPrice ? Math.max(labelled.startPrice, sellerFloor) : labelled.startPrice;
-      if (labelled.startPrice < currentPrice && startPrice >= currentPrice) {
-        await this.rememberEstimate(product, labelled, 'floor_cancels', researchNote);
-        return null;
-      }
-      estimate = { ...labelled, startPrice };
-    }
-    const hiddenReason = estimateHiddenReason(estimate, currentPrice);
-    await this.rememberEstimate(product, estimate, hiddenReason, researchNote);
-    if (hiddenReason !== null) return null;
-    const isLower = estimate.startPrice < currentPrice;
-    return {
-      type: isLower ? 'suggested_lower_price' : 'suggested_higher_price',
-      severity: isLower ? 'warning' : 'info',
-      title: `AI suggests price ${estimate.startPrice}`,
-      detail: estimate.reasoning,
-      change: {
-        kind: 'price',
-        field: 'price',
-        from: currentPrice,
-        to: estimate.startPrice,
-        estimate,
-      },
-    };
+    const { suggestion, skipped } = await this.priceEstimates.estimate(product, primary, { researchNote });
+    return skipped === 'research_pending' ? PRICE_ESTIMATE_PENDING : suggestion;
   }
 
   async checkConditions(product: Product): Promise<Suggestion[]> {

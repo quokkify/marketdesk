@@ -931,7 +931,12 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const priceResearchHandler = new PriceResearchHandler({
     runs: priceResearchRunRepo,
     graph: priceResearchGraph,
-    afterRun: async () => undefined,
+    // Re-estimates when the run changed the ladder, or when no estimate exists yet (an Analyze
+    // skipped it while the run was pending).
+    afterRun: async (workspaceId, productId, result) => {
+      const stored = result.rowsChanged ? null : await priceResearchRepo.findByProduct(workspaceId, productId);
+      if (result.rowsChanged || !stored?.lastEstimate) await hermesEngine.reestimatePrice(workspaceId, productId);
+    },
     events: eventPublisher,
     now: () => new Date(),
     logger: overrides.logger,
