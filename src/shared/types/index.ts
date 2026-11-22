@@ -512,6 +512,8 @@ export interface ProductVerdictView {
   latest: SaleVerdict | null;
   active: SaleVerdict | null;
   lastFailed: boolean;
+  // Why the newest run failed; null unless lastFailed.
+  lastFailedCode: string | null;
 }
 
 export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';

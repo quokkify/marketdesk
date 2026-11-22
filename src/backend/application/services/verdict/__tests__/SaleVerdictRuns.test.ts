@@ -43,7 +43,7 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
   async fail(runId: string, completedAt: string, errorCode: string): Promise<boolean> {
     const row = this.rows.find((r) => r.id === runId);
     if (!row) return false;
-    Object.assign(row, { status: 'failed', completedAt });
+    Object.assign(row, { status: 'failed', completedAt, errorCode });
     this.errorCodes.set(runId, errorCode);
     return true;
   }
@@ -66,9 +66,6 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
   }
   async lastRunFailedForProducts(): Promise<Set<string>> {
     return new Set();
-  }
-  async lastRunFailed(): Promise<boolean> {
-    return false;
   }
 }
 
@@ -269,6 +266,26 @@ describe('SaleVerdictRuns', () => {
 
     expect(view.active).toBeNull();
     expect(verdicts.errorCodes.get('old')).toBe('expired');
+  });
+
+  it('view returns the error code of the newest run when it failed', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(stuck('queued', VERDICT_QUEUED_TTL_MS + 1000));
+
+    const view = await runs.view(WS, PID);
+
+    expect(view).toMatchObject({ lastFailed: true, lastFailedCode: 'expired' });
+  });
+
+  it('view has no failed code when the newest run did not fail', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push({ ...stuck('failed', 2 * MIN), id: 'older', errorCode: 'run_error' });
+    verdicts.rows.push({ ...stuck('completed', MIN), id: 'newer', overall: 'ready' });
+
+    const view = await runs.view(WS, PID);
+
+    expect(view).toMatchObject({ lastFailed: false, lastFailedCode: null });
+    expect(view.latest?.id).toBe('newer');
   });
 
   it('fails a run that could not be enqueued and rethrows', async () => {

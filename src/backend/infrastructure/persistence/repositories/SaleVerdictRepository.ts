@@ -215,15 +215,4 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     return new Set(rows.map((row) => row.product_id));
   }
 
-  async lastRunFailed(workspaceId: string, productId: string): Promise<boolean> {
-    const { rows } = await query<{ status: VerdictRunStatus }>(
-      `SELECT status FROM product_sale_verdicts
-       WHERE workspace_id = $1 AND product_id = $2
-       ORDER BY queued_at DESC
-       LIMIT 1`,
-      [workspaceId, productId],
-      this.queryClient,
-    );
-    return rows[0]?.status === 'failed';
-  }
 }

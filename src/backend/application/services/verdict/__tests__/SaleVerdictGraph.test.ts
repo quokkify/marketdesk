@@ -83,9 +83,6 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async lastRunFailedForProducts(): Promise<Set<string>> {
     return new Set();
   }
-  async lastRunFailed(): Promise<boolean> {
-    return false;
-  }
 }
 
 function check(name: VerdictCheckName, status: VerdictCheck['status'], checkedAt: string): VerdictCheck {

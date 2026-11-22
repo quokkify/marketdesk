@@ -113,12 +113,13 @@ export class SaleVerdictRuns {
       throw new NotFoundError(`Product not found: ${productId}`);
     }
     await this.expireStuck(workspaceId, productId, this.deps.now());
-    const [latest, active, lastFailed] = await Promise.all([
+    const [latest, active, [newest]] = await Promise.all([
       this.deps.verdicts.findLatestCompleted(workspaceId, productId),
       this.deps.verdicts.findActive(workspaceId, productId),
-      this.deps.verdicts.lastRunFailed(workspaceId, productId),
+      this.deps.verdicts.listForProduct(workspaceId, productId, 1),
     ]);
-    return { latest, active, lastFailed };
+    const lastFailed = newest?.status === 'failed';
+    return { latest, active, lastFailed, lastFailedCode: lastFailed ? newest.errorCode : null };
   }
 
   async history(workspaceId: string, productId: string, limit: number): Promise<SaleVerdict[]> {
