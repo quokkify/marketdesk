@@ -14,6 +14,7 @@ public class ProductDetailPageVerification
   private static final String OFFLINE_USAGE_LINE = "Offline heuristics · no AI usage";
   private static final String CONDITION_PLACEHOLDER = "Choose condition";
   private static final String UNKNOWN_CONDITION_LABEL = "Requires confirmation";
+  private static final String CONFIRM_PUBLICATION = "Confirm publication request";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
     super(steps, page);
@@ -22,6 +23,30 @@ public class ProductDetailPageVerification
   @Step("The suggestions say they used offline heuristics and no AI usage")
   public ProductDetailPageVerification showsOfflineUsageLine() {
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
+    return this;
+  }
+
+  @Step("The product page shows the publication readiness check")
+  public ProductDetailPageVerification showsPublicationReadinessCheck() {
+    page.publicationReadinessButton().shouldBe(Condition.visible, getTimeout());
+    return this;
+  }
+
+  @Step("The product page shows suggestions for review only and leaves {productName} unchanged")
+  public ProductDetailPageVerification showsSuggestionsForReviewOnly(String productName) {
+    page.suggestedImprovementsHeading().shouldBe(Condition.visible, getTimeout());
+    page.suggestedPriceHeading().shouldBe(Condition.visible, getTimeout());
+    page.reviewOnlyNote().shouldBe(Condition.visible, getTimeout());
+    page.productTitle().shouldHave(Condition.exactText(productName), getTimeout());
+    return this;
+  }
+
+  @Step("The publication confirmation dialog is shown")
+  public ProductDetailPageVerification showsPublicationConfirmation() {
+    page.publicationDialog()
+        .shouldBe(Condition.visible, getTimeout())
+        .shouldHave(Condition.text(CONFIRM_PUBLICATION), getTimeout());
+    page.confirmPublicationButton().shouldBe(Condition.visible, getTimeout());
     return this;
   }
 

@@ -22,9 +22,20 @@ public class ProductsPageVerification
   private static final String SELECTED = "aria-pressed";
   private static final Pattern ANALYSIS_RESULT = Pattern.compile("\\d+ to review|No new suggestions");
   private static final String ALL_REVIEWED = "All reviewed";
+  private static final String NEW_PRODUCT = "New product";
+  private static final String NEW_PRODUCT_SUBTITLE = "Add photos, then review and publish.";
 
   public ProductsPageVerification(ProductsPageSteps steps, ProductsPage page) {
     super(steps, page);
+  }
+
+  @Step("The New product dialog is open")
+  public ProductsPageVerification newProductDialogIsShown() {
+    page.newProductDialog()
+        .shouldBe(Condition.visible, getTimeout())
+        .shouldHave(Condition.text(NEW_PRODUCT), getTimeout())
+        .shouldHave(Condition.text(NEW_PRODUCT_SUBTITLE), getTimeout());
+    return this;
   }
 
   @Step("The catalogue shows the columns {columns}")

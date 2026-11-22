@@ -28,6 +28,9 @@ public class ProductsPage implements Page {
   private static final String BUTTON = "button";
   private static final String APPROVE = "Approve";
   private static final String DISMISS = "Dismiss";
+  private static final String NEW_PRODUCT = "New product";
+  private static final String DIALOG = "[role=\"dialog\"]";
+  private static final String CLOSE = "Close";
   private static final String GAP_SCRIPT =
       "const panel = document.querySelector(arguments[0]);"
           + "const table = document.querySelector(arguments[1]).closest('.MuiCard-root');"
@@ -43,6 +46,18 @@ public class ProductsPage implements Page {
 
   public SelenideElement filtersButton() {
     return Selenide.$(FILTERS_BUTTON);
+  }
+
+  public SelenideElement newProductButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.text(NEW_PRODUCT));
+  }
+
+  public SelenideElement newProductDialog() {
+    return Selenide.$(DIALOG);
+  }
+
+  public SelenideElement closeDialogButton() {
+    return newProductDialog().$$(BUTTON).findBy(Condition.attribute("aria-label", CLOSE));
   }
 
   public SelenideElement filtersFullyOpen() {

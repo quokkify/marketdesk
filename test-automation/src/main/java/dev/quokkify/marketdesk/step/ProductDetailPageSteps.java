@@ -30,6 +30,12 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Open the publication dialog")
+  public ProductDetailPageSteps openPublicationDialog() {
+    page.publishButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Replace the draft reply to the buyer message {buyerText} with {reply} and send it")
   public ProductDetailPageSteps editAndSendDraft(String buyerText, String reply) {
     page.replaceReplyText(buyerText, reply);

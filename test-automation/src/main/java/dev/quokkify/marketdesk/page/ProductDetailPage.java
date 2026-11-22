@@ -35,6 +35,14 @@ public class ProductDetailPage implements Page {
   private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
   private static final String ALERT = "[role=\"alert\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
+  private static final String PUBLICATION_READINESS = "Publication readiness check";
+  private static final String PUBLISH = "Publish";
+  private static final String PRODUCT_TITLE = "#product-detail-title";
+  private static final String SUGGESTED_IMPROVEMENTS = "Suggested improvements";
+  private static final String SUGGESTED_PRICE = "Suggested price:";
+  private static final String REVIEW_ONLY = "Suggestions are for review only.";
+  private static final String DIALOG = "[role=\"dialog\"]";
+  private static final String CONFIRM_AND_QUEUE = "Confirm category and queue publish";
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
@@ -42,6 +50,38 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement suggestImprovementsButton() {
     return Selenide.$$(BUTTON).findBy(Condition.text(SUGGEST_IMPROVEMENTS));
+  }
+
+  public SelenideElement publicationReadinessButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.text(PUBLICATION_READINESS));
+  }
+
+  public SelenideElement publishButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.attribute("aria-label", PUBLISH));
+  }
+
+  public SelenideElement productTitle() {
+    return Selenide.$(PRODUCT_TITLE);
+  }
+
+  public SelenideElement suggestedImprovementsHeading() {
+    return Selenide.$$("h6").findBy(Condition.text(SUGGESTED_IMPROVEMENTS));
+  }
+
+  public SelenideElement suggestedPriceHeading() {
+    return Selenide.$$("h6").findBy(Condition.text(SUGGESTED_PRICE));
+  }
+
+  public SelenideElement reviewOnlyNote() {
+    return Selenide.$$("span").findBy(Condition.text(REVIEW_ONLY));
+  }
+
+  public SelenideElement publicationDialog() {
+    return Selenide.$(DIALOG);
+  }
+
+  public SelenideElement confirmPublicationButton() {
+    return publicationDialog().$$(BUTTON).findBy(Condition.text(CONFIRM_AND_QUEUE));
   }
 
   public SelenideElement aiUsageLine() {

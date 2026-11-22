@@ -29,6 +29,18 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Open the New product dialog")
+  public ProductsPageSteps openNewProductDialog() {
+    page.newProductButton().shouldBe(Condition.visible).click();
+    return this;
+  }
+
+  @Step("Close the New product dialog")
+  public ProductsPageSteps closeNewProductDialog() {
+    page.closeDialogButton().shouldBe(Condition.visible).click();
+    return this;
+  }
+
   @Step("Open the filters panel")
   public ProductsPageSteps openFilters() {
     page.filtersButton().shouldBe(Condition.visible).click();

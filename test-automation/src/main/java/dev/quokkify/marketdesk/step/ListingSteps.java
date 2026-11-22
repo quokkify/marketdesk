@@ -104,6 +104,12 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     return new ProductListingPojo(productId, listingId);
   }
 
+  @Step("Set the sandbox OLX category on listing {listingId}")
+  public void setSandboxOlxCategory(AccountPojo account, String listingId) {
+    service.setMarketplaceCategory(account.token(), listingId, MarketplaceCategoryRequestPojo.sandboxCameras())
+        .statusCode(HttpStatus.SC_OK);
+  }
+
   // The stub adapter publishes to the sandbox advert store; its adverts carry the sandbox buyer threads.
   @Step("Publish a product to the sandbox OLX and wait until its listing is live")
   public ProductListingPojo publishSandboxOlxListing(AccountPojo account, ProductRequestPojo product) {
