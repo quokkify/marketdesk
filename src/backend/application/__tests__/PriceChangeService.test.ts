@@ -95,7 +95,12 @@ function setup(accountConnected = true) {
   return { service, productRepo, listingRepo, priceHistory, publishQueue, product };
 }
 
-const input = { workspaceId: 'ws-1', productId: 'prod-1', changedBy: 'user' as const };
+const input = {
+  workspaceId: 'ws-1',
+  productId: 'prod-1',
+  changedBy: 'user' as const,
+  allowBelowCost: false,
+};
 
 describe('PriceChangeService', () => {
   it('appliesToEveryListing', async () => {
@@ -176,5 +181,22 @@ describe('PriceChangeService', () => {
     const { service } = setup();
     const result = await service.apply({ ...input, workspaceId: 'ws-2', price: 120 });
     expect(result.isErr() && result.error).toBeInstanceOf(NotFoundError);
+  });
+
+  it('refusesBelowCostUnlessConfirmed', async () => {
+    const { service, listingRepo, priceHistory, productRepo } = setup();
+    listingRepo.items.set('l1', makeListing('l1'));
+
+    const refused = await service.apply({ ...input, price: 40, allowBelowCost: false });
+
+    expect(refused.isErr()).toBe(true);
+    expect((await productRepo.findById('prod-1'))?.sellingPrice.amount).toBe(100);
+    expect(listingRepo.items.get('l1')?.price.amount).toBe(100);
+    expect(priceHistory.records).toHaveLength(0);
+
+    unwrap(await service.apply({ ...input, price: 40, allowBelowCost: true }));
+    expect((await productRepo.findById('prod-1'))?.sellingPrice.amount).toBe(40);
+    expect(listingRepo.items.get('l1')?.price.amount).toBe(40);
+    expect(priceHistory.records).toHaveLength(1);
   });
 });

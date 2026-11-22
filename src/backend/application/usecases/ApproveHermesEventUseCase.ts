@@ -469,6 +469,8 @@ export class ApproveHermesEventUseCase {
       productId: event.productId,
       price: change.to,
       changedBy: 'hermes',
+      // Approved AI price changes may go below cost; > 20% drops were already gated to human review.
+      allowBelowCost: true,
       reason: event.detail ?? event.title,
     });
   }

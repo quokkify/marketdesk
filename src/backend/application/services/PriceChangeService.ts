@@ -13,6 +13,7 @@ export interface ApplyPriceChangeInput {
   productId: string;
   price: number;
   changedBy: 'user' | 'hermes';
+  allowBelowCost: boolean;
   reason?: string | null;
 }
 
@@ -42,9 +43,7 @@ export class PriceChangeService {
       return Err(new InvalidStateError('The new price is below the lowest price you accept'));
     }
     const oldPrice = product.sellingPrice.amount;
-    // Approved AI price changes may go below cost (> 20% drops were already gated to
-    // human review); a manual change must confirm below-cost like any product edit.
-    const updated = product.updateSellingPrice(money.value, input.changedBy === 'hermes');
+    const updated = product.updateSellingPrice(money.value, input.allowBelowCost);
     if (updated.isErr()) return updated;
     await this.productRepo.save(product);
 
