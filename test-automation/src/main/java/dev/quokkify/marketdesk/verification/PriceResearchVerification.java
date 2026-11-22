@@ -95,6 +95,28 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("Price research keeps the last estimate with the time it was made")
+  public PriceResearchVerification hasLastEstimate(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.lastEstimate.estimatedAt", Matchers.notNullValue());
+    response.body("data.lastEstimate.estimate.startPrice", Matchers.notNullValue());
+    return self();
+  }
+
+  @Step("Last estimate starts at {maxStartPrice} or lower")
+  public PriceResearchVerification lastEstimateStartsAtMost(ValidatableResponse response, double maxStartPrice) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.lastEstimate.estimate.startPrice", Matchers.lessThanOrEqualTo((float) maxStartPrice));
+    return self();
+  }
+
+  @Step("Last estimate says why it was not proposed")
+  public PriceResearchVerification lastEstimateHasHiddenReason(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.lastEstimate.hiddenReason", Matchers.notNullValue());
+    return self();
+  }
+
   // The API stack has no research profile, so the market search cannot run.
   @Step("Market search answers that it is not configured")
   public PriceResearchVerification isRefreshNotConfigured(ValidatableResponse response) {

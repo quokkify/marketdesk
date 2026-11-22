@@ -1,6 +1,8 @@
 package dev.quokkify.marketdesk.step;
 
+import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
@@ -17,6 +19,8 @@ import org.apache.http.HttpStatus;
 public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
 
   private static final String DATA_ID = "data.id";
+  private static final String ALLEGRO_OFFER = "https://allegro.pl/oferta/projektor-";
+  private static final String SEEN_AT = "2026-11-20";
 
   private final PriceResearchService service = new PriceResearchService();
   private final ProductService productService = new ProductService();
@@ -72,5 +76,15 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
   @Step("Refresh the price anchor ladder without authentication")
   public ValidatableResponse refreshPriceResearchUnauthenticated(String productId) {
     return service.refreshPriceResearch(productId);
+  }
+
+  @Step("Save the auto comparables of product {productId}")
+  public ValidatableResponse saveAutoComparables(AccountPojo account, String productId, String tier, Double... prices) {
+    List<PriceResearchPojo.Comparable> rows = IntStream.range(0, prices.length)
+        .mapToObj(i -> new PriceResearchPojo.Comparable(prices[i], "Projector " + i,
+            ALLEGRO_OFFER + i, "auto", tier, SEEN_AT))
+        .toList();
+    return service.putPriceResearch(account.token(), productId,
+        new PriceResearchPojo(null, null, null, null, rows));
   }
 }

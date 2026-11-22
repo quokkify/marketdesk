@@ -90,6 +90,7 @@ function setup() {
     new RecordingEventPublisher(),
     selector,
     new InMemoryPriceResearchRepository(),
+    null,
     sequentialIdFactory('offline-run'),
   );
   const workspace = unwrap(

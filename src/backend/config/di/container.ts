@@ -488,6 +488,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     eventPublisher,
     aiProvider,
     priceResearchRepo,
+    anchorLadderService,
     idGenerator
   );
 

@@ -62,6 +62,7 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
     publisher,
     aiProvider,
     new InMemoryPriceResearchRepository(),
+    null,
     sequentialIdFactory('evt')
   );
 

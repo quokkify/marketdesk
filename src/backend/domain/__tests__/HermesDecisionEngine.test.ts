@@ -3,7 +3,7 @@ import { Product } from '../entities/Product';
 import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
-import type { HermesGuardrails, PriceEstimate, PriceResearch } from '../../../shared/types';
+import type { HermesGuardrails, PriceComparable, PriceEstimate, PriceResearch } from '../../../shared/types';
 import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type AIProviderSourceAware } from '../ports/IAIProvider';
 import { ServiceUnavailableError } from '../shared/DomainError';
 import {
@@ -41,6 +41,7 @@ function makeEngine(overrides?: {
     publisher,
     ai,
     overrides?.priceResearchRepo ?? new InMemoryPriceResearchRepository(),
+    null,
     sequentialIdFactory(),
   );
   return { engine, productRepo, listingRepo, eventRepo, publisher, ai };
@@ -339,6 +340,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       publisher,
       ai,
       new InMemoryPriceResearchRepository(),
+      null,
       sequentialIdFactory('g'),
     );
 
@@ -501,6 +503,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       new RecordingEventPublisher(),
       ai,
       new InMemoryPriceResearchRepository(),
+      null,
       sequentialIdFactory('s'),
     );
     const product = unwrap(
@@ -670,6 +673,7 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       new RecordingEventPublisher(),
       ai,
       new InMemoryPriceResearchRepository(),
+      null,
       sequentialIdFactory('seo'),
     );
     const product = unwrap(
@@ -835,6 +839,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       new RecordingEventPublisher(),
       new StubAIProvider(undefined, '', undefined, undefined, answer),
       priceResearchRepo,
+      null,
       sequentialIdFactory('pe'),
     );
     const product = unwrap(
@@ -861,7 +866,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     );
     const priceEvent = events.find((e) => e.proposedChange?.kind === 'price');
     const notice = events.find((e) => e.type === 'price_estimate_unavailable');
-    return { events, priceEvent, notice, product };
+    return { events, priceEvent, notice, product, priceResearchRepo };
   }
 
   function estimateOf(event: HermesEvent | undefined): PriceEstimate | undefined {
@@ -983,6 +988,34 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
         { research: research({ comparables: [] }) },
       );
       expect(estimateOf(priceEvent)?.usedRange?.basis).toBe('estimated');
+    });
+  });
+
+  describe('price anchor ladder', () => {
+    const substitutes: PriceComparable[] = [280, 300, 320].map((price) => ({
+      price,
+      note: 'new substitute',
+      source: 'auto',
+      tier: 'substitute_new',
+    }));
+
+    it('caps the start price at 70 % of the new substitutes and keeps the estimate it made', async () => {
+      const { priceEvent, priceResearchRepo } = await analyse(
+        estimate({ startPrice: 299, floorPrice: 250, confidence: 'high' }),
+        { price: 400, research: research({ retailPrice: null, retailCurrency: null, comparables: substitutes }) },
+      );
+
+      expect(estimateOf(priceEvent)).toMatchObject({ startPrice: 210, floorPrice: 210, confidence: 'medium' });
+      const saved = priceResearchRepo.items.get('w1:p1')?.lastEstimate;
+      expect(saved).toMatchObject({ hiddenReason: null, researchNote: null });
+      expect(saved?.estimate.startPrice).toBe(210);
+    });
+
+    it('keeps the estimate with the reason it was hidden', async () => {
+      const { priceEvent, priceResearchRepo } = await analyse(estimate({ confidence: 'low' }));
+
+      expect(priceEvent).toBeUndefined();
+      expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.hiddenReason).toBe('low_confidence');
     });
   });
 });

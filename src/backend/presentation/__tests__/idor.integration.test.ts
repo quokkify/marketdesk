@@ -161,6 +161,7 @@ async function build(): Promise<Ctx> {
     events,
     aiProvider,
     new InMemoryPriceResearchRepository(),
+    null,
     idGenerator
   );
 
