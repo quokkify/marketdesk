@@ -31,6 +31,10 @@ public record PriceResearchPojo(Double retailPrice, String retailCurrency, Strin
     return new PriceResearchPojo(retailPrice, retailCurrency, retailSource, retailCheckedAt, List.of(comparable));
   }
 
+  public PriceResearchPojo withComparables(List<Comparable> newComparables) {
+    return new PriceResearchPojo(retailPrice, retailCurrency, retailSource, retailCheckedAt, newComparables);
+  }
+
   public PriceResearchPojo withoutRetailAnchor() {
     return new PriceResearchPojo(null, null, null, null, comparables);
   }

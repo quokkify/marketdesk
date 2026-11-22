@@ -96,4 +96,11 @@ public class ProductDetailPageVerification
     page.comparableOlxLink().shouldHave(Condition.attribute("href", href), getTimeout());
     return this;
   }
+
+  @Step("The {label} anchor line says {text}")
+  public ProductDetailPageVerification showsAnchorTier(String tier, String label, String text) {
+    page.anchorTier(tier).shouldHave(Condition.text(label), getTimeout());
+    page.anchorTier(tier).shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
 }

@@ -31,7 +31,8 @@ public class ProductDetailPage implements Page {
   private static final String SAVE_PRICE_RESEARCH = "[data-testid=\"price-research-save\"]";
   private static final String PRICE_RESEARCH_SAVED = "[data-testid=\"price-research-saved\"]";
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
-  private static final String FIND_COMPARABLES = "[data-testid=\"comparable-search-button\"]";
+  private static final String FIND_PRICES = "[data-testid=\"find-prices-button\"]";
+  private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
   private static final String ALERT = "[role=\"alert\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
 
@@ -112,8 +113,12 @@ public class ProductDetailPage implements Page {
     return Selenide.$(PRICE_RESEARCH_SAVED);
   }
 
-  public SelenideElement findComparablesButton() {
-    return Selenide.$(FIND_COMPARABLES);
+  public SelenideElement findPricesButton() {
+    return Selenide.$(FIND_PRICES);
+  }
+
+  public SelenideElement anchorTier(String tier) {
+    return Selenide.$(String.format(ANCHOR_TIER, tier));
   }
 
   public SelenideElement alertWithText(String text) {

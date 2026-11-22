@@ -4,12 +4,16 @@ import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 
+import java.util.List;
+
 import org.testng.annotations.Test;
 
 public class PriceResearchUiTest extends BaseUiTest {
 
   private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
   private static final String OLX_ADVERT = "https://www.olx.pl/d/oferta/airpods-4-bez-anc-CID99-ID1d1eUB.html";
+  private static final String OLX_ADVERT_2 = "https://www.olx.pl/d/oferta/airpods-4-CID99-ID1d1eUC.html";
+  private static final String OLX_ADVERT_3 = "https://www.olx.pl/d/oferta/airpods-4-pro-CID99-ID1d1eUD.html";
 
   private static final String RETAIL_PRICE = "469.99";
   private static final String RETAIL_PRICE_SHOWN = "469,99 zł";
@@ -37,7 +41,7 @@ public class PriceResearchUiTest extends BaseUiTest {
 
   // The stack has no research profile; the real search is checked by hand on production.
   @Test
-  public void findComparablesShowsNotConfigured() {
+  public void findPricesShowsNotConfigured() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
@@ -48,9 +52,33 @@ public class PriceResearchUiTest extends BaseUiTest {
         .productsCatalogueIsShown();
     productDetailPageSteps
         .openProductPage(productListing)
-        .findComparablesOnOlx()
+        .findPrices()
         .verify()
         .showsAlert(SEARCH_NOT_CONFIGURED);
+  }
+
+  @Test
+  public void anchorsGroupedByTier() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    PriceResearchPojo research = PriceResearchPojo.sample().withComparables(List.of(
+        new PriceResearchPojo.Comparable(280.0, "Phone A", OLX_ADVERT, "auto", "substitute_new", "2026-11-22"),
+        new PriceResearchPojo.Comparable(300.0, "Phone B", OLX_ADVERT_2, "auto", "substitute_new", "2026-11-22"),
+        new PriceResearchPojo.Comparable(320.0, "Phone C", OLX_ADVERT_3, "auto", "substitute_new", "2026-11-22")));
+    priceResearchSteps.verify().isSaved(priceResearchSteps.savePriceResearch(account, productListing.productId(), research));
+    loginPageSteps
+        .openLoginPage()
+        .signIn(account.email(), account.password())
+        .verify()
+        .productsCatalogueIsShown();
+    productDetailPageSteps
+        .openProductPage(productListing)
+        .verify()
+        .showsAnchorTier("same_model_used", "Same model, used", "not found")
+        .showsAnchorTier("last_new_price", "Last new price", "not found")
+        .showsAnchorTier("substitute_new", "New substitutes", "from 280 zł (3)")
+        .showsAnchorTier("substitute_used", "Used substitutes", "not found");
   }
 
   @Test

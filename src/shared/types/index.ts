@@ -128,14 +128,6 @@ export interface PriceComparable {
   seenAt?: string | null; // ISO date
 }
 
-// An OLX advert found by the market search; nothing is stored until the seller picks it.
-export interface ComparableCandidate {
-  price: number;
-  currency: string;
-  title: string;
-  url: string;
-}
-
 export type EstimateHiddenReason = 'low_confidence' | 'within_threshold' | 'floor_cancels';
 
 export interface StoredPriceEstimate {
