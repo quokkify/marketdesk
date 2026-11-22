@@ -16,6 +16,7 @@ const TEMP_TABLES = ['products', 'product_price_research'];
 const row = (price: number): PriceComparable => ({ price, note: 'same model, used', source: 'auto', tier: 'same_model_used' });
 
 const edit = {
+  productId: PID,
   retailPrice: 469.99,
   retailCurrency: 'PLN',
   retailSource: 'MediaMarkt',

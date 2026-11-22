@@ -51,7 +51,7 @@ class EvidencedResearchRepository extends InMemoryPriceResearchRepository {
 
 // The stored estimate is display-only: a failing store must not cost the seller the price event.
 class FailingEstimateStore extends EvidencedResearchRepository {
-  async saveEstimate(): Promise<void> {
+  async saveEstimate(): Promise<boolean> {
     throw new Error('estimate store is down');
   }
 }

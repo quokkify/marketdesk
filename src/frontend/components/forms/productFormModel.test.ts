@@ -73,6 +73,8 @@ describe('productFormModel below-cost pricing', () => {
       costPrice: null,
       sellingPrice: 100,
       condition: 'unknown',
+      minAcceptablePrice: null,
+      missingAccessories: null,
       category: 'Electronics',
       status: 'active',
       tags: [],
