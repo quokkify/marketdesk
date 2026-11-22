@@ -116,6 +116,11 @@ describe('buildContainer (composition root)', () => {
     });
   });
 
+  it('runs a price research job once: a failed run is recorded on the run, not retried', () => {
+    expect(buildBullAddOptions('price-research')).toMatchObject({ attempts: 1 });
+    expect(buildBullAddOptions('price-research')).not.toHaveProperty('backoff');
+  });
+
   it('populates every required AppDeps field', () => {
     const { deps } = build();
     expect(deps.productService).toBeDefined();
@@ -199,7 +204,7 @@ describe('buildContainer (composition root)', () => {
     expect('subscriber' in build()).toBe(false);
   });
 
-  it('creates exactly the publish, sync, conversation-retention and conversation-reply queues', () => {
+  it('creates exactly the publish, sync, conversation-retention, conversation-reply and price-research queues', () => {
     const names: string[] = [];
     const scheduled: Array<{ name: string; options: unknown }> = [];
     buildContainer({
@@ -222,7 +227,7 @@ describe('buildContainer (composition root)', () => {
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'price-research']);
     expect(scheduled).toEqual([
       {
         name: 'conversation-retention',
@@ -236,7 +241,7 @@ describe('buildContainer (composition root)', () => {
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
     expect('cache' in container).toBe(false);
-    expect(container.queues).toHaveLength(4);
+    expect(container.queues).toHaveLength(5);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

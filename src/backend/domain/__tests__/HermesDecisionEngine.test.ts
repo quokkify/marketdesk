@@ -5,7 +5,8 @@ import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
 import type { HermesGuardrails, PriceComparable, PriceEstimate, PriceResearch } from '../../../shared/types';
 import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type AIProviderSourceAware } from '../ports/IAIProvider';
-import { ServiceUnavailableError } from '../shared/DomainError';
+import { ServiceUnavailableError, TooManyRequestsError } from '../shared/DomainError';
+import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
 import {
   unwrap,
   money,
@@ -864,7 +865,13 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
 
   async function analyse(
     answer: PriceEstimate | Error,
-    options: { price?: number; research?: PriceResearch; priceResearchRepo?: EvidencedResearchRepository; logger?: RecordingLogger } = {},
+    options: {
+      price?: number;
+      research?: PriceResearch;
+      priceResearchRepo?: EvidencedResearchRepository;
+      logger?: RecordingLogger;
+      runs?: IPriceResearchRuns;
+    } = {},
   ) {
     const price = options.price ?? 100;
     const productRepo = new InMemoryProductRepository();
@@ -879,7 +886,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       new RecordingEventPublisher(),
       new StubAIProvider(undefined, '', undefined, undefined, answer),
       priceResearchRepo,
-      null,
+      options.runs ?? null,
       sequentialIdFactory('pe'),
       options.logger,
     );
@@ -1039,6 +1046,38 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
         { research: research({ comparables: [] }) },
       );
       expect(estimateOf(priceEvent)?.usedRange?.basis).toBe('estimated');
+    });
+  });
+
+  describe('price research runs', () => {
+    it('asks for an automatic run and estimates from the stored research without waiting for it', async () => {
+      const requests: unknown[] = [];
+      const runs: IPriceResearchRuns = {
+        request: async (...args) => {
+          requests.push(args);
+          return { run: null, enqueued: true, reason: 'enqueued' };
+        },
+        latest: async () => ({ active: null, last: null }),
+      };
+      const { priceEvent, priceResearchRepo } = await analyse(estimate(), { runs });
+
+      expect(requests).toEqual([['w1', 'p1', { force: false, trigger: 'analyze' }]]);
+      expect(priceEvent).toBeDefined();
+      expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.researchNote).toBeNull();
+    });
+
+    it('still estimates and notes it when the run could not be requested', async () => {
+      const logger = new RecordingLogger();
+      const runs: IPriceResearchRuns = {
+        request: async () => { throw new TooManyRequestsError('Too many price research runs are queued'); },
+        latest: async () => ({ active: null, last: null }),
+      };
+      const { priceEvent, priceResearchRepo } = await analyse(estimate(), { runs, logger });
+
+      expect(priceEvent).toBeDefined();
+      expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.researchNote)
+        .toBe('Market research failed; the estimate uses saved data.');
+      expect(logger.warnings.map((w) => w.message)).toContain('Requesting price research failed');
     });
   });
 

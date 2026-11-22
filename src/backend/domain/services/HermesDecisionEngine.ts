@@ -43,7 +43,7 @@ import type { IEventRepository } from '../repositories/interfaces/IEventReposito
 import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
 import type { Listing } from '../entities/Listing';
 import { applyLadderRules, estimateHiddenReason, validatePriceEstimate } from './priceEstimate';
-import type { IPriceResearchRefresher } from '../ports/IPriceResearchRefresher';
+import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import {
   isAIProviderSourceAware,
@@ -132,7 +132,7 @@ export class HermesDecisionEngine {
     private readonly eventPublisher: IEventPublisher,
     private readonly aiProvider: IAIProvider,
     private readonly priceResearchRepo: IPriceResearchRepository,
-    private readonly researchRefresher: IPriceResearchRefresher | null,
+    private readonly researchRuns: IPriceResearchRuns | null,
     private readonly idFactory: IdFactory,
     private readonly logger?: HermesEngineLogger
   ) {}
@@ -502,6 +502,19 @@ export class HermesDecisionEngine {
   }
 
   // The stored estimate is display-only, so a failed write is logged and the price path goes on.
+  // Asks for a background research run when one is due and never waits for it: the estimate uses
+  // the stored research. A run that could not even be requested is noted on the estimate.
+  private async requestResearch(product: Product): Promise<string | null> {
+    if (!this.researchRuns) return null;
+    try {
+      await this.researchRuns.request(product.workspaceId, product.id, { force: false, trigger: 'analyze' });
+      return null;
+    } catch (error) {
+      this.logger?.warn({ productId: product.id, err: error }, 'Requesting price research failed');
+      return RESEARCH_UNAVAILABLE_NOTE;
+    }
+  }
+
   private async rememberEstimate(
     product: Product,
     estimate: PriceEstimate,
@@ -529,8 +542,7 @@ export class HermesDecisionEngine {
     product: Product,
     primary: Listing
   ): Promise<Suggestion | null> {
-    const outcome = await this.researchRefresher?.refreshIfStale(product.workspaceId, product.id);
-    const researchNote = outcome === 'unavailable' ? RESEARCH_UNAVAILABLE_NOTE : null;
+    const researchNote = await this.requestResearch(product);
     const stored = await this.priceResearchRepo.findByProduct(product.workspaceId, product.id);
     // A retail anchor in another currency must not be compared against the listing price.
     const research =

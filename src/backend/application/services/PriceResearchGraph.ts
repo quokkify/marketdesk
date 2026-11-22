@@ -5,7 +5,7 @@
 // Only sanitized item fields reach a prompt (researchItemFromProduct); seller free text never does.
 
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
-import type { AnchorTier, PriceComparable, PriceResearch } from '../../../shared/types';
+import type { AnchorTier, NodeStatus, PriceComparable, PriceResearch, RunOutcome } from '../../../shared/types';
 import type { Product } from '../../domain/entities/Product';
 import type { Listing } from '../../domain/entities/Listing';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -36,7 +36,7 @@ export const SEARCH_NOT_CONFIGURED = 'Market search is not configured';
 export const SEARCH_NEEDS_PLN = 'OLX search needs a PLN listing';
 export const SEARCH_UNUSABLE = 'Hermes returned no usable results';
 
-const SEARCH_CURRENCY = 'PLN';
+export const SEARCH_CURRENCY = 'PLN';
 const AI_FEATURE = 'research';
 const IDENTIFY_ATTEMPTS = 2;
 const RUN_BUDGET_ENDED = 'The research run budget ended';
@@ -53,8 +53,7 @@ const TIER_NODES = Object.keys(TIER_OF) as TierNode[];
 const ALL_NODES: ResearchNode[] = ['identify', ...TIER_NODES];
 const SUBSTITUTE_TIERS: ReadonlySet<AnchorTier> = new Set(['substitute_new', 'substitute_used']);
 
-export type NodeStatus = 'pending' | 'running' | 'done' | 'failed' | 'timeout';
-export type RunOutcome = 'ok' | 'partial' | 'failed';
+export type { NodeStatus, RunOutcome } from '../../../shared/types';
 export type ResearchErrorCode =
   | 'research_unreachable'
   | 'unsafe_toolset'

@@ -133,6 +133,15 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  // Nothing stored and no run yet: the whole answer is null, or a view without a run.
+  @Step("Product has no price research run")
+  public PriceResearchVerification hasNoRun(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data", Matchers.anyOf(Matchers.nullValue(),
+        Matchers.allOf(Matchers.hasEntry("run", null), Matchers.hasEntry("lastRun", null))));
+    return self();
+  }
+
   @Step("Save is refused because the price research changed since the form was opened")
   public PriceResearchVerification isStale(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_CONFLICT, CONFLICT);

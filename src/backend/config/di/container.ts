@@ -97,13 +97,15 @@ import { OfflineReplyDraftAI } from '../../infrastructure/external/OfflineReplyD
 import { ReplyDraftAISelector } from '../../infrastructure/external/ReplyDraftAISelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
-import { AnchorLadderService } from '../../application/services/AnchorLadderService';
+import { PriceResearchRuns } from '../../application/services/PriceResearchRuns';
+import { PriceResearchRunRepository } from '../../infrastructure/persistence/repositories/PriceResearchRunRepository';
 import { PriceResearchGraph } from '../../application/services/PriceResearchGraph';
 import { createResearchCallLimiter } from '../../application/services/researchCallLimiter';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import { ConversationReplyHandler } from '../../infrastructure/jobQueue/JobHandlers/ConversationReplyHandler';
+import { PriceResearchHandler } from '../../infrastructure/jobQueue/JobHandlers/PriceResearchHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
@@ -159,6 +161,7 @@ import type {
   ConversationReplyJob,
   IJobQueue,
   JobEnqueueOptions,
+  PriceResearchJob,
   PublishListingJob,
   SyncMarketplaceJob,
 } from '../../application/ports/IJobQueue';
@@ -208,7 +211,11 @@ const CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE = 'Conversation reply run not qu
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
-export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) {
+const PRICE_RESEARCH_QUEUE = 'price-research';
+
+export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
+  // A failed research run is recorded on the run and retried by its schedule, never by the queue.
+  if (name === PRICE_RESEARCH_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -457,6 +464,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
+  const priceResearchQueue = createQueue<PriceResearchJob>(PRICE_RESEARCH_QUEUE);
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -492,7 +500,17 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     now: () => new Date(),
     logger: overrides.logger,
   });
-  const anchorLadderService = new AnchorLadderService(priceResearchRepo, priceResearchGraph, undefined, overrides.logger);
+  const priceResearchRunRepo = new PriceResearchRunRepository(pool);
+  const priceResearchRuns = new PriceResearchRuns({
+    products: productRepo,
+    listings: listingRepo,
+    runs: priceResearchRunRepo,
+    queue: priceResearchQueue,
+    configured: researchConfig !== null,
+    newId: idGenerator,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,
@@ -500,7 +518,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     eventPublisher,
     aiProvider,
     priceResearchRepo,
-    anchorLadderService,
+    priceResearchRuns,
     idGenerator,
     overrides.logger
   );
@@ -910,6 +928,16 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
 
+  const priceResearchHandler = new PriceResearchHandler({
+    runs: priceResearchRunRepo,
+    graph: priceResearchGraph,
+    afterRun: async () => undefined,
+    events: eventPublisher,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  priceResearchQueue.registerHandler((data) => priceResearchHandler.handle(data));
+
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
   void conversationRetentionQueue
@@ -984,7 +1012,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analyticsService,
     productRepo,
     priceResearchRepo,
-    anchorLadderService,
+    priceResearchRuns,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,
@@ -1014,6 +1042,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     syncQueue as ManagedQueue<unknown>,
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
+    priceResearchQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

@@ -19,6 +19,9 @@ import type {
   PriceEstimate,
   PriceComparable,
   PriceResearch,
+  NodeStatus,
+  ResearchNode,
+  ResearchRun,
   StoredPriceEstimate,
 } from '../../../shared/types';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
@@ -35,6 +38,11 @@ import type {
   OlxPublicationAuthorization,
   OlxQuotaLookup,
 } from '../repositories/interfaces/IOlxPublicationQuotaRepository';
+import type {
+  FinishedRunFields,
+  IPriceResearchRunRepository,
+  NewResearchRun,
+} from '../repositories/interfaces/IPriceResearchRunRepository';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import type {
   IAIProvider,
@@ -322,10 +330,6 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
     this.items.set(key, saved);
     return saved;
   }
-  async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {
-    const key = `${workspaceId}:${productId}`;
-    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastAttemptAt: attemptedAt, updatedAt: new Date().toISOString() });
-  }
   async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
     const key = `${workspaceId}:${productId}`;
     this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastEstimate: stored, updatedAt: new Date().toISOString() });
@@ -344,6 +348,57 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
       lastEstimate: null,
       updatedAt: new Date().toISOString(),
     };
+  }
+}
+
+// Mirrors the partial unique index: one queued or running run per product.
+export class InMemoryPriceResearchRunRepository implements IPriceResearchRunRepository {
+  readonly runs: ResearchRun[] = [];
+  async insertQueued(run: NewResearchRun): Promise<ResearchRun | null> {
+    if (this.runs.some((r) => r.productId === run.productId && r.status !== 'finished')) return null;
+    const stored: ResearchRun = {
+      ...run,
+      status: 'queued',
+      nodes: {},
+      outcome: null,
+      failedTiers: [],
+      errorCode: null,
+      consecutiveFailures: 0,
+      startedAt: null,
+      finishedAt: null,
+      leaseUntil: null,
+      nextAutoAt: null,
+    };
+    this.runs.push(stored);
+    return { ...stored };
+  }
+  async findActive(workspaceId: string, productId: string): Promise<ResearchRun | null> {
+    const run = this.runs.find((r) => r.workspaceId === workspaceId && r.productId === productId && r.status !== 'finished');
+    return run ? { ...run } : null;
+  }
+  async findLastFinished(workspaceId: string, productId: string): Promise<ResearchRun | null> {
+    const finished = this.runs.filter((r) => r.workspaceId === workspaceId && r.productId === productId && r.status === 'finished');
+    const last = finished.sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))[0];
+    return last ? { ...last } : null;
+  }
+  async countQueued(workspaceId: string): Promise<number> {
+    return this.runs.filter((r) => r.workspaceId === workspaceId && r.status === 'queued').length;
+  }
+  async claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null> {
+    const run = this.runs.find((r) => r.id === runId && r.status === 'queued');
+    if (!run) return null;
+    Object.assign(run, { status: 'running', startedAt, leaseUntil });
+    return { ...run };
+  }
+  async saveNode(runId: string, node: ResearchNode, status: NodeStatus): Promise<void> {
+    const run = this.runs.find((r) => r.id === runId && r.status === 'running');
+    if (run) run.nodes = { ...run.nodes, [node]: status };
+  }
+  async finish(runId: string, fields: FinishedRunFields): Promise<boolean> {
+    const run = this.runs.find((r) => r.id === runId && r.status !== 'finished');
+    if (!run) return false;
+    Object.assign(run, { ...fields, status: 'finished', leaseUntil: null });
+    return true;
   }
 }
 

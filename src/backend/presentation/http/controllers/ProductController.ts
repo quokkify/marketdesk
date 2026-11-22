@@ -9,8 +9,8 @@ import type { ListingApplicationService } from '../../../application/services/Li
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
-import type { AnchorLadderService } from '../../../application/services/AnchorLadderService';
-import { SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
+import { SEARCH_NEEDS_PLN, SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
+import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -19,7 +19,7 @@ import type { CreateProductDTO } from '../../../application/dto/CreateProductDTO
 import type { UpdateProductDTO } from '../../../application/dto/UpdateProductDTO';
 import type { ListProductsQueryDTO, SortKey } from '../../../application/dto/ListProductsQueryDTO';
 import type { PriceResearch, ProductStatus } from '../../../../shared/types';
-import { ConflictError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
+import { ConflictError, InvalidStateError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
@@ -95,7 +95,7 @@ export class ProductController {
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
     private readonly priceResearchRepo?: IPriceResearchRepository,
-    private readonly anchorLadder?: AnchorLadderService,
+    private readonly researchRuns?: IPriceResearchRuns,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -222,8 +222,15 @@ export class ProductController {
 
   refreshPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!this.anchorLadder) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-      ok(res, await this.anchorLadder.refresh(req.user!.workspaceId!, routeParam(req.params.id)));
+      if (!this.researchRuns) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      const result = await this.researchRuns.request(req.user!.workspaceId!, routeParam(req.params.id), {
+        force: true,
+        trigger: 'manual',
+      });
+      if (result.reason === 'not_configured') throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      if (result.reason === 'not_pln') throw new InvalidStateError(SEARCH_NEEDS_PLN);
+      // The run continues in the background; a run already queued or running is answered as is.
+      ok(res, { run: result.run }, result.enqueued ? 202 : 200);
     } catch (error) { next(error); }
   };
 

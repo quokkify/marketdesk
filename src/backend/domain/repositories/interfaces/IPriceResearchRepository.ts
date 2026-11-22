@@ -19,6 +19,5 @@ export interface IPriceResearchRepository {
     productId: string,
     apply: (current: PriceResearch | null) => { comparables: PriceComparable[]; specs: string | null } | null,
   ): Promise<PriceResearch | null>;
-  markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void>;
   saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void>;
 }

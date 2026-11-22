@@ -117,6 +117,31 @@ export interface PriceEstimate {
 
 export type AnchorTier = 'same_model_used' | 'last_new_price' | 'substitute_new' | 'substitute_used';
 
+// A price research run: one background graph run of narrow research calls for a product.
+export type ResearchNode = 'identify' | 'sameModelUsed' | 'lastNewPrice' | 'substitutesNew' | 'substitutesUsed';
+export type NodeStatus = 'pending' | 'running' | 'done' | 'failed' | 'timeout';
+export type RunOutcome = 'ok' | 'partial' | 'failed';
+export type RunStatus = 'queued' | 'running' | 'finished';
+export type RunTrigger = 'manual' | 'analyze' | 'autopilot';
+
+export interface ResearchRun {
+  id: string;
+  workspaceId: string;
+  productId: string;
+  trigger: RunTrigger;
+  status: RunStatus;
+  nodes: Partial<Record<ResearchNode, NodeStatus>>;
+  outcome: RunOutcome | null;
+  failedTiers: AnchorTier[];
+  errorCode: string | null;
+  consecutiveFailures: number;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  leaseUntil: string | null;
+  nextAutoAt: string | null;
+}
+
 export type PriceComparableSource = 'manual' | 'web' | 'auto';
 
 export interface ClassAttribute {

@@ -1,4 +1,5 @@
 import { pgConstraintConflict, statusForError, toErrorBody } from '../formatters/ResponseFormatter';
+import { TooManyRequestsError } from '../../../domain/shared/DomainError';
 
 function driverError(code: string, details: Record<string, unknown> = {}): Error {
   // The driver message names the constraint and echoes row values.
@@ -36,5 +37,11 @@ describe('ResponseFormatter Postgres constraint violations', () => {
     });
     expect(pgConstraintConflict(driverError('23505'))).toMatchObject({ constraint: null, table: null });
     expect(pgConstraintConflict(driverError('40P01'))).toBeNull();
+  });
+});
+
+describe('ResponseFormatter domain error statuses', () => {
+  it('maps too many requests to 429', () => {
+    expect(statusForError(new TooManyRequestsError('Too many price research runs are queued'))).toBe(429);
   });
 });

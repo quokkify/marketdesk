@@ -191,19 +191,6 @@ export class PriceResearchRepository implements IPriceResearchRepository {
     }
   }
 
-  async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {
-    await query(
-      `INSERT INTO product_price_research (product_id, workspace_id, last_attempt_at, updated_at)
-       VALUES ($1, $2, ($3::timestamptz AT TIME ZONE 'UTC'), ${NOW_UTC})
-       ON CONFLICT (product_id) DO UPDATE SET
-         last_attempt_at = EXCLUDED.last_attempt_at,
-         updated_at = ${NOW_UTC}
-       WHERE product_price_research.workspace_id = EXCLUDED.workspace_id`,
-      [productId, workspaceId, attemptedAt],
-      this.queryClient,
-    );
-  }
-
   async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
     await query(
       `INSERT INTO product_price_research (product_id, workspace_id, last_estimate, updated_at)

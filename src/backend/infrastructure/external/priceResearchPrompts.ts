@@ -3,15 +3,14 @@
 // reach a prompt: the description, notes and missing accessories never do.
 
 import { z } from 'zod';
-import type { ClassAttribute, Product } from '../../../shared/types';
+import type { ClassAttribute, Product, ResearchNode } from '../../../shared/types';
 import { MAX_ANCHORS_PER_TIER } from '../../domain/services/anchorLadder';
 import { ValidationError } from '../../domain/shared/DomainError';
 import { SEARCH_NAME_TOO_SHORT, sanitizeSearchName } from './anchorLadderPrompt';
 import { parseJsonObject } from './jsonText';
 import { sellerDataBlock } from './sellerData';
 
-export type ResearchNode =
-  'identify' | 'sameModelUsed' | 'lastNewPrice' | 'substitutesNew' | 'substitutesUsed';
+export type { ResearchNode } from '../../../shared/types';
 
 export interface ResearchItem {
   name: string;
