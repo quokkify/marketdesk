@@ -2,11 +2,13 @@
 // longer queued is skipped without calling Hermes), holds a 10 minute lease, runs the graph within
 // the caller's budget while recording node progress, then runs beforeFinish while the run is still
 // active, so a client polling the run sees it end only once that step is done. Then it finishes the
-// run with its outcome and the next automatic run time. Shared by the research job and the research
+// run with its outcome and the next automatic run time and, when that finish was written, publishes
+// price_research.completed. Shared by the research job and the research
 // node of the sale verdict's price check.
 
 import type { ResearchRun, RunOutcome, RunTrigger } from '../../../shared/types';
 import type { IPriceResearchRunRepository } from '../../domain/repositories/interfaces/IPriceResearchRunRepository';
+import type { IEventPublisher } from '../../domain/ports/IEventPublisher';
 import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../domain/shared/DomainError';
 import { nextAutoAt, RECHECK_WAIT_MS } from '../../domain/services/researchSchedule';
 import { SEARCH_NAME_TOO_SHORT } from '../../infrastructure/external/anchorLadderPrompt';
@@ -25,6 +27,7 @@ export interface RecordedResearchRunLogger {
 export interface RecordedResearchRunDeps {
   runs: IPriceResearchRunRepository;
   graph: Pick<PriceResearchGraph, 'run'>;
+  events: IEventPublisher;
   now: () => Date;
   logger?: RecordedResearchRunLogger;
 }
@@ -97,6 +100,16 @@ export class RecordedResearchRun {
     const outcome = result?.outcome ?? 'failed';
     if (beforeFinish) await beforeFinish(run, result);
     const written = await this.finish(run, outcome, result, errorCode);
+    // Only a finish that was written: a run already expired by a read keeps its stored outcome.
+    if (written) {
+      await this.deps.events.publish({
+        type: 'price_research.completed',
+        aggregateType: 'product',
+        aggregateId: run.productId,
+        payload: { runId: run.id, outcome },
+        occurredAt: this.deps.now(),
+      });
+    }
     return { kind: 'finished', run, outcome, result, errorCode, written };
   }
 

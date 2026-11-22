@@ -147,7 +147,7 @@ export class SaleVerdictGraph {
       .addNode('price', checkNode('price'))
       .addNode('photos', checkNode('photos'))
       .addNode('combine', (state: VerdictGraphState) => this.step('combine', () => this.combine(ctx, state)))
-      .addNode('save', (state: VerdictGraphState) => this.step('save', () => this.save(ctx, runId, state)))
+      .addNode('save', (state: VerdictGraphState) => this.step('save', () => this.save(ctx, runId, scope, state)))
       .addConditionalEdges(
         START,
         () => {
@@ -167,15 +167,34 @@ export class SaleVerdictGraph {
     return { combined: { checks, overall, completedAt: this.deps.now().toISOString() } };
   }
 
-  // The saved run is read back, so the verdict returned is the stored one.
-  private async save(ctx: CheckContext, runId: string, state: VerdictGraphState): Promise<Partial<VerdictGraphState>> {
-    if (!state.combined) throw new Error('The sale verdict has nothing to save');
-    if (!(await this.deps.verdicts.complete(runId, state.combined))) {
+  // The run is completed before the stored row is read, so a failed read never fails the run: the
+  // verdict is then built from what was saved.
+  private async save(ctx: CheckContext, runId: string, scope: VerdictCheckName[], state: VerdictGraphState): Promise<Partial<VerdictGraphState>> {
+    const { combined } = state;
+    if (!combined) throw new Error('The sale verdict has nothing to save');
+    if (!(await this.deps.verdicts.complete(runId, combined))) {
       throw new Error('The sale verdict run is no longer active');
     }
-    const verdict = await this.deps.verdicts.findLatestCompleted(ctx.workspace.id, ctx.product.id);
-    if (verdict?.id !== runId) throw new Error('The saved sale verdict could not be read back');
-    return { verdict };
+    let stored: SaleVerdict | null = null;
+    try {
+      stored = await this.deps.verdicts.findById(ctx.workspace.id, runId);
+    } catch (error) {
+      this.deps.logger?.warn({ productId: ctx.product.id, runId, err: error }, 'Reading back the saved sale verdict failed');
+    }
+    return {
+      verdict: stored ?? {
+        id: runId,
+        productId: ctx.product.id,
+        listingId: ctx.listing?.id ?? null,
+        graphVersion: SALE_VERDICT_GRAPH_VERSION,
+        scope,
+        status: 'completed',
+        overall: combined.overall,
+        checks: combined.checks,
+        createdAt: combined.completedAt,
+        completedAt: combined.completedAt,
+      },
+    };
   }
 
   private async step<T>(node: VerdictTransition['node'], work: () => Promise<T>): Promise<T> {

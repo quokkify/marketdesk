@@ -34,7 +34,12 @@ export interface InfoCheckDeps {
 function unlistedItems(product: Product): ProductRecheckItem[] {
   const items: ProductRecheckItem[] = missingFacts(product)
     .filter((fact) => fact.required)
-    .map((fact) => ({ key: 'required_fields', status: 'fix', message: fact.note, editField: 'condition' }));
+    .map((fact) => ({
+      key: 'required_fields',
+      status: 'fix',
+      message: fact.note,
+      ...(fact.field === 'condition' ? { editField: fact.field } : {}),
+    }));
   if (!fitsOlxTitle(product.name)) {
     items.push({
       key: 'title',

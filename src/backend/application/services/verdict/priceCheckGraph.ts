@@ -80,6 +80,8 @@ export function buildPriceCheck(deps: PriceCheckDeps): CheckGraph {
       );
       // Another run holds the product (a research job, or one queued just before this).
       if (recorded.kind !== 'finished') return { input: { kind: 'research_running' } };
+      // The budget is spent: no time left for the estimate, which would call Hermes.
+      if (ctx.signal.aborted) return { input: { kind: 'failed' } };
       if (recorded.outcome !== 'failed') return { hasResearch: true };
       const hasResearch = state.hasResearch || (recorded.result?.research?.comparables.length ?? 0) > 0;
       return hasResearch ? { researchFailed: true } : { researchFailed: true, input: { kind: 'failed' } };

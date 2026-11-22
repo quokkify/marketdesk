@@ -2,8 +2,7 @@
 // 10 minute lease, node progress, finish with the next automatic run time) within a 7 minute budget.
 // Before the finish it runs afterRun (the re-estimate; no result when the graph threw or timed out)
 // while the run is still active, so a client polling the run sees it end only once the estimate is
-// stored. It publishes price_research.completed only when that finish was written (a run already
-// expired by a read keeps its stored outcome).
+// stored. RecordedResearchRun publishes price_research.completed when that finish was written.
 // Every outcome completes the job (attempts: 1): a failure is recorded on the run, never retried by
 // the queue.
 
@@ -36,7 +35,13 @@ export class PriceResearchHandler {
   private readonly recorded: RecordedResearchRun;
 
   constructor(private readonly deps: PriceResearchHandlerDeps) {
-    this.recorded = new RecordedResearchRun({ runs: deps.runs, graph: deps.graph, now: deps.now, logger: deps.logger });
+    this.recorded = new RecordedResearchRun({
+      runs: deps.runs,
+      graph: deps.graph,
+      events: deps.events,
+      now: deps.now,
+      logger: deps.logger,
+    });
   }
 
   async handle(job: PriceResearchJob): Promise<PriceResearchJobResult> {
@@ -46,16 +51,7 @@ export class PriceResearchHandler {
       (run, result) => this.afterRun(run, result),
     );
     if (recorded.kind === 'skipped') return { kind: 'skipped' };
-    const { run, outcome } = recorded;
-    if (!recorded.written) return { kind: 'finished', outcome };
-    await this.deps.events.publish({
-      type: 'price_research.completed',
-      aggregateType: 'product',
-      aggregateId: run.productId,
-      payload: { runId: run.id, outcome },
-      occurredAt: this.deps.now(),
-    });
-    return { kind: 'finished', outcome };
+    return { kind: 'finished', outcome: recorded.outcome };
   }
 
   // The research is stored already; a failed re-estimate must not lose the completion event.

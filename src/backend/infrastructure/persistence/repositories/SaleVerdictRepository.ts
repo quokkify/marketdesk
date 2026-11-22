@@ -120,6 +120,15 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     return rowCount > 0;
   }
 
+  async findById(workspaceId: string, runId: string): Promise<SaleVerdict | null> {
+    const { rows } = await query<VerdictRow>(
+      `SELECT ${COLUMNS} FROM product_sale_verdicts WHERE workspace_id = $1 AND id = $2`,
+      [workspaceId, runId],
+      this.queryClient,
+    );
+    return rows[0] ? toVerdict(rows[0]) : null;
+  }
+
   async findLatestCompleted(workspaceId: string, productId: string): Promise<SaleVerdict | null> {
     const { rows } = await query<VerdictRow>(
       `SELECT ${COLUMNS} FROM product_sale_verdicts

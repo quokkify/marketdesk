@@ -59,6 +59,9 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
     Object.assign(row, { status: 'failed', completedAt });
     return true;
   }
+  async findById(_workspaceId: string, runId: string): Promise<SaleVerdict | null> {
+    return this.rows.find((r) => r.id === runId) ?? null;
+  }
   async findLatestCompleted(_workspaceId: string, productId: string): Promise<SaleVerdict | null> {
     const done = this.rows.filter((r) => r.productId === productId && r.status === 'completed');
     return done[done.length - 1] ?? null;
@@ -121,7 +124,9 @@ function setup(fakes: Partial<Record<VerdictCheckName, CheckGraph>> = {}) {
   });
   const run = (scope: VerdictCheckName[]) =>
     graph.run({ workspaceId: WS, productId: PID, runId: RUN_ID, scope, signal: new AbortController().signal });
-  return { run, calls, contexts, verdicts };
+  const runWith = (scope: VerdictCheckName[], options: Partial<CheckContext['options']>) =>
+    graph.run({ workspaceId: WS, productId: PID, runId: RUN_ID, scope, options, signal: new AbortController().signal });
+  return { run, runWith, calls, contexts, verdicts };
 }
 
 describe('SaleVerdictGraph routing', () => {
@@ -148,6 +153,33 @@ describe('SaleVerdictGraph routing', () => {
     expect(verdict.overall).toBe('ready');
     expect(contexts[0]!.listing?.id).toBe('l1');
     expect(contexts[0]!.options).toEqual({ forceResearch: false, infoCodeOnly: false });
+  });
+
+  it('runs no check for an empty scope and keeps every previous result', async () => {
+    const { run, calls } = setup();
+
+    const verdict = await run([]);
+
+    expect(calls).toEqual([]);
+    expect(verdict.status).toBe('completed');
+    expect(verdict.checks).toEqual(PREVIOUS.checks);
+    expect(verdict.overall).toBe('fix');
+  });
+
+  it('runs a check once however often the scope names it', async () => {
+    const { run, calls } = setup();
+
+    await run(['price', 'price', 'info', 'price']);
+
+    expect([...calls].sort()).toEqual(['info', 'price']);
+  });
+
+  it('passes the run options to the checks', async () => {
+    const { runWith, contexts } = setup();
+
+    await runWith(['price'], { forceResearch: true, infoCodeOnly: true });
+
+    expect(contexts[0]!.options).toEqual({ forceResearch: true, infoCodeOnly: true });
   });
 
   it('records a throwing check as check_failed and still completes the run', async () => {
