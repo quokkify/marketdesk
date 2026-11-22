@@ -1,3 +1,4 @@
+import { advertKey } from '../../../shared/anchorUrl';
 import type { PriceComparable } from '../../../shared/types';
 
 export const MAX_ANCHORS_PER_TIER = 5;
@@ -8,4 +9,12 @@ const MAX_LADDER_ROWS = 30;
 export function mergeLadder(existing: PriceComparable[], found: PriceComparable[]): PriceComparable[] {
   const kept = existing.filter((row) => row.source !== 'auto');
   return [...kept, ...found].slice(0, MAX_LADDER_ROWS);
+}
+
+// Auto rows whose advert is excluded (the seller's own, or removed by the seller) are dropped; seller-owned rows stay.
+export function dropExcludedAutoRows(rows: PriceComparable[], excludedKeys: ReadonlySet<string>): PriceComparable[] {
+  return rows.filter((row) => {
+    if (row.source !== 'auto' || !row.url) return true;
+    return !excludedKeys.has(advertKey(row.url) ?? row.url);
+  });
 }

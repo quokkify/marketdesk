@@ -10,7 +10,7 @@ const VALID = {
   title: '  Apple AirPods 4 bez ANC  ',
   url: 'https://www.olx.pl/d/oferta/airpods-4-bez-anc-CID99-ID1cHIxA.html',
 };
-const CTX = { currency: 'PLN', ownUrl: OWN_URL, dismissed: new Set<string>(), today: TODAY };
+const CTX = { currency: 'PLN', ownUrls: [OWN_URL], dismissed: new Set<string>(), today: TODAY };
 
 function row(index: number, tier = 'same_model_used'): typeof VALID {
   return { ...VALID, tier, url: `https://www.olx.pl/d/oferta/airpods-4-n${index}-CID99-ID1n${index}.html` };
@@ -66,6 +66,22 @@ describe('filterAnchorRows', () => {
 
   it('drops the own advert and duplicates', () => {
     expect(filterAnchorRows([{ ...VALID, url: OWN_URL }, VALID, VALID], CTX)).toHaveLength(1);
+  });
+
+  // Regression guard: an advert retitled after listing keeps its OLX id token and must still be recognised.
+  it('drops a retitled own advert, also one of another product', () => {
+    const retitled = { ...VALID, url: 'https://www.olx.pl/d/oferta/airpods-4-nowy-tytul-CID99-ID1own0.html?x=1' };
+    expect(filterAnchorRows([retitled], CTX)).toEqual([]);
+    const other = 'https://www.olx.pl/d/oferta/inny-produkt-CID99-ID1oth3.html';
+    const alsoOwn = { ...VALID, url: 'https://www.olx.pl/d/oferta/inny-produkt-zmiana-CID99-ID1oth3.html' };
+    expect(filterAnchorRows([alsoOwn, VALID], { ...CTX, ownUrls: [OWN_URL, other] })).toHaveLength(1);
+  });
+
+  it('drops a retitled dismissed URL and a retitled duplicate', () => {
+    const dismissed = new Set([VALID.url]);
+    const retitled = { ...VALID, url: 'https://www.olx.pl/d/oferta/zmieniony-tytul-CID99-ID1cHIxA.html' };
+    expect(filterAnchorRows([retitled], { ...CTX, dismissed })).toEqual([]);
+    expect(filterAnchorRows([VALID, retitled], CTX)).toHaveLength(1);
   });
 
   it('skips dismissed URLs', () => {
