@@ -62,6 +62,14 @@ describe('CreateProductUseCase', () => {
     expect(productRepo.items.get(product.id)).toBe(product);
   });
 
+  it('stores the missing accessories text trimmed', async () => {
+    const { useCase } = setup();
+
+    const result = await useCase.execute({ ...validDto, sku: 'SKU-MISSING', missingAccessories: ' remote ' });
+
+    expect(unwrap(result).missingAccessories).toBe('remote');
+  });
+
   it('requires and audits confirmation for an intentional below-cost price', async () => {
     const { useCase, productRepo, publisher } = setup();
 

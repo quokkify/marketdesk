@@ -19,6 +19,7 @@ import {
   REGISTRATION_WORKSPACE_NAME_MAX_LENGTH,
   PRODUCT_DESCRIPTION_MIN_LENGTH,
   PRODUCT_DESCRIPTION_MAX_LENGTH,
+  PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH,
 } from '../../../../shared/constants';
 
 const conditionEnum = z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'refurbished', 'unknown']);
@@ -48,6 +49,7 @@ export const createProductSchema = z
     sellingPrice: z.number().nonnegative(),
     // Range is checked by the Product entity so a bad floor answers 422, like the other price-state rules.
     minAcceptablePrice: z.number().finite().nullable().optional(),
+    missingAccessories: z.string().trim().max(PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH).nullable().optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
@@ -68,6 +70,7 @@ export const updateProductSchema = z
     sellingPrice: z.number().nonnegative().optional(),
     // Range is checked by the Product entity so a bad floor answers 422, like the other price-state rules.
     minAcceptablePrice: z.number().finite().nullable().optional(),
+    missingAccessories: z.string().trim().max(PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH).nullable().optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)

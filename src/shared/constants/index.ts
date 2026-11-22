@@ -209,6 +209,7 @@ export const DEFAULT_TIMEZONE = 'Europe/Warsaw';
 // Product invariants
 export const PRODUCT_DESCRIPTION_MIN_LENGTH = 20;
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 2000;
+export const PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH = 200;
 
 // Registration limits
 export const REGISTRATION_WORKSPACE_NAME_MAX_LENGTH = 120;

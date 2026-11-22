@@ -321,6 +321,8 @@ export interface Product {
   sellingPrice: number;
   // Lowest price the seller accepts in negotiation (major units); null means none.
   minAcceptablePrice: number | null;
+  // Free text naming accessories the item lacks; used only to price the item.
+  missingAccessories: string | null;
   condition: ProductCondition;
   category: string;
   categoryProvenance?: ProductCategoryProvenance | null;

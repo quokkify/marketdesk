@@ -101,6 +101,7 @@ function parseValues(value: unknown): ProductFormValues | null {
       typeof value.minAcceptablePrice === 'number' && Number.isFinite(value.minAcceptablePrice)
         ? value.minAcceptablePrice
         : null,
+    missingAccessories: typeof value.missingAccessories === 'string' ? value.missingAccessories : '',
     condition: value.condition as ProductCondition,
     category: value.category,
     status: value.status as ProductStatus,

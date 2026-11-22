@@ -66,6 +66,12 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     return self();
   }
 
+  @Step("Product has the missing accessories {expected}")
+  public ProductVerification hasMissingAccessories(ValidatableResponse response, String expected) {
+    response.body("data.missingAccessories", Matchers.equalTo(expected));
+    return self();
+  }
+
   // Offline heuristics report no tokens: unknown stays null, never 0.
   @Step("Analysis reports offline AI usage without tokens")
   public ProductVerification reportsOfflineAiUsage(ValidatableResponse response) {

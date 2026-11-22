@@ -59,6 +59,7 @@ export class CreateProductUseCase {
       costPrice,
       sellingPrice: sellingPrice.value,
       minAcceptablePrice,
+      missingAccessories: dto.missingAccessories,
       condition: dto.condition,
       category: dto.category,
       tags: dto.tags,

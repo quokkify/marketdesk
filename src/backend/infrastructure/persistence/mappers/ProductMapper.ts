@@ -92,6 +92,7 @@ export const ProductMapper = {
       costPrice,
       sellingPrice,
       minAcceptablePrice,
+      missingAccessories: row.missing_accessories ?? null,
       condition: row.condition as ProductCondition,
       category: row.category,
       categoryProvenance: parseCategoryProvenance(row.category_provenance),

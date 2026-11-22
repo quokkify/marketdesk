@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS products (
   selling_price DECIMAL(10, 2) NOT NULL,
   -- Lowest price the seller accepts in negotiation, in minor units; NULL means no discount.
   min_acceptable_price_minor BIGINT,
+  -- Accessories the item lacks; used only by the price estimate.
+  missing_accessories VARCHAR(200),
   condition VARCHAR(50) NOT NULL,
   category VARCHAR(100) NOT NULL,
   category_provenance JSONB,

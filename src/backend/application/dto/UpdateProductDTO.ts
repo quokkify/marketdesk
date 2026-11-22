@@ -15,6 +15,7 @@ export interface UpdateProductDTO {
   costPrice?: number | null;
   sellingPrice?: number;
   minAcceptablePrice?: number | null;
+  missingAccessories?: string | null;
   currency?: string;
   condition?: ProductCondition;
   category?: string;

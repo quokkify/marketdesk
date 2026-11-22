@@ -199,3 +199,42 @@ describe('productFormModel photo-to-advert rules', () => {
     expect(deriveProductCategory([])).toBe('uncategorised');
   });
 });
+
+describe('productFormModel missing accessories', () => {
+  it('starts empty and round-trips from a product', () => {
+    expect(emptyProductValues().missingAccessories).toBe('');
+    const product = {
+      id: 'product-1',
+      workspaceId: 'workspace-1',
+      sku: 'SKU-1',
+      name: 'Camera',
+      description: 'Camera in good condition with all required details.',
+      costPrice: null,
+      sellingPrice: 100,
+      minAcceptablePrice: null,
+      missingAccessories: 'remote, charger' as string | null,
+      condition: 'good' as const,
+      category: 'Electronics',
+      status: 'draft' as const,
+      tags: [],
+      images: [],
+      createdAt: '2026-11-22T10:00:00.000Z',
+      updatedAt: '2026-11-22T10:00:00.000Z',
+    };
+    expect(productToValues(product).missingAccessories).toBe('remote, charger');
+    expect(productToValues({ ...product, missingAccessories: null }).missingAccessories).toBe('');
+  });
+
+  it('accepts 200 characters and flags 201', () => {
+    expect(validateProductValues({ ...validValues(), missingAccessories: 'x'.repeat(200) })).toEqual({});
+    expect(validateProductValues({ ...validValues(), missingAccessories: 'x'.repeat(201) }).missingAccessories)
+      .toBe('Missing accessories must be at most 200 characters.');
+  });
+
+  it('maps an API field error onto the field', () => {
+    const result = productFieldErrorsFromApi({
+      data: { error: { details: [{ field: 'missingAccessories', message: 'too long' }] } },
+    });
+    expect(result.fieldErrors.missingAccessories).toBe('too long');
+  });
+});
