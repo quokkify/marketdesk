@@ -1,11 +1,6 @@
 // Per-product view statistics and "needs action" reasons for the products catalogue.
 // Pure functions: the service gathers listings, view events and awaiting counts, these decide.
-import type {
-  ListingStatus,
-  NeedsActionReason,
-  ProductStats,
-  ProductStatus,
-} from '@shared/types';
+import type { ListingStatus, NeedsActionReason, ProductStats, ProductStatus } from '@shared/types';
 
 export const STATS_DAYS = 14;
 export const GROWTH_WINDOW_MS = 7 * 24 * 3600 * 1000;

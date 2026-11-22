@@ -26,6 +26,7 @@ export function createProductRoutes(
 ): Router {
   const router = Router();
   router.get('/', asyncHandler(controller.list));
+  router.get('/stats', asyncHandler(controller.stats));
   router.post('/', validateBody(createProductSchema), asyncHandler(controller.create));
   router.post('/ai-draft', aiLimiter, validateBody(productAIDraftSchema), asyncHandler(controller.generateAIDraft));
   router.get('/:id', asyncHandler(controller.get));

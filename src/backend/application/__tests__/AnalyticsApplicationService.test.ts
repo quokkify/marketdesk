@@ -79,6 +79,9 @@ describe('AnalyticsApplicationService', () => {
           && item.occurredAt >= query.from && item.occurredAt < query.to
           && (!query.marketplaceId || item.marketplaceId === query.marketplaceId));
       },
+      async baselineViewEventIds() {
+        return new Set<string>();
+      },
     };
     const service = new AnalyticsApplicationService(productRepo, listingRepo, marketplaceRepo, analyticsEvents);
     const range = {
