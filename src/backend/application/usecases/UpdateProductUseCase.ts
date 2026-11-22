@@ -57,6 +57,8 @@ export class UpdateProductUseCase {
     // checks see the saved fields. A refusal before the commit saves nothing, and after it
     // only the service's own pre-checked refusals remain, so a refused edit never leaves a
     // price live on OLX.
+    // The deferred selling price is committed only by priceChange.apply below (commitSellingPrice=false
+    // in updatePrices): if apply throws after this commit, floor/cost may briefly exceed the stored price.
     const persisted = this.runInTransaction
       ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true))
       : await this.executeValidated(dto, this.productRepo, false);
@@ -74,7 +76,8 @@ export class UpdateProductUseCase {
         allowBelowCost: dto.allowBelowCost === true,
       });
       if (applied.isErr()) return applied;
-      priceSync = applied.value;
+      // An unchanged price reports no sync, so a plain edit keeps its "Product updated" message.
+      if (!applied.value.unchanged) priceSync = applied.value;
       const reloaded = await this.productRepo.findByIdForWorkspace(dto.productId, dto.workspaceId);
       if (reloaded) product = reloaded;
     }

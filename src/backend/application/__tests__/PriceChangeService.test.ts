@@ -143,6 +143,33 @@ describe('PriceChangeService', () => {
     expect(publishQueue.jobs).toHaveLength(0);
   });
 
+  it('repairsAListingThatDriftedFromTheProduct', async () => {
+    const { service, listingRepo, priceHistory, publishQueue, productRepo } = setup();
+    const drifted = unwrap(
+      Listing.create({
+        id: 'live',
+        productId: 'prod-1',
+        marketplaceId: 'mp-1',
+        price: money(120),
+        marketplaceListingId: 'olx-live',
+        status: 'live' as const,
+      })
+    );
+    listingRepo.items.set('live', drifted);
+    listingRepo.items.set('same', makeListing('same'));
+
+    const result = unwrap(await service.apply({ ...input, price: 100 }));
+
+    expect(result.unchanged).toBe(false);
+    expect(listingRepo.items.get('live')?.price.amount).toBe(100);
+    expect((await productRepo.findById('prod-1'))?.sellingPrice.amount).toBe(100);
+    expect(priceHistory.records).toHaveLength(1);
+    expect(priceHistory.records[0]).toMatchObject({ listingId: 'live', oldPrice: 120, newPrice: 100 });
+    expect(publishQueue.jobs).toHaveLength(1);
+    expect(publishQueue.jobs[0].data.listingId).toBe('live');
+    expect(publishQueue.jobs[0].data.changes).toEqual({ price: 100 });
+  });
+
   it('refusesBelowMinimum', async () => {
     const { service, listingRepo, priceHistory, publishQueue, productRepo, product } = setup();
     unwrap(product.updateMinAcceptablePrice(money(95)));

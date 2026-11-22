@@ -234,6 +234,21 @@ describe('UpdateProductUseCase', () => {
       expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(700);
     });
 
+    it('reports no price sync when the sent selling price equals the current one', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 renamed',
+        sellingPrice: 799,
+      });
+
+      const updated = unwrap(result);
+      expect(updated.priceSync).toBeUndefined();
+      expect(productRepo.items.get(product.id)?.name).toBe('AirPods 4 renamed');
+    });
+
     it('saves nothing when the price is below the lowest acceptable price', async () => {
       const { useCase, productRepo, product } = setupWithService();
       product.updateMinAcceptablePrice(money(750));

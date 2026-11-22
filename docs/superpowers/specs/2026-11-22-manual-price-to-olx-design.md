@@ -24,7 +24,7 @@ The owner chose: every manual price change behaves like a Hermes approval.
 - A manual price change (either place) sets the product's selling price and every listing's price,
   records price history with `changedBy: 'user'`, and queues the OLX update for live OLX listings
   exactly as the Hermes approval does (the update rewrites the whole advert from MarketDesk data).
-- Same price as now → nothing is sent to OLX (no needless advert rewrite).
+- Same price on the product and every listing → nothing is sent to OLX (no needless advert rewrite). A listing that drifted from the product is repaired and sent.
 - Below the product's minimum acceptable price → refused, manually too (lower the minimum first).
   The existing below-cost confirmation in Edit product stays.
 - Only live OLX listings get the update; drafts and ended listings change in MarketDesk only.

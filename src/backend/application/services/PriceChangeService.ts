@@ -35,24 +35,38 @@ export class PriceChangeService {
     const money = Money.of(input.price, product.sellingPrice.currency);
     if (money.isErr()) return money;
 
-    if (money.value.equals(product.sellingPrice)) {
-      return Ok({ unchanged: true, marketplaceUpdates: [], skippedLiveListings: [] });
-    }
-
-    if (product.minAcceptablePrice && money.value.isLessThan(product.minAcceptablePrice)) {
-      return Err(new InvalidStateError('The new price is below the lowest price you accept'));
-    }
-    const oldPrice = product.sellingPrice.amount;
-    const updated = product.updateSellingPrice(money.value, input.allowBelowCost);
-    if (updated.isErr()) return updated;
-    await this.productRepo.save(product);
-
     const listings = await this.listingRepo.findByProduct(product.id);
-    const now = new Date();
+    const productDiffers = !money.value.equals(product.sellingPrice);
+    const listingTargets: { listing: (typeof listings)[number]; price: Money }[] = [];
     for (const listing of listings) {
       const listingPrice = Money.of(input.price, listing.price.currency);
       if (listingPrice.isErr()) return listingPrice;
-      const listingUpdated = listing.updatePrice(listingPrice.value);
+      if (!listingPrice.value.equals(listing.price)) {
+        listingTargets.push({ listing, price: listingPrice.value });
+      }
+    }
+
+    // Unchanged only when the product and every listing already carry this price; a listing
+    // that drifted from the product is repaired here instead of being reported as in sync.
+    if (!productDiffers && listingTargets.length === 0) {
+      return Ok({ unchanged: true, marketplaceUpdates: [], skippedLiveListings: [] });
+    }
+
+    if (productDiffers) {
+      if (product.minAcceptablePrice && money.value.isLessThan(product.minAcceptablePrice)) {
+        return Err(new InvalidStateError('The new price is below the lowest price you accept'));
+      }
+      const updated = product.updateSellingPrice(money.value, input.allowBelowCost);
+      if (updated.isErr()) return updated;
+      // No row lock or transaction here: a concurrent product edit can be lost. This was already
+      // true for Hermes and is now shared by the listing dialog; a transaction is a non-goal.
+      await this.productRepo.save(product);
+    }
+
+    const now = new Date();
+    for (const { listing, price } of listingTargets) {
+      const oldPrice = listing.price.amount;
+      const listingUpdated = listing.updatePrice(price);
       if (listingUpdated.isErr()) return listingUpdated;
       await this.listingRepo.save(listing);
       await this.priceHistory.record({
