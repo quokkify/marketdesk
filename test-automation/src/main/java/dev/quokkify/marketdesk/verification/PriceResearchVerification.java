@@ -17,6 +17,7 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   private static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
   private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
   private static final String CONFLICT = "CONFLICT";
+  private static final double PRICE_TOLERANCE = 0.001;
   private static final String RESEARCH_CHANGED = "Price research changed since you opened it. Reload and try again.";
 
   @Override
@@ -27,7 +28,9 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   @Step("Price research holds the saved retail anchor and comparables")
   public PriceResearchVerification holds(ValidatableResponse response, PriceResearchPojo expected) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data.retailPrice", Matchers.equalTo(expected.retailPrice().floatValue()));
+    // A whole price such as 450 comes back as a JSON integer, so compare the value as a double.
+    MatcherAssert.assertThat(response.extract().jsonPath().getDouble("data.retailPrice"),
+        Matchers.closeTo(expected.retailPrice(), PRICE_TOLERANCE));
     response.body("data.retailCurrency", Matchers.equalTo(expected.retailCurrency()));
     response.body("data.retailSource", Matchers.equalTo(expected.retailSource()));
     response.body("data.retailCheckedAt", Matchers.equalTo(expected.retailCheckedAt()));
@@ -108,7 +111,8 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   @Step("Last estimate starts at exactly {startPrice}")
   public PriceResearchVerification lastEstimateStartsAt(ValidatableResponse response, double startPrice) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data.lastEstimate.estimate.startPrice", Matchers.equalTo((float) startPrice));
+    MatcherAssert.assertThat(response.extract().jsonPath().getDouble("data.lastEstimate.estimate.startPrice"),
+        Matchers.closeTo(startPrice, PRICE_TOLERANCE));
     return self();
   }
 
