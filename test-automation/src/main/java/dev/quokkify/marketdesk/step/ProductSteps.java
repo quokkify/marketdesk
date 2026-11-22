@@ -55,8 +55,9 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
 
   @Step("Analyze product {productId} with AI")
   public List<String> runHermes(AccountPojo account, String productId) {
+    // The run answers synchronously but with 202 Accepted, carrying the created suggestions.
     return service.runHermes(account.token(), productId)
-        .statusCode(HttpStatus.SC_OK)
+        .statusCode(HttpStatus.SC_ACCEPTED)
         .extract()
         .jsonPath()
         .getList("data.id", String.class);
