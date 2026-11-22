@@ -75,4 +75,34 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     response.body("data.aiUsage.costStatus", Matchers.equalTo(COST_NOT_APPLICABLE));
     return self();
   }
+
+  @Step("Price sync queued {count} OLX update(s)")
+  public ProductVerification queuedOlxUpdates(ValidatableResponse response, int count) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.priceSync.unchanged", Matchers.equalTo(false));
+    response.body("data.priceSync.marketplaceUpdates", Matchers.hasSize(count));
+    return self();
+  }
+
+  @Step("Price sync reports the price unchanged and queues nothing")
+  public ProductVerification priceUnchanged(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.priceSync.unchanged", Matchers.equalTo(true));
+    response.body("data.priceSync.marketplaceUpdates", Matchers.empty());
+    return self();
+  }
+
+  @Step("Response carries no price sync")
+  public ProductVerification hasNoPriceSync(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.priceSync", Matchers.nullValue());
+    return self();
+  }
+
+  @Step("Product has selling price {expected}")
+  public ProductVerification hasSellingPrice(ValidatableResponse response, double expected) {
+    double actual = response.extract().jsonPath().getDouble("data.sellingPrice");
+    MatcherAssert.assertThat(actual, Matchers.closeTo(expected, PRICE_TOLERANCE));
+    return self();
+  }
 }

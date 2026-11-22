@@ -12,6 +12,7 @@ public class ProductService extends MarketDeskApiService {
   private static final String PRODUCTS = "/api/products";
   private static final String PRODUCT = PRODUCTS + "/%s";
   private static final String PRICE_PATCH = "{\"%s\": %s}";
+  private static final String NAME_PATCH = "{\"name\": \"%s\"}";
   private static final String PRODUCT_LISTINGS = PRODUCTS + "/%s/listings";
   private static final String PRODUCT_IMPROVEMENTS = PRODUCTS + "/%s/improvements";
 
@@ -35,6 +36,10 @@ public class ProductService extends MarketDeskApiService {
 
   public ValidatableResponse updateSellingPrice(String token, String productId, double sellingPrice) {
     return patch(authorized(token), PRODUCT.formatted(productId), PRICE_PATCH.formatted("sellingPrice", sellingPrice));
+  }
+
+  public ValidatableResponse updateName(String token, String productId, String name) {
+    return patch(authorized(token), PRODUCT.formatted(productId), NAME_PATCH.formatted(name));
   }
 
   // Keeps nulls: the API requires costPrice and reads null as an unknown cost price.

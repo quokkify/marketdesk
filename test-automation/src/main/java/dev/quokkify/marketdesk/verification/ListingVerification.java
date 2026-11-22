@@ -5,10 +5,12 @@ import dev.quokkify.verification.BaseApiVerification;
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
+import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 
 public class ListingVerification extends BaseApiVerification<ListingVerification> {
 
+  private static final double PRICE_TOLERANCE = 0.001;
   private static final String UNAUTHORIZED = "UNAUTHORIZED";
   private static final String NOT_FOUND = "NOT_FOUND";
   private static final String INVALID_STATE = "INVALID_STATE";
@@ -128,6 +130,29 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     verifyResponseStatusCode(response, status);
     response.body("success", Matchers.equalTo(false));
     response.body("error.code", Matchers.equalTo(code));
+    return self();
+  }
+
+  @Step("Price sync queued {count} OLX update(s)")
+  public ListingVerification queuedOlxUpdates(ValidatableResponse response, int count) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.priceSync.unchanged", Matchers.equalTo(false));
+    response.body("data.priceSync.marketplaceUpdates", Matchers.hasSize(count));
+    return self();
+  }
+
+  @Step("Price sync reports the price unchanged and queues nothing")
+  public ListingVerification priceUnchanged(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.priceSync.unchanged", Matchers.equalTo(true));
+    response.body("data.priceSync.marketplaceUpdates", Matchers.empty());
+    return self();
+  }
+
+  @Step("Listing has price {expected}")
+  public ListingVerification hasPrice(ValidatableResponse response, double expected) {
+    double actual = response.extract().jsonPath().getDouble("data.price");
+    MatcherAssert.assertThat(actual, Matchers.closeTo(expected, PRICE_TOLERANCE));
     return self();
   }
 }

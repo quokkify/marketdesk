@@ -496,9 +496,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     workspaceRepo,
     idGenerator
   );
-  const updateProductUC = new UpdateProductUseCase(productRepo, eventPublisher, (work) =>
-    withPoolTransaction(pool, (client) => work(new ProductRepository(pool, client)))
-  );
   const publishListingUC = new PublishListingUseCase(
     listingRepo,
     productRepo,
@@ -525,6 +522,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceHistoryRepo,
     marketplaceUpdateEnqueuer,
     idGenerator
+  );
+  const updateProductUC = new UpdateProductUseCase(productRepo, eventPublisher, (work) =>
+    withPoolTransaction(pool, (client) => work(new ProductRepository(pool, client))),
+    undefined,
+    priceChangeService
   );
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
@@ -985,6 +987,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     authUserStore,
     priceHistoryReader: priceHistoryRepo,
     priceHistoryRecorder: priceHistoryRepo,
+    priceChangeService,
     idGenerator,
     logger: overrides.logger,
     requestLogger: overrides.logger,

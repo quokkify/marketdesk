@@ -15,6 +15,7 @@ public class ListingService extends MarketDeskApiService {
   private static final String REVIVAL_PROPOSAL = LISTING + "/revival-proposal";
   private static final String REVIVE = LISTING + "/revive";
   private static final String EMPTY_BODY = "{}";
+  private static final String PRICE_PATCH = "{\"price\": %s}";
 
   public ValidatableResponse reactivate(String token, String listingId) {
     return post(authorized(token), REACTIVATE.formatted(listingId), EMPTY_BODY);
@@ -26,6 +27,10 @@ public class ListingService extends MarketDeskApiService {
 
   public ValidatableResponse getListing(String token, String listingId) {
     return get(authorized(token), LISTING.formatted(listingId));
+  }
+
+  public ValidatableResponse updatePrice(String token, String listingId, double price) {
+    return patch(authorized(token), LISTING.formatted(listingId), PRICE_PATCH.formatted(price));
   }
 
   public ValidatableResponse setMarketplaceCategory(String token, String listingId,

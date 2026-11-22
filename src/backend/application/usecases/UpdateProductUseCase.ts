@@ -12,6 +12,13 @@ import type { IProductRepository } from '../../domain/repositories/interfaces/IP
 import type { IEventPublisher, DomainEvent } from '../../domain/ports/IEventPublisher';
 import type { UpdateProductDTO } from '../dto/UpdateProductDTO';
 import { ProductValidator } from '../validators/ProductValidator';
+import type { PriceChangeService } from '../services/PriceChangeService';
+import type { PriceSync } from '../../../shared/types';
+
+export interface UpdatedProduct {
+  product: Product;
+  priceSync?: PriceSync;
+}
 
 interface PersistedProductUpdate {
   product: Product;
@@ -30,17 +37,48 @@ export class UpdateProductUseCase {
     private readonly runInTransaction?: <T>(
       work: (productRepo: IProductRepository) => Promise<T>,
     ) => Promise<T>,
-    private readonly validator: ProductValidator = new ProductValidator()
+    private readonly validator: ProductValidator = new ProductValidator(),
+    private readonly priceChange?: PriceChangeService
   ) {}
 
   async execute(input: UpdateProductDTO): Promise<Result<Product>> {
+    const result = await this.executeWithPriceSync(input);
+    return result.isErr() ? result : Ok(result.value.product);
+  }
+
+  async executeWithPriceSync(input: UpdateProductDTO): Promise<Result<UpdatedProduct>> {
     const validated = this.validator.validateUpdate(input);
     if (validated.isErr()) return validated;
-    const dto = validated.value;
+    let dto = validated.value;
+
+    // The selling price goes through PriceChangeService first, so a refused price saves
+    // nothing; the remaining fields are then saved as before. Cost and floor edits sent
+    // together with the price are checked against the stored values at that point.
+    let priceSync: PriceSync | undefined;
+    let previousSellingPrice: number | undefined;
+    if (this.priceChange && dto.sellingPrice !== undefined) {
+      const current = await this.productRepo.findByIdForWorkspace(dto.productId, dto.workspaceId);
+      if (!current) return Err(new NotFoundError(`Product not found: ${dto.productId}`));
+      if (dto.currency === undefined || dto.currency === current.sellingPrice.currency) {
+        previousSellingPrice = current.sellingPrice.amount;
+        // The DTO validator has already demanded confirmation against a cost sent in the
+        // same request, so only the stored cost is left for the service to check.
+        const applied = await this.priceChange.apply({
+          workspaceId: dto.workspaceId,
+          productId: dto.productId,
+          price: dto.sellingPrice,
+          changedBy: 'user',
+          allowBelowCost: dto.allowBelowCost === true || dto.costPrice !== undefined,
+        });
+        if (applied.isErr()) return applied;
+        priceSync = applied.value;
+        dto = { ...dto, sellingPrice: undefined };
+      }
+    }
 
     const persisted = this.runInTransaction
-      ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true))
-      : await this.executeValidated(dto, this.productRepo, false);
+      ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true, previousSellingPrice))
+      : await this.executeValidated(dto, this.productRepo, false, previousSellingPrice);
     if (persisted.isErr()) return persisted;
 
     try {
@@ -48,13 +86,14 @@ export class UpdateProductUseCase {
     } catch {
       // Product already committed; don't fail the request over best-effort delivery.
     }
-    return Ok(persisted.value.product);
+    return Ok({ product: persisted.value.product, ...(priceSync ? { priceSync } : {}) });
   }
 
   private async executeValidated(
     dto: UpdateProductDTO,
     productRepo: IProductRepository,
     lockProduct: boolean,
+    appliedFromSellingPrice?: number,
   ): Promise<Result<PersistedProductUpdate>> {
 
     // Tenant-scoped load: a product in another workspace reads as not-found so a
@@ -66,7 +105,7 @@ export class UpdateProductUseCase {
       return Err(new NotFoundError(`Product not found: ${dto.productId}`));
     }
     const previousCostPrice = product.costPrice?.amount ?? null;
-    const previousSellingPrice = product.sellingPrice.amount;
+    const previousSellingPrice = appliedFromSellingPrice ?? product.sellingPrice.amount;
 
     if (dto.name !== undefined) {
       const r = product.rename(dto.name);
@@ -158,7 +197,8 @@ export class UpdateProductUseCase {
     return Ok({
       product,
       pricing: {
-        pricesChanged: dto.costPrice !== undefined || dto.sellingPrice !== undefined,
+        pricesChanged:
+          dto.costPrice !== undefined || dto.sellingPrice !== undefined || appliedFromSellingPrice !== undefined,
         belowCostConfirmed: dto.allowBelowCost === true,
         previousCostPrice,
         previousSellingPrice,

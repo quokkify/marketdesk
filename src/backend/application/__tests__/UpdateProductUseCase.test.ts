@@ -6,6 +6,14 @@ import {
   unwrap,
 } from '../../domain/testkit/support';
 import { Product } from '../../domain/entities/Product';
+import { PriceChangeService } from '../services/PriceChangeService';
+import { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import {
+  InMemoryListingRepository,
+  InMemoryMarketplaceRepository,
+} from '../../domain/testkit/support';
+import { RecordingPriceHistoryRecorder, RecordingJobQueue, idFactory } from '../testkit/support';
+import type { PublishListingJob } from '../ports/IJobQueue';
 
 function setup() {
   const productRepo = new InMemoryProductRepository();
@@ -185,4 +193,67 @@ describe('UpdateProductUseCase', () => {
     expect(locked).toHaveBeenCalledWith(product.id, product.workspaceId);
   });
 
+  describe('with the price change service', () => {
+    function setupWithService() {
+      const base = setup();
+      const listingRepo = new InMemoryListingRepository();
+      const priceHistory = new RecordingPriceHistoryRecorder();
+      const enqueuer = new MarketplaceUpdateEnqueuer(
+        listingRepo,
+        new InMemoryMarketplaceRepository(),
+        new RecordingJobQueue<PublishListingJob>(),
+        idFactory('op'),
+        { findByMarketplaceId: async () => null, upsert: jest.fn(), updateConnectedIfUnchanged: jest.fn() },
+      );
+      const service = new PriceChangeService(base.productRepo, listingRepo, priceHistory, enqueuer, idFactory('h'));
+      const useCase = new UpdateProductUseCase(base.productRepo, base.publisher, undefined, undefined, service);
+      return { ...base, useCase };
+    }
+
+    it('applies the selling price through the service and returns the price sync', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 repriced',
+        sellingPrice: 700,
+      });
+
+      const updated = unwrap(result);
+      expect(updated.priceSync).toMatchObject({ unchanged: false, marketplaceUpdates: [] });
+      expect(productRepo.items.get(product.id)).toMatchObject({ name: 'AirPods 4 repriced' });
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(700);
+    });
+
+    it('saves nothing when the price is below the lowest acceptable price', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+      product.updateMinAcceptablePrice(money(750));
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 refused',
+        sellingPrice: 700,
+        allowBelowCost: true,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.name).toBe('AirPods 4');
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+    });
+
+    it('still refuses a below-cost price without confirmation', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        sellingPrice: 399,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+    });
+  });
 });
