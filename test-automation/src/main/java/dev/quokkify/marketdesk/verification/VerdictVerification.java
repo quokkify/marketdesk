@@ -39,7 +39,7 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
     view.body(LATEST + ".status", Matchers.equalTo(COMPLETED));
     view.body(LATEST + ".graphVersion", Matchers.equalTo(GRAPH_VERSION));
     MatcherAssert.assertThat(view.extract().jsonPath().getMap(LATEST + ".checks").keySet(),
-        Matchers.containsInAnyOrder(checks));
+        Matchers.containsInAnyOrder((Object[]) checks));
     return self();
   }
 

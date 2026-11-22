@@ -1,9 +1,6 @@
 package dev.quokkify.marketdesk.step;
 
-import java.util.List;
-
 import dev.quokkify.marketdesk.model.AccountPojo;
-import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.ProductVerification;
@@ -11,7 +8,6 @@ import dev.quokkify.step.ApiSteps;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
-import org.apache.http.HttpStatus;
 
 public class ProductSteps extends ApiSteps<ProductVerification> {
 
