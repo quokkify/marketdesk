@@ -1,0 +1,1 @@
+{"id":"e8f31645a5b78de56adcf4d830c5b149.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/abuseLimits.test.ts#login failure limiter (regression guard) keys the account by normalised e-mail","name":"keys the account by normalised e-mail","status":"passed","testResultsByEnv":{"default":"abbe0867a89b1e3e5b4c941244d1b50c"}}

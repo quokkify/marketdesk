@@ -1,0 +1,1 @@
+{"id":"99a92c93974a12edcb396a1846f43a9e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/SecretRegistry.test.ts#SecretRegistry cap never evicts an ENV secret","name":"never evicts an ENV secret","status":"passed","testResultsByEnv":{"default":"a0c0e46a1a90fd4626e59b74419afb76"}}

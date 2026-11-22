@@ -1,0 +1,1 @@
+{"id":"f14d0dd621af5c24c4b7fbf08bdf4eca.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/abuseLimits.test.ts#AI rate limiter (regression guard) keeps a separate allowance per workspace","name":"keeps a separate allowance per workspace","status":"passed","testResultsByEnv":{"default":"0c8fa421ee1a8668e7f3b85549035316"}}
