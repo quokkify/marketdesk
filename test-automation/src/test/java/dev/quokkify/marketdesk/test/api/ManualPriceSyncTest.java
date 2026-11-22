@@ -17,6 +17,7 @@ public class ManualPriceSyncTest extends BaseTest {
   private static final double CURRENT_PRICE = 100.0;
   private static final double FLOOR = 80.0;
   private static final double BELOW_FLOOR = 70.0;
+  private static final double LOWERED_FLOOR = 60.0;
   private static final String NEW_NAME = "QA renamed camera";
 
   @Test
@@ -91,5 +92,20 @@ public class ManualPriceSyncTest extends BaseTest {
     productSteps.verify().hasSellingPrice(product, CURRENT_PRICE);
     ValidatableResponse listing = listingSteps.getListing(account, draft.listingId());
     listingSteps.verify().hasPrice(listing, CURRENT_PRICE);
+  }
+
+  @Test
+  public void editLoweringFloorAndPriceTogetherApplies() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo live = listingSteps.publishSandboxOlxListing(account,
+        ProductRequestPojo.withPriceFloor(CURRENT_PRICE, FLOOR));
+
+    ValidatableResponse response = productSteps.updateSellingPriceAndFloor(account, live.productId(), BELOW_FLOOR,
+        LOWERED_FLOOR);
+    productSteps.verify()
+        .queuedOlxUpdates(response, 1)
+        .hasSellingPrice(response, BELOW_FLOOR)
+        .hasMinAcceptablePrice(response, LOWERED_FLOOR);
   }
 }

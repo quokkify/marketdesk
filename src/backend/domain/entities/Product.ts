@@ -321,12 +321,14 @@ export class Product {
   }
 
   // Applies coordinated price changes atomically so callers do not need to know
-  // which update order avoids transient cost/selling invariant failures.
+  // which update order avoids transient cost/selling invariant failures. With
+  // commitSellingPrice false the selling price is only validated against, not stored.
   updatePrices(
     costPrice: Money | null,
     sellingPrice: Money | null,
     allowBelowCost = false,
-    minAcceptablePrice: Money | null | undefined = undefined
+    minAcceptablePrice: Money | null | undefined = undefined,
+    commitSellingPrice = true
   ): Result<void> {
     if (!costPrice && !sellingPrice && minAcceptablePrice === undefined) return Ok(undefined);
     const nextCost = costPrice ?? this._costPrice;
@@ -350,7 +352,7 @@ export class Product {
     if (floorCheck.isErr()) return floorCheck;
 
     if (costPrice) this._costPrice = costPrice;
-    if (sellingPrice) this._sellingPrice = sellingPrice;
+    if (sellingPrice && commitSellingPrice) this._sellingPrice = sellingPrice;
     this._minAcceptablePrice = nextFloor;
     this.touch();
     return Ok(undefined);

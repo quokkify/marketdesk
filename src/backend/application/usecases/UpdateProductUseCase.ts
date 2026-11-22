@@ -22,6 +22,7 @@ export interface UpdatedProduct {
 
 interface PersistedProductUpdate {
   product: Product;
+  deferredSellingPrice?: number;
   pricing: {
     pricesChanged: boolean;
     belowCostConfirmed: boolean;
@@ -49,51 +50,47 @@ export class UpdateProductUseCase {
   async executeWithPriceSync(input: UpdateProductDTO): Promise<Result<UpdatedProduct>> {
     const validated = this.validator.validateUpdate(input);
     if (validated.isErr()) return validated;
-    let dto = validated.value;
+    const dto = validated.value;
 
-    // The selling price goes through PriceChangeService first, so a refused price saves
-    // nothing; the remaining fields are then saved as before. Cost and floor edits sent
-    // together with the price are checked against the stored values at that point.
+    // The other fields (cost, floor, status, ...) are saved first and validated against the
+    // TARGET selling price; the price itself then goes through PriceChangeService, whose
+    // checks see the saved fields. A refusal before the commit saves nothing, and after it
+    // only the service's own pre-checked refusals remain, so a refused edit never leaves a
+    // price live on OLX.
+    const persisted = this.runInTransaction
+      ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true))
+      : await this.executeValidated(dto, this.productRepo, false);
+    if (persisted.isErr()) return persisted;
+    let { product } = persisted.value;
+
     let priceSync: PriceSync | undefined;
-    let previousSellingPrice: number | undefined;
-    if (this.priceChange && dto.sellingPrice !== undefined) {
-      const current = await this.productRepo.findByIdForWorkspace(dto.productId, dto.workspaceId);
-      if (!current) return Err(new NotFoundError(`Product not found: ${dto.productId}`));
-      if (dto.currency === undefined || dto.currency === current.sellingPrice.currency) {
-        previousSellingPrice = current.sellingPrice.amount;
-        // The DTO validator has already demanded confirmation against a cost sent in the
-        // same request, so only the stored cost is left for the service to check.
-        const applied = await this.priceChange.apply({
-          workspaceId: dto.workspaceId,
-          productId: dto.productId,
-          price: dto.sellingPrice,
-          changedBy: 'user',
-          allowBelowCost: dto.allowBelowCost === true || dto.costPrice !== undefined,
-        });
-        if (applied.isErr()) return applied;
-        priceSync = applied.value;
-        dto = { ...dto, sellingPrice: undefined };
-      }
+    const deferredPrice = persisted.value.deferredSellingPrice;
+    if (this.priceChange && deferredPrice !== undefined) {
+      const applied = await this.priceChange.apply({
+        workspaceId: dto.workspaceId,
+        productId: dto.productId,
+        price: deferredPrice,
+        changedBy: 'user',
+        allowBelowCost: dto.allowBelowCost === true,
+      });
+      if (applied.isErr()) return applied;
+      priceSync = applied.value;
+      const reloaded = await this.productRepo.findByIdForWorkspace(dto.productId, dto.workspaceId);
+      if (reloaded) product = reloaded;
     }
 
-    const persisted = this.runInTransaction
-      ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true, previousSellingPrice))
-      : await this.executeValidated(dto, this.productRepo, false, previousSellingPrice);
-    if (persisted.isErr()) return persisted;
-
     try {
-      await this.eventPublisher.publish(this.updatedEvent(persisted.value.product, persisted.value.pricing));
+      await this.eventPublisher.publish(this.updatedEvent(product, persisted.value.pricing));
     } catch {
       // Product already committed; don't fail the request over best-effort delivery.
     }
-    return Ok({ product: persisted.value.product, ...(priceSync ? { priceSync } : {}) });
+    return Ok({ product, ...(priceSync ? { priceSync } : {}) });
   }
 
   private async executeValidated(
     dto: UpdateProductDTO,
     productRepo: IProductRepository,
     lockProduct: boolean,
-    appliedFromSellingPrice?: number,
   ): Promise<Result<PersistedProductUpdate>> {
 
     // Tenant-scoped load: a product in another workspace reads as not-found so a
@@ -105,7 +102,7 @@ export class UpdateProductUseCase {
       return Err(new NotFoundError(`Product not found: ${dto.productId}`));
     }
     const previousCostPrice = product.costPrice?.amount ?? null;
-    const previousSellingPrice = appliedFromSellingPrice ?? product.sellingPrice.amount;
+    const previousSellingPrice = product.sellingPrice.amount;
 
     if (dto.name !== undefined) {
       const r = product.rename(dto.name);
@@ -151,11 +148,15 @@ export class UpdateProductUseCase {
       nextMinAcceptable = price.value;
     }
 
+    // The service applies a same-currency price after this save; the entity only validates it here.
+    const deferSellingPrice = this.priceChange !== undefined && nextSellingPrice !== null
+      && nextSellingPrice.currency === product.sellingPrice.currency;
     const priceUpdate = product.updatePrices(
       nextCostPrice,
       nextSellingPrice,
       dto.allowBelowCost ?? false,
-      nextMinAcceptable
+      nextMinAcceptable,
+      !deferSellingPrice
     );
     if (priceUpdate.isErr()) return priceUpdate;
     if (clearCostPrice) product.clearCostPrice();
@@ -196,9 +197,9 @@ export class UpdateProductUseCase {
 
     return Ok({
       product,
+      ...(deferSellingPrice && nextSellingPrice ? { deferredSellingPrice: nextSellingPrice.amount } : {}),
       pricing: {
-        pricesChanged:
-          dto.costPrice !== undefined || dto.sellingPrice !== undefined || appliedFromSellingPrice !== undefined,
+        pricesChanged: dto.costPrice !== undefined || dto.sellingPrice !== undefined,
         belowCostConfirmed: dto.allowBelowCost === true,
         previousCostPrice,
         previousSellingPrice,

@@ -51,6 +51,12 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
     return service.updateSellingPrice(account.token(), productId, sellingPrice);
   }
 
+  @Step("Set the selling price of product {productId} to {sellingPrice} and its lowest acceptable price to {floor}")
+  public ValidatableResponse updateSellingPriceAndFloor(AccountPojo account, String productId, double sellingPrice,
+      double floor) {
+    return service.updateSellingPriceAndFloor(account.token(), productId, sellingPrice, floor);
+  }
+
   @Step("Rename product {productId} to {name}")
   public ValidatableResponse updateName(AccountPojo account, String productId, String name) {
     return service.updateName(account.token(), productId, name);
