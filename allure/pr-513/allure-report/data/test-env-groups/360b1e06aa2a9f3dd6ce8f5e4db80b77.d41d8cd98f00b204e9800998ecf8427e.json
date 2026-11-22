@@ -1,0 +1,1 @@
+{"id":"360b1e06aa2a9f3dd6ce8f5e4db80b77.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product price floor uses the minimum acceptable price as the floor when set","name":"uses the minimum acceptable price as the floor when set","status":"passed","testResultsByEnv":{"default":"1301cc12ad56d5bad49dd2699516c282"}}

@@ -1,0 +1,1 @@
+{"id":"d59fa961ffec3e162ee63e5c42f6967b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/PriceResearchRuns.test.ts#PriceResearchRuns.latest returns no run for a product with none","name":"returns no run for a product with none","status":"passed","testResultsByEnv":{"default":"dbec328fc48040a03ae3af5fdef3a8ad"}}

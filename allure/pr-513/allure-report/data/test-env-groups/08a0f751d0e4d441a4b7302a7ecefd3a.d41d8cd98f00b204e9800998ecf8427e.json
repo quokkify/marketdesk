@@ -1,0 +1,1 @@
+{"id":"08a0f751d0e4d441a4b7302a7ecefd3a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product price floor rejects lowering the selling price below an existing floor","name":"rejects lowering the selling price below an existing floor","status":"passed","testResultsByEnv":{"default":"f2dd465e2244549f259e65160ff30be6"}}

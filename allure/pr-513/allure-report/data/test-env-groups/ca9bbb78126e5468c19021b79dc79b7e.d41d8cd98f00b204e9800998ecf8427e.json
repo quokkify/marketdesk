@@ -1,0 +1,1 @@
+{"id":"ca9bbb78126e5468c19021b79dc79b7e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceResearchEdit.test.ts#researchChangedSince skips the check when the client sends no base","name":"skips the check when the client sends no base","status":"passed","testResultsByEnv":{"default":"5344d05058db88919674abf6d47a76dc"}}
