@@ -24,6 +24,9 @@ import type {
 // Events fetched per "Load more" step of the activity feed.
 export const HERMES_FEED_PAGE_SIZE = 20;
 
+// Runs fetched per product for the history list.
+export const HISTORY_LIMIT = 30;
+
 export function buildHermesEventsUrl(params: HermesEventListParams = {}): string {
   return `/hermes/events${buildQueryString({ ...params })}`;
 }
@@ -172,6 +175,13 @@ export const hermesApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<ProductVerdictView>) => unwrap(res),
       providesTags: (_result, _error, productId) => [{ type: 'SaleVerdict', id: productId }],
     }),
+
+    getProductVerdicts: builder.query<SaleVerdict[], string>({
+      query: (productId) =>
+        `/hermes/products/${encodeURIComponent(productId)}/verdicts?limit=${HISTORY_LIMIT}`,
+      transformResponse: (res: ApiResponse<SaleVerdict[]>) => unwrap(res),
+      providesTags: (_result, _error, productId) => [{ type: 'SaleVerdict', id: productId }],
+    }),
   }),
 });
 
@@ -187,5 +197,6 @@ export const {
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
   useGetProductVerdictQuery,
+  useGetProductVerdictsQuery,
   useGetHermesPendingCountsQuery,
 } = hermesApi;

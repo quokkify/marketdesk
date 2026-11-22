@@ -301,6 +301,11 @@ const ERROR_REASONS: Record<string, string> = {
 };
 const FALLBACK_REASON = 'something went wrong';
 
+// An error code in words; an unknown or missing code gives the fallback, never the raw code.
+export function errorReason(code: string | null): string {
+  return (code && ERROR_REASONS[code]) || FALLBACK_REASON;
+}
+
 // When the anchors were last updated: the last finished run, else the research's own version.
 export function anchorsUpdatedAt(last: ResearchRun | null, research: PriceResearch | null): string | null {
   if (last?.status === 'finished' && last.finishedAt) return last.finishedAt;
@@ -318,7 +323,7 @@ export function lastRunText(last: ResearchRun | null, nextAutoAt: string | null,
     const failed = labels.length > 0 ? `; ${labels.join(', ')} search failed` : '';
     return `Prices searched ${when}${failed}${retry ? `, will retry ${retry}` : ''}`;
   }
-  const reason = (last.errorCode && ERROR_REASONS[last.errorCode]) || FALLBACK_REASON;
+  const reason = errorReason(last.errorCode);
   return `Price search failed: ${reason}.${retry ? ` Will retry ${retry}` : ''}`;
 }
 
