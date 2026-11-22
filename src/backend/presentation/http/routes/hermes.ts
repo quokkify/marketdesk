@@ -24,6 +24,7 @@ export function createHermesRoutes(
   router.get('/usage', asyncHandler(controller.usage));
   router.get('/limits', asyncHandler(controller.limits));
   router.get('/events', asyncHandler(controller.list));
+  router.get('/events/pending-counts', asyncHandler(controller.pendingCounts));
   router.get('/events/:id', asyncHandler(controller.get));
   router.get(
     '/events/:id/category-correction-operations',

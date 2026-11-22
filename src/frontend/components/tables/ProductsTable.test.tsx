@@ -1,14 +1,21 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Pagination, Typography } from '@mui/material';
-import type { Product } from '@shared/types';
+import { MemoryRouter } from 'react-router-dom';
+import type { Product, ProductStats } from '@shared/types';
 import {
   CatalogueFooter,
   ProductRowActions,
   ProductsCards,
+  PRODUCT_TABLE_COLUMNS,
   ProductsTable,
   productRowMenuItems,
+  rowClickIntent,
 } from './ProductsTable';
+import { withoutStyleTags } from '../../testkit/staticMarkup';
+
+const markup = (node: React.ReactElement) =>
+  withoutStyleTags(renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>));
 
 type ElementLike = React.ReactElement<{ children?: React.ReactNode; [key: string]: unknown }>;
 
@@ -48,37 +55,93 @@ const product: Product = {
 };
 
 describe('ProductsTable catalogue hierarchy', () => {
-  it('renders product identity, fallback, price/profit/margin/tags and honest marketplace absence', () => {
-    const html = renderToStaticMarkup(
+  it('renders product identity, fallback initials and price', () => {
+    const html = markup(
       <ProductsTable products={[product]} currency="PLN" selectedIds={new Set(['p-1'])} />
     );
     expect(html).toContain('Wireless Headphones');
     expect(html).toContain('SKU-100');
     expect(html).toContain('WH');
-    expect(html).toContain('150 zł');
-    expect(html).toContain('60% margin');
-    expect(html).toContain('featured');
-    expect(html).toContain('Marketplace count unavailable');
+    expect(html).toContain('250 zł');
     expect(html).toContain('Select all products on this page');
   });
 
-  it('formats money in PLN style and shows when each product was last updated', () => {
-    const updatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const html = renderToStaticMarkup(
-      <ProductsTable
-        products={[{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }]}
-        currency="PLN"
-      />
+  it('renders only the stage 1 columns', () => {
+    expect(PRODUCT_TABLE_COLUMNS.map((column) => column.key)).toEqual([
+      'select',
+      'product',
+      'status',
+      'price',
+      'views',
+      'ai',
+      'actions',
+    ]);
+    const html = markup(<ProductsTable products={[product]} currency="PLN" />);
+    for (const gone of [
+      'Markets',
+      'Cost',
+      'Profit',
+      'Tags',
+      'featured',
+      'margin',
+      'Marketplace count unavailable',
+    ]) {
+      expect(html).not.toContain(gone);
+    }
+  });
+
+  it('draws a seven-cell skeleton row while loading', () => {
+    const html = markup(<ProductsTable products={[]} loading />);
+    const firstRow = html.split('<tr').find((row) => row.includes('MuiSkeleton')) ?? '';
+    expect(firstRow.match(/<td/g)).toHaveLength(7);
+  });
+
+  it('shows the short listing id with the full SKU as its title', () => {
+    const imported = { ...product, sku: 'OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120' };
+    const html = markup(<ProductsTable products={[imported]} />);
+    expect(html).toContain('OLX · 1085784120');
+    expect(html).toContain('title="OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120"');
+  });
+
+  // Regression guard: a middle-click on the title is handled by the link alone, never also by the row.
+  it('excludes the title link from row opening', () => {
+    const html = markup(<ProductsTable products={[product]} onOpen={() => {}} />);
+    expect(html).toMatch(
+      /<a[^>]*href="\/products\/p-1"[^>]*data-row-stop|<a[^>]*data-row-stop[^>]*href="\/products\/p-1"/
     );
-    expect(html).toContain('800 zł');
+  });
+
+  it('links the product title to its page', () => {
+    const html = markup(<ProductsTable products={[product]} onOpen={() => {}} />);
+    expect(html).toContain('href="/products/p-1"');
+  });
+
+  it.each([
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false, insideRow: true }, 'open'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: true, button: 0, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 1, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: true, insideRow: true }, 'ignore'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: true, insideRow: true }, 'ignore'],
+    // Regression guard: clicks in the portaled row menu bubble to the row through React.
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false, insideRow: false }, 'ignore'],
+    // Regression guard: right-click (auxclick with button 2) must not open the product.
+    [{ metaKey: false, ctrlKey: false, button: 2, insideStop: false, insideRow: true }, 'ignore'],
+  ] as const)('row click %o opens as %s', (event, intent) => {
+    expect(rowClickIntent(event)).toBe(intent);
+  });
+
+  it('formats money in PLN style; cards still show when each product was last updated', () => {
+    const updatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const items = [{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }];
+    const html = markup(<ProductsTable products={items} currency="PLN" />);
     expect(html).toContain('1 050 zł');
-    expect(html).toContain('250 zł');
-    expect(html).toContain('24% margin');
-    expect(html).toContain('2h ago');
+    expect(html).not.toContain('800 zł');
+    expect(markup(<ProductsCards products={items} currency="PLN" />)).toContain('2h ago');
   });
 
   it('offers a row actions menu instead of navigating from the overflow control', () => {
-    const html = renderToStaticMarkup(
+    const html = markup(
       <ProductsTable
         products={[product]}
         currency="PLN"
@@ -91,8 +154,8 @@ describe('ProductsTable catalogue hierarchy', () => {
   });
 
   it('distinguishes an empty catalogue from an empty filtered result', () => {
-    const empty = renderToStaticMarkup(<ProductsTable products={[]} />);
-    const filtered = renderToStaticMarkup(
+    const empty = markup(<ProductsTable products={[]} />);
+    const filtered = markup(
       <ProductsTable
         products={[]}
         emptyFiltered
@@ -105,17 +168,179 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(filtered).toContain('Clear filters');
   });
 
-  it('keeps cost, price, profit, tags, updated date and the actions menu in card view', () => {
-    const html = renderToStaticMarkup(
+  it('keeps price, updated date and the actions menu in card view without cost, profit, markets or tags', () => {
+    const html = markup(
       <ProductsCards products={[product]} currency="PLN" onEdit={() => undefined} />
     );
     expect(html).toContain('Wireless Headphones');
-    expect(html).toContain('Cost');
-    expect(html).toContain('100 zł');
-    expect(html).toContain('60% margin');
+    expect(html).toContain('250 zł');
     expect(html).toContain('Updated');
     expect(html).toContain('aria-label="Actions for Wireless Headphones"');
-    expect(html).toContain('Marketplace count unavailable');
+    for (const gone of ['Cost', 'Profit', 'Markets', 'featured', 'margin']) {
+      expect(html).not.toContain(gone);
+    }
+  });
+});
+
+describe('views, reasons and the listing link', () => {
+  const stats = (over: Partial<ProductStats> = {}): ProductStats => ({
+    views: 10,
+    watchers: 3,
+    messages: 1,
+    viewsDelta7d: 2,
+    viewsByDay: [0, 1, 2, 3, 1, 0, 2, 4, 1, 0, 0, 3, 2, 1],
+    lastSyncAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    stale: false,
+    externalUrl: null,
+    listingStatus: 'live',
+    needsAction: [],
+    ...over,
+  });
+  const other = { ...product, id: 'p-2', name: 'Other' };
+
+  it('shows views, growth, trend and freshness', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        statsByProductId={{ 'p-1': stats({ views: 128, viewsDelta7d: 14 }) }}
+      />
+    );
+    expect(html).toContain('Views · 7 days');
+    expect(html).toContain('128');
+    expect(html).toContain('▲ +14');
+    expect(html).toContain('<polyline');
+    expect(html).toContain('watching');
+    expect(html).not.toContain('>Updated<');
+  });
+
+  it('shows stale without a trend and a dash without stats', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product, other]}
+        statsByProductId={{ 'p-1': stats({ views: 203, viewsDelta7d: null, stale: true }) }}
+      />
+    );
+    expect(html).toContain('stale');
+    expect(html).not.toContain('<polyline');
+    expect(html).toContain('—');
+  });
+
+  it('lists needs-action reasons and the condition hint under the status', () => {
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, condition: 'unknown' }]}
+        statsByProductId={{ 'p-1': stats({ needsAction: ['buyer_waiting', 'no_view_growth'] }) }}
+      />
+    );
+    expect(html).toContain('Buyer waiting');
+    expect(html).toContain('No view growth for 7 days');
+    expect(html).toContain('Condition not confirmed');
+  });
+
+  it('links the short listing id to the OLX advert in a new tab', () => {
+    const imported = { ...product, sku: 'OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120' };
+    const html = markup(
+      <ProductsTable
+        products={[imported]}
+        statsByProductId={{ 'p-1': stats({ externalUrl: 'https://www.olx.pl/d/oferta/x.html' }) }}
+      />
+    );
+    expect(html).toContain('href="https://www.olx.pl/d/oferta/x.html"');
+    expect(html).toContain('target="_blank"');
+  });
+
+  it('labels the AI column for screen readers only', () => {
+    const html = markup(<ProductsTable products={[product]} />);
+    expect(html).not.toMatch(/<th[^>]*>AI<\/th>/);
+    expect(html).toContain('AI analysis');
+  });
+});
+
+describe('row analysis in the table', () => {
+  it('renders the analyze button and a review toggle for pending suggestions', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        onToggleReview={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'done', count: 2 } }}
+      />
+    );
+    expect(html).toContain('aria-label="Analyze with AI: Wireless Headphones"');
+    expect(html).toContain('2 to review');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('href="/products/p-1#');
+  });
+
+  it('places the review content in a full-width row under the expanded product only', () => {
+    const other = { ...product, id: 'p-2', name: 'Other' };
+    const html = markup(
+      <ProductsTable
+        products={[product, other]}
+        onToggleReview={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'done', count: 1 } }}
+        expandedProductId="p-1"
+        renderReview={(p) => <span>review-of-{p.id}</span>}
+      />
+    );
+    expect(html).toContain('review-of-p-1');
+    expect(html).not.toContain('review-of-p-2');
+    expect(html).toContain('colSpan="7"');
+    expect(html).toContain('aria-expanded="true"');
+    expect(html.indexOf('review-of-p-1')).toBeLessThan(html.indexOf('Other'));
+  });
+
+  it('disables the analyze button while running', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'running' } }}
+      />
+    );
+    const button =
+      html.match(/<button[^>]*aria-label="Analyze with AI: Wireless Headphones"[^>]*>/)?.[0] ?? '';
+    expect(button).toContain('disabled');
+  });
+
+  it('shows why analysis is unavailable', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        analyzeDisabledReason="The listing SEO agent is switched off for this workspace."
+      />
+    );
+    expect(html).toContain('The listing SEO agent is switched off for this workspace.');
+  });
+
+  it('disables the menu analyze item when told to', () => {
+    const items = productRowMenuItems(
+      product,
+      { onAnalyze: () => {}, analyzeDisabled: true },
+      () => {}
+    ) as ElementLike[];
+    expect(items[0]!.props.disabled).toBe(true);
+  });
+
+  // Regression guard: the kebab item must not start a second run on a row that is already running.
+  it('disables the analyze controls of a running row in the menu too', () => {
+    const table = ProductsTable({
+      products: [product],
+      onAnalyze: jest.fn(),
+      analysisByProductId: { 'p-1': { status: 'running' } },
+    }) as ElementLike;
+    const actions = findByType(table, ProductRowActions)[0]!;
+    expect((actions.props.handlers as { analyzeDisabled?: boolean }).analyzeDisabled).toBe(true);
+  });
+
+  it('puts Analyze with AI first in the row menu when available', () => {
+    const items = productRowMenuItems(
+      product,
+      { onAnalyze: () => {}, onOpen: () => {} },
+      () => {}
+    ) as ElementLike[];
+    expect(textContent(items[0])).toContain('Analyze with AI');
   });
 });
 
@@ -125,7 +350,11 @@ describe('product row actions menu', () => {
     const onEdit = jest.fn();
     const onDelete = jest.fn();
     const close = jest.fn();
-    const items = productRowMenuItems(product, { onOpen, onEdit, onDelete }, close) as ElementLike[];
+    const items = productRowMenuItems(
+      product,
+      { onOpen, onEdit, onDelete },
+      close
+    ) as ElementLike[];
 
     expect(items.map((item) => textContent(item))).toEqual(['Open', 'Edit', 'Delete']);
     (items[0]!.props.onClick as () => void)();
@@ -139,15 +368,25 @@ describe('product row actions menu', () => {
 
   it('gives every table row and card the delete handler', () => {
     const onDelete = jest.fn();
-    const table = ProductsTable({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
-    const cards = ProductsCards({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
-    const rowActions = [...findByType(table, ProductRowActions), ...findByType(cards, ProductRowActions)];
+    const table = ProductsTable({
+      products: [product],
+      onOpen: jest.fn(),
+      onDelete,
+    }) as ElementLike;
+    const cards = ProductsCards({
+      products: [product],
+      onOpen: jest.fn(),
+      onDelete,
+    }) as ElementLike;
+    const rowActions = [
+      ...findByType(table, ProductRowActions),
+      ...findByType(cards, ProductRowActions),
+    ];
 
     expect(rowActions).toHaveLength(2);
-    expect(rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)).toEqual([
-      onDelete,
-      onDelete,
-    ]);
+    expect(
+      rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)
+    ).toEqual([onDelete, onDelete]);
   });
 
   it('omits actions that have no handler', () => {

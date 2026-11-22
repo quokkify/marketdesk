@@ -31,6 +31,7 @@ import type { ProductImageUploadService } from '../../application/services/Produ
 import type { ProductRecheckService } from '../../application/services/ProductRecheckService';
 import type { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
 import type { IPriceResearchRuns } from '../../domain/ports/IPriceResearchRuns';
+import type { ProductStatsService } from '../../application/services/ProductStatsService';
 
 import { NotFoundError } from '../../domain/shared/DomainError';
 import { env, isProduction, type OlxAdapterMode } from '../../config/env';
@@ -91,6 +92,7 @@ export interface AppDeps {
   productRepo: IProductRepository;
   priceResearchRepo?: IPriceResearchRepository;
   priceResearchRuns?: IPriceResearchRuns;
+  productStatsService?: ProductStatsService;
   listingRepo: IListingRepository;
   marketplaceRepo: IMarketplaceRepository;
   marketplaceOAuthService: MarketplaceOAuthService;
@@ -237,6 +239,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.productAssistanceGraph,
       deps.priceResearchRepo,
       deps.priceResearchRuns,
+      deps.productStatsService,
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,

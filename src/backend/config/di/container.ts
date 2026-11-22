@@ -139,6 +139,7 @@ import { ProductAssistanceGraph } from '../../application/services/ProductAssist
 import { ListingApplicationService } from '../../application/services/ListingApplicationService';
 import { HermesApplicationService } from '../../application/services/HermesApplicationService';
 import { AnalyticsApplicationService } from '../../application/services/AnalyticsApplicationService';
+import { ProductStatsService } from '../../application/services/ProductStatsService';
 import { MarketplaceOAuthService } from '../../application/services/MarketplaceOAuthService';
 import { ConversationRetentionService } from '../../application/services/ConversationRetentionService';
 import { ConversationSyncService } from '../../application/services/ConversationSyncService';
@@ -641,6 +642,13 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     dismissEventUC
   );
   const analyticsEventRepo = new AnalyticsEventRepository(pool);
+  const productStatsService = new ProductStatsService({
+    products: productRepo,
+    listings: listingRepo,
+    analytics: analyticsEventRepo,
+    awaitingReplyCounts: (workspaceId) =>
+      new ConversationRepository(pool).awaitingReplyCounts(workspaceId),
+  });
   const analyticsService = new AnalyticsApplicationService(
     productRepo,
     listingRepo,
@@ -1027,6 +1035,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productRepo,
     priceResearchRepo,
     priceResearchRuns,
+    productStatsService,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,

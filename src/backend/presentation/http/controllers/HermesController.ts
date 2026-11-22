@@ -105,6 +105,10 @@ export class HermesController {
     ok(res, operation);
   };
 
+  pendingCounts = async (req: Request, res: Response): Promise<void> => {
+    ok(res, { byProductId: await this.hermes.pendingCountsByProduct(req.user!.workspaceId!) });
+  };
+
   list = async (req: Request, res: Response): Promise<void> => {
     // Filters are comma-separated multi-value params (the frontend sends
     // ?status=pending_review,applied and ?severity=warning,critical).

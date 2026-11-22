@@ -20,6 +20,24 @@ export type ProductCondition =
 
 export type ListingStatus = 'live' | 'draft' | 'expired' | 'error';
 
+// Products catalogue statistics (GET /products/stats).
+export type NeedsActionReason = 'buyer_waiting' | 'listing_problem' | 'no_view_growth';
+
+export interface ProductStats {
+  views: number | null;
+  watchers: number | null;
+  messages: number | null;
+  /** Views gained in the last 7 days; null when the listing data is stale. */
+  viewsDelta7d: number | null;
+  /** 14 UTC-day buckets of gained views, oldest first. */
+  viewsByDay: number[];
+  lastSyncAt: string | null;
+  stale: boolean;
+  externalUrl: string | null;
+  listingStatus: ListingStatus | null;
+  needsAction: NeedsActionReason[];
+}
+
 export type MarketplaceCategorySource = 'provider_taxonomy' | 'remote_import' | 'user_confirmed';
 
 export interface MarketplaceCategoryMetadata {

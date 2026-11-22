@@ -20,6 +20,8 @@ export interface ListProductsQueryDTO {
   // Full-text-ish match against name/sku/description (case-insensitive contains).
   search?: string;
   sort?: SortKey[];
+  // Only products with at least one needs-action reason (see productStats.needsActionReasons).
+  needsAction?: boolean;
   limit?: number;
   offset?: number;
 }
