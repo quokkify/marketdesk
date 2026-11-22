@@ -121,6 +121,14 @@ export class SaleVerdictRuns {
     return { latest, active, lastFailed };
   }
 
+  async history(workspaceId: string, productId: string, limit: number): Promise<SaleVerdict[]> {
+    if (!(await this.deps.products.findByIdForWorkspace(productId, workspaceId))) {
+      throw new NotFoundError(`Product not found: ${productId}`);
+    }
+    await this.expireStuck(workspaceId, productId, this.deps.now());
+    return this.deps.verdicts.listForProduct(workspaceId, productId, limit);
+  }
+
   async viewsFor(
     workspaceId: string,
     productIds: string[],

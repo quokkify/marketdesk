@@ -32,6 +32,8 @@ export interface IPriceResearchRunRepository {
   insertQueued(run: NewResearchRun): Promise<ResearchRun | null>;
   findActive(workspaceId: string, productId: string): Promise<ResearchRun | null>;
   findLastFinished(workspaceId: string, productId: string): Promise<ResearchRun | null>;
+  // Every run of the product, whatever its status, newest queued_at first.
+  listForProduct(workspaceId: string, productId: string, limit: number): Promise<ResearchRun[]>;
   // queued → running for this run only; null when the run is no longer queued.
   claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null>;
   saveNode(runId: string, node: ResearchNode, status: NodeStatus): Promise<void>;

@@ -94,6 +94,21 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.getPriceResearch(account.token(), productId);
   }
 
+  @Step("Get the market search run history of product {productId}")
+  public ValidatableResponse getRunHistory(AccountPojo account, String productId) {
+    return service.getRunHistory(account.token(), productId);
+  }
+
+  @Step("Get the market search run history of product {productId} with the limit {limit}")
+  public ValidatableResponse getRunHistory(AccountPojo account, String productId, String limit) {
+    return service.getRunHistory(account.token(), productId, limit);
+  }
+
+  @Step("Read the id of the newest market search run")
+  public String newestRunId(ValidatableResponse history) {
+    return history.extract().path("data[0].id");
+  }
+
   @Step("Refresh the price anchor ladder without authentication")
   public ValidatableResponse refreshPriceResearchUnauthenticated(String productId) {
     return service.refreshPriceResearch(productId);

@@ -107,4 +107,25 @@ describeDb('SaleVerdictRepository (PostgreSQL integration, TEMP table)', () => {
 
     await expect(repo().findById(WS, RUN)).resolves.toMatchObject({ status: 'failed', errorCode: 'enqueue_failed' });
   });
+
+  it('lists a product\'s runs of every status newest first, capped by the limit, in the workspace only', async () => {
+    if (!tempReady) return;
+    const OTHER_WS = '00000000-0000-4000-8000-000000000602';
+    const OTHER_PID = '00000000-0000-4000-8000-000000000702';
+    const insert = (id: string, queuedAt: string, productId = PID, workspaceId = WS) =>
+      repo().insertQueued({ id, workspaceId, productId, graphVersion: 'sale-verdict@1', scope: ['price'], queuedAt });
+    const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-00000000080${n}`);
+    await insert(ids[0]!, later(0));
+    await repo().fail(ids[0]!, later(1), 'enqueue_failed');
+    await insert(ids[1]!, later(10));
+    await insert(ids[2]!, later(20));
+    await insert('00000000-0000-4000-8000-000000000804', later(30), OTHER_PID);
+    await insert('00000000-0000-4000-8000-000000000805', later(40), PID, OTHER_WS);
+
+    const all = await repo().listForProduct(WS, PID, 20);
+    expect(all.map((run) => run.id)).toEqual([ids[2], ids[1], ids[0]]);
+    expect(all[2]).toMatchObject({ status: 'failed', errorCode: 'enqueue_failed' });
+    expect((await repo().listForProduct(WS, PID, 2)).map((run) => run.id)).toEqual([ids[2], ids[1]]);
+    await expect(repo().listForProduct(OTHER_WS, OTHER_PID, 20)).resolves.toEqual([]);
+  });
 });

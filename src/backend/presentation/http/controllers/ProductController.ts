@@ -24,6 +24,7 @@ import type { PriceResearch, PriceResearchView, ProductStatus } from '../../../.
 import { ConflictError, InvalidStateError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
+import { parseHistoryLimit } from './historyLimit';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
 import { presentListing } from '../../../application/dto/presenters';
 import type { ProductStatsService } from '../../../application/services/ProductStatsService';
@@ -215,6 +216,16 @@ export class ProductController {
     } catch (error) {
       next(error);
     }
+  };
+
+  listPriceResearchRuns = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const productId = routeParam(req.params.id);
+      const workspaceId = req.user!.workspaceId!;
+      const limit = parseHistoryLimit(req.query.limit);
+      await this.requireProduct(productId, workspaceId);
+      ok(res, this.researchRuns ? await this.researchRuns.history(workspaceId, productId, limit) : []);
+    } catch (error) { next(error); }
   };
 
   getPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

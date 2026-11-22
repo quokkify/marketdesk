@@ -38,6 +38,8 @@ export interface ISaleVerdictRepository {
   // job was lost); true when one was failed.
   failExpired(workspaceId: string, productId: string, now: string, queuedBefore: string, errorCode: string): Promise<boolean>;
   findById(workspaceId: string, runId: string): Promise<SaleVerdict | null>;
+  // Every run of the product, whatever its status, newest queued_at first.
+  listForProduct(workspaceId: string, productId: string, limit: number): Promise<SaleVerdict[]>;
   findLatestCompleted(workspaceId: string, productId: string): Promise<SaleVerdict | null>;
   findLatestCompletedForProducts(
     workspaceId: string,

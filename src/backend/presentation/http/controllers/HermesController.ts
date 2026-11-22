@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/types';
 import type { ListEventsQueryDTO } from '../../../application/dto/HermesDTO';
 import { NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
+import { parseHistoryLimit } from './historyLimit';
 import { ok, paginated } from '../formatters/ResponseFormatter';
 import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
@@ -188,5 +189,11 @@ export class HermesController {
   verdict = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
     ok(res, await this.saleVerdictRuns.view(req.user!.workspaceId!, routeParam(req.params.productId)));
+  };
+
+  verdicts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
+    const limit = parseHistoryLimit(req.query.limit);
+    ok(res, await this.saleVerdictRuns.history(req.user!.workspaceId!, routeParam(req.params.productId), limit));
   };
 }

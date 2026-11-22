@@ -74,6 +74,21 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
   }
 
   // A run is over when nothing is active; it left a completed verdict, or the last run failed.
+  @Step("Get the sale verdict run history of product {productId}")
+  public ValidatableResponse getVerdictHistory(AccountPojo account, String productId) {
+    return service.getVerdictHistory(account.token(), productId);
+  }
+
+  @Step("Get the sale verdict run history of product {productId} with the limit {limit}")
+  public ValidatableResponse getVerdictHistory(AccountPojo account, String productId, String limit) {
+    return service.getVerdictHistory(account.token(), productId, limit);
+  }
+
+  @Step("Read the market search id the newest sale verdict run started")
+  public String newestResearchRunId(ValidatableResponse history) {
+    return history.extract().path("data[0].researchRunId");
+  }
+
   @Step("Wait until the sale verdict run of product {productId} ends")
   public ValidatableResponse awaitVerdict(AccountPojo account, String productId) {
     Waiter.awaitCondition(() -> hasEnded(service.getVerdict(account.token(), productId)),

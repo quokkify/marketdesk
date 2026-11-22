@@ -70,6 +70,9 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async findById(_workspaceId: string, runId: string): Promise<SaleVerdict | null> {
     return this.rows.find((r) => r.id === runId) ?? null;
   }
+  async listForProduct(): Promise<SaleVerdict[]> {
+    return [];
+  }
   async findLatestCompleted(_workspaceId: string, productId: string): Promise<SaleVerdict | null> {
     const done = this.rows.filter((r) => r.productId === productId && r.status === 'completed');
     return done[done.length - 1] ?? null;

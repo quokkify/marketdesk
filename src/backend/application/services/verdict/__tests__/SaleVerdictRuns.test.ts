@@ -61,6 +61,9 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
   async findLatestCompleted(): Promise<SaleVerdict | null> {
     return this.rows.filter((r) => r.status === 'completed').pop() ?? null;
   }
+  async listForProduct(_ws: string, _pid: string, limit: number): Promise<SaleVerdict[]> {
+    return [...this.rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
   async lastRunFailedForProducts(): Promise<Set<string>> {
     return new Set();
   }
@@ -295,5 +298,31 @@ describe('SaleVerdictRuns', () => {
     expect(errors).toEqual(['Storing the sale verdict of a recheck failed']);
     expect(verdicts.rows[0]).toMatchObject({ status: 'failed' });
     expect(verdicts.errorCodes.get('run-1')).toBe('store_failed');
+  });
+});
+
+describe('SaleVerdictRuns.history', () => {
+  it('lists the product\'s runs newest first, up to the limit', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(
+      { id: 'old', productId: PID, createdAt: '2026-11-20T00:00:00.000Z', status: 'failed' } as SaleVerdict,
+      { id: 'new', productId: PID, createdAt: '2026-11-21T00:00:00.000Z', status: 'completed' } as SaleVerdict,
+    );
+
+    expect((await runs.history(WS, PID, 20)).map((row) => row.id)).toEqual(['new', 'old']);
+    expect((await runs.history(WS, PID, 1)).map((row) => row.id)).toEqual(['new']);
+  });
+
+  it('expires a stuck run before listing it', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push({
+      id: 'lost', productId: PID, status: 'queued', createdAt: new Date(NOW.getTime() - VERDICT_QUEUED_TTL_MS - 1).toISOString(),
+    } as SaleVerdict);
+
+    await expect(runs.history(WS, PID, 20)).resolves.toMatchObject([{ id: 'lost', status: 'failed' }]);
+  });
+
+  it('throws NotFoundError for a product that is not in the workspace', async () => {
+    await expect(setup().runs.history(WS, 'other', 20)).rejects.toThrow('Product not found');
   });
 });

@@ -1,6 +1,7 @@
 package dev.quokkify.marketdesk.verification;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 import dev.quokkify.verification.BaseApiVerification;
@@ -18,6 +19,7 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
   private static final String LATEST = "data.latest";
   private static final String CHECKS = LATEST + ".checks.";
   private static final String GRAPH_VERSION = "sale-verdict@1";
+  private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
   private static final String COMPLETED = "completed";
 
   @Override
@@ -122,6 +124,42 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
     view.body("data.active", Matchers.nullValue());
     view.body("data.latest", Matchers.nullValue());
     return self();
+  }
+
+  @Step("The history lists {count} runs")
+  public VerdictVerification historyHasSize(ValidatableResponse history, int count) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data", Matchers.hasSize(count));
+    return self();
+  }
+
+  @Step("The history lists at least {count} runs")
+  public VerdictVerification historyHasAtLeast(ValidatableResponse history, int count) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data.size()", Matchers.greaterThanOrEqualTo(count));
+    return self();
+  }
+
+  @Step("The history is newest first")
+  public VerdictVerification historyIsNewestFirst(ValidatableResponse history) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    List<String> createdAt = history.extract().jsonPath().getList("data.createdAt", String.class);
+    for (int i = 1; i < createdAt.size(); i++) {
+      MatcherAssert.assertThat(Instant.parse(createdAt.get(i - 1)), Matchers.greaterThanOrEqualTo(Instant.parse(createdAt.get(i))));
+    }
+    return self();
+  }
+
+  @Step("The newest run started the market search {researchRunId}")
+  public VerdictVerification newestRunStartedSearch(ValidatableResponse history, String researchRunId) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data[0].researchRunId", Matchers.equalTo(researchRunId));
+    return self();
+  }
+
+  @Step("Request is rejected as invalid")
+  public VerdictVerification isInvalid(ValidatableResponse response) {
+    return failsWith(response, HttpStatus.SC_BAD_REQUEST, VALIDATION_ERROR);
   }
 
   @Step("Request is rejected as not found")

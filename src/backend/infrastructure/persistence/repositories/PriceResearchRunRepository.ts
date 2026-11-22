@@ -103,6 +103,18 @@ export class PriceResearchRunRepository implements IPriceResearchRunRepository {
     return rows[0] ? toRun(rows[0]) : null;
   }
 
+  async listForProduct(workspaceId: string, productId: string, limit: number): Promise<ResearchRun[]> {
+    const { rows } = await query<RunRow>(
+      `SELECT ${COLUMNS} FROM price_research_runs
+       WHERE workspace_id = $1 AND product_id = $2
+       ORDER BY price_research_runs.queued_at DESC
+       LIMIT $3`,
+      [workspaceId, productId, limit],
+      this.queryClient,
+    );
+    return rows.map(toRun);
+  }
+
   async claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null> {
     const { rows } = await query<RunRow>(
       `UPDATE price_research_runs

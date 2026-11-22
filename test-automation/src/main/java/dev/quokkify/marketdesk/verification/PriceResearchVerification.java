@@ -181,6 +181,27 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return failsWith(response, HttpStatus.SC_BAD_REQUEST, VALIDATION_ERROR);
   }
 
+  @Step("The run history is empty")
+  public PriceResearchVerification historyIsEmpty(ValidatableResponse history) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data", Matchers.empty());
+    return self();
+  }
+
+  @Step("The run history lists {count} runs")
+  public PriceResearchVerification historyHasSize(ValidatableResponse history, int count) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data", Matchers.hasSize(count));
+    return self();
+  }
+
+  @Step("The newest run was started by the trigger {trigger}")
+  public PriceResearchVerification newestRunHasTrigger(ValidatableResponse history, String trigger) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data[0].trigger", Matchers.equalTo(trigger));
+    return self();
+  }
+
   @Step("Product is not found")
   public PriceResearchVerification isNotFound(ValidatableResponse response) {
     return failsWith(response, HttpStatus.SC_NOT_FOUND, NOT_FOUND);
