@@ -137,7 +137,10 @@ export class ProductController {
     const result = await this.products.listProducts(query, stats);
     if (result.isErr()) return next(result.error);
     const page = result.value;
-    paginated(res, page.items, {
+    const verdicts = this.saleVerdictRuns
+      ? await this.saleVerdictRuns.viewsFor(query.workspaceId, page.items.map((item) => item.id))
+      : undefined;
+    paginated(res, verdicts ? page.items.map((item) => ({ ...item, verdict: verdicts.get(item.id) ?? null })) : page.items, {
       page: page.page,
       limit: page.limit,
       total: page.total,

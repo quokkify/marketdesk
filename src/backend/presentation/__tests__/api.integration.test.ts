@@ -487,6 +487,7 @@ async function buildTestApp(
     categoryCorrectionOperationService?: CategoryCorrectionOperationService;
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
+    saleVerdictRuns?: AppDeps['saleVerdictRuns'];
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
     marketplaceOAuthService?: (
       marketplaceRepo: InMemoryMarketplaceRepository
@@ -525,6 +526,7 @@ async function buildTestApp(
       )
     ),
     hermesService: options.hermesService ?? stubHermesService(),
+    saleVerdictRuns: options.saleVerdictRuns,
     hermesStatus: options.hermesStatus,
     productAssistanceGraph: options.productAssistanceGraph,
     analyticsService: stubAnalyticsService(),
@@ -2176,27 +2178,32 @@ describe('Presentation API', () => {
       expect(res.body.data[0]).toMatchObject({ productId: 'p1' });
     });
 
-    it('runs product-scoped Hermes from the explicit route product only', async () => {
-      const calls: Array<{ workspaceId: string; productId: string; trigger?: string }> = [];
-      const hermesService = {
-        ...stubHermesService(),
-        async runHermes(dto: { workspaceId: string; productId: string; trigger?: string }) {
-          calls.push(dto);
-          return Ok([{ ...appliedEvent, productId: dto.productId }]);
+    it('queues a sale verdict run from the explicit route product only', async () => {
+      const calls: unknown[][] = [];
+      const queued = { id: 'run-1', productId: 'p-real', status: 'queued' };
+      const saleVerdictRuns = {
+        async request(...args: unknown[]) {
+          calls.push(args);
+          return { run: queued, enqueued: true };
         },
-      } as unknown as HermesApplicationService;
-      const { app } = await buildTestApp({ hermesService });
+      } as unknown as AppDeps['saleVerdictRuns'];
+      const { app } = await buildTestApp({ saleVerdictRuns });
 
       const accepted = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
-        trigger: 'manual',
+        scope: ['price'],
       });
       const rejected = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
         productId: '0a0d3ba3-bc5b-4579-82e3-955d7968f5a4',
       });
+      const badScope = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
+        scope: ['seo'],
+      });
 
       expect(accepted.status).toBe(202);
+      expect(accepted.body.data).toEqual(queued);
       expect(rejected.status).toBe(400);
-      expect(calls).toEqual([{ workspaceId: 'ws-1', productId: 'p-real', trigger: 'manual' }]);
+      expect(badScope.status).toBe(400);
+      expect(calls).toEqual([['ws-1', 'p-real', ['price'], 'manual']]);
     });
 
     it('approves a pending event (happy path)', async () => {

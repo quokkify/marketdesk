@@ -56,5 +56,6 @@ export function createHermesRoutes(
     validateBody(runProductHermesSchema),
     asyncHandler(controller.runForProduct)
   );
+  router.get('/products/:productId/verdict', asyncHandler(controller.verdict));
   return router;
 }

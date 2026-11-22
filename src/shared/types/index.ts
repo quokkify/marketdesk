@@ -387,6 +387,8 @@ export interface Product {
   status: ProductStatus;
   tags: string[];
   images: string[];
+  // Latest completed sale verdict; only the product list fills it.
+  verdict?: SaleVerdict | null;
   createdAt: string;
   updatedAt: string;
 }

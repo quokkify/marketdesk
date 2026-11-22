@@ -274,7 +274,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.categoryCorrectionOperationService,
       deps.hermesStatus,
       deps.aiUsageReport,
-      deps.hermesLimits
+      deps.hermesLimits,
+      deps.saleVerdictRuns
     ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),

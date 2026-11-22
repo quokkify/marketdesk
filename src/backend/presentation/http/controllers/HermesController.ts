@@ -11,8 +11,9 @@ import type {
   HermesStatusView,
 } from '../../../../shared/types';
 import type { ListEventsQueryDTO } from '../../../application/dto/HermesDTO';
-import { NotFoundError } from '../../../domain/shared/DomainError';
+import { NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { ok, paginated } from '../formatters/ResponseFormatter';
+import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 
 // Parse a comma-separated multi-value query param (e.g. ?status=a,b) into a
@@ -36,7 +37,8 @@ export class HermesController {
     private readonly categoryCorrections?: CategoryCorrectionOperationService,
     private readonly hermesStatus?: () => Promise<HermesStatusView>,
     private readonly aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>,
-    private readonly hermesLimits?: () => Promise<HermesLimits>
+    private readonly hermesLimits?: () => Promise<HermesLimits>,
+    private readonly saleVerdictRuns?: SaleVerdictRuns
   ) {}
 
   status = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -172,12 +174,19 @@ export class HermesController {
   };
 
   runForProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const result = await this.hermes.runHermes({
-      workspaceId: req.user!.workspaceId!,
-      productId: routeParam(req.params.productId),
-      trigger: req.body?.trigger ?? 'manual',
-    });
-    if (result.isErr()) return next(result.error);
-    ok(res, result.value, 202);
+    if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
+    const scope = req.body?.scope ?? ['info', 'price', 'photos'];
+    const { run } = await this.saleVerdictRuns.request(
+      req.user!.workspaceId!,
+      routeParam(req.params.productId),
+      scope,
+      'manual'
+    );
+    ok(res, run, 202);
+  };
+
+  verdict = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
+    ok(res, await this.saleVerdictRuns.view(req.user!.workspaceId!, routeParam(req.params.productId)));
   };
 }

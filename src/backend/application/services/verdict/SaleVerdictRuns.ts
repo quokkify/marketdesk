@@ -100,6 +100,9 @@ export class SaleVerdictRuns {
   }
 
   async view(workspaceId: string, productId: string): Promise<ProductVerdictView> {
+    if (!(await this.deps.products.findByIdForWorkspace(productId, workspaceId))) {
+      throw new NotFoundError(`Product not found: ${productId}`);
+    }
     await this.expireStuck(workspaceId, productId, this.deps.now());
     const [latest, active, lastFailed] = await Promise.all([
       this.deps.verdicts.findLatestCompleted(workspaceId, productId),
