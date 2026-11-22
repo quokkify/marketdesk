@@ -1,6 +1,6 @@
 # One Hermes card on the product page — design
 
-**Status:** draft, waiting for the owner's review of the clickable prototype.
+**Status:** the owner approved the clickable prototype on 2026-11-22; this document waits for approval.
 **Related:** issue #496 (product detail UX audit), the price research graph and sale verdict graph designs of 2026-11-22.
 
 ## Intent
@@ -97,14 +97,47 @@ current step. Staleness and "last run failed" keep their current rules and appea
   (Analyze, Find prices, Autopilot), duration, outcome. A run expands to its steps: identify the model, the
   four price searches, the three checks, each with its result or its error in plain words.
 
+## Behaviour decisions
+
+These are the author's calls after a builder's read of this document; the owner reviews them with the doc.
+
+- **What the buttons run.** Analyze and Analyze again start a verdict run the way the page does today:
+  market prices are searched only when they are missing or out of date (`forceResearch: false`).
+  **Search again** in the drawer forces a new market search (`forceResearch: true`). The "Review price"
+  button is removed; Analyze again and Set price cover it. The counter reads "n/8" when the run includes a
+  market search and "n/3" when it reuses the prices.
+- **Set price to {proposed}** approves the price recommendation the price check wrote
+  (`checks.price.refs.eventIds`), through the same path as Apply in the suggestion queue. As today, that
+  updates the product and queues the update of a connected live listing. When the event is gone or already
+  resolved, the button is replaced by "Analyze again".
+- **Stale and failed.** The chip keeps the last verdict, outlined instead of filled, when the product
+  changed after the check; the lead line says the product changed since the check and Analyze again becomes
+  the primary action. When the last run failed, the chip reads "Last run failed", the lead line gives the
+  reason in plain words, and Analyze again is the primary action.
+- **Checks while a run is in progress.** A check shows "running" while the verdict run is active and the
+  check has no result yet (`pending` or absent); market search rows use the research run's `nodes`.
+- **"Last new price" by hand.** The stored retail fields and their API stay, because the price estimate
+  reads them. In "Your prices" the kind "Last new price" reads and writes those fields (one value, the
+  existing one is shown and can be replaced); the other three kinds are manual comparables with `tier`,
+  `url` and `seenAt`. No data migration, nothing entered earlier is lost.
+- **History sources.** The history tab merges three lists: research runs, verdict runs, and the product's
+  Hermes events the page already loads (suggestions made, applied, dismissed). Price changes stay in the
+  price history card.
+- **Drawer.** Local page state, not in the URL. It opens from the Hermes card rows and from the price
+  card's "1 thing to fix" line (Checks tab).
+
 ## Backend
 
 - `GET /products/:id/price-research/runs?limit=` — finished and active research runs with `nodes`.
 - `GET /hermes/products/:productId/verdicts?limit=` — verdict runs with `checks`.
-- The frontend joins the two lists by time into one history. A verdict run that started a research run is
-  shown as one entry when the research run's trigger is `analyze` and the times overlap.
-- No schema change. Per-step timestamps are not stored today; the log shows step results without times
-  unless the builder finds them cheap to add.
+- Both are workspace-scoped like their single-run siblings, default `limit` 20, maximum 50, no AI rate
+  limiter (they start nothing).
+- One additive migration: nullable `research_run_id` on `product_sale_verdicts`, written when a verdict run
+  starts or reuses a research run. Migrations replay on every start, so it is `ADD COLUMN IF NOT EXISTS`.
+  The history shows a verdict run and its linked research run as one entry; runs without the link (all
+  earlier ones, and searches started by Search again or by autopilot) are separate entries.
+- Per-step timestamps are not stored today; the log shows step results without times unless the builder
+  finds them cheap to add.
 
 ## What is left to the builder
 
@@ -113,7 +146,3 @@ current step. Staleness and "last run failed" keep their current rules and appea
 - Polling cadence while a run is active.
 - Page size and "show more" of the history.
 - Exact copy, within the vocabulary above.
-
-## Open after the prototype review
-
-The owner reviews the prototype and says what is wrong. This document is updated before a plan is written.
