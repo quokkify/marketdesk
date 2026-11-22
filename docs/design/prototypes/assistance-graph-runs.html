@@ -1,0 +1,1629 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarketDesk · AI graph runs — concept</title>
+<style>
+  @font-face {
+    font-family: 'Manrope Variable';
+    src: url('../../../node_modules/@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2') format('woff2');
+    font-weight: 200 800;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2') format('woff2');
+    font-weight: 500;
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #F6F7F9;
+    --surface: #FFFFFF;
+    --surface2: #F2F3F6;
+    --surface3: #ECEEF2;
+    --border: #E7E9EF;
+    --border-strong: #DCDFE7;
+    --text: #191B23;
+    --text2: #5B606E;
+    --text3: #8B90A0;
+    --primary: #5B5BD6;
+    --primary-hover: #4F4FCA;
+    --primary-weak: #EEEEFB;
+    --on-primary: #FFFFFF;
+    --secondary: #C86DD7;
+    --success: #1C9C6B;
+    --success-weak: #E6F6EE;
+    --warning: #C67A12;
+    --warning-weak: #FBF0DD;
+    --danger: #D1435B;
+    --danger-weak: #FBE9EC;
+    --info: #2B7FD4;
+    --info-weak: #E7F1FC;
+    --shadow-sm: 0 1px 2px rgba(19,22,33,.05), 0 1px 1px rgba(19,22,33,.03);
+    --shadow-md: 0 4px 14px rgba(19,22,33,.06), 0 1px 3px rgba(19,22,33,.04);
+    --shadow-lg: 0 18px 48px rgba(19,22,33,.12), 0 4px 12px rgba(19,22,33,.06);
+    --radius: 12px;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    --bg: #0C0D11;
+    --surface: #16171D;
+    --surface2: #1C1E26;
+    --surface3: #23262F;
+    --border: #25272F;
+    --border-strong: #31343E;
+    --text: #ECEEF4;
+    --text2: #A4A9B8;
+    --text3: #6B7080;
+    --primary: #8B8BF2;
+    --primary-hover: #9B9BF6;
+    --primary-weak: #1F2036;
+    --on-primary: #0C0D11;
+    --secondary: #C86DD7;
+    --success: #3ECF8E;
+    --success-weak: #12261E;
+    --warning: #E0A94A;
+    --warning-weak: #2A2113;
+    --danger: #F2647D;
+    --danger-weak: #2C1620;
+    --info: #5AA9F0;
+    --info-weak: #122132;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-md: 0 6px 20px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+    --shadow-lg: 0 24px 60px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope Variable', Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background .18s ease, color .18s ease;
+  }
+  button, select { font-family: inherit; font-size: inherit; color: inherit; }
+  button { cursor: pointer; border: none; background: none; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--text2); }
+  .hidden { display: none !important; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    height: 56px; display: flex; align-items: center; gap: 14px;
+    padding: 0 22px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 90;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: -.02em; font-size: 15px; }
+  .brand-mark {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
+    background: linear-gradient(140deg, var(--primary), var(--secondary)); color: #fff;
+  }
+  .brand-mark svg { width: 14px; height: 14px; }
+  .top-context { color: var(--text2); font-size: 13px; font-weight: 600; padding-left: 14px; border-left: 1px solid var(--border); }
+  .top-spacer { flex: 1; }
+  .concept-chip {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--warning); background: var(--warning-weak); border: 1px solid color-mix(in srgb, var(--warning) 22%, transparent);
+    padding: 3px 7px; border-radius: 6px;
+  }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border);
+    display: grid; place-items: center; color: var(--text2); background: var(--surface);
+    transition: background .15s ease, color .15s ease;
+  }
+  .icon-btn:hover { background: var(--surface2); color: var(--text); }
+  .icon-btn svg { width: 17px; height: 17px; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--primary-weak); color: var(--primary); font-size: 11px; font-weight: 800;
+  }
+
+  .activity { position: relative; }
+  .activity-btn {
+    height: 34px; display: inline-flex; align-items: center; gap: 8px;
+    padding: 0 11px; border-radius: 99px;
+    border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+    background: var(--primary-weak); color: var(--primary);
+    font-size: 12px; font-weight: 700; transition: filter .15s ease;
+  }
+  .activity-btn:hover { filter: brightness(.97); }
+  .activity-btn.is-done { border-color: color-mix(in srgb, var(--success) 30%, var(--border)); background: var(--success-weak); color: var(--success); }
+  .activity-btn.is-error { border-color: color-mix(in srgb, var(--danger) 32%, var(--border)); background: var(--danger-weak); color: var(--danger); }
+  .activity-tokens { font-family: var(--mono); font-size: 10.5px; opacity: .8; font-weight: 500; }
+
+  /* ---------- Layout ---------- */
+  .page { max-width: 1140px; margin: 0 auto; padding: 22px 24px 80px; }
+  .crumbs { margin-bottom: 14px; }
+  .crumbs a { color: var(--text2); text-decoration: none; font-size: 12.5px; font-weight: 650; }
+  .crumbs a:hover { color: var(--text); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); padding: 18px 20px;
+  }
+  .card + .card, .card + .how-card, .ai-card + .how-card { margin-top: 14px; }
+
+  .product-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 22px; }
+  .chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .chip {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+    background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  }
+  .chip.success { background: var(--success-weak); color: var(--success); border-color: color-mix(in srgb, var(--success) 20%, transparent); }
+  .product-head h1 { font-size: 24px; line-height: 1.2; font-weight: 800; letter-spacing: -.025em; }
+  .product-meta { color: var(--text2); font-size: 12.5px; margin-top: 5px; display: flex; gap: 10px; align-items: center; }
+  .product-meta span.dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text3); }
+
+  .btn {
+    height: 36px; padding: 0 14px; border-radius: 9px;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+    font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    white-space: nowrap; transition: background .15s ease, border-color .15s ease, transform .06s ease;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--primary); border-color: transparent; color: var(--on-primary); }
+  .btn.primary:hover { background: var(--primary-hover); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.small { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
+
+  .link-btn { color: var(--primary); font-size: 12.5px; font-weight: 750; display: inline-flex; align-items: center; gap: 5px; }
+  .link-btn:hover { text-decoration: underline; }
+
+  /* ---------- AI action card ---------- */
+  .ai-card { padding: 18px 20px 16px; }
+  .ai-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .ai-head h2 { font-size: 15px; font-weight: 800; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+  .ai-head h2 .spark { color: var(--primary); display: inline-flex; }
+  .ai-head h2 .spark svg { width: 16px; height: 16px; }
+  .ai-head p { color: var(--text2); font-size: 12.5px; margin-top: 2px; }
+  .demo-control {
+    display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 650; color: var(--text3);
+    background: var(--surface2); border: 1px dashed var(--border-strong); padding: 5px 9px; border-radius: 8px;
+  }
+  .demo-control select {
+    border: none; background: transparent; font-size: 11.5px; font-weight: 700; color: var(--text2);
+    outline: none; cursor: pointer; max-width: 170px;
+  }
+  .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 15px; }
+  .actions-spacer { flex: 1; }
+  .run-empty { margin-top: 14px; color: var(--text3); font-size: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .run-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .run-list:empty { margin: 0; }
+
+  .run {
+    display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+    padding: 10px 13px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); cursor: pointer;
+    transition: background .14s ease, border-color .14s ease;
+    animation: rowIn .2s ease both;
+  }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+  .run:hover { background: var(--surface2); border-color: var(--border-strong); }
+  .run.is-running { border-left: 3px solid var(--primary); padding-left: 11px; }
+  .run.is-completed { border-left: 3px solid var(--success); padding-left: 11px; }
+  .run.is-timed_out, .run.is-failed { border-left: 3px solid var(--danger); padding-left: 11px; }
+  .run-icon { width: 24px; height: 24px; display: grid; place-items: center; }
+  .run-icon.running { color: var(--primary); }
+  .run-icon.completed { color: var(--success); }
+  .run-icon.danger { color: var(--danger); }
+  .run-icon svg { width: 17px; height: 17px; }
+  .run-top { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+  .run-name { font-size: 13px; font-weight: 750; white-space: nowrap; }
+  .run-phase { font-size: 11.5px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .run-phase b { color: var(--primary); font-weight: 700; }
+  .run.is-timed_out .run-phase, .run.is-failed .run-phase { color: var(--danger); }
+  .run-segments { display: flex; gap: 4px; margin-top: 6px; max-width: 340px; }
+  .seg { height: 4px; flex: 1; border-radius: 99px; background: var(--surface3); }
+  .seg.done { background: var(--success); }
+  .seg.running { background: var(--primary); animation: segPulse 1.3s ease-in-out infinite; }
+  .seg.timed_out, .seg.failed { background: var(--danger); }
+  @keyframes segPulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .run-meta { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: 11.5px; }
+  .run-time { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+  .run-tokens { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text3); }
+  .run-chev { color: var(--text3); font-size: 16px; line-height: 1; }
+
+  /* ---------- How it works ---------- */
+  .how-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px 20px 17px; }
+  .how-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .how-head h3 { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+  .how-head h3 .info {
+    width: 16px; height: 16px; border-radius: 50%; background: var(--primary-weak); color: var(--primary);
+    display: inline-grid; place-items: center; font-size: 10px; font-weight: 800;
+  }
+  .how-head p { color: var(--text2); font-size: 11.5px; margin-top: 2px; }
+  .graph-lane { display: flex; align-items: stretch; gap: 0; margin-top: 15px; flex-wrap: wrap; row-gap: 10px; }
+  .lane-node {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 10px; min-width: 88px; text-align: left;
+    transition: border-color .14s ease, background .14s ease, transform .06s ease;
+  }
+  .lane-node:hover { border-color: var(--primary); background: var(--primary-weak); }
+  .lane-node:active { transform: translateY(1px); }
+  .lane-node .ln-top { display: flex; align-items: center; gap: 6px; }
+  .lane-node .ln-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+  .lane-node .ln-name { font-size: 11.5px; font-weight: 750; white-space: nowrap; }
+  .lane-node .ln-limit { font-size: 10px; color: var(--text3); font-family: var(--mono); white-space: nowrap; }
+  .lane-node.llm { background: var(--primary-weak); border-color: color-mix(in srgb, var(--primary) 24%, transparent); }
+  .lane-node.llm .ln-dot { background: var(--primary); }
+  .lane-node.llm .ln-limit { color: var(--primary); opacity: .8; }
+  .lane-node.guard { background: var(--warning-weak); border-color: color-mix(in srgb, var(--warning) 22%, transparent); }
+  .lane-node.guard .ln-dot { background: var(--warning); }
+  .lane-arrow { display: flex; align-items: center; color: var(--text3); padding: 0 5px; font-size: 12px; }
+  .how-note { margin-top: 13px; color: var(--text3); font-size: 11.5px; max-width: 780px; }
+  .how-note b { color: var(--text2); font-weight: 650; }
+
+  /* ---------- Tooltip ---------- */
+  .tooltip {
+    position: fixed; z-index: 400; width: 408px; max-width: calc(100vw - 24px);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px;
+    box-shadow: var(--shadow-lg); overflow: hidden;
+    animation: tipIn .13s ease both;
+  }
+  @keyframes tipIn { from { opacity: 0; transform: translateY(-3px) scale(.99); } to { opacity: 1; transform: none; } }
+  .tt-head { padding: 13px 15px 11px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .tt-title { font-size: 13.5px; font-weight: 800; line-height: 1.25; }
+  .tt-ver { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 99px;
+    font-size: 10.5px; font-weight: 750; white-space: nowrap;
+    background: var(--primary-weak); color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  .status-pill.completed { background: var(--success-weak); color: var(--success); border-color: color-mix(in srgb, var(--success) 22%, transparent); }
+  .status-pill.timed_out, .status-pill.failed { background: var(--danger-weak); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 24%, transparent); }
+  .status-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .status-pill.running .dot { animation: segPulse 1.2s ease-in-out infinite; }
+
+  .tt-current { padding: 10px 15px 9px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .tt-current-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 11.5px; }
+  .tt-current-top b { font-weight: 750; }
+  .tt-current-top .limit { color: var(--text3); font-family: var(--mono); font-size: 10.5px; }
+  .tt-bar { height: 4px; border-radius: 99px; background: var(--surface3); margin-top: 7px; overflow: hidden; }
+  .tt-bar > i { display: block; height: 100%; border-radius: 99px; background: var(--primary); transition: width .14s linear, background .2s ease; }
+  .tt-bar.warn > i { background: var(--warning); }
+  .tt-bar.danger > i { background: var(--danger); }
+
+  .tt-phases { list-style: none; padding: 7px 9px; }
+  .tt-phase { display: grid; grid-template-columns: 18px minmax(0,1fr) 50px 52px; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 7px; }
+  .tt-phase.current { background: var(--primary-weak); }
+  .tt-dot { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--surface3); color: var(--text3); }
+  .tt-dot svg { width: 10px; height: 10px; }
+  .tt-dot.done { background: var(--success-weak); color: var(--success); }
+  .tt-dot.current { background: var(--primary); color: var(--on-primary); }
+  .tt-dot.current .spinner { width: 9px; height: 9px; border-width: 1.5px; }
+  .tt-dot.timed_out, .tt-dot.failed { background: var(--danger-weak); color: var(--danger); }
+  .tt-pname { font-size: 11.5px; font-weight: 650; min-width: 0; line-height: 1.25; }
+  .tt-pname small { display: block; color: var(--text3); font-size: 9.5px; font-weight: 500; }
+  .tt-time { font-family: var(--mono); font-size: 10.5px; color: var(--text2); text-align: right; }
+  .tt-tok { font-family: var(--mono); font-size: 10px; color: var(--text3); text-align: right; }
+  .tt-phase.timed_out .tt-time, .tt-phase.failed .tt-time { color: var(--danger); font-weight: 500; }
+
+  .tt-flag { margin: 0 12px 8px; padding: 7px 9px; border-radius: 7px; font-size: 10.5px; line-height: 1.4; background: var(--danger-weak); color: var(--danger); }
+  .tt-flag b { font-weight: 750; }
+  .tt-foot { border-top: 1px solid var(--border); padding: 9px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface2); }
+  .tt-totals { display: flex; flex-direction: column; gap: 1px; }
+  .tt-totals span { font-size: 10px; color: var(--text3); }
+  .tt-totals b { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text2); }
+  .tt-link { color: var(--primary); font-size: 11.5px; font-weight: 750; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .tt-link:hover { text-decoration: underline; }
+
+  /* ---------- Drawer ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(12,13,17,.38); z-index: 200;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(620px, 96vw);
+    background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg);
+    z-index: 220; transform: translateX(102%); transition: transform .24s cubic-bezier(.4,0,.2,1);
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: none; }
+  body.drawer-open { overflow: hidden; }
+  .drawer-head { padding: 17px 22px 0; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .drawer-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+  .eyebrow { font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+  .drawer-head h2 { font-size: 20px; line-height: 1.25; font-weight: 800; letter-spacing: -.02em; margin-top: 1px; }
+  .drawer-sub { color: var(--text2); font-size: 11.5px; margin-top: 1px; }
+  .drawer-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); color: var(--text2); display: grid; place-items: center; }
+  .drawer-close:hover { background: var(--surface2); color: var(--text); }
+  .drawer-close svg { width: 15px; height: 15px; }
+  .tabs { display: flex; gap: 2px; margin-top: 14px; }
+  .drawer-tab {
+    padding: 9px 12px 10px; font-size: 12px; font-weight: 700; color: var(--text2);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 6px;
+  }
+  .drawer-tab:hover { color: var(--text); }
+  .drawer-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-badge { font-family: var(--mono); font-size: 9px; background: var(--surface3); color: var(--text2); border-radius: 99px; padding: 0 5px; line-height: 15px; }
+  .drawer-tab.active .tab-badge { background: var(--primary-weak); color: var(--primary); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 20px 22px 44px; }
+  .drawer-body::-webkit-scrollbar { width: 10px; }
+  .drawer-body::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid var(--surface); }
+
+  .drawer-section + .drawer-section { margin-top: 24px; }
+  .drawer-section h3 { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+  .lede { font-size: 13px; line-height: 1.6; color: var(--text2); }
+  .seg-switch { display: inline-flex; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 2px; gap: 2px; margin-bottom: 13px; flex-wrap: wrap; }
+  .seg-switch button { padding: 5px 10px; border-radius: 7px; font-size: 11.5px; font-weight: 700; color: var(--text2); }
+  .seg-switch button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; }
+  .stat span { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); }
+  .stat b { display: block; font-size: 13px; font-weight: 750; margin-top: 2px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  .lane-lg { margin-top: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
+  .lane-lg .lane-node { min-width: 0; padding: 7px 9px; flex: 0 0 auto; }
+  .lane-lg .lane-node .ln-name { font-size: 11px; }
+  .lane-lg .lane-node .ln-limit { font-size: 9px; }
+  .lane-lg .lane-arrow { padding: 0 3px; font-size: 11px; flex: 0 0 auto; }
+  .hint { color: var(--text3); font-size: 10.5px; margin-top: 8px; }
+
+  .phase { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); overflow: hidden; }
+  .phase + .phase { margin-top: 7px; }
+  .phase summary {
+    display: flex; align-items: center; gap: 8px; padding: 9px 11px; cursor: pointer; list-style: none;
+    transition: background .13s ease;
+  }
+  .phase summary::-webkit-details-marker { display: none; }
+  .phase summary:hover { background: var(--surface2); }
+  .phase[open] summary { background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .kind { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 2px 5px; border-radius: 4px; background: var(--surface3); color: var(--text2); }
+  .kind.kind-llm { background: var(--primary-weak); color: var(--primary); }
+  .kind.kind-guard { background: var(--warning-weak); color: var(--warning); }
+  .kind.kind-io { background: var(--info-weak); color: var(--info); }
+  .phase-name { font-size: 12.5px; font-weight: 750; flex: 1; }
+  .phase-limit { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .phase-tok { font-family: var(--mono); font-size: 10px; color: var(--text3); min-width: 44px; text-align: right; }
+  .phase-body { padding: 12px 13px 13px; }
+  .phase-body p { font-size: 12px; color: var(--text2); line-height: 1.55; }
+  .phase-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 14px; margin-top: 11px; }
+  .phase-grid div span { display: block; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); }
+  .phase-grid div b { font-size: 11.5px; font-weight: 650; }
+  .io { display: grid; grid-template-columns: 46px 1fr; gap: 8px; margin-top: 7px; align-items: baseline; }
+  .io span { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text3); }
+  .io code { font-family: var(--mono); font-size: 10px; color: var(--text2); background: var(--surface2); padding: 2px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+  .ticks { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .ticks li { font-size: 12px; color: var(--text2); display: flex; gap: 8px; }
+  .ticks li::before { content: '✓'; color: var(--success); font-weight: 800; }
+  .fine { margin-top: 26px; padding-top: 14px; border-top: 1px dashed var(--border); color: var(--text3); font-size: 10.5px; line-height: 1.5; }
+
+  .trace-status { border: 1px solid var(--border); border-radius: 10px; padding: 12px 13px; background: var(--surface2); }
+  .trace-status.running { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); background: var(--primary-weak); }
+  .trace-status.completed { border-color: color-mix(in srgb, var(--success) 24%, var(--border)); background: var(--success-weak); }
+  .trace-status.timed_out, .trace-status.failed { border-color: color-mix(in srgb, var(--danger) 26%, var(--border)); background: var(--danger-weak); }
+  .trace-status-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .trace-status-top b { font-size: 12.5px; }
+  .trace-note { font-size: 11.5px; color: var(--text2); margin-top: 4px; line-height: 1.5; }
+  .trace-status.timed_out .trace-note, .trace-status.failed .trace-note { color: var(--danger); }
+  .trace-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 11px; }
+  .trace-stats .stat { background: color-mix(in srgb, var(--surface) 62%, transparent); border-color: transparent; padding: 7px 8px; }
+  .timeline { position: relative; margin-top: 4px; }
+  .tl-row { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 9px; padding: 8px 8px; border-radius: 8px; cursor: pointer; position: relative; }
+  .tl-row:hover { background: var(--surface2); }
+  .tl-row.selected { background: var(--primary-weak); }
+  .tl-row::after { content: ''; position: absolute; left: 18px; top: 30px; bottom: -6px; width: 1px; background: var(--border-strong); }
+  .tl-row:last-child::after { display: none; }
+  .tl-dot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--surface3); color: var(--text3); z-index: 1; }
+  .tl-dot svg { width: 11px; height: 11px; }
+  .tl-dot.done { background: var(--success-weak); color: var(--success); }
+  .tl-dot.running { background: var(--primary); color: var(--on-primary); }
+  .tl-dot.timed_out, .tl-dot.failed { background: var(--danger-weak); color: var(--danger); }
+  .tl-body { min-width: 0; }
+  .tl-name { font-size: 12.5px; font-weight: 700; }
+  .tl-sub { font-size: 10px; color: var(--text3); margin-top: 1px; }
+  .tl-time { font-family: var(--mono); font-size: 10.5px; color: var(--text2); text-align: right; align-self: center; }
+  .trace-detail { border: 1px solid var(--border); border-radius: 9px; padding: 12px 13px; margin-top: 14px; }
+  .trace-detail h4 { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 7px; }
+  .trace-detail .kv { display: grid; grid-template-columns: 76px 1fr; gap: 5px 10px; margin-top: 9px; font-size: 11.5px; }
+  .trace-detail .kv span { color: var(--text3); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .trace-detail .kv code { font-family: var(--mono); font-size: 10px; color: var(--text2); overflow-wrap: anywhere; }
+  .run-select { width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 0 9px; font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+  .empty-msg { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 26px 20px; text-align: center; color: var(--text3); font-size: 12px; }
+  .run-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .run-table th { text-align: left; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--text3); font-weight: 750; padding: 0 6px 7px; border-bottom: 1px solid var(--border); }
+  .run-table td { padding: 9px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .run-table tr:last-child td { border-bottom: none; }
+  .run-table .num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .run-table tr[data-run] { cursor: pointer; }
+  .run-table tr[data-run]:hover td { background: var(--surface2); }
+
+  /* ---------- Toasts ---------- */
+  .toasts { position: fixed; right: 20px; bottom: 20px; z-index: 500; display: flex; flex-direction: column; gap: 9px; width: 352px; max-width: calc(100vw - 40px); transition: right .24s cubic-bezier(.4,0,.2,1); }
+  @media (min-width: 900px) { body.drawer-open .toasts { right: calc(min(620px, 96vw) + 20px); } }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border-strong); border-left: 3px solid var(--primary);
+    border-radius: 10px; box-shadow: var(--shadow-lg); padding: 11px 13px;
+    display: flex; gap: 10px; align-items: flex-start; animation: toastIn .2s ease both;
+  }
+  .toast.success { border-left-color: var(--success); }
+  .toast.danger { border-left-color: var(--danger); }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .toast-main { flex: 1; min-width: 0; }
+  .toast-main b { display: block; font-size: 12px; }
+  .toast-main span { display: block; font-size: 10.5px; color: var(--text2); margin-top: 1px; line-height: 1.4; }
+  .toast-main button { margin-top: 6px; color: var(--primary); font-size: 11px; font-weight: 750; }
+  .toast-main button:hover { text-decoration: underline; }
+  .toast-close { color: var(--text3); font-size: 15px; line-height: 1; padding: 0 2px; }
+  .toast-close:hover { color: var(--text); }
+
+  /* ---------- shared bits ---------- */
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .footer-note { text-align: center; color: var(--text3); font-size: 10.5px; margin-top: 30px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+  @media (max-width: 760px) {
+    .graph-lane { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+    .lane-node { flex: 0 0 auto; }
+    .lane-arrow { flex: 0 0 auto; }
+    .page { padding: 16px 13px 60px; }
+    .product-head { flex-direction: column; }
+    .top-context { display: none; }
+    .concept-chip { display: none; }
+    .activity-tokens { display: none; }
+    .stats, .trace-stats { grid-template-columns: 1fr 1fr; }
+    .actions .link-btn { width: 100%; justify-content: flex-start; margin-top: 4px; }
+    .run-meta .run-tokens { display: none; }
+    .demo-control { width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6l8 7 8-7v12"/></svg>
+    </span>
+    MarketDesk
+  </div>
+  <div class="top-context">Product detail</div>
+  <div class="top-spacer"></div>
+  <span class="concept-chip">Concept preview</span>
+  <div class="activity hidden" id="activityPill">
+    <button class="activity-btn" id="activityBtn" type="button" aria-haspopup="dialog">
+      <span class="spinner" id="activitySpinner"></span>
+      <span id="activityText">1 running</span>
+      <span class="activity-tokens" id="activityTokens">0 tok</span>
+    </button>
+  </div>
+  <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle theme" title="Toggle light / dark">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+  <div class="avatar">YA</div>
+</header>
+
+<main class="page">
+  <div class="crumbs"><a href="#" onclick="return false">← Back to products</a></div>
+
+  <section class="card product-head">
+    <div>
+      <div class="chips">
+        <span class="chip success">Active</span>
+        <span class="chip">Like new</span>
+        <span class="chip">Audio</span>
+      </div>
+      <h1>Wireless Headphones Pro</h1>
+      <div class="product-meta"><span>Product detail · SKU-38412</span><span class="dot"></span><span>OLX · 3 photos</span></div>
+    </div>
+    <button class="btn" type="button">Edit product</button>
+  </section>
+
+  <section class="card ai-card">
+    <div class="ai-head">
+      <div>
+        <h2>
+          <span class="spark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/><path d="M19 15.5 19.8 18l2.2.8-2.2.7L19 22l-.8-2.5-2.2-.7 2.2-.8.8-2.5Z"/></svg></span>
+          AI actions
+        </h2>
+        <p>Runs in the background — the page stays usable while the graph works.</p>
+      </div>
+      <label class="demo-control">Prototype scenario
+        <select id="scenario" aria-label="Prototype scenario">
+          <option value="normal">Normal run</option>
+          <option value="slow">Slow SEO → timeout</option>
+          <option value="error">Provider error</option>
+        </select>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn primary" type="button" data-graph="improve">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/></svg>
+        Improve listing
+      </button>
+      <button class="btn" type="button" data-graph="draft">Generate draft</button>
+      <button class="btn" type="button" data-graph="publication">Recheck publication</button>
+      <div class="actions-spacer"></div>
+      <button class="link-btn" type="button" id="openOverview">How graphs work <span>→</span></button>
+    </div>
+    <div class="run-list" id="runList"></div>
+    <p class="run-empty" id="runEmpty">No AI runs yet. Start one — it keeps running while you browse. Hover a run for live phases, click for the full trace.</p>
+  </section>
+
+  <section class="how-card">
+    <div class="how-head">
+      <div>
+        <h3><span class="info">i</span> How this graph works</h3>
+        <p id="laneSub">product-assistance@1 · 5 phases · 20s deadline · review-only</p>
+      </div>
+      <button class="link-btn" type="button" id="openGraph">Full graph →</button>
+    </div>
+    <div class="graph-lane" id="graphLane"></div>
+    <p class="how-note">Each phase has its own timeout. If a phase exceeds its limit the run stops, keeps what it already produced and reports where it stopped — <b>nothing is applied automatically</b>.</p>
+  </section>
+
+  <p class="footer-note">Interactive concept · all timings, token counts and prices are illustrative prototype data.</p>
+</main>
+
+<div class="tooltip hidden" id="tooltip" role="tooltip"></div>
+<div class="overlay" id="drawerOverlay"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div class="drawer-title-row">
+      <div>
+        <div class="eyebrow" id="drawerEyebrow">AI graph · concept</div>
+        <h2 id="drawerTitle">Improve listing</h2>
+        <div class="drawer-sub" id="drawerSub">product-assistance@1 · 5 phases</div>
+      </div>
+      <button class="drawer-close" id="drawerClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="tabs" id="drawerTabs">
+      <button class="drawer-tab" type="button" data-tab="overview">Overview</button>
+      <button class="drawer-tab" type="button" data-tab="trace">Live trace <span class="tab-badge" id="traceBadge">0</span></button>
+      <button class="drawer-tab" type="button" data-tab="runs">Run history</button>
+    </div>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Prototype data. Mirrors the shape of the real ProductAssistanceGraph:
+// route -> branch node. Phases below are the sub-steps shown to the user; the
+// real trace would be fed by LangGraph node callbacks / SSE.
+// ---------------------------------------------------------------------------
+const TOKEN_RATE = 2.5e-6; // blended $ per token, illustrative
+
+const GRAPHS = {
+  improve: {
+    name: 'Improve listing',
+    version: 'product-assistance@1',
+    summary: 'Reads the product and listing inside the workspace, drafts better SEO copy and a price suggestion, then assembles review-only changes. It never writes to the marketplace.',
+    deadline: 20,
+    maxTokens: 8000,
+    typicalTokens: 5200,
+    failKey: 'price',
+    guardrails: [
+      'Review-only: suggestions are returned, never applied automatically.',
+      'Workspace-scoped reads; unknown or cross-workspace IDs stop the graph at Load context.',
+      'Sandbox views are excluded from the price signal.',
+      'Both model outputs are schema-validated before assembly.'
+    ],
+    phases: [
+      { key: 'route', label: 'Route', kind: 'router', limit: 0.5, duration: 0.2, tokens: 0, model: '—',
+        desc: 'Chooses the improve branch from the requested action and validates the input shape. A bad input fails here before any model spend.',
+        inp: 'action = improve, workspaceId, productId, listingId?', out: 'branch = improve', retry: 'none' },
+      { key: 'load', label: 'Load context', kind: 'io', limit: 2, duration: 0.6, tokens: 0, model: '—',
+        desc: 'Loads the product, listing and marketplace scoped to the workspace. Unknown or cross-workspace IDs stop the graph here.',
+        inp: 'productId, listingId, workspaceId', out: 'product, listing, marketplace', retry: 'none' },
+      { key: 'seo', label: 'SEO copy', kind: 'llm', limit: 8, duration: 3.2, tokens: 3400, model: 'gpt-4.1-mini',
+        desc: 'Sends the product and listing copy to the SEO agent. Proposes a stronger title, description and tags; output is schema-validated.',
+        inp: 'name, description, category, tags, marketplace', out: 'title, description, tags', retry: '1× on provider error' },
+      { key: 'price', label: 'Price', kind: 'llm', limit: 6, duration: 2.0, tokens: 1800, model: 'gpt-4.1-mini',
+        desc: 'Suggests a price from cost, recent views and conversion. Sandbox views are excluded so they cannot be mistaken for real demand.',
+        inp: 'cost, recent views, conversion rate', out: 'suggestedPrice, reasoning, confidence', retry: '1× on provider error' },
+      { key: 'assemble', label: 'Assemble', kind: 'guard', limit: 1, duration: 0.3, tokens: 0, model: '—',
+        desc: 'Validates both outputs and merges them into a review-only suggestion. Nothing is written until a human approves.',
+        inp: 'seo output, price output', out: 'ProductImprovementSuggestions', retry: 'none' }
+    ]
+  },
+  draft: {
+    name: 'Generate draft',
+    version: 'product-assistance@1',
+    summary: 'Turns the product data into a marketplace-ready draft, runs marketplace guardrails, then stores it as a draft for review.',
+    deadline: 18,
+    maxTokens: 6500,
+    typicalTokens: 4500,
+    failKey: 'copy',
+    guardrails: [
+      'Draft is stored, not published.',
+      'Marketplace character limits and forbidden claims are checked before save.',
+      'Provider errors are retried once, then surfaced to the run.'
+    ],
+    phases: [
+      { key: 'route', label: 'Route', kind: 'router', limit: 0.5, duration: 0.2, tokens: 0, model: '—',
+        desc: 'Selects the draft branch and validates the product payload.',
+        inp: 'action = draft, workspaceId, request', out: 'branch = draft', retry: 'none' },
+      { key: 'context', label: 'Product context', kind: 'io', limit: 2, duration: 0.8, tokens: 0, model: '—',
+        desc: 'Loads the product, images and target marketplace settings.',
+        inp: 'productId, marketplaceId', out: 'product, images, marketplace rules', retry: 'none' },
+      { key: 'copy', label: 'Draft copy', kind: 'llm', limit: 8, duration: 3.6, tokens: 4200, model: 'gpt-4.1-mini',
+        desc: 'Generates title, description, category and tags in the marketplace voice.',
+        inp: 'product + marketplace rules', out: 'draft listing fields', retry: '1× on provider error' },
+      { key: 'guardrails', label: 'Guardrails', kind: 'guard', limit: 3.5, duration: 0.8, tokens: 300, model: 'gpt-4.1-mini',
+        desc: 'Checks character limits, forbidden claims and category fit. Rewrites or rejects invalid copy.',
+        inp: 'draft listing fields', out: 'validated draft + warnings', retry: 'none' },
+      { key: 'persist', label: 'Save draft', kind: 'io', limit: 1.5, duration: 0.4, tokens: 0, model: '—',
+        desc: 'Stores the draft with an audit record. Publishing still requires a human action.',
+        inp: 'validated draft', out: 'draftId', retry: 'none' }
+    ]
+  },
+  publication: {
+    name: 'Recheck publication',
+    version: 'product-assistance@1',
+    summary: 'Re-reads a live listing, re-runs the SEO and price checks and returns a publish/no-publish verdict for review.',
+    deadline: 16,
+    maxTokens: 5000,
+    typicalTokens: 4000,
+    failKey: 'price',
+    guardrails: [
+      'Verdict is advisory; the listing is not changed.',
+      'Only provider-reported views are used.',
+      'Any phase timeout invalidates the verdict and is surfaced.'
+    ],
+    phases: [
+      { key: 'route', label: 'Route', kind: 'router', limit: 0.5, duration: 0.2, tokens: 0, model: '—',
+        desc: 'Selects the publication branch from the requested action.',
+        inp: 'action = publication, listingId', out: 'branch = publication', retry: 'none' },
+      { key: 'listing', label: 'Load listing', kind: 'io', limit: 2, duration: 0.6, tokens: 0, model: '—',
+        desc: 'Loads the listing, product and marketplace snapshot for the workspace.',
+        inp: 'listingId, workspaceId', out: 'listing snapshot', retry: 'none' },
+      { key: 'seo', label: 'SEO check', kind: 'llm', limit: 8, duration: 2.6, tokens: 2600, model: 'gpt-4.1-mini',
+        desc: 'Scores the current copy and proposes targeted fixes if it falls below the marketplace baseline.',
+        inp: 'listing copy + marketplace baseline', out: 'seo findings + fixes', retry: '1× on provider error' },
+      { key: 'price', label: 'Price check', kind: 'llm', limit: 6, duration: 1.6, tokens: 1400, model: 'gpt-4.1-mini',
+        desc: 'Compares the current price with cost, views and conversion, and flags a mismatch.',
+        inp: 'price, cost, views, conversion', out: 'price verdict', retry: '1× on provider error' },
+      { key: 'verdict', label: 'Verdict', kind: 'guard', limit: 1, duration: 0.3, tokens: 0, model: '—',
+        desc: 'Combines both checks into a single advisory verdict with reasons.',
+        inp: 'seo findings, price verdict', out: 'ProductRecheckResult', retry: 'none' }
+    ]
+  }
+};
+
+const STATUS_LABEL = { running: 'Running', completed: 'Completed', timed_out: 'Timed out', failed: 'Failed' };
+const KIND_LABEL = { router: 'route', io: 'io', llm: 'llm', guard: 'guard' };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const $ = (sel) => document.querySelector(sel);
+const el = {
+  runList: $('#runList'),
+  runEmpty: $('#runEmpty'),
+  tooltip: $('#tooltip'),
+  drawer: $('#drawer'),
+  overlay: $('#drawerOverlay'),
+  drawerBody: $('#drawerBody'),
+  drawerTitle: $('#drawerTitle'),
+  drawerSub: $('#drawerSub'),
+  drawerEyebrow: $('#drawerEyebrow'),
+  drawerTabs: $('#drawerTabs'),
+  traceBadge: $('#traceBadge'),
+  graphLane: $('#graphLane'),
+  laneSub: $('#laneSub'),
+  activityPill: $('#activityPill'),
+  activityBtn: $('#activityBtn'),
+  activityText: $('#activityText'),
+  activityTokens: $('#activityTokens'),
+  activitySpinner: $('#activitySpinner'),
+  scenario: $('#scenario'),
+  toasts: $('#toasts'),
+};
+
+const fmtTokens = (n) => {
+  n = Math.max(0, n || 0);
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(2)}k`;
+  return `${Math.round(n)}`;
+};
+const fmtTokensFull = (n) => Math.round(n || 0).toLocaleString('en-US');
+const fmtCost = (tokens) => `$${(Math.max(0, tokens) * TOKEN_RATE).toFixed(3)}`;
+const fmtSec = (n) => `${(Math.max(0, n) || 0).toFixed(1)}s`;
+const fmtLimit = (n) => (n >= 1 ? `${n.toFixed(n % 1 ? 1 : 0)}s` : `${Math.round(n * 1000)}ms`);
+
+const ICON = {
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/><path d="M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>',
+  spinner: '<span class="spinner"></span>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  dot: '<span style="width:4px;height:4px;border-radius:50%;background:currentColor;display:block"></span>',
+};
+
+const state = {
+  runs: [],
+  hover: null,
+  drawer: { open: false, tab: 'overview', runId: null, graphKey: 'improve', phase: null },
+  theme: localStorage.getItem('md-concept-theme') || 'light',
+  laneGraph: 'improve',
+  lastDrawerPaint: 0,
+};
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+function applyTheme(theme) {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('md-concept-theme', theme);
+  const icon = theme === 'dark'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z"/></svg>';
+  $('#themeBtn').innerHTML = icon;
+}
+applyTheme(state.theme);
+$('#themeBtn').addEventListener('click', () => applyTheme(state.theme === 'light' ? 'dark' : 'light'));
+
+// ---------------------------------------------------------------------------
+// Runs
+// ---------------------------------------------------------------------------
+let runSeq = 0;
+function createRun(graphKey) {
+  runSeq += 1;
+  return {
+    id: `run_${Date.now().toString(36)}${runSeq}`,
+    graphKey,
+    status: 'running',
+    startedAt: Date.now(),
+    elapsed: 0,
+    phaseIndex: 0,
+    tokens: 0,
+    phaseStates: GRAPHS[graphKey].phases.map(() => ({ status: 'pending', elapsed: 0, tokens: 0 })),
+    scenario: el.scenario.value,
+    note: null,
+    seeded: false,
+    finishedNotified: false,
+  };
+}
+
+function phaseDuration(run, index, phase) {
+  if (run.scenario === 'slow' && phase.key === 'seo') return phase.limit + 2.6;
+  if (run.scenario === 'error' && phase.key === GRAPHS[run.graphKey].failKey) return Math.max(1.2, phase.duration * 0.8);
+  return phase.duration;
+}
+
+function startRun(graphKey) {
+  const active = state.runs.filter((r) => r.status === 'running');
+  if (active.length >= 3) {
+    showToast('Prototype limit reached', 'Up to 3 concurrent graph runs in this concept.', 'danger');
+    return;
+  }
+  const run = createRun(graphKey);
+  state.runs.unshift(run);
+  state.laneGraph = graphKey;
+  renderLane();
+  renderRunList();
+  renderActivity();
+  if (el.footerNote) el.footerNote.textContent = '';
+}
+
+function recomputeTokens(run) {
+  run.tokens = run.phaseStates.reduce((sum, ps) => sum + ps.tokens, 0);
+}
+
+function tick() {
+  const now = performance.now();
+  if (!tick.last) tick.last = now;
+  const dt = Math.min(0.35, Math.max(0, (now - tick.last) / 1000));
+  tick.last = now;
+  if (!dt) return;
+
+  for (const run of state.runs) {
+    if (run.status !== 'running') continue;
+    const graph = GRAPHS[run.graphKey];
+    const index = run.phaseIndex;
+    const phase = graph.phases[index];
+    const ps = run.phaseStates[index];
+    if (ps.status === 'pending') ps.status = 'running';
+
+    const duration = phaseDuration(run, index, phase);
+    ps.elapsed += dt;
+    run.elapsed += dt;
+    if (phase.tokens > 0) ps.tokens += phase.tokens * (dt / Math.max(duration, 0.1));
+
+    // Hard per-phase timeout: stop before the phase can finish.
+    if (ps.elapsed >= phase.limit) {
+      ps.elapsed = phase.limit;
+      ps.status = 'timed_out';
+      run.status = 'timed_out';
+      run.note = `${phase.label} exceeded its ${fmtLimit(phase.limit)} limit. The run stopped and kept the partial output.`;
+      finishRun(run);
+      continue;
+    }
+
+    // Simulated provider failure.
+    if (run.scenario === 'error' && phase.key === graph.failKey && ps.elapsed >= duration * 0.6) {
+      ps.status = 'failed';
+      run.status = 'failed';
+      run.note = `Provider error in ${phase.label} (HTTP 429). Retry policy: ${phase.retry}.`;
+      finishRun(run);
+      continue;
+    }
+
+    if (ps.elapsed >= duration) {
+      ps.elapsed = duration;
+      ps.tokens = phase.tokens;
+      ps.status = 'done';
+      if (index + 1 < graph.phases.length) {
+        run.phaseIndex += 1;
+        run.phaseStates[run.phaseIndex].status = 'running';
+      } else {
+        run.status = 'completed';
+        finishRun(run);
+      }
+    }
+    recomputeTokens(run);
+  }
+
+  renderRunList();
+  renderActivity();
+  if (state.hover) renderTooltip();
+  if (state.drawer.open && state.drawer.tab === 'trace') updateDrawerLive();
+}
+
+function finishRun(run) {
+  recomputeTokens(run);
+  run.finishedAt = Date.now();
+  if (run.finishedNotified) return;
+  run.finishedNotified = true;
+  countFinished(run);
+  if (run.status === 'completed') {
+    showToast('Run completed', `${GRAPHS[run.graphKey].name} · ${fmtTokensFull(run.tokens)} tokens · ${fmtCost(run.tokens)} · ${fmtSec(run.elapsed)}`, 'success', run.id);
+  } else if (run.status === 'timed_out') {
+    showToast('Phase timed out', run.note, 'danger', run.id, 'View trace');
+  } else if (run.status === 'failed') {
+    showToast('Run failed', run.note, 'danger', run.id, 'View trace');
+  }
+  if (state.drawer.open) renderDrawer();
+}
+
+function countFinished(run) {
+  const label = run.status === 'completed' ? 'Completed' : run.status === 'timed_out' ? 'Timed out' : 'Failed';
+  if (state.drawer.open && state.drawer.tab === 'trace') renderDrawer();
+  void label;
+}
+
+// ---------------------------------------------------------------------------
+// Run rows
+// ---------------------------------------------------------------------------
+function statusOf(run) {
+  if (run.status === 'running') {
+    const ps = run.phaseStates[run.phaseIndex];
+    return ps.status === 'pending' ? 'running' : ps.status;
+  }
+  return run.status;
+}
+
+function runIconMarkup(run) {
+  if (run.status === 'running') return '<span class="spinner"></span>';
+  if (run.status === 'completed') return ICON.check;
+  if (run.status === 'timed_out') return ICON.alert;
+  return ICON.x;
+}
+
+function runIconClass(run) {
+  if (run.status === 'running') return 'run-icon running';
+  if (run.status === 'completed') return 'run-icon completed';
+  return 'run-icon danger';
+}
+
+function activePhase(run) {
+  return GRAPHS[run.graphKey].phases[Math.min(run.phaseIndex, GRAPHS[run.graphKey].phases.length - 1)];
+}
+
+function runPhaseText(run) {
+  if (run.status === 'running') {
+    const phase = activePhase(run);
+    const ps = run.phaseStates[run.phaseIndex];
+    return `<b>${phase.label}</b> · ${fmtSec(ps.elapsed)} / ${fmtLimit(phase.limit)} limit`;
+  }
+  if (run.status === 'completed') {
+    return `Done · ${fmtSec(run.elapsed)} · ${fmtTokensFull(run.tokens)} tokens`;
+  }
+  if (run.status === 'timed_out') {
+    return `<b>${activePhase(run).label} timed out</b> · ${fmtLimit(activePhase(run).limit)} limit`;
+  }
+  return `<b>Failed in ${activePhase(run).label}</b>`;
+}
+
+function updateRow(row, run) {
+  row.className = `run is-${run.status}`;
+  const icon = row.querySelector('.run-icon');
+  icon.className = runIconClass(run);
+  icon.innerHTML = runIconMarkup(run);
+  row.querySelector('.run-name').textContent = GRAPHS[run.graphKey].name;
+  row.querySelector('.run-phase').innerHTML = runPhaseText(run);
+
+  const segs = run.phaseStates.map((ps) => {
+    const cls = ps.status === 'running' ? 'running' : ps.status === 'done' ? 'done' : ps.status === 'timed_out' || ps.status === 'failed' ? ps.status : '';
+    return `<span class="seg ${cls}"></span>`;
+  }).join('');
+  const segWrap = row.querySelector('.run-segments');
+  if (segWrap.dataset.sig !== segs) {
+    segWrap.innerHTML = segs;
+    segWrap.dataset.sig = segs;
+  }
+
+  row.querySelector('.run-time').textContent = fmtSec(run.elapsed);
+  row.querySelector('.run-tokens').textContent = `${fmtTokens(run.tokens)} tok`;
+  row.setAttribute('aria-label', `${GRAPHS[run.graphKey].name}, ${STATUS_LABEL[run.status]}. Open trace.`);
+}
+
+function ensureRow(run) {
+  let row = el.runList.querySelector(`.run[data-run-id="${run.id}"]`);
+  if (row) return row;
+  row = document.createElement('div');
+  row.className = `run is-${run.status}`;
+  row.dataset.runId = run.id;
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  row.innerHTML = `
+    <div class="run-icon"></div>
+    <div class="run-main">
+      <div class="run-top"><span class="run-name"></span><span class="run-phase"></span></div>
+      <div class="run-segments"></div>
+    </div>
+    <div class="run-meta">
+      <span class="run-time mono"></span>
+      <span class="run-tokens"></span>
+      <span class="run-chev">›</span>
+    </div>`;
+  row.addEventListener('click', () => openDrawer({ runId: run.id, tab: 'trace' }));
+  row.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openDrawer({ runId: run.id, tab: 'trace' });
+    }
+  });
+  row.addEventListener('pointerenter', () => showTooltip(run, row, 'right'));
+  row.addEventListener('pointerleave', hideTooltipSoon);
+  el.runList.appendChild(row);
+  return row;
+}
+
+function renderRunList() {
+  const liveRuns = state.runs.filter((run) => !run.seeded);
+  for (const run of liveRuns) ensureRow(run);
+  for (const row of [...el.runList.children]) {
+    if (!liveRuns.some((run) => run.id === row.dataset.runId)) row.remove();
+  }
+  const order = [
+    ...liveRuns.filter((run) => run.status === 'running'),
+    ...liveRuns.filter((run) => run.status !== 'running'),
+  ].map((run) => run.id).join(',');
+  if (el.runList.dataset.order !== order) {
+    el.runList.dataset.order = order;
+    for (const run of liveRuns) {
+      const row = el.runList.querySelector(`.run[data-run-id="${run.id}"]`);
+      if (!row) continue;
+      el.runList.appendChild(row);
+      updateRow(row, run);
+    }
+  } else {
+    for (const run of liveRuns) {
+      const row = el.runList.querySelector(`.run[data-run-id="${run.id}"]`);
+      if (row) updateRow(row, run);
+    }
+  }
+  el.runEmpty.classList.toggle('hidden', liveRuns.length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Activity pill
+// ---------------------------------------------------------------------------
+function latestLiveRun() {
+  return state.runs.find((run) => !run.seeded) || null;
+}
+
+function renderActivity() {
+  const live = state.runs.filter((run) => run.status === 'running');
+  const latest = latestLiveRun();
+  if (!latest) {
+    el.activityPill.classList.add('hidden');
+    return;
+  }
+  el.activityPill.classList.remove('hidden');
+  el.activityText.textContent = live.length ? `${live.length} running` : STATUS_LABEL[latest.status];
+  const tokens = live.length ? live.reduce((sum, run) => sum + run.tokens, 0) : latest.tokens;
+  el.activityTokens.textContent = `${fmtTokens(tokens)} tok`;
+  el.activityBtn.className = 'activity-btn';
+  if (!live.length) {
+    if (latest.status === 'completed') el.activityBtn.classList.add('is-done');
+    else el.activityBtn.classList.add('is-error');
+    el.activitySpinner.classList.add('hidden');
+  } else {
+    el.activitySpinner.classList.remove('hidden');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tooltip
+// ---------------------------------------------------------------------------
+let hideTimer = null;
+
+function phaseIcon(status) {
+  if (status === 'running') return ICON.spinner;
+  if (status === 'done') return ICON.check;
+  if (status === 'timed_out') return ICON.alert;
+  if (status === 'failed') return ICON.x;
+  return ICON.dot;
+}
+
+function tooltipHTML(run) {
+  const graph = GRAPHS[run.graphKey];
+  const activeKey = run.phaseIndex;
+  const status = run.status;
+  const phaseRows = graph.phases.map((phase, index) => {
+    const ps = run.phaseStates[index];
+    const cls = ps.status === 'running' || (status === 'running' && index === activeKey)
+      ? 'current'
+      : ps.status === 'pending' ? 'pending' : ps.status;
+    const time = ps.status === 'pending' ? '—' : fmtSec(ps.elapsed);
+    const limit = ps.status === 'timed_out' ? `${fmtLimit(phase.limit)} limit` : `${fmtLimit(phase.limit)} limit`;
+    const tok = phase.tokens > 0 && ps.tokens > 0 ? fmtTokens(ps.tokens) : '';
+    return `<li class="tt-phase ${cls}">
+      <span class="tt-dot ${cls}">${phaseIcon(cls === 'current' ? 'running' : ps.status)}</span>
+      <span class="tt-pname">${phase.label}<small>${limit}</small></span>
+      <span class="tt-time">${time}</span>
+      <span class="tt-tok">${tok}</span>
+    </li>`;
+  }).join('');
+
+  const currentPhase = graph.phases[Math.min(activeKey, graph.phases.length - 1)];
+  const currentState = run.phaseStates[Math.min(activeKey, graph.phases.length - 1)];
+  const timeoutRatio = currentState.status === 'pending' ? 0 : Math.min(1, currentState.elapsed / currentPhase.limit);
+  const timeoutClass = currentState.status === 'timed_out' || status === 'failed' ? 'danger' : timeoutRatio > 0.75 ? 'warn' : '';
+
+  let flag = '';
+  if (run.note) flag = `<div class="tt-flag"><b>${status === 'timed_out' ? 'Phase timeout' : 'Run stopped'}.</b> ${run.note}</div>`;
+
+  return `
+    <div class="tt-head">
+      <div>
+        <div class="tt-title">${graph.name}</div>
+        <div class="tt-ver">${graph.version}</div>
+      </div>
+      <span class="status-pill ${status}"><span class="dot"></span>${STATUS_LABEL[status]}</span>
+    </div>
+    <div class="tt-current">
+      <div class="tt-current-top">
+        <span>${status === 'running' ? `Current phase · <b>${currentPhase.label}</b>` : status === 'completed' ? 'All phases completed' : `${currentPhase.label} · ${STATUS_LABEL[status].toLowerCase()}`}</span>
+        <span class="limit">${currentState.status === 'pending' ? 'queued' : `${fmtSec(currentState.elapsed)} / ${fmtLimit(currentPhase.limit)}`}</span>
+      </div>
+      <div class="tt-bar ${timeoutClass}"><i style="width:${Math.round((status === 'running' ? timeoutRatio : currentState.status === 'done' ? 1 : timeoutRatio) * 100)}%"></i></div>
+    </div>
+    <ul class="tt-phases">${phaseRows}</ul>
+    ${flag}
+    <div class="tt-foot">
+      <div class="tt-totals">
+        <span>Elapsed ${fmtSec(run.elapsed)} / ${graph.deadline}s · ${fmtTokensFull(run.tokens)} tokens · ${fmtCost(run.tokens)}</span>
+        <b>${graph.phases.filter((_, i) => run.phaseStates[i].status === 'done').length}/${graph.phases.length} phases done</b>
+      </div>
+      <button class="tt-link" type="button" data-open-trace="${run.id}">Full trace →</button>
+    </div>`;
+}
+
+function showTooltip(run, anchor, placement) {
+  clearTimeout(hideTimer);
+  state.hover = { runId: run.id, anchor, placement: placement || 'right' };
+  renderTooltip();
+  el.tooltip.classList.remove('hidden');
+  positionTooltip();
+}
+
+function renderTooltip() {
+  if (!state.hover) return;
+  const run = state.runs.find((item) => item.id === state.hover.runId);
+  if (!run) { hideTooltip(); return; }
+  el.tooltip.innerHTML = tooltipHTML(run);
+  positionTooltip();
+}
+
+function positionTooltip() {
+  if (!state.hover) return;
+  const anchor = state.hover.anchor;
+  const rect = anchor.getBoundingClientRect();
+  const tip = el.tooltip;
+  const width = tip.offsetWidth || 408;
+  const height = tip.offsetHeight || 320;
+  const margin = 12;
+  let left;
+  let top;
+  if (state.hover.placement === 'bottom-end') {
+    left = Math.min(window.innerWidth - width - margin, Math.max(margin, rect.right - width));
+    top = rect.bottom + 8;
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 8);
+  } else {
+    left = rect.right + 12;
+    top = rect.top;
+    if (left + width > window.innerWidth - margin) {
+      // Not enough room to the right: anchor under the row, right-aligned to it.
+      left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
+      top = rect.bottom + 8;
+      if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 8);
+    }
+    if (top + height > window.innerHeight - margin) top = Math.max(margin, window.innerHeight - height - margin);
+  }
+  tip.style.left = `${Math.round(left)}px`;
+  tip.style.top = `${Math.round(Math.max(margin, top))}px`;
+}
+
+function hideTooltipSoon() {
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    state.hover = null;
+    el.tooltip.classList.add('hidden');
+  }, 160);
+}
+
+function hideTooltip() {
+  clearTimeout(hideTimer);
+  state.hover = null;
+  el.tooltip.classList.add('hidden');
+}
+
+el.tooltip.addEventListener('pointerenter', () => clearTimeout(hideTimer));
+el.tooltip.addEventListener('pointerleave', hideTooltipSoon);
+el.tooltip.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-open-trace]');
+  if (!btn) return;
+  openDrawer({ runId: btn.dataset.openTrace, tab: 'trace' });
+  hideTooltip();
+});
+window.addEventListener('resize', () => { if (state.hover) positionTooltip(); });
+window.addEventListener('scroll', () => { if (state.hover) positionTooltip(); }, { passive: true });
+
+// ---------------------------------------------------------------------------
+// Graph lane (short explanation)
+// ---------------------------------------------------------------------------
+function renderLane() {
+  const graph = GRAPHS[state.laneGraph];
+  el.laneSub.textContent = `${graph.name} · ${graph.version} · ${graph.phases.length} phases · ${graph.deadline}s deadline · review-only`;
+  el.graphLane.innerHTML = graph.phases.map((phase, index) => `
+    ${index > 0 ? '<span class="lane-arrow">→</span>' : ''}
+    <button class="lane-node ${phase.kind}" type="button" data-graph="${state.laneGraph}" data-phase="${phase.key}" title="Open ${phase.label} details">
+      <span class="ln-top"><span class="ln-dot"></span><span class="ln-name">${phase.label}</span></span>
+      <span class="ln-limit">${phase.tokens ? `${fmtTokens(phase.tokens)} tok · ${fmtLimit(phase.limit)}` : `${phase.kind} · ${fmtLimit(phase.limit)}`}</span>
+    </button>
+  `).join('');
+}
+renderLane();
+
+el.graphLane.addEventListener('click', (event) => {
+  const node = event.target.closest('.lane-node');
+  if (!node) return;
+  openDrawer({ graph: node.dataset.graph, phase: node.dataset.phase, tab: 'overview' });
+});
+
+// ---------------------------------------------------------------------------
+// Drawer
+// ---------------------------------------------------------------------------
+function setTab(tab) {
+  state.drawer.tab = tab;
+  renderDrawer();
+}
+
+function openDrawer({ runId = null, graph = null, phase = null, tab = null } = {}) {
+  const run = runId ? state.runs.find((item) => item.id === runId) : null;
+  state.drawer.open = true;
+  state.drawer.runId = run ? run.id : null;
+  state.drawer.graphKey = run ? run.graphKey : (graph || state.drawer.graphKey || 'improve');
+  state.drawer.phase = phase;
+  state.drawer.tab = tab || (run ? 'trace' : 'overview');
+  el.drawer.classList.add('open');
+  el.overlay.classList.add('show');
+  el.drawer.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('drawer-open');
+  state.lastDrawerPaint = 0;
+  renderDrawer();
+  const body = el.drawerBody;
+  body.scrollTop = 0;
+}
+
+function closeDrawer() {
+  state.drawer.open = false;
+  state.drawer.runId = null;
+  el.drawer.classList.remove('open');
+  el.overlay.classList.remove('show');
+  el.drawer.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('drawer-open');
+}
+
+el.overlay.addEventListener('click', closeDrawer);
+$('#drawerClose').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    if (state.drawer.open) closeDrawer();
+    else hideTooltip();
+  }
+});
+el.drawerTabs.addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-tab]');
+  if (!tab) return;
+  setTab(tab.dataset.tab);
+});
+
+function currentDrawerRun() {
+  return state.drawer.runId ? state.runs.find((run) => run.id === state.drawer.runId) : null;
+}
+
+function overviewHTML(graph, run) {
+  const graphSwitch = Object.entries(GRAPHS).map(([key, item]) =>
+    `<button type="button" data-switch-graph="${key}" class="${key === state.drawer.graphKey ? 'active' : ''}">${item.name}</button>`
+  ).join('');
+
+  const lane = graph.phases.map((phase, index) => `
+    ${index > 0 ? '<span class="lane-arrow">→</span>' : ''}
+    <button class="lane-node ${phase.kind}" type="button" data-open-phase="${phase.key}">
+      <span class="ln-top"><span class="ln-dot"></span><span class="ln-name">${phase.label}</span></span>
+      <span class="ln-limit">${phase.tokens ? `${fmtTokens(phase.tokens)} tok · ${fmtLimit(phase.limit)}` : `${KIND_LABEL[phase.kind]} · ${fmtLimit(phase.limit)}`}</span>
+    </button>
+  `).join('');
+
+  const phases = graph.phases.map((phase) => {
+    const open = state.drawer.phase === phase.key ? 'open' : '';
+    return `<details class="phase" data-phase="${phase.key}" ${open}>
+      <summary>
+        <span class="kind kind-${phase.kind}">${KIND_LABEL[phase.kind]}</span>
+        <span class="phase-name">${phase.label}</span>
+        <span class="phase-limit">${fmtLimit(phase.limit)}</span>
+        <span class="phase-tok">${phase.tokens ? `${fmtTokens(phase.tokens)} tok` : 'no LLM'}</span>
+      </summary>
+      <div class="phase-body">
+        <p>${phase.desc}</p>
+        <div class="phase-grid">
+          <div><span>Model</span><b>${phase.model}</b></div>
+          <div><span>Timeout</span><b>${fmtLimit(phase.limit)} hard limit</b></div>
+          <div><span>Retry</span><b>${phase.retry}</b></div>
+          <div><span>Token budget</span><b>${phase.tokens ? fmtTokensFull(phase.tokens) : '0'}</b></div>
+        </div>
+        <div class="io"><span>Input</span><code>${phase.inp}</code></div>
+        <div class="io"><span>Output</span><code>${phase.out}</code></div>
+      </div>
+    </details>`;
+  }).join('');
+
+  return `
+    <div class="drawer-section">
+      <div class="seg-switch">${graphSwitch}</div>
+      <p class="lede">${graph.summary}</p>
+      <div class="stats">
+        <div class="stat"><span>Deadline</span><b>${graph.deadline}s</b></div>
+        <div class="stat"><span>Token budget</span><b>${fmtTokens(graph.maxTokens)}</b></div>
+        <div class="stat"><span>Est. cost / run</span><b>${fmtCost(graph.typicalTokens)}</b></div>
+        <div class="stat"><span>Mode</span><b>review-only</b></div>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>Graph map</h3>
+      <div class="graph-lane lane-lg">${lane}</div>
+      <p class="hint">Each node is a phase with its own hard timeout. Click a phase to read its contract.</p>
+    </div>
+    <div class="drawer-section">
+      <h3>Phases · ${graph.phases.length}</h3>
+      ${phases}
+    </div>
+    <div class="drawer-section">
+      <h3>Guardrails</h3>
+      <ul class="ticks">${graph.guardrails.map((item) => `<li>${item}</li>`).join('')}</ul>
+    </div>
+    ${run ? `<div class="drawer-section"><h3>Selected run</h3>${traceStatusHTML(run)}</div>` : ''}
+    <p class="fine">This concept uses illustrative timings and token estimates. In the product they would come from the LangGraph callbacks that already emit node start / complete / fail events, streamed to the UI.</p>`;
+}
+
+function traceStatusHTML(run) {
+  const graph = GRAPHS[run.graphKey];
+  const status = run.status;
+  return `<div class="trace-status ${status}">
+    <div class="trace-status-top"><b>${STATUS_LABEL[status]}</b><span class="status-pill ${status}"><span class="dot"></span>${fmtSec(run.elapsed)}</span></div>
+    ${run.note ? `<p class="trace-note">${run.note}</p>` : ''}
+    <div class="trace-stats">
+      <div class="stat"><span>Tokens</span><b>${fmtTokensFull(run.tokens)}</b></div>
+      <div class="stat"><span>Est. cost</span><b>${fmtCost(run.tokens)}</b></div>
+      <div class="stat"><span>Deadline</span><b>${graph.deadline}s</b></div>
+      <div class="stat"><span>Started</span><b>${new Date(run.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b></div>
+    </div>
+  </div>`;
+}
+
+function traceHTML(run) {
+  const graphOptions = state.runs.map((item) => {
+    const g = GRAPHS[item.graphKey];
+    return `<option value="${item.id}" ${item.id === run.id ? 'selected' : ''}>${g.name} · ${STATUS_LABEL[item.status]} · ${fmtTokens(item.tokens)} tok</option>`;
+  }).join('');
+
+  const rows = GRAPHS[run.graphKey].phases.map((phase, index) => {
+    const ps = run.phaseStates[index];
+    const dotClass = ps.status === 'running' ? 'running' : ps.status;
+    const selected = state.drawer.phase === phase.key ? 'selected' : '';
+    const time = ps.status === 'pending' ? '—' : `${fmtSec(ps.elapsed)}${ps.status === 'timed_out' ? ` / ${fmtLimit(phase.limit)}` : ''}`;
+    return `<div class="tl-row ${selected}" data-trace-phase="${phase.key}">
+      <span class="tl-dot ${dotClass}">${phaseIcon(dotClass === 'running' ? 'running' : ps.status)}</span>
+      <div class="tl-body">
+        <div class="tl-name">${phase.label} <span class="kind kind-${phase.kind}">${KIND_LABEL[phase.kind]}</span></div>
+        <div class="tl-sub">${ps.status === 'pending' ? 'queued' : ps.status === 'done' ? 'completed' : ps.status === 'running' ? 'running' : ps.status} · limit ${fmtLimit(phase.limit)} · ${phase.tokens ? `${fmtTokens(ps.tokens)} tok` : 'no model call'}</div>
+      </div>
+      <span class="tl-time">${time}</span>
+    </div>`;
+  }).join('');
+
+  const selectedKey = state.drawer.phase || GRAPHS[run.graphKey].phases[Math.min(run.phaseIndex, GRAPHS[run.graphKey].phases.length - 1)].key;
+  const selectedIndex = GRAPHS[run.graphKey].phases.findIndex((phase) => phase.key === selectedKey);
+  const phase = GRAPHS[run.graphKey].phases[selectedIndex];
+  const ps = run.phaseStates[selectedIndex];
+  const phaseTok = phase.tokens ? `${fmtTokensFull(ps.tokens)} / ${fmtTokensFull(phase.tokens)}` : 'no model call';
+
+  return `
+    <select class="run-select" id="runSelect" aria-label="Select a run">${graphOptions}</select>
+    ${traceStatusHTML(run)}
+    <div class="drawer-section" style="margin-top:20px">
+      <h3>Phase timeline</h3>
+      <div class="timeline">${rows}</div>
+      <div class="trace-detail">
+        <h4><span class="kind kind-${phase.kind}">${KIND_LABEL[phase.kind]}</span>${phase.label}</h4>
+        <div class="kv">
+          <span>State</span><code>${ps.status}${ps.status === 'running' ? ` · ${fmtSec(ps.elapsed)} / ${fmtLimit(phase.limit)}` : ''}</code>
+          <span>Model</span><code>${phase.model}</code>
+          <span>Timeout</span><code>${fmtLimit(phase.limit)} hard limit</code>
+          <span>Tokens</span><code>${phaseTok}</code>
+          <span>Retry</span><code>${phase.retry}</code>
+          <span>Input</span><code>${phase.inp}</code>
+          <span>Output</span><code>${phase.out}</code>
+        </div>
+        <p class="hint" style="margin-top:9px">${phase.desc}</p>
+      </div>
+    </div>
+    <p class="fine">Live trace updates every ~250 ms from the same events that drive the tooltip. Phase timeouts and token usage are first-class fields, so they survive into the run history.</p>`;
+}
+
+function runsHTML() {
+  if (!state.runs.length) {
+    return '<div class="empty-msg">No runs yet. Start an AI action and it will appear here with token usage and phase timings.</div>';
+  }
+  const rows = state.runs.map((run) => {
+    const graph = GRAPHS[run.graphKey];
+    return `<tr data-run="${run.id}">
+      <td><b style="font-weight:700">${graph.name}</b></td>
+      <td class="num">${new Date(run.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+      <td><span class="status-pill ${run.status}"><span class="dot"></span>${STATUS_LABEL[run.status]}</span></td>
+      <td class="num">${fmtSec(run.elapsed)}</td>
+      <td class="num">${fmtTokensFull(run.tokens)}</td>
+      <td class="num">${fmtCost(run.tokens)}</td>
+    </tr>`;
+  }).join('');
+  return `<p class="lede">Every run keeps its phase timings, token usage, cost and timeout outcome. Click a row to open its trace.</p>
+    <table class="run-table" style="margin-top:14px">
+      <thead><tr><th>Graph</th><th>Started</th><th>Status</th><th>Duration</th><th>Tokens</th><th>Cost</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderDrawer() {
+  if (!state.drawer.open) return;
+  if (state.drawer.tab === 'trace' && !state.drawer.runId && state.runs.length) {
+    const candidate = state.runs.find((item) => item.status === 'running') || state.runs[0];
+    state.drawer.runId = candidate.id;
+    state.drawer.graphKey = candidate.graphKey;
+  }
+  const run = currentDrawerRun();
+  if (run) state.drawer.graphKey = run.graphKey;
+  const graph = GRAPHS[state.drawer.graphKey];
+  el.drawerTitle.textContent = graph.name;
+  el.drawerSub.textContent = `${graph.version} · ${graph.phases.length} phases · ${graph.deadline}s deadline`;
+  el.drawerEyebrow.textContent = state.drawer.tab === 'trace' && run
+    ? `Run trace · ${STATUS_LABEL[run.status]}`
+    : 'AI graph · concept';
+  const activeCount = state.runs.filter((item) => item.status === 'running').length;
+  el.traceBadge.textContent = String(activeCount);
+  el.traceBadge.classList.toggle('hidden', activeCount === 0);
+  el.drawerTabs.querySelectorAll('.drawer-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.tab === state.drawer.tab);
+  });
+  if (state.drawer.tab === 'overview') {
+    el.drawerBody.innerHTML = overviewHTML(graph, run);
+  } else if (state.drawer.tab === 'trace') {
+    el.drawerBody.innerHTML = run ? traceHTML(run) : emptyTraceHTML();
+  } else {
+    el.drawerBody.innerHTML = runsHTML();
+  }
+}
+
+function emptyTraceHTML() {
+  const live = state.runs.filter((run) => run.status === 'running');
+  const list = (live.length ? live : state.runs).slice(0, 4);
+  if (!list.length) return '<div class="empty-msg">No run selected. Start an AI action first.</div>';
+  return `<p class="lede">Pick a run to inspect its phases, timings and token usage.</p>
+    <div style="margin-top:14px">${list.map((run) => {
+      const graph = GRAPHS[run.graphKey];
+      return `<button class="btn" type="button" style="width:100%;justify-content:space-between;margin-bottom:7px" data-open-run="${run.id}">
+        <span>${graph.name}</span><span class="mono muted" style="font-size:11px">${STATUS_LABEL[run.status]} · ${fmtTokens(run.tokens)} tok</span>
+      </button>`;
+    }).join('')}</div>`;
+}
+
+function updateDrawerLive() {
+  if (!state.drawer.open) return;
+  const run = currentDrawerRun();
+  if (!run || run.status !== 'running') return;
+  const now = performance.now();
+  if (now - state.lastDrawerPaint < 300) return;
+  state.lastDrawerPaint = now;
+  const scroll = el.drawerBody.scrollTop;
+  renderDrawer();
+  el.drawerBody.scrollTop = scroll;
+}
+
+el.drawerBody.addEventListener('click', (event) => {
+  const switchGraph = event.target.closest('[data-switch-graph]');
+  if (switchGraph) {
+    state.drawer.graphKey = switchGraph.dataset.switchGraph;
+    state.drawer.runId = null;
+    state.drawer.phase = null;
+    state.drawer.tab = 'overview';
+    renderDrawer();
+    el.drawerBody.scrollTop = 0;
+    return;
+  }
+  const openPhase = event.target.closest('[data-open-phase]');
+  if (openPhase) {
+    state.drawer.phase = openPhase.dataset.openPhase;
+    renderDrawer();
+    const details = el.drawerBody.querySelector(`details[data-phase="${openPhase.dataset.openPhase}"]`);
+    if (details) {
+      details.open = true;
+      details.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    return;
+  }
+  const tracePhase = event.target.closest('[data-trace-phase]');
+  if (tracePhase) {
+    state.drawer.phase = tracePhase.dataset.tracePhase;
+    const scroll = el.drawerBody.scrollTop;
+    renderDrawer();
+    el.drawerBody.scrollTop = scroll;
+    return;
+  }
+  const openRun = event.target.closest('[data-open-run]');
+  if (openRun) {
+    openDrawer({ runId: openRun.dataset.openRun, tab: 'trace' });
+    return;
+  }
+  const row = event.target.closest('tr[data-run]');
+  if (row) openDrawer({ runId: row.dataset.run, tab: 'trace' });
+});
+
+el.drawerBody.addEventListener('change', (event) => {
+  if (event.target.id === 'runSelect') {
+    openDrawer({ runId: event.target.value, tab: 'trace' });
+  }
+});
+
+// Keep the phase details state in sync when the user toggles them natively.
+el.drawerBody.addEventListener('toggle', (event) => {
+  if (event.target.matches('details.phase') && event.target.open) {
+    state.drawer.phase = event.target.dataset.phase;
+  }
+}, true);
+
+// Close the drawer when clicking a lane node in the how-card.
+// (Handled above by the graphLane listener.)
+
+// ---------------------------------------------------------------------------
+// Toasts
+// ---------------------------------------------------------------------------
+function showToast(title, detail, tone = 'primary', runId = null, actionLabel = 'Review') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${tone}`;
+  toast.innerHTML = `
+    <div class="toast-main">
+      <b>${title}</b>
+      <span>${detail}</span>
+      ${runId ? `<button type="button" data-toast-open="${runId}">${actionLabel} →</button>` : ''}
+    </div>
+    <button class="toast-close" type="button" aria-label="Dismiss">×</button>`;
+  toast.querySelector('.toast-close').addEventListener('click', () => toast.remove());
+  const openBtn = toast.querySelector('[data-toast-open]');
+  if (openBtn) openBtn.addEventListener('click', () => {
+    openDrawer({ runId, tab: 'trace' });
+    toast.remove();
+  });
+  el.toasts.appendChild(toast);
+  while (el.toasts.children.length > 3) el.toasts.firstElementChild.remove();
+  setTimeout(() => toast.remove(), 9000);
+}
+
+// ---------------------------------------------------------------------------
+// Seeded history so the concept is populated on first paint
+// ---------------------------------------------------------------------------
+function seedHistory() {
+  const specs = [
+    { id: 'run_demo_1', graphKey: 'draft', status: 'completed', ago: 2.4 * 3600e3, elapsed: 5.1, tokens: 4610, timeoutKey: null },
+    { id: 'run_demo_2', graphKey: 'publication', status: 'timed_out', ago: 26 * 3600e3, elapsed: 8.0, tokens: 2210, timeoutKey: 'seo' },
+    { id: 'run_demo_3', graphKey: 'improve', status: 'completed', ago: 3.2 * 86400e3, elapsed: 6.2, tokens: 5985, timeoutKey: null },
+  ];
+  for (const spec of specs) {
+    const graph = GRAPHS[spec.graphKey];
+    const phaseStates = graph.phases.map(() => ({ status: 'pending', elapsed: 0, tokens: 0 }));
+    graph.phases.forEach((phase, index) => {
+      if (spec.timeoutKey && phase.key === spec.timeoutKey) {
+        phaseStates[index] = { status: 'timed_out', elapsed: phase.limit, tokens: phase.tokens * 0.82 };
+      } else if (!spec.timeoutKey || index < graph.phases.findIndex((item) => item.key === spec.timeoutKey)) {
+        phaseStates[index] = { status: 'done', elapsed: phase.duration, tokens: phase.tokens };
+      }
+    });
+    state.runs.push({
+      id: spec.id,
+      graphKey: spec.graphKey,
+      status: spec.status,
+      startedAt: Date.now() - spec.ago,
+      elapsed: spec.elapsed,
+      phaseIndex: spec.timeoutKey ? graph.phases.findIndex((item) => item.key === spec.timeoutKey) : graph.phases.length - 1,
+      tokens: spec.tokens,
+      phaseStates,
+      scenario: 'normal',
+      note: spec.status === 'timed_out' ? 'SEO check exceeded its 8s limit. The run stopped and kept the partial output.' : null,
+      seeded: true,
+      finishedNotified: true,
+    });
+  }
+}
+seedHistory();
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+document.querySelectorAll('[data-graph]').forEach((button) => {
+  if (button.classList.contains('lane-node')) return;
+  button.addEventListener('click', () => startRun(button.dataset.graph));
+});
+
+$('#openOverview').addEventListener('click', () => openDrawer({ graph: state.laneGraph, tab: 'overview' }));
+$('#openGraph').addEventListener('click', () => openDrawer({ graph: state.laneGraph, tab: 'overview' }));
+el.activityBtn.addEventListener('click', () => {
+  const latest = latestLiveRun();
+  if (latest) openDrawer({ runId: latest.id, tab: 'trace' });
+  else openDrawer({ graph: 'improve', tab: 'overview' });
+});
+el.activityBtn.addEventListener('pointerenter', () => {
+  const latest = latestLiveRun();
+  if (latest) showTooltip(latest, el.activityBtn, 'bottom-end');
+});
+el.activityBtn.addEventListener('pointerleave', hideTooltipSoon);
+
+// A run completes and the page is still fully interactive: no modal, no overlay.
+// This is the core of the interaction: the button returns immediately.
+setInterval(tick, 100);
+
+// Expose a tiny API for the concept demo.
+window.concept = {
+  startRun,
+  openDrawer,
+  state,
+};
+</script>
+</body>
+</html>
