@@ -1,0 +1,1 @@
+{"id":"7bc2ff7b9caca2c8be1b24b9fc12eebc.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/researchSchedule.test.ts#nextAutoAt waits 24 hours after a partial run","name":"waits 24 hours after a partial run","status":"passed","testResultsByEnv":{"default":"a42c22a45063b058bc9420969b1e977a"}}
