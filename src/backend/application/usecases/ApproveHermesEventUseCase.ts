@@ -16,12 +16,11 @@ import {
   ServiceUnavailableError,
 } from '../../domain/shared/DomainError';
 import { OLX_CONDITION_REQUIRED_MESSAGE } from '../../domain/services/OlxCategoryGuard';
-import { Money } from '../../domain/valueObjects/Money';
 import type { HermesEvent } from '../../domain/entities/HermesEvent';
 import type { Listing } from '../../domain/entities/Listing';
 import type { Marketplace } from '../../domain/entities/Marketplace';
 import type { Product } from '../../domain/entities/Product';
-import type { ProposedChange } from '../../../shared/types';
+import type { MarketplaceUpdateOperation, ProposedChange } from '../../../shared/types';
 import type { IEventRepository } from '../../domain/repositories/interfaces/IEventRepository';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
@@ -29,10 +28,12 @@ import type { IMarketplaceRepository } from '../../domain/repositories/interface
 import type { IActivityLogRepository } from '../../domain/repositories/interfaces/IActivityLogRepository';
 import type { IEventPublisher, DomainEvent } from '../../domain/ports/IEventPublisher';
 import type { IPriceHistoryRecorder } from '../ports/IPriceHistoryRecorder';
-import type { IJobQueue, PublishListingJob, ListingUpdateJobChanges } from '../ports/IJobQueue';
+import type { IJobQueue, PublishListingJob } from '../ports/IJobQueue';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { ApproveEventDTO } from '../dto/ApproveEventDTO';
 import type { MarketplaceAccountRepository } from '../services/MarketplaceOAuthService';
+import type { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import type { PriceChangeService } from '../services/PriceChangeService';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
 import {
   listingSeoProfile,
@@ -40,21 +41,9 @@ import {
   type AgentRecommendationRecord,
 } from '../../domain/agents/MarketDeskAgentCatalog';
 
-interface MarketplaceUpdateOperation {
-  operationId: string;
-  listingId: string;
-  marketplaceId: string;
-}
-
 interface ApplyChangeOutcome {
   marketplaceUpdates: MarketplaceUpdateOperation[];
   skippedLiveListings?: Array<{ listingId: string; reason: string }>;
-}
-
-type MarketplaceUpdateChanges = ListingUpdateJobChanges;
-
-interface EnqueueMarketplaceUpdateOptions {
-  requireAllLiveTargets?: boolean;
 }
 
 export class ApproveHermesEventUseCase {
@@ -68,6 +57,8 @@ export class ApproveHermesEventUseCase {
     private readonly publishQueue: IJobQueue<PublishListingJob>,
     private readonly eventPublisher: IEventPublisher,
     private readonly idGenerator: IdGenerator,
+    private readonly priceChange: PriceChangeService,
+    private readonly marketplaceUpdates: MarketplaceUpdateEnqueuer,
     private readonly marketplaceAccountRepo?: MarketplaceAccountRepository,
     private readonly olxQuota?: OlxPublicationQuotaService
   ) {}
@@ -292,7 +283,7 @@ export class ApproveHermesEventUseCase {
     }
     if (
       applied.value.marketplaceUpdates.length === 0 &&
-      listings.some((listing) => this.isListingSeoLiveTarget(listing))
+      listings.some((listing) => this.marketplaceUpdates.isLiveTarget(listing))
     ) {
       const restored = await this.restoreOrRecordListingSeoRollbackFailure(
         event,
@@ -337,7 +328,7 @@ export class ApproveHermesEventUseCase {
     listings: Listing[]
   ): Promise<Result<void>> {
     for (const listing of listings) {
-      if (!this.isListingSeoLiveTarget(listing)) continue;
+      if (!this.marketplaceUpdates.isLiveTarget(listing)) continue;
       const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
         listing.marketplaceId,
         event.workspaceId
@@ -366,10 +357,6 @@ export class ApproveHermesEventUseCase {
       }
     }
     return Ok(undefined);
-  }
-
-  private isListingSeoLiveTarget(listing: Listing): boolean {
-    return listing.isLive() && Boolean(listing.marketplaceListingId);
   }
 
   private async restoreListingSeoProductValue(
@@ -474,42 +461,16 @@ export class ApproveHermesEventUseCase {
     event: HermesEvent,
     change: Extract<ProposedChange, { kind: 'price' }>
   ): Promise<Result<ApplyChangeOutcome>> {
-    const loaded = await this.requireProduct(event.workspaceId, event.productId);
-    if (loaded.isErr()) return loaded;
-    const product = loaded.value;
-
-    const money = Money.of(change.to, product.sellingPrice.currency);
-    if (money.isErr()) return money;
-
-    // Approved AI price changes may go below cost; > 20% drops were already gated
-    // to human review by HermesEvent.requiresHumanReview() before reaching approval.
-    if (product.minAcceptablePrice && money.value.isLessThan(product.minAcceptablePrice)) {
-      return Err(new InvalidStateError('The new price is below the lowest price you accept'));
+    if (!event.productId) {
+      return Err(new InvalidStateError('Event has no product to apply the change to'));
     }
-    const updated = product.updateSellingPrice(money.value, true);
-    if (updated.isErr()) return updated;
-    await this.productRepo.save(product);
-
-    const listings = await this.listingRepo.findByProduct(product.id);
-    const now = new Date();
-    for (const listing of listings) {
-      const listingPrice = Money.of(change.to, listing.price.currency);
-      if (listingPrice.isErr()) return listingPrice;
-      const listingUpdated = listing.updatePrice(listingPrice.value);
-      if (listingUpdated.isErr()) return listingUpdated;
-      await this.listingRepo.save(listing);
-      await this.priceHistory.record({
-        id: this.idGenerator(),
-        listingId: listing.id,
-        oldPrice: change.from,
-        newPrice: change.to,
-        changedBy: 'hermes',
-        reason: event.detail ?? event.title,
-        createdAt: now,
-      });
-    }
-
-    return this.enqueueMarketplaceUpdates(product, { price: change.to });
+    return this.priceChange.apply({
+      workspaceId: event.workspaceId,
+      productId: event.productId,
+      price: change.to,
+      changedBy: 'hermes',
+      reason: event.detail ?? event.title,
+    });
   }
 
   private async applyProductTextChange(
@@ -527,10 +488,12 @@ export class ApproveHermesEventUseCase {
     await this.productRepo.save(product);
     let queued: Result<ApplyChangeOutcome>;
     try {
-      queued = await this.enqueueMarketplaceUpdates(
-        product,
-        change.kind === 'title' ? { productName: change.to } : { description: change.to },
-        { requireAllLiveTargets: true }
+      queued = Ok(
+        await this.marketplaceUpdates.enqueue(
+          product,
+          change.kind === 'title' ? { productName: change.to } : { description: change.to },
+          { requireAllLiveTargets: true }
+        )
       );
     } catch (error) {
       const restored = await this.restoreOrRecordListingSeoRollbackFailure(
@@ -692,78 +655,6 @@ export class ApproveHermesEventUseCase {
         listingId,
         reason: decision.reason,
       })),
-    });
-  }
-
-  private async enqueueMarketplaceUpdates(
-    product: Product,
-    changes: MarketplaceUpdateChanges,
-    options: EnqueueMarketplaceUpdateOptions = {}
-  ): Promise<Result<ApplyChangeOutcome>> {
-    const queueItems: Array<{
-      operation: MarketplaceUpdateOperation;
-      data: PublishListingJob;
-      options: { jobId: string };
-    }> = [];
-    const skippedLiveListings: Array<{ listingId: string; reason: string }> = [];
-    const listings = await this.listingRepo.findByProduct(product.id);
-    for (const listing of listings) {
-      if (!this.isListingSeoLiveTarget(listing)) continue;
-
-      const marketplace = await this.marketplaceRepo.findByIdForWorkspace(
-        listing.marketplaceId,
-        product.workspaceId
-      );
-      if (!marketplace || !marketplace.isConnected()) {
-        skippedLiveListings.push({ listingId: listing.id, reason: 'marketplace_not_connected' });
-        continue;
-      }
-      if (this.marketplaceAccountRepo) {
-        const account = await this.marketplaceAccountRepo.findByMarketplaceId(marketplace.id);
-        if (!account || account.status !== 'connected') {
-          skippedLiveListings.push({
-            listingId: listing.id,
-            reason: 'marketplace_account_not_connected',
-          });
-          continue;
-        }
-      }
-
-      const operationId = this.idGenerator();
-      queueItems.push({
-        operation: { operationId, listingId: listing.id, marketplaceId: marketplace.id },
-        options: { jobId: `update:${operationId}` },
-        data: {
-          operationId,
-          mode: 'update',
-          listingUpdatedAt: listing.updatedAt.toISOString(),
-          productUpdatedAt: product.updatedAt.toISOString(),
-          marketplaceKey: marketplace.key,
-          marketplaceId: marketplace.id,
-          listingId: listing.id,
-          input: {
-            productName: product.name,
-            description: product.description,
-            price: listing.price.amount,
-            currency: listing.price.currency,
-            category: product.category,
-            marketplaceCategory: listing.marketplaceCategory,
-            condition: product.condition,
-            imageUrls: [...product.images],
-          },
-          changes,
-        },
-      });
-    }
-    if (options.requireAllLiveTargets && skippedLiveListings.length > 0) {
-      return Ok({ marketplaceUpdates: [], skippedLiveListings });
-    }
-    await this.publishQueue.enqueueAll(
-      queueItems.map((item) => ({ data: item.data, options: item.options }))
-    );
-    return Ok({
-      marketplaceUpdates: queueItems.map((item) => item.operation),
-      skippedLiveListings,
     });
   }
 

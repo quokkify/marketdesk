@@ -49,6 +49,8 @@ import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUs
 import { PublishListingUseCase } from '../../application/usecases/PublishListingUseCase';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
 import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
+import { MarketplaceUpdateEnqueuer } from '../../application/services/MarketplaceUpdateEnqueuer';
+import { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
@@ -191,6 +193,19 @@ async function buildE2E(): Promise<E2EContext> {
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
   const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
+  const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
+    listingRepo,
+    marketplaceRepo,
+    publishQueue,
+    idGenerator
+  );
+  const priceChangeService = new PriceChangeService(
+    productRepo,
+    listingRepo,
+    priceHistory,
+    marketplaceUpdateEnqueuer,
+    idGenerator
+  );
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
@@ -200,7 +215,9 @@ async function buildE2E(): Promise<E2EContext> {
     priceHistory,
     publishQueue,
     events,
-    idGenerator
+    idGenerator,
+    priceChangeService,
+    marketplaceUpdateEnqueuer
   );
   const dismissEventUC = new DismissHermesEventUseCase(eventRepo, activityLog, events, idGenerator);
 
