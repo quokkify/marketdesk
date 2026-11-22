@@ -369,7 +369,7 @@ export class HermesDecisionEngine {
 
   /**
    * The research job's re-estimate: estimates from the stored research without requesting a run or
-   * running SEO, and replaces the product's pending price event (an "unavailable" result replaces
+   * running SEO (the job's own run may still be active), and replaces the product's pending price event (an "unavailable" result replaces
    * only earlier notices). A stored estimate not worth surfacing still closes the pending ones: they
    * predate the research the job just stored. An estimate refused as stale closes nothing. Null when
    * the product or its listing is gone, or nothing is surfaced.
@@ -380,7 +380,7 @@ export class HermesDecisionEngine {
     const [primary] = await this.listingRepo.findByProduct(product.id);
     if (!primary) return null;
     const offlineBefore = await this.aiAnswersOffline();
-    const { suggestion, stored } = await this.priceEstimates.estimate(product, primary);
+    const { suggestion, stored } = await this.priceEstimates.estimate(product, primary, { ignoreActiveRun: true });
     if (suggestion) {
       const supersedes = suggestion.type === 'price_estimate_unavailable' ? PRICE_NOTICE_TYPES : PRICE_EVENT_TYPES;
       return this.savePriceEvent(product, suggestion, offlineBefore, supersedes);

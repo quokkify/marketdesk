@@ -97,14 +97,15 @@ export class PriceEstimateService {
    * An estimate the store refuses (computed from older research than the stored one) is neither
    * kept nor proposed: the newer estimate and its suggestion stand.
    * `researchNote` is kept on the stored estimate (Analyze notes a research run it could not request).
+   * `ignoreActiveRun` is for the research job itself: its own run is still active while it re-estimates.
    */
   async estimate(
     product: Product,
     listing: Listing,
-    opts: { researchNote?: string | null } = {},
+    opts: { researchNote?: string | null; ignoreActiveRun?: boolean } = {},
   ): Promise<PriceEstimateResult> {
     const stored = await this.deps.research.findByProduct(product.workspaceId, product.id);
-    if (await this.researchPending(product, stored)) {
+    if (!opts.ignoreActiveRun && (await this.researchPending(product, stored))) {
       return { suggestion: null, stored: null, skipped: 'research_pending' };
     }
     const researchNote = opts.researchNote ?? null;

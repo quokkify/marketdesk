@@ -1265,6 +1265,20 @@ describe('HermesDecisionEngine pending price events', () => {
     expect(notice!.status).toBe('dismissed');
   });
 
+  it('the job re-estimate runs while its own run is still active and replaces the searching notice', async () => {
+    const { runs } = activeRunsUntilDone();
+    const { engine, workspace, pendingPrice, priceResearchRepo } = setup([new Error('model answered nonsense')], runs);
+    // The run found nothing: no ladder before or after, and the run stays active until the re-estimate ends.
+    priceResearchRepo.findByProduct = async () => null;
+    const searching = (await engine.runProductSeo(workspace, 'p1')).find((e) => e.type === 'price_estimate_unavailable');
+
+    const notice = await engine.reestimatePrice('w1', 'p1');
+
+    expect(searching?.status).toBe('dismissed');
+    expect(notice).toMatchObject({ type: 'price_estimate_unavailable', title: 'Price estimate unavailable' });
+    expect(pendingPrice().map((e) => e.id)).toEqual([notice!.id]);
+  });
+
   it('the job re-estimate with nothing worth surfacing still closes the pending notice', async () => {
     const active = {
       id: 'r1', workspaceId: 'w1', productId: 'p1', trigger: 'analyze' as const, status: 'running' as const, nodes: {},

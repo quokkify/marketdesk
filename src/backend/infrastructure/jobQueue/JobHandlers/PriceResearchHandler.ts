@@ -1,8 +1,10 @@
 // Job handler: one price research graph run per queued run. It claims the run by id (a job whose run
 // is no longer queued exits without calling Hermes), holds a 10 minute lease, runs the graph within a
-// 7 minute budget while recording node progress, and finishes the run with its outcome and the next
-// automatic run time. Then afterRun (the re-estimate) runs for every finished run, with no result when
-// the graph threw or timed out, and price_research.completed is published.
+// 7 minute budget while recording node progress, then runs afterRun (the re-estimate; no result when
+// the graph threw or timed out) while the run is still active, so a client polling the run sees it end
+// only once the estimate is stored. Then it finishes the run with its outcome and the next automatic
+// run time, and publishes price_research.completed only when that finish was written (a run already
+// expired by a read keeps its stored outcome).
 // Every outcome completes the job (attempts: 1): a failure is recorded on the run, never retried by
 // the queue.
 
@@ -80,8 +82,8 @@ export class PriceResearchHandler {
     }
 
     const outcome = result?.outcome ?? 'failed';
-    await this.finish(run, outcome, result, errorCode);
     await this.afterRun(run, result);
+    if (!(await this.finish(run, outcome, result, errorCode))) return { kind: 'finished', outcome };
     await this.deps.events.publish({
       type: 'price_research.completed',
       aggregateType: 'product',
@@ -92,12 +94,12 @@ export class PriceResearchHandler {
     return { kind: 'finished', outcome };
   }
 
-  private async finish(run: ResearchRun, outcome: RunOutcome, result: GraphResult | null, errorCode: string | null): Promise<void> {
+  private async finish(run: ResearchRun, outcome: RunOutcome, result: GraphResult | null, errorCode: string | null): Promise<boolean> {
     const finished = this.deps.now();
     const previous = (await this.deps.runs.findLastFinished(run.workspaceId, run.productId))?.consecutiveFailures ?? 0;
     const attempted = !(errorCode && NOT_ATTEMPTED.has(errorCode));
     const consecutiveFailures = !attempted ? previous : outcome === 'failed' ? previous + 1 : 0;
-    await this.deps.runs.finish(run.id, {
+    return this.deps.runs.finish(run.id, {
       outcome,
       nodes: result?.nodes ?? run.nodes,
       failedTiers: result?.failedTiers ?? [],

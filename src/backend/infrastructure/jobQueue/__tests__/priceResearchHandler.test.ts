@@ -36,6 +36,11 @@ const OK_RESULT: GraphResult = {
   rowsChanged: true,
 };
 
+const expired = {
+  outcome: 'failed' as const, nodes: {}, failedTiers: [], errorCode: 'lease_expired', consecutiveFailures: 1,
+  finishedAt: at(11 * 60 * 1000), nextAutoAt: at(HOUR_MS),
+};
+
 class Logger {
   readonly errors: Array<{ context: Record<string, unknown>; message: string }> = [];
   warn(): void {}
@@ -168,6 +173,33 @@ describe('PriceResearchHandler', () => {
       payload: { runId: 'run-1', outcome: 'ok' },
       occurredAt: NOW,
     }]);
+  });
+
+  it('re-estimates while the run is still active, so the UI keeps polling until the estimate is stored', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(run({}));
+    const seen: string[] = [];
+    const { handler } = setup({ runs, afterRun: async () => { seen.push(runs.runs[0]!.status); } });
+
+    await handler.handle(job);
+
+    expect(seen).toEqual(['running']);
+    expect(runs.runs[0]).toMatchObject({ status: 'finished', outcome: 'ok' });
+  });
+
+  it('publishes nothing when the run was already finished by its expiry', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(run({}));
+    const { handler, events } = setup({
+      runs,
+      // A GET expired the lease while the job was still working.
+      afterRun: async () => { await runs.finish('run-1', { ...expired }); },
+    });
+
+    await handler.handle(job);
+
+    expect(events.published).toEqual([]);
+    expect(runs.runs[0]).toMatchObject({ outcome: 'failed', errorCode: 'lease_expired' });
   });
 
   it('still publishes the event when afterRun fails, and logs the failure', async () => {
