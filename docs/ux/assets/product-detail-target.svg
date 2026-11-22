@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 880" width="1000" height="880" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1000" height="880" fill="#F6F7F9"/>
+  <text x="24" y="28" font-size="15" font-weight="700" fill="#191B23">Target layout — Product detail</text>
+  <text x="24" y="46" font-size="11" fill="#5B606E">Answer above the fold: is it live, what is it worth, what do I do next. One primary action; details on demand.</text>
+
+  <!-- DESKTOP -->
+  <text x="24" y="76" font-size="12" font-weight="700" fill="#191B23">Desktop, ≥1200px</text>
+  <rect x="24" y="84" width="632" height="644" rx="6" fill="#F6F7F9" stroke="#DDE1EA"/>
+  <!-- topbar -->
+  <rect x="24" y="84" width="632" height="30" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="36" y="103" font-size="10" fill="#5B606E">Products  /  Frezarka do paznokci Mercedes 25000</text>
+  <rect x="548" y="91" width="12" height="12" rx="2" fill="#ECEEF2"/><rect x="566" y="91" width="12" height="12" rx="2" fill="#ECEEF2"/><rect x="584" y="91" width="52" height="16" rx="3" fill="#5B5BD6"/>
+  <text x="594" y="102" font-size="8" fill="#FFFFFF">New product</text>
+  <!-- hero -->
+  <rect x="36" y="124" width="608" height="78" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <rect x="48" y="138" width="40" height="14" rx="7" fill="#E6F6EE"/><text x="55" y="148" font-size="8" fill="#137A53">Active</text>
+  <rect x="94" y="138" width="34" height="14" rx="7" fill="#F2F3F6"/><text x="101" y="148" font-size="8" fill="#5B606E">Good</text>
+  <rect x="134" y="138" width="52" height="14" rx="7" fill="#F2F3F6"/><text x="141" y="148" font-size="8" fill="#5B606E">Frezarki</text>
+  <text x="48" y="176" font-size="17" font-weight="700" fill="#191B23">Frezarka do paznokci Mercedes 25000 — rączka…</text>
+  <text x="48" y="192" font-size="9" fill="#5B606E">SKU OLX-5e881fca…  ·  Updated 3m ago</text>
+  <rect x="532" y="158" width="96" height="24" rx="4" fill="#FFFFFF" stroke="#5B5BD6"/>
+  <text x="548" y="174" font-size="9" fill="#5B5BD6">Edit product</text>
+  <rect x="632" y="158" width="24" height="24" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/><text x="641" y="174" font-size="11" fill="#5B606E">⋯</text>
+  <!-- summary strip -->
+  <rect x="36" y="212" width="608" height="90" rx="5" fill="#FFFFFF" stroke="#5B5BD6"/>
+  <line x1="188" y1="222" x2="188" y2="292" stroke="#E7E9EF"/>
+  <line x1="340" y1="222" x2="340" y2="292" stroke="#E7E9EF"/>
+  <line x1="492" y1="222" x2="492" y2="292" stroke="#E7E9EF"/>
+  <text x="48" y="230" font-size="8" font-weight="700" fill="#5B606E">SELLING PRICE</text>
+  <text x="48" y="256" font-size="20" font-weight="700" fill="#191B23">70 zł</text>
+  <text x="48" y="272" font-size="9" fill="#5B606E">Profit 42 zł · 60% margin</text>
+  <text x="48" y="287" font-size="8" fill="#5B5BD6">Add cost →</text>
+
+  <text x="200" y="230" font-size="8" font-weight="700" fill="#5B606E">LISTING HEALTH</text>
+  <rect x="200" y="238" width="86" height="16" rx="8" fill="#E6F6EE"/><text x="208" y="249" font-size="8" fill="#137A53">Live · Sandbox</text>
+  <text x="200" y="270" font-size="9" fill="#191B23">Synced 2m ago</text>
+  <text x="200" y="284" font-size="8" fill="#5B606E">Amazon: not connected</text>
+  <text x="200" y="296" font-size="8" fill="#137A53">Ready to update</text>
+
+  <text x="352" y="230" font-size="8" font-weight="700" fill="#5B606E">LAST 7 DAYS</text>
+  <text x="352" y="252" font-size="16" font-weight="700" fill="#191B23">77 views</text>
+  <text x="352" y="268" font-size="9" fill="#191B23">11 watchers · 0 messages</text>
+  <text x="352" y="284" font-size="8" fill="#5B606E">Sandbox metrics, not real OLX data</text>
+
+  <text x="504" y="230" font-size="8" font-weight="700" fill="#5B606E">NEXT ACTION</text>
+  <rect x="504" y="240" width="124" height="26" rx="4" fill="#5B5BD6"/>
+  <text x="528" y="257" font-size="9" fill="#FFFFFF">Open on OLX</text>
+  <text x="504" y="282" font-size="8" fill="#5B5BD6">Edit price</text>
+  <text x="504" y="294" font-size="8" fill="#5B606E">No blockers</text>
+
+  <!-- left column -->
+  <rect x="36" y="316" width="404" height="150" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="48" y="334" font-size="11" font-weight="700" fill="#191B23">Gallery</text>
+  <text x="48" y="346" font-size="8" fill="#5B606E">4 photos · cover</text>
+  <rect x="48" y="354" width="290" height="100" rx="4" fill="#ECEEF2"/>
+  <rect x="348" y="354" width="80" height="30" rx="3" fill="#F2F3F6" stroke="#5B5BD6"/>
+  <rect x="348" y="390" width="80" height="30" rx="3" fill="#F2F3F6"/>
+  <rect x="348" y="426" width="80" height="30" rx="3" fill="#F2F3F6"/>
+  <text x="56" y="410" font-size="9" fill="#5B606E">1 / 4  ·  click to zoom</text>
+
+  <rect x="36" y="476" width="404" height="92" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="48" y="494" font-size="11" font-weight="700" fill="#191B23">Marketplace listings</text>
+  <rect x="48" y="502" width="380" height="24" rx="3" fill="#F2F3F6"/>
+  <text x="56" y="517" font-size="8" fill="#5B606E">Frezarka…   OLX · Sandbox   Live   70 zł   77 views   ⋯</text>
+  <rect x="48" y="532" width="380" height="24" rx="3" fill="#FFFFFF" stroke="#E7E9EF"/>
+  <text x="56" y="547" font-size="8" fill="#5B606E">Add listing to another marketplace (roadmap)</text>
+
+  <rect x="36" y="578" width="404" height="52" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="48" y="596" font-size="11" font-weight="700" fill="#191B23">Description</text>
+  <text x="48" y="612" font-size="8" fill="#5B606E">Professional nail drill… Used in a salon…</text>
+  <text x="414" y="596" font-size="8" fill="#5B5BD6">Edit</text>
+
+  <rect x="36" y="640" width="404" height="76" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="48" y="658" font-size="11" font-weight="700" fill="#191B23">History</text>
+  <text x="48" y="674" font-size="8" fill="#5B606E">Price, marketplace and Hermes events in one feed</text>
+  <rect x="48" y="682" width="90" height="10" rx="5" fill="#E6F6EE"/><text x="54" y="690" font-size="7" fill="#137A53">All</text>
+  <rect x="144" y="682" width="70" height="10" rx="5" fill="#F2F3F6"/><text x="150" y="690" font-size="7" fill="#5B606E">Price</text>
+  <rect x="220" y="682" width="78" height="10" rx="5" fill="#F2F3F6"/><text x="226" y="690" font-size="7" fill="#5B606E">Hermes</text>
+
+  <!-- right rail -->
+  <rect x="452" y="316" width="192" height="112" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="464" y="334" font-size="11" font-weight="700" fill="#191B23">Hermes</text>
+  <rect x="596" y="322" width="36" height="14" rx="7" fill="#FBF0DD"/><text x="601" y="332" font-size="8" fill="#9A5B0A">1 new</text>
+  <text x="464" y="352" font-size="8" fill="#5B606E">Review-only suggestions</text>
+  <rect x="464" y="360" width="168" height="22" rx="3" fill="#5B5BD6"/><text x="490" y="375" font-size="8" fill="#FFFFFF">Review recommendation</text>
+  <text x="464" y="396" font-size="8" fill="#5B5BD6">Suggest improvements</text>
+
+  <rect x="452" y="440" width="192" height="76" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="464" y="458" font-size="11" font-weight="700" fill="#191B23">Publication readiness</text>
+  <rect x="464" y="466" width="168" height="16" rx="3" fill="#FBF0DD"/>
+  <text x="470" y="477" font-size="8" fill="#9A5B0A">2 blockers: price, category</text>
+  <rect x="464" y="490" width="70" height="18" rx="3" fill="#FFFFFF" stroke="#DDE1EA"/><text x="482" y="502" font-size="8" fill="#5B606E">Fix issues</text>
+
+  <rect x="452" y="528" width="192" height="44" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="464" y="546" font-size="10" font-weight="700" fill="#191B23">Technical details</text>
+  <text x="464" y="560" font-size="8" fill="#5B606E">Category IDs, taxonomy, timestamps</text>
+  <text x="622" y="550" font-size="10" fill="#5B606E">▾</text>
+
+  <rect x="452" y="584" width="192" height="40" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="464" y="601" font-size="10" font-weight="700" fill="#191B23">Price history</text>
+  <text x="464" y="615" font-size="8" fill="#5B606E">Sparkline with min/max + table</text>
+
+  <rect x="452" y="636" width="192" height="26" rx="5" fill="#EDEEFB"/>
+  <text x="464" y="653" font-size="8" fill="#3F3FB0">On scroll: compact sticky bar</text>
+  <text x="464" y="665" font-size="8" fill="#5B606E">Title · price · primary CTA</text>
+
+  <!-- MOBILE -->
+  <text x="720" y="76" font-size="12" font-weight="700" fill="#191B23">Mobile, &lt;600px</text>
+  <rect x="720" y="84" width="256" height="700" rx="12" fill="#F6F7F9" stroke="#DDE1EA"/>
+  <rect x="720" y="84" width="256" height="30" rx="12" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="732" y="103" font-size="9" fill="#5B606E">☰  Products / Frezarka…</text>
+  <rect x="924" y="92" width="40" height="14" rx="3" fill="#5B5BD6"/><text x="932" y="102" font-size="7" fill="#FFFFFF">New</text>
+
+  <rect x="732" y="124" width="232" height="96" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <rect x="744" y="136" width="34" height="12" rx="6" fill="#E6F6EE"/><text x="750" y="145" font-size="7" fill="#137A53">Active</text>
+  <rect x="782" y="136" width="30" height="12" rx="6" fill="#F2F3F6"/><text x="788" y="145" font-size="7" fill="#5B606E">Good</text>
+  <text x="744" y="164" font-size="12" font-weight="700" fill="#191B23">Frezarka do paznokci</text>
+  <text x="744" y="178" font-size="12" font-weight="700" fill="#191B23">Mercedes 25000 — rączka</text>
+  <text x="744" y="192" font-size="7" fill="#5B606E">SKU OLX-5e881… · 3m ago</text>
+  <rect x="924" y="200" width="28" height="18" rx="3" fill="#FFFFFF" stroke="#DDE1EA"/><text x="934" y="213" font-size="9" fill="#5B606E">⋯</text>
+
+  <rect x="732" y="232" width="232" height="146" rx="5" fill="#FFFFFF" stroke="#5B5BD6"/>
+  <text x="744" y="250" font-size="8" font-weight="700" fill="#5B606E">SELLING PRICE</text>
+  <text x="744" y="274" font-size="17" font-weight="700" fill="#191B23">70 zł</text>
+  <rect x="820" y="258" width="70" height="14" rx="7" fill="#E6F6EE"/><text x="826" y="268" font-size="7" fill="#137A53">Live · Sandbox</text>
+  <text x="744" y="290" font-size="8" fill="#5B606E">Profit 42 zł · 60% margin</text>
+  <text x="744" y="304" font-size="8" fill="#5B5BD6">Add cost →</text>
+  <rect x="744" y="312" width="208" height="26" rx="4" fill="#5B5BD6"/><text x="792" y="329" font-size="9" fill="#FFFFFF">Open on OLX</text>
+  <text x="744" y="352" font-size="8" fill="#5B606E">77 views · 11 watchers · 0 messages</text>
+  <text x="744" y="366" font-size="8" fill="#5B5BD6">Edit price</text>
+
+  <rect x="732" y="390" width="232" height="118" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="406" font-size="10" font-weight="700" fill="#191B23">Gallery</text>
+  <rect x="744" y="414" width="208" height="72" rx="3" fill="#ECEEF2"/>
+  <text x="750" y="474" font-size="7" fill="#5B606E">1 / 4 · tap to zoom</text>
+  <rect x="744" y="490" width="44" height="12" rx="2" fill="#F2F3F6" stroke="#5B5BD6"/>
+  <rect x="792" y="490" width="44" height="12" rx="2" fill="#F2F3F6"/>
+  <rect x="840" y="490" width="44" height="12" rx="2" fill="#F2F3F6"/>
+
+  <rect x="732" y="520" width="232" height="70" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="536" font-size="10" font-weight="700" fill="#191B23">Listings</text>
+  <rect x="744" y="544" width="208" height="36" rx="3" fill="#F2F3F6"/>
+  <text x="750" y="558" font-size="7" fill="#191B23">OLX · Sandbox</text>
+  <text x="750" y="570" font-size="7" fill="#5B606E">Live · 70 zł · 77 views</text>
+  <text x="912" y="558" font-size="8" fill="#5B5BD6">Edit</text>
+
+  <rect x="732" y="602" width="232" height="34" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="617" font-size="9" font-weight="700" fill="#191B23">Description</text>
+  <text x="744" y="629" font-size="7" fill="#5B606E">Professional nail drill…</text>
+
+  <rect x="732" y="646" width="232" height="30" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="665" font-size="9" fill="#191B23">Hermes · 1 pending</text>
+  <rect x="912" y="652" width="40" height="14" rx="7" fill="#FBF0DD"/><text x="918" y="662" font-size="7" fill="#9A5B0A">Review</text>
+
+  <rect x="732" y="686" width="232" height="34" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="701" font-size="9" font-weight="700" fill="#191B23">History</text>
+  <text x="744" y="713" font-size="7" fill="#5B606E">All · Price · Hermes</text>
+
+  <rect x="732" y="730" width="232" height="26" rx="5" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="744" y="747" font-size="8" fill="#191B23">Technical details</text>
+  <text x="932" y="746" font-size="8" fill="#5B606E">▾</text>
+
+  <rect x="720" y="790" width="256" height="42" rx="0" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="756" y="815" font-size="11" font-weight="700" fill="#191B23">70 zł</text>
+  <rect x="816" y="800" width="144" height="24" rx="4" fill="#5B5BD6"/><text x="862" y="816" font-size="8" fill="#FFFFFF">Open on OLX</text>
+  <text x="720" y="850" font-size="8" fill="#5B606E">Sticky bottom bar appears after the hero.</text>
+
+  <!-- legend -->
+  <text x="24" y="858" font-size="9" fill="#5B606E">One primary action per state. Product status, listing health, and sandbox provenance are distinct labels.</text>
+  <text x="24" y="872" font-size="9" fill="#5B606E">Cards below the fold are progressive disclosure, not required for the first decision.</text>
+</svg>
