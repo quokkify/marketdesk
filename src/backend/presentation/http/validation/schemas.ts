@@ -174,10 +174,9 @@ const priceComparableSchema = z
     if (comparable.source === 'web' && (!comparable.url || normalizeOlxAdvertUrl(comparable.url) === null)) {
       ctx.addIssue({ code: 'custom', path: ['url'], message: 'A web comparable needs an OLX advert link' });
     }
+    // Rows stored before tier-aware hosts sit on allowlist hosts in any tier; saving them must not fail.
     const autoUrl = comparable.url
-      ? comparable.tier
-        ? normalizeAnchorUrlForTier(comparable.url, comparable.tier)
-        : normalizeAnchorUrl(comparable.url)
+      ? (comparable.tier ? normalizeAnchorUrlForTier(comparable.url, comparable.tier) : null) ?? normalizeAnchorUrl(comparable.url)
       : null;
     if (comparable.source === 'auto' && autoUrl === null) {
       ctx.addIssue({ code: 'custom', path: ['url'], message: 'An auto comparable needs a link on a known shop or marketplace' });

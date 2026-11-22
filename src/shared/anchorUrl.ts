@@ -19,6 +19,9 @@ export const ANCHOR_HOSTS: readonly string[] = [
 export const NON_SHOP_HOSTS: readonly string[] = ['e-katalog.pl', 'keenable.ai', 'google.com', 'bing.com', 'duckduckgo.com'];
 
 const USED_TIERS: ReadonlySet<AnchorTier> = new Set(['same_model_used', 'substitute_used']);
+// Search and listing pages show many offers, never one product's price.
+const LISTING_PATH = /(?:^|\/)(?:listing|szukaj|search|kategoria)(?:\/|$)|^\/oferty\/q-|;szukaj/i;
+const SEARCH_PARAMS = ['q', 'query', 'search'];
 const LOKALNIE_HOST = 'allegrolokalnie.pl';
 const LOKALNIE_OFFER_PATH = /^\/oferta\/[^/]+/;
 const OLX_HOST = 'olx.pl';
@@ -65,6 +68,7 @@ export function normalizeAnchorUrlForTier(url: string, tier: AnchorTier): string
   if (parsed.protocol !== 'https:') return null;
   const host = parsed.hostname.replace(HOST_ALIAS_PREFIX, '');
   if (matchesHost(host, NON_SHOP_HOSTS)) return null;
+  if (LISTING_PATH.test(parsed.pathname) || SEARCH_PARAMS.some((name) => parsed.searchParams.has(name))) return null;
   if (USED_TIERS.has(tier)) {
     if (host === OLX_HOST) return normalizeAnchorUrl(url);
     if (host === LOKALNIE_HOST && LOKALNIE_OFFER_PATH.test(parsed.pathname)) return normalizeAnchorUrl(url);

@@ -89,6 +89,16 @@ describe('parseAnchorLadder', () => {
 });
 
 describe('filterAnchorRows', () => {
+  it('keeps a .pl shop row for substitute_new and drops it for substitute_used', () => {
+    const shop = { ...VALID, url: 'https://tst.pl/produkty/x' };
+    expect(filterAnchorRows([{ ...shop, tier: 'substitute_new' }], CTX)).toHaveLength(1);
+    expect(filterAnchorRows([{ ...shop, tier: 'substitute_used' }], CTX)).toEqual([]);
+  });
+
+  it('drops a substitute_used row on an allowlist offer URL that the PUT schema still accepts', () => {
+    expect(filterAnchorRows([{ ...VALID, tier: 'substitute_used', url: 'https://allegro.pl/oferta/projektor-1' }], CTX)).toEqual([]);
+  });
+
   it('keeps a valid row as an auto anchor', () => {
     expect(filterAnchorRows([VALID], CTX)).toEqual([
       {

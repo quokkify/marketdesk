@@ -6,6 +6,10 @@ const body = (comparable: Record<string, unknown>) => ({
 });
 
 describe('priceResearchSchema auto rows', () => {
+  it('accepts a legacy auto substitute_used row on an allowlist offer URL', () => {
+    expect(priceResearchSchema.safeParse(body({ tier: 'substitute_used', url: 'https://allegro.pl/oferta/projektor-1' })).success).toBe(true);
+  });
+
   it('accepts an auto substitute_new row on a .pl shop', () => {
     expect(priceResearchSchema.safeParse(body({ tier: 'substitute_new', url: 'https://tst.pl/produkty/x' })).success).toBe(true);
   });

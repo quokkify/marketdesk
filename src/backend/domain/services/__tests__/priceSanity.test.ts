@@ -26,4 +26,8 @@ describe('applyPriceSanity', () => {
   it('keeps a last new price when nothing else can be compared', () => {
     expect(applyPriceSanity([row('last_new_price', 2594)], 'PLN')).toHaveLength(1);
   });
+
+  it('keeps a row that names no currency', () => {
+    expect(applyPriceSanity([row('substitute_new', 300)], 'PLN')).toHaveLength(1);
+  });
 });

@@ -102,4 +102,15 @@ describe('normalizeAnchorUrlForTier', () => {
     expect(normalizeAnchorUrlForTier('https://allegrolokalnie.pl/oferta/projektor-1', 'substitute_used')).toBe('https://allegrolokalnie.pl/oferta/projektor-1');
     expect(normalizeAnchorUrlForTier('https://allegrolokalnie.pl/oferty/projektor', 'substitute_used')).toBeNull();
   });
+
+  // Regression guard: search-result pages must never be stored as rows.
+  it('refuses search and listing pages on any host', () => {
+    for (const tier of tiers) {
+      expect(normalizeAnchorUrlForTier('https://tst.pl/search?q=projektor', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('https://www.ceneo.pl/;szukaj-projektor', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('https://allegro.pl/listing?string=x', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('https://tst.pl/kategoria/projektory', tier)).toBeNull();
+    }
+    expect(normalizeAnchorUrlForTier('https://tst.pl/produkty/projektor-x', 'substitute_new')).toBe('https://tst.pl/produkty/projektor-x');
+  });
 });
