@@ -98,7 +98,7 @@ public class ProductDetailPageVerification
 
   @Step("The {check} check of the sale verdict reads {text}")
   public ProductDetailPageVerification showsVerdictCheck(String check, String text) {
-    page.verdictCheck(check).shouldHave(Condition.exactText(text), getTimeout());
+    page.verdictCheck(check).shouldHave(Condition.text(text), getTimeout());
     return this;
   }
 

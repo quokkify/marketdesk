@@ -72,6 +72,9 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async findLatestCompletedForProducts(): Promise<Map<string, SaleVerdict>> {
     return new Map();
   }
+  async lastRunFailedForProducts(): Promise<Set<string>> {
+    return new Set();
+  }
   async lastRunFailed(): Promise<boolean> {
     return false;
   }

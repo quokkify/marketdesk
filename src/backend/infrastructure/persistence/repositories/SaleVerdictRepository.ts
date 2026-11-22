@@ -177,6 +177,20 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     return latest;
   }
 
+  async lastRunFailedForProducts(workspaceId: string, productIds: string[]): Promise<Set<string>> {
+    if (productIds.length === 0) return new Set();
+    const { rows } = await query<{ product_id: string }>(
+      `SELECT product_id FROM (
+         SELECT DISTINCT ON (product_id) product_id, status FROM product_sale_verdicts
+         WHERE workspace_id = $1 AND product_id = ANY($2::uuid[])
+         ORDER BY product_id, queued_at DESC
+       ) newest WHERE status = 'failed'`,
+      [workspaceId, productIds],
+      this.queryClient,
+    );
+    return new Set(rows.map((row) => row.product_id));
+  }
+
   async lastRunFailed(workspaceId: string, productId: string): Promise<boolean> {
     const { rows } = await query<{ status: VerdictRunStatus }>(
       `SELECT status FROM product_sale_verdicts

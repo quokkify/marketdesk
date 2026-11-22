@@ -1,4 +1,5 @@
 import type { SaleVerdict, VerdictCheck } from '@shared/types';
+import type { VerdictMark } from '../verdictDisplay.js';
 import {
   checkAge,
   checkLabel,
@@ -6,6 +7,7 @@ import {
   leadingReason,
   newestCheckAt,
   overallLabel,
+  verdictSettled,
 } from '../verdictDisplay.js';
 
 function check(patch: Partial<VerdictCheck>): VerdictCheck {
@@ -53,6 +55,17 @@ describe('labels', () => {
     expect(checkLabel(check({ check: 'price', status: 'pending' }))).toBe('Price researching…');
   });
 
+  it('shows the prices of a price check and the count of a photos check', () => {
+    const price = check({
+      check: 'price',
+      status: 'fix',
+      refs: { eventIds: [], currentPrice: 349, proposedPrice: 279, currency: 'PLN' },
+    });
+    expect(checkLabel(price)).toBe('Price ✗ 349 → 279 zł');
+    expect(checkLabel(check({ check: 'photos', refs: { eventIds: [], photoCount: 4 } }))).toBe('Photos ✓(4)');
+    expect(checkLabel(check({ check: 'photos', status: 'fix', refs: { eventIds: [], photoCount: 0 } }))).toBe('Photos ✗');
+  });
+
   it('leads with the first reason of the first check that is not ready', () => {
     const checks: SaleVerdict['checks'] = {
       info: check({ check: 'info' }),
@@ -86,5 +99,33 @@ describe('checkAge', () => {
       price: check({ check: 'price', checkedAt: newest }),
     };
     expect(newestCheckAt({ checks })).toBe(newest);
+  });
+});
+
+describe('verdictSettled', () => {
+  const mark = (patch: Partial<VerdictMark> = {}): VerdictMark => ({
+    productId: 'p1',
+    latestId: 'run-1',
+    completedAt: '2026-11-22T10:00:00.000Z',
+    active: false,
+    ...patch,
+  });
+
+  it('settles when a run that was active is gone', () => {
+    expect(verdictSettled(mark({ active: true }), mark())).toBe(true);
+  });
+
+  it('settles when the latest verdict changed without ever seeing the run active', () => {
+    expect(verdictSettled(mark(), mark({ latestId: 'run-2', completedAt: '2026-11-22T10:05:00.000Z' }))).toBe(true);
+  });
+
+  it('does not settle while a run is active or when nothing changed', () => {
+    expect(verdictSettled(mark(), mark({ active: true }))).toBe(false);
+    expect(verdictSettled(mark(), mark())).toBe(false);
+  });
+
+  it('does not settle on the first read or when another product is read', () => {
+    expect(verdictSettled(null, mark())).toBe(false);
+    expect(verdictSettled(mark({ active: true }), mark({ productId: 'p2', latestId: null, completedAt: null }))).toBe(false);
   });
 });

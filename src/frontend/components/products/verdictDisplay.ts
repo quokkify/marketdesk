@@ -1,5 +1,6 @@
 // Pure helpers behind the sale verdict shown in the catalogue row and on the product page.
 import type {
+  ProductVerdictView,
   SaleVerdict,
   VerdictCheck,
   VerdictCheckName,
@@ -62,10 +63,26 @@ export function isVerdictStale(
   return time(productUpdatedAt) > completed || time(listingUpdatedAt) > completed;
 }
 
+const CURRENCY_SYMBOLS: Record<string, string> = { PLN: 'zł' };
+
+function figure(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+// "Price ✗ 349 → 279 zł" when the price check proposes a price, "Photos ✓(4)" with the photo count.
 export function checkLabel(check: VerdictCheck): string {
   const name = CHECK_NAMES[check.check];
   if (check.status === 'pending') return `${name} ${PENDING_LABEL}`;
-  return `${name} ${STATUS_MARKS[check.status]}`;
+  const label = `${name} ${STATUS_MARKS[check.status]}`;
+  const { currentPrice, proposedPrice, currency, photoCount } = check.refs;
+  if (check.check === 'price' && currentPrice !== undefined && proposedPrice != null) {
+    const unit = currency ? (CURRENCY_SYMBOLS[currency] ?? currency) : '';
+    return `${label} ${figure(currentPrice)} → ${figure(proposedPrice)}${unit ? ` ${unit}` : ''}`;
+  }
+  if (check.check === 'photos' && check.status === 'ready' && photoCount !== undefined) {
+    return `${label}(${photoCount})`;
+  }
+  return label;
 }
 
 export function newestCheckAt(verdict: Pick<SaleVerdict, 'checks'>): string | null {
@@ -93,4 +110,28 @@ export function leadingReason(verdict: Pick<SaleVerdict, 'checks'>): string | nu
     if (check && check.status !== 'ready' && check.reasons.length > 0) return check.reasons[0]!.message;
   }
   return null;
+}
+
+export interface VerdictMark {
+  productId: string;
+  latestId: string | null;
+  completedAt: string | null;
+  active: boolean;
+}
+
+export function verdictMark(productId: string, view: ProductVerdictView): VerdictMark {
+  return {
+    productId,
+    latestId: view.latest?.id ?? null,
+    completedAt: view.latest?.completedAt ?? null,
+    active: view.active !== null,
+  };
+}
+
+// A run just ended: no run is active now, and either one was active before or the latest verdict
+// changed (a fast run can finish between two reads without ever being seen active). Reading a
+// different product is never an ending.
+export function verdictSettled(prev: VerdictMark | null, next: VerdictMark): boolean {
+  if (!prev || prev.productId !== next.productId || next.active) return false;
+  return prev.active || prev.latestId !== next.latestId || prev.completedAt !== next.completedAt;
 }

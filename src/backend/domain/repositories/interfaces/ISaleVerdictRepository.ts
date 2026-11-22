@@ -42,6 +42,8 @@ export interface ISaleVerdictRepository {
     workspaceId: string,
     productIds: string[],
   ): Promise<Map<string, SaleVerdict>>;
+  // The ids among productIds whose newest run (by queued_at) failed, in one query.
+  lastRunFailedForProducts(workspaceId: string, productIds: string[]): Promise<Set<string>>;
   // True when the newest run of the product (by queued_at) failed.
   lastRunFailed(workspaceId: string, productId: string): Promise<boolean>;
 }

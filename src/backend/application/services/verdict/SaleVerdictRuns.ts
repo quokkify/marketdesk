@@ -120,8 +120,15 @@ export class SaleVerdictRuns {
     return { latest, active, lastFailed };
   }
 
-  async viewsFor(workspaceId: string, productIds: string[]): Promise<Map<string, SaleVerdict>> {
-    return this.deps.verdicts.findLatestCompletedForProducts(workspaceId, productIds);
+  async viewsFor(
+    workspaceId: string,
+    productIds: string[],
+  ): Promise<{ latest: Map<string, SaleVerdict>; failed: Set<string> }> {
+    const [latest, failed] = await Promise.all([
+      this.deps.verdicts.findLatestCompletedForProducts(workspaceId, productIds),
+      this.deps.verdicts.lastRunFailedForProducts(workspaceId, productIds),
+    ]);
+    return { latest, failed };
   }
 
   // Manual research runs exist only for a forced research.

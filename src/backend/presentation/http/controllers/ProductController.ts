@@ -142,7 +142,14 @@ export class ProductController {
     const verdicts = this.saleVerdictRuns
       ? await this.saleVerdictRuns.viewsFor(query.workspaceId, page.items.map((item) => item.id))
       : undefined;
-    paginated(res, verdicts ? page.items.map((item) => ({ ...item, verdict: verdicts.get(item.id) ?? null })) : page.items, {
+    const items = verdicts
+      ? page.items.map((item) => ({
+          ...item,
+          verdict: verdicts.latest.get(item.id) ?? null,
+          verdictLastFailed: verdicts.failed.has(item.id),
+        }))
+      : page.items;
+    paginated(res, items, {
       page: page.page,
       limit: page.limit,
       total: page.total,

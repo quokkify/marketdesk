@@ -389,6 +389,8 @@ export interface Product {
   images: string[];
   // Latest completed sale verdict; only the product list fills it.
   verdict?: SaleVerdict | null;
+  // The newest sale verdict run of the product failed; only the product list fills it.
+  verdictLastFailed?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -476,7 +478,15 @@ export interface VerdictCheck {
   status: VerdictCheckStatus;
   reasons: VerdictReason[];
   checkedAt: string;
-  refs: { eventIds: string[]; researchUpdatedAt?: string | null };
+  refs: {
+    eventIds: string[];
+    researchUpdatedAt?: string | null;
+    // Figures behind the check, shown in the row: the price check carries the prices, the photos check the count.
+    currentPrice?: number;
+    proposedPrice?: number | null;
+    currency?: string;
+    photoCount?: number;
+  };
 }
 
 export type VerdictRunStatus = 'queued' | 'running' | 'completed' | 'failed';

@@ -56,6 +56,9 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
   async findLatestCompleted(): Promise<SaleVerdict | null> {
     return this.rows.filter((r) => r.status === 'completed').pop() ?? null;
   }
+  async lastRunFailedForProducts(): Promise<Set<string>> {
+    return new Set();
+  }
   async lastRunFailed(): Promise<boolean> {
     return false;
   }

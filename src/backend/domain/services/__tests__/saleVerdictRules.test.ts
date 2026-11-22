@@ -33,6 +33,7 @@ describe('photosCheck', () => {
     expect(check.status).toBe('fix');
     expect(check.reasons.map((r) => r.code)).toEqual(['photos_missing']);
     expect(check.reasons[0].field).toBe('images');
+    expect(check.refs.photoCount).toBe(0);
   });
 
   it('is ready with photos', () => {
@@ -40,6 +41,7 @@ describe('photosCheck', () => {
     expect(check.status).toBe('ready');
     expect(check.reasons).toEqual([]);
     expect(check.checkedAt).toBe(T0.toISOString());
+    expect(check.refs.photoCount).toBe(3);
   });
 });
 
@@ -71,12 +73,14 @@ describe('priceCheckFromEstimate', () => {
     expect(check.reasons[0].field).toBe('sellingPrice');
     expect(check.refs.eventIds).toEqual(['e1']);
     expect(check.refs.researchUpdatedAt).toBe('2026-11-22T09:00:00.000Z');
+    expect(check.refs).toMatchObject({ currentPrice: 349, proposedPrice: 279, currency: 'PLN' });
   });
 
   it('asks to raise a price below the floor', () => {
     const check = estimated(240, stored());
     expect(check.status).toBe('fix');
     expect(check.reasons[0].code).toBe('below_floor');
+    expect(check.refs).toMatchObject({ currentPrice: 240, proposedPrice: null });
   });
 
   it('is ready within the band', () => {

@@ -453,18 +453,13 @@ function rowHandlers(props: ProductsCollectionProps, product: Product): ProductR
 
 function RowVerdict({ product, props }: { product: Product; props: ProductsCollectionProps }) {
   const verdict = product.verdict ?? null;
-  const running =
-    props.analysisByProductId?.[product.id]?.status === 'running' ||
-    verdict?.status === 'queued' ||
-    verdict?.status === 'running';
   return (
     <VerdictSummary
       compact
-      verdict={verdict?.status === 'completed' ? verdict : null}
-      running={running}
-      stale={
-        verdict?.status === 'completed' && isVerdictStale(verdict, product.updatedAt, null)
-      }
+      verdict={verdict}
+      running={props.analysisByProductId?.[product.id]?.status === 'running'}
+      lastFailed={product.verdictLastFailed ?? false}
+      stale={verdict !== null && isVerdictStale(verdict, product.updatedAt, null)}
     />
   );
 }

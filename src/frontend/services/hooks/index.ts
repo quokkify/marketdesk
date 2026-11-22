@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
 import { baseApi } from '../../state/api/baseApi.js';
+import { verdictMark, verdictSettled } from '../../components/products/verdictDisplay.js';
+import type { VerdictMark } from '../../components/products/verdictDisplay.js';
 import {
   useGetProductsQuery,
   useGetProductQuery,
@@ -170,21 +172,23 @@ export function useProductVerdict(productId: string | undefined) {
   const dispatch = useAppDispatch();
   const [pollingInterval, setPollingInterval] = useState(0);
   const result = useGetProductVerdictQuery(productId ?? skipToken, { pollingInterval });
-  const running = Boolean(result.currentData?.active);
-  const wasRunning = useRef(false);
+  const view = result.currentData;
+  const mark = useRef<VerdictMark | null>(null);
   useEffect(() => {
-    setPollingInterval(running ? VERDICT_POLL_MS : 0);
-    if (wasRunning.current && !running) {
+    if (!productId || !view) return;
+    const next = verdictMark(productId, view);
+    setPollingInterval(next.active ? VERDICT_POLL_MS : 0);
+    if (verdictSettled(mark.current, next)) {
       dispatch(
         baseApi.util.invalidateTags([
           { type: 'Product', id: 'LIST' },
           { type: 'HermesEvent', id: 'LIST' },
-          ...(productId ? [{ type: 'PriceResearch' as const, id: productId }] : []),
+          { type: 'PriceResearch', id: productId },
         ])
       );
     }
-    wasRunning.current = running;
-  }, [running, productId, dispatch]);
+    mark.current = next;
+  }, [view, productId, dispatch]);
   return result;
 }
 

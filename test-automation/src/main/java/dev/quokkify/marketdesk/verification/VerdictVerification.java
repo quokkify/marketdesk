@@ -104,6 +104,7 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
   public VerdictVerification catalogueCarries(ValidatableResponse products, String productId) {
     verifyResponseStatusCode(products, HttpStatus.SC_OK);
     products.body("data.find { it.id == '%s' }.verdict.overall".formatted(productId), Matchers.notNullValue());
+    products.body("data.find { it.id == '%s' }.verdictLastFailed".formatted(productId), Matchers.is(false));
     return self();
   }
 

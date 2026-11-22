@@ -35,6 +35,9 @@ export type PriceCheckInput =
       eventIds: string[];
     };
 
+// The price check exists only for PLN listings.
+const PRICE_CHECK_CURRENCY = 'PLN';
+
 type VerdictChecks = Partial<Record<VerdictCheckName, VerdictCheck>>;
 
 function makeCheck(
@@ -54,9 +57,10 @@ export function photosCheck(imageCount: number, now: Date): VerdictCheck {
       'fix',
       [{ code: 'photos_missing', message: 'Add at least one photo of the product', field: 'images' }],
       now,
+      { eventIds: [], photoCount: imageCount },
     );
   }
-  return makeCheck('photos', 'ready', [], now);
+  return makeCheck('photos', 'ready', [], now, { eventIds: [], photoCount: imageCount });
 }
 
 export function infoCheckFromRecheck(items: ProductRecheckItem[], now: Date): VerdictCheck {
@@ -109,9 +113,14 @@ function estimatedPriceCheck(
   now: Date,
 ): VerdictCheck {
   const { currentPrice, stored, suggestionType, eventIds } = input;
-  const refs = { eventIds, researchUpdatedAt: stored?.researchUpdatedAt ?? null };
-  const result = (status: VerdictCheckStatus, reason: VerdictReason) =>
-    makeCheck('price', status, [reason], now, refs);
+  const baseRefs = {
+    eventIds,
+    researchUpdatedAt: stored?.researchUpdatedAt ?? null,
+    currentPrice,
+    currency: PRICE_CHECK_CURRENCY,
+  };
+  const result = (status: VerdictCheckStatus, reason: VerdictReason, proposedPrice: number | null = null) =>
+    makeCheck('price', status, [reason], now, { ...baseRefs, proposedPrice });
 
   if (suggestionType === 'price_estimate_unavailable' || stored === null) {
     return result('needs_human', {
@@ -131,7 +140,7 @@ function estimatedPriceCheck(
       code: 'above_ceiling',
       message: `The price is above the fair ceiling of ${startPrice}`,
       field: 'sellingPrice',
-    });
+    }, startPrice);
   }
   if (currentPrice < floorPrice) {
     return result('fix', {

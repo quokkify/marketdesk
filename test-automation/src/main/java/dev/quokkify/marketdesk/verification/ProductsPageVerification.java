@@ -65,7 +65,7 @@ public class ProductsPageVerification
 
   @Step("The row of {productName} shows the {check} check as {text}")
   public ProductsPageVerification rowShowsVerdictCheck(String productName, String check, String text) {
-    page.rowVerdictCheck(productName, check).shouldHave(Condition.exactText(text), getTimeout());
+    page.rowVerdictCheck(productName, check).shouldHave(Condition.text(text), getTimeout());
     return this;
   }
 
