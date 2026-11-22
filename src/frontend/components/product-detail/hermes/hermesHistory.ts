@@ -79,6 +79,20 @@ const RESEARCH_OUTCOMES = {
 const RUNNING: HistoryEntry['outcome'] = { label: 'Running', tone: 'info' };
 const FAILED: HistoryEntry['outcome'] = { label: 'Failed', tone: 'error' };
 
+interface HistoryQuery {
+  currentData?: unknown;
+  isError: boolean;
+  error?: unknown;
+}
+
+// Loading until every list has data for the current product; the first failure wins over loading,
+// so a failed list is an error with retry, never a shorter history.
+export function historyQueryState(queries: HistoryQuery[]): { loading: boolean; error: unknown } {
+  const failed = queries.find((query) => query.isError);
+  if (failed) return { loading: false, error: failed.error };
+  return { loading: queries.some((query) => query.currentData === undefined), error: undefined };
+}
+
 export function formatDuration(ms: number): string {
   const seconds = Math.max(ms > 0 ? 1 : 0, Math.round(ms / 1000));
   const minutes = Math.floor(seconds / 60);

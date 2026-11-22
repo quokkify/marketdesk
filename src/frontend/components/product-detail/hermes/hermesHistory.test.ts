@@ -1,5 +1,5 @@
 import type { HermesEvent, ResearchRun, SaleVerdict, VerdictCheck } from '@shared/types';
-import { buildHistory } from './hermesHistory';
+import { buildHistory, historyQueryState } from './hermesHistory';
 
 const T0 = '2026-11-20T10:00:00.000Z';
 const T1 = '2026-11-20T10:01:00.000Z';
@@ -219,5 +219,25 @@ describe('buildHistory', () => {
       { label: 'Action failed', tone: 'error' },
     ]);
     expect(entries.map((e) => e.steps[0]!.status)).toEqual(['ok', 'none', 'bad']);
+  });
+});
+
+describe('historyQueryState', () => {
+  const ready = { currentData: [], isError: false };
+
+  it('is not loading when every list has data for this product', () => {
+    expect(historyQueryState([ready, ready, ready])).toEqual({ loading: false, error: undefined });
+  });
+
+  it('is loading while any list has no data yet', () => {
+    expect(historyQueryState([ready, { currentData: undefined, isError: false }, ready]).loading).toBe(true);
+  });
+
+  it('reports the error, not loading, when a list failed', () => {
+    const failure = { status: 503 };
+    expect(historyQueryState([ready, { currentData: undefined, isError: true, error: failure }, ready])).toEqual({
+      loading: false,
+      error: failure,
+    });
   });
 });

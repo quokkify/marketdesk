@@ -116,7 +116,7 @@ import { ChecksTab } from '../components/product-detail/hermes/ChecksTab.js';
 import { PricesTabContainer } from '../components/product-detail/hermes/PricesTab.js';
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
 import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
-import { buildHistory } from '../components/product-detail/hermes/hermesHistory.js';
+import { buildHistory, historyQueryState } from '../components/product-detail/hermes/hermesHistory.js';
 import { hermesCardState } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
@@ -730,6 +730,7 @@ const ListingDetailsPage: React.FC = () => {
     { productId, sort: '-createdAt', limit: HISTORY_LIMIT },
     { skip: historyArgs === skipToken }
   );
+  const historyState = historyQueryState([researchRuns, verdictHistory, eventHistory]);
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
   // The advert queued from this page, followed until OLX answers.
@@ -1479,11 +1480,11 @@ const ListingDetailsPage: React.FC = () => {
             entries={buildHistory({
               researchRuns: researchRuns.currentData ?? [],
               verdicts: verdictHistory.currentData ?? [],
-              events: eventHistory.data?.items ?? [],
+              events: eventHistory.currentData?.items ?? [],
               currency,
             })}
-            loading={researchRuns.isLoading || verdictHistory.isLoading || eventHistory.isLoading}
-            error={researchRuns.isError ? researchRuns.error : verdictHistory.isError ? verdictHistory.error : eventHistory.isError ? eventHistory.error : undefined}
+            loading={historyState.loading}
+            error={historyState.error}
             onRetry={() => {
               if (researchRuns.isError) void researchRuns.refetch();
               if (verdictHistory.isError) void verdictHistory.refetch();
