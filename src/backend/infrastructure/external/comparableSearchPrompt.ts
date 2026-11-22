@@ -8,54 +8,15 @@ import { normalizeOlxAdvertUrl } from '../../../shared/olxAdvertUrl';
 import { parseJsonObject } from './jsonText';
 import { sellerDataBlock } from './sellerData';
 import { ValidationError } from '../../domain/shared/DomainError';
+import { sanitizeSearchName, SEARCH_NAME_TOO_SHORT } from './anchorLadderPrompt';
+
+export { isResearchToolsetSafe, RESEARCH_TOOLSET, sanitizeSearchName, SEARCH_NAME_TOO_SHORT } from './anchorLadderPrompt';
 
 export const COMPARABLE_SEARCH_OPERATION = 'searchComparables';
-export const RESEARCH_TOOLSET = 'web';
-export const SEARCH_NAME_TOO_SHORT = 'Product name is too short to search';
 
-const MAX_NAME_LENGTH = 120;
 const MAX_TITLE_LENGTH = 200;
 const MAX_PRICE = 100_000;
 const MAX_CANDIDATES = 10;
-
-// Top-level domains that mark a dotted word as a host. A fixed list, so names written without a
-// space after a period (256GB.Czarny, stan.bdb) keep their words.
-const URL_TLDS = [
-  'com', 'net', 'org', 'info', 'biz', 'io', 'co', 'app', 'dev', 'xyz', 'site', 'online', 'top', 'pl', 'eu',
-  'de', 'uk', 'ru', 'ua', 'by', 'cz', 'sk', 'lt', 'lv', 'ee', 'fr', 'it', 'es', 'nl', 'be', 'at', 'ch', 'se',
-  'no', 'dk', 'fi', 'us', 'ca', 'me', 'tv', 'cc', 'ly', 'gl', 'to', 'sh', 'ai', 'gg', 'link', 'click', 'shop',
-  'store',
-];
-const LABEL = String.raw`[\p{L}\p{N}-]+`;
-const REST = String.raw`(?:[:/?#]\S*)?`;
-// Each alternative matches only the URL itself:
-// any scheme with ://; a web scheme with a bare colon (http:host); a //host; user@host;
-// an IPv4 host; a www. host; a host on a listed TLD; any dotted host followed by a port, path or query.
-const URL_LIKE = new RegExp(
-  [
-    String.raw`[a-z][a-z0-9+.-]*:\/\/\S*`,
-    String.raw`(?:https?|ftps?|file|wss?|mailto):\S*`,
-    String.raw`\/\/\S+`,
-    String.raw`[^\s@]*@\S+`,
-    String.raw`(?<![\p{N}.])\d{1,3}(?:\.\d{1,3}){3}(?![\p{N}])${REST}`,
-    String.raw`www\.\S*`,
-    String.raw`(?:${LABEL}\.)+(?:${URL_TLDS.join('|')})(?![\p{L}\p{N}-])${REST}`,
-    String.raw`(?:${LABEL}\.)+\p{L}{2,}[:/?#]\S*`,
-  ].join('|'),
-  'giu',
-);
-const NOT_ALLOWED = /[^\p{L}\p{N} \-/.()+]/gu;
-
-// URLs removed; only letters, digits, spaces and -/.()+ kept; spaces collapsed; at most 120 chars.
-export function sanitizeSearchName(name: string): string {
-  return name
-    .replace(URL_LIKE, ' ')
-    .replace(NOT_ALLOWED, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_NAME_LENGTH)
-    .trim();
-}
 
 const SYSTEM = [
   'You find current used-item adverts on OLX.pl with your web search and extraction tools.',
@@ -130,9 +91,4 @@ export function filterComparableCandidates(
     candidates.push({ price, currency, title: trimmed, url: normalized });
   }
   return candidates;
-}
-
-// The research profile must expose exactly the web toolset (web_search + web_extract), nothing else.
-export function isResearchToolsetSafe(enabled: readonly string[]): boolean {
-  return enabled.length > 0 && enabled.every((name) => name === RESEARCH_TOOLSET);
 }
