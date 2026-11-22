@@ -1,20 +1,26 @@
 package dev.quokkify.marketdesk.page;
 
 import dev.quokkify.annotation.PageUrl;
+import dev.quokkify.elements.table.Table;
+import dev.quokkify.elements.table.TableLayout;
+import dev.quokkify.elements.table.TableRow;
 import dev.quokkify.impl.Page;
 
-import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
-import com.codeborne.selenide.ElementsCollection;
+import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.TextMatchOptions;
+import org.openqa.selenium.By;
 
 @PageUrl("/products")
 public class ProductsPage implements Page {
 
   private static final String CATALOGUE_TABLE = "table[aria-label=\"Products catalogue\"]";
-  private static final String HEADER_CELLS = CATALOGUE_TABLE + " thead th";
-  private static final String BODY_ROWS = CATALOGUE_TABLE + " tbody tr";
+  private static final String PRODUCT_COLUMN = "Product";
+  private static final String UPDATED_COLUMN = "Updated";
+  private static final String AI_COLUMN = "AI";
+  private static final By PRODUCT_LINK = By.tagName("a");
   private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
   private static final String FILTERS_PANEL = "#products-filters .MuiCard-root";
   private static final String FILTERS_ENTERED = "#products-filters.MuiCollapse-entered";
@@ -31,6 +37,14 @@ public class ProductsPage implements Page {
   private static final String NEW_PRODUCT = "New product";
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String CLOSE = "Close";
+  private static final String PHOTO_INPUT = "input[type=\"file\"]";
+  private static final String CONTINUE = "Continue";
+  private static final String REVIEW_AND_PUBLISH = "Review and publish";
+  private static final String NAME = "Name";
+  private static final String DESCRIPTION = "Description";
+  private static final String SELLING_PRICE = "Selling price";
+  private static final String OLX_CATEGORY = "OLX category";
+  private static final String PUBLISH_TO_OLX = "Publish to OLX";
   private static final String GAP_SCRIPT =
       "const panel = document.querySelector(arguments[0]);"
           + "const table = document.querySelector(arguments[1]).closest('.MuiCard-root');"
@@ -40,8 +54,30 @@ public class ProductsPage implements Page {
     Selenide.open(getUrl());
   }
 
-  public ElementsCollection headerCells() {
-    return Selenide.$$(HEADER_CELLS);
+  public Table catalogue() {
+    return Table.of(Selenide.$(CATALOGUE_TABLE), TableLayout.html());
+  }
+
+  // The Product cell also shows the SKU, so the row is found by the name inside that column, not by exact text.
+  public TableRow row(String productName) {
+    Table catalogue = catalogue();
+    return catalogue.row(catalogue.column(PRODUCT_COLUMN).findBy(Condition.text(productName)).closest("tr"));
+  }
+
+  public SelenideElement updatedCell(String productName) {
+    return row(productName).cell(UPDATED_COLUMN);
+  }
+
+  public SelenideElement aiCell(String productName) {
+    return row(productName).cell(AI_COLUMN);
+  }
+
+  public By productLink() {
+    return PRODUCT_LINK;
+  }
+
+  public String productColumn() {
+    return PRODUCT_COLUMN;
   }
 
   public SelenideElement filtersButton() {
@@ -60,6 +96,43 @@ public class ProductsPage implements Page {
     return newProductDialog().$$(BUTTON).findBy(Condition.attribute("aria-label", CLOSE));
   }
 
+  public SelenideElement photoInput() {
+    return newProductDialog().$(PHOTO_INPUT);
+  }
+
+  public SelenideElement continueButton() {
+    return newProductDialog().$$(BUTTON).findBy(Condition.exactText(CONTINUE));
+  }
+
+  public SelenideElement reviewHeading() {
+    return newProductDialog().$(Selectors.byText(REVIEW_AND_PUBLISH));
+  }
+
+  // Required MUI fields append " *" to the label, so labels match as partial text.
+  public SelenideElement nameField() {
+    return newProductDialog().$(Selectors.byLabel(NAME, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement descriptionField() {
+    return newProductDialog().$(Selectors.byLabel(DESCRIPTION, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement sellingPriceField() {
+    return newProductDialog().$(Selectors.byLabel(SELLING_PRICE, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement olxCategoryField() {
+    return newProductDialog().$(Selectors.byLabel(OLX_CATEGORY, TextMatchOptions.partialText()));
+  }
+
+  public SelenideElement olxCategoryResult(String path) {
+    return newProductDialog().$(Selectors.byText(path));
+  }
+
+  public SelenideElement publishToOlxButton() {
+    return newProductDialog().$$(BUTTON).findBy(Condition.exactText(PUBLISH_TO_OLX));
+  }
+
   public SelenideElement filtersFullyOpen() {
     return Selenide.$(FILTERS_ENTERED);
   }
@@ -73,17 +146,12 @@ public class ProductsPage implements Page {
     return gap == null ? Long.MIN_VALUE : gap.longValue();
   }
 
-  public SelenideElement row(String productName) {
-    return Selenide.$$(BODY_ROWS).shouldHave(CollectionCondition.sizeGreaterThan(0))
-        .findBy(Condition.text(productName));
-  }
-
   public SelenideElement analyzeButton(String productName) {
     return Selenide.$(String.format(ANALYZE_BUTTON, productName));
   }
 
   public SelenideElement reviewToggle(String productName) {
-    return row(productName).$(REVIEW_TOGGLE);
+    return row(productName).self().$(REVIEW_TOGGLE);
   }
 
   public SelenideElement reviewRegion() {

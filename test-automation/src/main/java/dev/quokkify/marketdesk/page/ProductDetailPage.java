@@ -44,6 +44,7 @@ public class ProductDetailPage implements Page {
   private static final String REVIEW_ONLY = "Suggestions are for review only.";
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String CONFIRM_AND_QUEUE = "Confirm category and queue publish";
+  private static final String PUBLICATION_QUEUED = "Publication was accepted and queued.";
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
@@ -79,6 +80,10 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement publicationDialog() {
     return Selenide.$(DIALOG);
+  }
+
+  public SelenideElement publicationQueuedNotice() {
+    return Selenide.$(Selectors.withText(PUBLICATION_QUEUED));
   }
 
   public SelenideElement confirmPublicationButton() {

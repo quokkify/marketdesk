@@ -11,6 +11,12 @@ public class ProductsPageSteps
     extends PageSteps<ProductsPageSteps, ProductsPageVerification, ProductsPage> {
 
   private static final String EXPANDED = "aria-expanded";
+  private static final String PRODUCT_PHOTO = "images/product-photo.png";
+  private static final String DESCRIPTION =
+      "Mirrorless camera with lens, original battery and carrying bag. Fully working, with minor signs of use.";
+  private static final String SELLING_PRICE = "1050";
+  private static final String CAMERAS_QUERY = "camera";
+  private static final String SANDBOX_CAMERAS_PATH = "Electronics > Cameras";
 
   public ProductsPageSteps() {
     this.page = new ProductsPage();
@@ -41,6 +47,39 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Upload a product photo")
+  public ProductsPageSteps uploadProductPhoto() {
+    page.photoInput().uploadFromClasspath(PRODUCT_PHOTO);
+    return this;
+  }
+
+  @Step("Continue to the review step")
+  public ProductsPageSteps continueToReview() {
+    page.continueButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
+  @Step("Fill the review step for {name}")
+  public ProductsPageSteps fillReview(String name) {
+    page.nameField().shouldBe(Condition.visible).setValue(name);
+    page.descriptionField().setValue(DESCRIPTION);
+    page.sellingPriceField().setValue(SELLING_PRICE);
+    return this;
+  }
+
+  @Step("Choose the sandbox OLX category Electronics > Cameras")
+  public ProductsPageSteps chooseSandboxCamerasCategory() {
+    page.olxCategoryField().shouldBe(Condition.visible).setValue(CAMERAS_QUERY);
+    page.olxCategoryResult(SANDBOX_CAMERAS_PATH).shouldBe(Condition.visible).click();
+    return this;
+  }
+
+  @Step("Publish to OLX")
+  public ProductsPageSteps publishToOlx() {
+    page.publishToOlxButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Open the filters panel")
   public ProductsPageSteps openFilters() {
     page.filtersButton().shouldBe(Condition.visible).click();
@@ -66,7 +105,7 @@ public class ProductsPageSteps
 
   @Step("Click the row of {productName}")
   public ProductsPageSteps clickRow(String productName) {
-    page.row(productName).$("td:nth-child(4)").click();
+    page.updatedCell(productName).click();
     return this;
   }
 

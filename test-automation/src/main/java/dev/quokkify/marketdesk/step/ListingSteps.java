@@ -123,10 +123,15 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
         .path(DATA_ID);
     setSandboxOlxCategory(account, listingId);
     service.publish(account.token(), listingId).statusCode(HttpStatus.SC_OK);
+    awaitListingLive(account, listingId);
+    return new ProductListingPojo(productId, listingId);
+  }
+
+  @Step("Wait until listing {listingId} is live on the sandbox OLX")
+  public void awaitListingLive(AccountPojo account, String listingId) {
     Waiter.awaitCondition(
         () -> LIVE.equals(service.getListing(account.token(), listingId).extract().path(DATA_STATUS)),
         "the sandbox OLX listing is live", PUBLISH_TIMEOUT, POLL_INTERVAL);
-    return new ProductListingPojo(productId, listingId);
   }
 
   @Step("Set the price of listing {listingId} to {price}")

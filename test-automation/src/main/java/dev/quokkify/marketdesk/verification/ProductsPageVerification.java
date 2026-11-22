@@ -7,7 +7,6 @@ import dev.quokkify.marketdesk.page.ProductsPage;
 import dev.quokkify.marketdesk.step.ProductsPageSteps;
 import dev.quokkify.model.Verification;
 
-import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.WebDriverRunner;
 import io.qameta.allure.Step;
@@ -38,6 +37,18 @@ public class ProductsPageVerification
     return this;
   }
 
+  @Step("The New product dialog shows the review step")
+  public ProductsPageVerification reviewStepIsShown() {
+    page.reviewHeading().shouldBe(Condition.visible, getTimeout());
+    return this;
+  }
+
+  @Step("Publish to OLX is enabled")
+  public ProductsPageVerification publishToOlxIsEnabled() {
+    page.publishToOlxButton().shouldBe(Condition.enabled, getTimeout());
+    return this;
+  }
+
   @Step("The New product dialog is closed")
   public ProductsPageVerification newProductDialogIsClosed() {
     page.newProductDialog().shouldNot(Condition.exist, getTimeout());
@@ -46,18 +57,22 @@ public class ProductsPageVerification
 
   @Step("The catalogue shows the columns {columns}")
   public ProductsPageVerification hasColumns(List<String> columns) {
-    page.headerCells().shouldHave(CollectionCondition.sizeGreaterThan(0), getTimeout());
-    for (String column : columns) {
-      page.headerCells().findBy(Condition.exactText(column)).shouldBe(Condition.visible);
-    }
+    page.catalogue().shouldSatisfy(snapshot -> assertThat(snapshot.headers()).containsAll(columns), getTimeout());
     return this;
   }
 
   @Step("The catalogue does not show the columns {columns}")
   public ProductsPageVerification lacksColumns(List<String> columns) {
-    for (String column : columns) {
-      page.headerCells().findBy(Condition.exactText(column)).shouldNot(Condition.exist);
-    }
+    page.catalogue().shouldSatisfy(snapshot -> assertThat(snapshot.headers()).doesNotContainAnyElementsOf(columns),
+        getTimeout());
+    return this;
+  }
+
+  @Step("The catalogue lists {productName} exactly once")
+  public ProductsPageVerification listsProductOnce(String productName) {
+    page.catalogue().shouldSatisfy(page.productLink(), snapshot -> assertThat(
+        snapshot.columnItems(page.productColumn()).stream().flatMap(List::stream).filter(productName::equals))
+        .hasSize(1), getTimeout());
     return this;
   }
 
@@ -69,7 +84,7 @@ public class ProductsPageVerification
 
   @Step("The row of {productName} shows the analysis result")
   public ProductsPageVerification rowShowsAnalysisResult(String productName) {
-    page.row(productName).shouldHave(Condition.match("analysis result", element ->
+    page.aiCell(productName).shouldHave(Condition.match("analysis result", element ->
         ANALYSIS_RESULT.matcher(element.getText()).find()), getTimeout());
     return this;
   }
@@ -83,7 +98,7 @@ public class ProductsPageVerification
 
   @Step("The row of {productName} reads All reviewed and the suggestions are closed")
   public ProductsPageVerification rowShowsAllReviewed(String productName) {
-    page.row(productName).shouldHave(Condition.text(ALL_REVIEWED), getTimeout());
+    page.aiCell(productName).shouldHave(Condition.text(ALL_REVIEWED), getTimeout());
     page.reviewRegion().shouldNot(Condition.exist, getTimeout());
     return this;
   }

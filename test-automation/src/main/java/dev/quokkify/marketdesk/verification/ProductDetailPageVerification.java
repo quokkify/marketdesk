@@ -41,6 +41,13 @@ public class ProductDetailPageVerification
     return this;
   }
 
+  @Step("The product page says the publication was queued and shows no dialog")
+  public ProductDetailPageVerification showsPublicationQueued() {
+    page.publicationQueuedNotice().shouldBe(Condition.visible, getTimeout());
+    page.publicationDialog().shouldNot(Condition.exist, getTimeout());
+    return this;
+  }
+
   @Step("The publication confirmation dialog is shown")
   public ProductDetailPageVerification showsPublicationConfirmation() {
     page.publicationDialog()
