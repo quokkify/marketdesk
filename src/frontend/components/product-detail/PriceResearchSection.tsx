@@ -10,6 +10,7 @@ import { Card } from '../common/Card.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
 import {
+  productsApi,
   useGetPriceResearchQuery,
   useSavePriceResearchMutation,
   useRefreshPriceResearchMutation,
@@ -307,14 +308,13 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
   listingCurrency = null,
 }) => {
   const dispatch = useAppDispatch();
-  const [pollingInterval, setPollingInterval] = useState(0);
-  const query = useGetPriceResearchQuery(productId, { pollingInterval });
+  const cached = productsApi.endpoints.getPriceResearch.useQueryState(productId).currentData;
+  const query = useGetPriceResearchQuery(productId, { pollingInterval: cached?.run ? POLL_INTERVAL_MS : 0 });
   const view = query.currentData;
   const research = storedResearch(view);
   const discount = research ? discountLine(currentPrice, research, currency) : null;
 
   const active = Boolean(view?.run);
-  useEffect(() => setPollingInterval(active ? POLL_INTERVAL_MS : 0), [active]);
   const wasActive = useRef(false);
   useEffect(() => {
     if (wasActive.current && !active) {

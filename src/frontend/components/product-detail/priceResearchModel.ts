@@ -291,7 +291,12 @@ const ERROR_REASONS: Record<string, string> = {
   not_configured: 'market search is unavailable',
   research_unreachable: 'market search is unavailable',
   hermes_unavailable: 'market search is unavailable',
-  unusable_answer: 'the model could not be identified',
+  unusable_answer: 'the search returned an unusable answer',
+  no_substitutes: 'no comparable items were found',
+  all_tiers_failed: 'none of the price searches returned an answer',
+  not_pln: 'the listing is not in PLN',
+  name_too_short: 'the product name is too short to search',
+  product_missing: 'the product no longer exists',
   timeout: 'the search took too long',
 };
 const FALLBACK_REASON = 'something went wrong';

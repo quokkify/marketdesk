@@ -170,4 +170,16 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     response.body("error.code", Matchers.equalTo(code));
     return self();
   }
+
+  // Research is stored but no run has finished (the stand has no research profile), so nothing is ready to price from.
+  @Step("Price research carries the run state and reads as degraded without a successful run")
+  public PriceResearchVerification hasRunStateAndIsDegraded(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data", Matchers.allOf(Matchers.hasKey("run"), Matchers.hasKey("lastRun"),
+        Matchers.hasKey("nextAutoAt"), Matchers.hasKey("readiness")));
+    response.body("data.run", Matchers.nullValue());
+    response.body("data.lastRun", Matchers.nullValue());
+    response.body("data.readiness", Matchers.equalTo("degraded"));
+    return this;
+  }
 }

@@ -22,6 +22,14 @@ public class PriceResearchTest extends BaseTest {
   }
 
   @Test
+  public void storedResearchCarriesRunStateAndReadiness() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.savePriceResearch(account, productId, PriceResearchPojo.sample());
+    priceResearchSteps.verify().hasRunStateAndIsDegraded(priceResearchSteps.getPriceResearch(account, productId));
+  }
+
+  @Test
   public void clearingRetailAnchorStoresNull() {
     AccountPojo account = authSteps.registerNewAccount();
     String productId = priceResearchSteps.createProduct(account);

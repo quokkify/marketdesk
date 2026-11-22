@@ -328,7 +328,13 @@ describe('lastRunText', () => {
     expect(failed('unsafe_toolset')).toBe(`Price search failed: market search is unavailable. Will retry ${retry}`);
     expect(failed('not_configured')).toBe(`Price search failed: market search is unavailable. Will retry ${retry}`);
     expect(failed('timeout')).toBe(`Price search failed: the search took too long. Will retry ${retry}`);
-    expect(failed('unusable_answer')).toBe(`Price search failed: the model could not be identified. Will retry ${retry}`);
+    expect(failed('unusable_answer')).toBe(`Price search failed: the search returned an unusable answer. Will retry ${retry}`);
+    expect(failed('no_substitutes')).toBe(`Price search failed: no comparable items were found. Will retry ${retry}`);
+    expect(failed('all_tiers_failed')).toBe(`Price search failed: none of the price searches returned an answer. Will retry ${retry}`);
+    expect(failed('not_pln')).toBe(`Price search failed: the listing is not in PLN. Will retry ${retry}`);
+    expect(failed('name_too_short')).toBe(`Price search failed: the product name is too short to search. Will retry ${retry}`);
+    expect(failed('product_missing')).toBe(`Price search failed: the product no longer exists. Will retry ${retry}`);
+    expect(failed('run_error')).toBe(`Price search failed: something went wrong. Will retry ${retry}`);
     expect(failed('weird_code')).toBe(`Price search failed: something went wrong. Will retry ${retry}`);
     expect(failed(null)).toBe(`Price search failed: something went wrong. Will retry ${retry}`);
   });
