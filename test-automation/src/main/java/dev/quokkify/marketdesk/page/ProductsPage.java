@@ -114,8 +114,10 @@ public class ProductsPage implements Page {
     return newProductButtons.filterBy(Condition.visible).first();
   }
 
+  // On phones the sidebar is a kept-mounted MUI Drawer, which also carries role="dialog", so only the visible
+  // dialog is the wizard.
   public SelenideElement newProductDialog() {
-    return Selenide.$(DIALOG);
+    return Selenide.$$(DIALOG).findBy(Condition.visible);
   }
 
   public SelenideElement closeDialogButton() {

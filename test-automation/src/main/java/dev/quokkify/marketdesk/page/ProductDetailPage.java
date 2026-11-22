@@ -95,8 +95,9 @@ public class ProductDetailPage implements Page {
     return Selenide.$(Selectors.withText(REVIEW_ONLY));
   }
 
+  // On phones the sidebar is a kept-mounted MUI Drawer, which also carries role="dialog".
   public SelenideElement publicationDialog() {
-    return Selenide.$(DIALOG);
+    return Selenide.$$(DIALOG).findBy(Condition.visible);
   }
 
   public SelenideElement publicationQueuedNotice() {
