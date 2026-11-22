@@ -114,7 +114,8 @@ export class HermesDecisionEngine {
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
     const events: HermesEvent[] = [];
-    const closed: HermesEvent[] = [];
+    // Products whose earlier pending price events this run supersedes; closed when its events are saved.
+    const superseding = new Set<Product>();
     const products = await this.productRepo.findByWorkspace(workspace.id);
 
     for (const product of products) {
@@ -150,10 +151,7 @@ export class HermesDecisionEngine {
         });
         if (created.isErr()) continue;
         const event = created.value;
-        // This run's events are saved at its end, so only earlier ones are closed.
-        if (PRICE_EVENT_TYPES.includes(event.type)) {
-          closed.push(...(await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES)));
-        }
+        if (PRICE_EVENT_TYPES.includes(event.type)) superseding.add(product);
 
         event.setAutonomyDecision(decision);
         const unsupportedAutomaticChange =
@@ -195,7 +193,10 @@ export class HermesDecisionEngine {
       }
     }
 
-    await this.eventRepo.saveAll([...closed, ...events]);
+    // Closed right before this run's events are saved, so only earlier ones are closed, and an event
+    // the seller resolved while the run was working keeps the seller's decision.
+    for (const product of superseding) await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
+    await this.eventRepo.saveAll(events);
     await this.eventPublisher.publish(this.runCompletedEvent(workspace.id, events.length));
 
     return events;
@@ -387,8 +388,7 @@ export class HermesDecisionEngine {
       return this.savePriceEvent(product, suggestion, offlineBefore, supersedes);
     }
     if (stored === null) return null;
-    const closed = await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
-    if (closed.length > 0) await this.eventRepo.saveAll(closed);
+    await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
     return null;
   }
 
@@ -439,18 +439,14 @@ export class HermesDecisionEngine {
       source,
     });
     if (created.isErr()) return null;
-    const closed = await this.closePendingPriceEvents(product, supersedes);
-    await this.eventRepo.saveAll([...closed, created.value]);
+    await this.closePendingPriceEvents(product, supersedes);
+    await this.eventRepo.saveAll([created.value]);
     return created.value;
   }
 
-  // Dismisses (in memory; the caller saves them) the product's pending events of the given types.
-  private async closePendingPriceEvents(
-    product: Product,
-    types: readonly HermesEventType[],
-  ): Promise<HermesEvent[]> {
-    const pending = await this.eventRepo.findPendingByProduct(product.workspaceId, product.id, types);
-    return pending.filter((e) => e.dismiss().isOk());
+  // Dismisses the product's events of the given types that are still pending when the write runs.
+  private async closePendingPriceEvents(product: Product, types: readonly HermesEventType[]): Promise<void> {
+    await this.eventRepo.dismissPendingByProduct(product.workspaceId, product.id, types, new Date());
   }
 
   private agentRecommendationRecord(params: {

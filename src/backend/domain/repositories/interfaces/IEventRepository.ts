@@ -11,6 +11,16 @@ export interface IEventRepository {
   findPendingReview(workspaceId: string): Promise<HermesEvent[]>;
   /** The product's pending_review events of the given types. */
   findPendingByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
+  /**
+   * Dismisses the product's events of the given types that are still pending_review when the write
+   * runs; an event resolved meanwhile is left as it is. Returns how many were dismissed.
+   */
+  dismissPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+    resolvedAt: Date,
+  ): Promise<number>;
   save(event: HermesEvent): Promise<void>;
   /** Atomically inserts a semantic recommendation once. */
   saveRecommendationIfAbsent(event: HermesEvent, idempotencyKey: string): Promise<boolean>;

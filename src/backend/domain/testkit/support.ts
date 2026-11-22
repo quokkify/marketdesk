@@ -216,6 +216,15 @@ export class InMemoryEventRepository implements IEventRepository {
       (e) => e.productId === productId && types.includes(e.type),
     );
   }
+  async dismissPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+    resolvedAt: Date,
+  ): Promise<number> {
+    const pending = await this.findPendingByProduct(workspaceId, productId, types);
+    return pending.filter((e) => e.dismiss(resolvedAt).isOk()).length;
+  }
   async save(event: HermesEvent): Promise<void> {
     this.items.set(event.id, event);
   }

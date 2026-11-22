@@ -92,6 +92,21 @@ export class EventRepository implements IEventRepository {
     return rows.map((row) => EventMapper.toDomain(row));
   }
 
+  async dismissPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+    resolvedAt: Date,
+  ): Promise<number> {
+    const { rowCount } = await query(
+      `UPDATE hermes_events SET status = 'dismissed', resolved_at = $4
+       WHERE workspace_id = $1 AND product_id = $2 AND status = 'pending_review' AND type = ANY($3::text[])`,
+      [workspaceId, productId, [...types], resolvedAt],
+      this.queryClient,
+    );
+    return rowCount;
+  }
+
   async save(event: HermesEvent): Promise<void> {
     await this.persist(event, this.queryClient as PoolClient);
   }

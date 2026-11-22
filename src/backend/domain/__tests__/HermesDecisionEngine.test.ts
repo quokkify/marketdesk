@@ -1432,6 +1432,35 @@ describe('HermesDecisionEngine pending price events', () => {
     });
   });
 
+  it('a workspace run keeps a price event the seller approved while the run was still working', async () => {
+    const { engine, ai, workspace, eventRepo, productRepo, listingRepo, pendingPrice } = setup([priceAnswer(90)]);
+    addProduct(productRepo, listingRepo, 'p2');
+    const earlier = () => unwrap(HermesEvent.create({
+      id: 'earlier', workspaceId: 'w1', productId: 'p1', type: 'suggested_lower_price', severity: 'warning',
+      title: 'AI suggests price 95', proposedChange: { kind: 'price', field: 'price', from: 100, to: 95 },
+    }));
+    await eventRepo.save(earlier());
+    // The seller approves the earlier event (a fresh read, as the approve request does) while the
+    // run estimates the next product.
+    let calls = 0;
+    const estimatePrice = ai.estimatePrice.bind(ai);
+    ai.estimatePrice = async (...args) => {
+      calls += 1;
+      if (calls === 2) {
+        const approved = earlier();
+        unwrap(approved.approve());
+        await eventRepo.save(approved);
+      }
+      return estimatePrice(...args);
+    };
+
+    await engine.run(workspace);
+
+    // approve() moves the event on to applying.
+    expect(eventRepo.items.get('earlier')?.status).toBe('applying');
+    expect(pendingPrice('p1').map((e) => e.proposedChange?.kind === 'price' && e.proposedChange.to)).toEqual([90]);
+  });
+
   it('leaves approved price events, other products and other event types untouched', async () => {
     const { engine, workspace, eventRepo, productRepo, listingRepo, pendingPrice } = setup([priceAnswer(90), priceAnswer(80)]);
     addProduct(productRepo, listingRepo, 'p2');

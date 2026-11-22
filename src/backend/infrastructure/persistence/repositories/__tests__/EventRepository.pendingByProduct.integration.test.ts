@@ -12,6 +12,7 @@ const WS = '00000000-0000-4000-8000-0000000000a1';
 const OTHER_WS = '00000000-0000-4000-8000-0000000000a2';
 const P1 = '00000000-0000-4000-8000-0000000000b1';
 const P2 = '00000000-0000-4000-8000-0000000000b2';
+const P3 = '00000000-0000-4000-8000-0000000000b3';
 const PRICE_TYPES: HermesEventType[] = ['suggested_lower_price', 'suggested_higher_price', 'price_estimate_unavailable'];
 
 function event(id: string, workspaceId: string, productId: string, type: HermesEventType, status: HermesEventStatus = 'pending_review'): HermesEvent {
@@ -31,7 +32,7 @@ function event(id: string, workspaceId: string, productId: string, type: HermesE
 }
 
 // Runs only against a session TEMP copy of hermes_events, never the real table.
-describeDb('EventRepository.findPendingByProduct (PostgreSQL integration, TEMP table)', () => {
+describeDb('EventRepository pending price events by product (PostgreSQL integration, TEMP table)', () => {
   let ready = false;
   let pool: Pool;
   let client: PoolClient;
@@ -95,5 +96,31 @@ describeDb('EventRepository.findPendingByProduct (PostgreSQL integration, TEMP t
     const found = await repo.findPendingByProduct(WS, P1, PRICE_TYPES);
 
     expect(found.map((e) => e.id.slice(-2)).sort()).toEqual(['01', '02']);
+  });
+
+  it('dismisses only events still pending when the write runs, so a decision made meanwhile stands', async () => {
+    if (!ready) return;
+    const repo = new EventRepository(pool, client);
+    const read = event('11', WS, P3, 'suggested_lower_price');
+    await repo.saveAll([
+      read,
+      event('12', WS, P3, 'price_estimate_unavailable'),
+      event('13', WS, P3, 'suggested_better_title'),
+      event('14', OTHER_WS, P3, 'suggested_lower_price'),
+    ]);
+    // The seller approves event 11 after it was read as pending.
+    expect((await repo.findPendingByProduct(WS, P3, PRICE_TYPES)).map((e) => e.id)).toContain(read.id);
+    unwrap(read.approve());
+    await repo.save(read);
+    const resolvedAt = new Date('2026-11-22T12:00:00.000Z');
+
+    await expect(repo.dismissPendingByProduct(WS, P3, PRICE_TYPES, resolvedAt)).resolves.toBe(1);
+
+    const status = async (id: string) => (await repo.findById(`00000000-0000-4000-8000-0000000000${id}`))?.status;
+    expect(await status('11')).toBe(read.status);
+    expect(await status('12')).toBe('dismissed');
+    expect((await repo.findById('00000000-0000-4000-8000-000000000012'))?.resolvedAt).not.toBeNull();
+    expect(await status('13')).toBe('pending_review');
+    expect(await status('14')).toBe('pending_review');
   });
 });
