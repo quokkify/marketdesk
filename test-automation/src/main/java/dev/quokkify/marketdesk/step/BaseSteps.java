@@ -15,4 +15,5 @@ public abstract class BaseSteps {
   protected final MarketplacesPageSteps marketplacesPageSteps = new MarketplacesPageSteps();
   protected final HermesActivityPageSteps hermesActivityPageSteps = new HermesActivityPageSteps();
   protected final ProductDetailPageSteps productDetailPageSteps = new ProductDetailPageSteps();
+  protected final ProductsPageSteps productsPageSteps = new ProductsPageSteps();
 }
