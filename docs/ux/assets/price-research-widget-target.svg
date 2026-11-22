@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 780" width="1000" height="780" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1000" height="780" fill="#F6F7F9"/>
+  <text x="24" y="28" font-size="15" font-weight="700" fill="#191B23">Price research widget — target</text>
+  <text x="24" y="46" font-size="11" fill="#5B606E">Designed for a 300–360 px rail. Use the card width, not the viewport, to choose the field layout.</text>
+
+  <!-- rail card -->
+  <rect x="24" y="72" width="380" height="684" rx="10" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="44" y="102" font-size="16" font-weight="700" fill="#191B23">Price research</text>
+  <rect x="286" y="87" width="96" height="20" rx="10" fill="#F2F3F6"/>
+  <text x="296" y="101" font-size="9" fill="#5B606E">Saved 2m ago</text>
+  <text x="44" y="124" font-size="10" fill="#5B606E">Hermes reads this to propose a start price.</text>
+  <text x="44" y="138" font-size="10" fill="#5B606E">It never changes cost price or the listing.</text>
+
+  <!-- status line -->
+  <text x="44" y="166" font-size="9" fill="#5B606E">Last search: 2m ago</text>
+  <rect x="352" y="152" width="24" height="22" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="360" y="167" font-size="10" fill="#5B606E">↻</text>
+
+  <!-- empty anchors -->
+  <rect x="44" y="190" width="336" height="88" rx="6" fill="#FBF0DD" stroke="#E7D3AC"/>
+  <text x="56" y="210" font-size="11" font-weight="700" fill="#7A4A08">No market data found for this model</text>
+  <text x="56" y="226" font-size="9" fill="#5B606E">Try a broader search, or add one anchor manually.</text>
+  <rect x="56" y="238" width="94" height="24" rx="4" fill="#5B5BD6"/>
+  <text x="74" y="254" font-size="9" fill="#FFFFFF">Find prices</text>
+  <text x="164" y="254" font-size="9" fill="#5B5BD6">Add manually</text>
+
+  <!-- retail anchor -->
+  <text x="44" y="302" font-size="11" font-weight="700" fill="#191B23">New price anchor</text>
+  <text x="44" y="320" font-size="8" fill="#5B606E">NEW PRICE</text>
+  <rect x="44" y="326" width="150" height="30" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="54" y="346" font-size="10" fill="#191B23">469.99</text>
+  <text x="170" y="346" font-size="9" fill="#5B606E">zł</text>
+  <text x="210" y="320" font-size="8" fill="#5B606E">CURRENCY</text>
+  <rect x="210" y="326" width="170" height="30" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="220" y="346" font-size="10" fill="#191B23">PLN</text>
+  <text x="44" y="376" font-size="8" fill="#5B606E">SOURCE</text>
+  <rect x="44" y="382" width="150" height="30" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="54" y="402" font-size="10" fill="#191B23">MediaMarkt</text>
+  <text x="210" y="376" font-size="8" fill="#5B606E">CHECKED ON</text>
+  <rect x="210" y="382" width="170" height="30" rx="4" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="220" y="402" font-size="9" fill="#191B23">2026-11-22</text>
+  <text x="44" y="426" font-size="8" fill="#5B606E">2×2 grid at 300–360 px. Source and date apply to this anchor.</text>
+
+  <!-- comparables -->
+  <text x="44" y="456" font-size="11" font-weight="700" fill="#191B23">Comparable used prices (0)</text>
+  <rect x="44" y="470" width="336" height="58" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="56" y="490" font-size="9" fill="#191B23">No comparables yet</text>
+  <text x="56" y="504" font-size="8" fill="#5B606E">Add a price, source, date and tier so anchors stay useful.</text>
+  <text x="56" y="520" font-size="9" fill="#5B5BD6">+ Add comparable</text>
+
+  <!-- match summary -->
+  <rect x="44" y="542" width="336" height="58" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="56" y="560" font-size="9" font-weight="700" fill="#191B23">How we matched</text>
+  <rect x="302" y="548" width="66" height="16" rx="8" fill="#FBF0DD"/>
+  <text x="310" y="559" font-size="7" fill="#7A4A08">Medium</text>
+  <text x="56" y="576" font-size="8" fill="#7A4A08">Missing: year → Add year</text>
+  <text x="56" y="590" font-size="8" fill="#5B606E">Conflict: 25,000 vs 30,000 RPM</text>
+
+  <!-- sticky footer -->
+  <line x1="24" y1="668" x2="404" y2="668" stroke="#E7E9EF"/>
+  <text x="44" y="692" font-size="9" fill="#7A4A08">Unsaved changes</text>
+  <text x="196" y="710" font-size="9" fill="#5B606E">Reset</text>
+  <rect x="256" y="692" width="124" height="26" rx="4" fill="#5B5BD6"/>
+  <text x="274" y="709" font-size="9" fill="#FFFFFF">Save research</text>
+
+  <!-- right side notes -->
+  <text x="444" y="90" font-size="13" font-weight="700" fill="#191B23">Rules for the redesign</text>
+
+  <rect x="444" y="108" width="520" height="90" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="462" y="128" font-size="12" font-weight="700" fill="#191B23">1. Field layout follows the card</text>
+  <text x="462" y="146" font-size="10" fill="#5B606E">At 300–360 px use 2×2 fields or one column. Never four in a row.</text>
+  <text x="462" y="162" font-size="10" fill="#5B606E">Show labels above inputs; no floating labels that truncate to "Pri…".</text>
+  <text x="462" y="178" font-size="10" fill="#5B606E">Price: currency suffix + numeric keypad. Date: date picker, max today.</text>
+
+  <rect x="444" y="212" width="520" height="90" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="462" y="232" font-size="12" font-weight="700" fill="#191B23">2. Empty anchors are one state</text>
+  <text x="462" y="250" font-size="10" fill="#5B606E">Replace four "not found" rows with a single explanation and two actions:</text>
+  <text x="462" y="266" font-size="10" fill="#5B606E">"Find prices" (primary when empty) and "Add manually".</text>
+  <text x="462" y="282" font-size="10" fill="#5B606E">When rows exist, give each row its own "Add" / "View" action.</text>
+
+  <rect x="444" y="316" width="520" height="108" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="462" y="336" font-size="12" font-weight="700" fill="#191B23">3. Every comparable keeps provenance</text>
+  <text x="462" y="354" font-size="10" fill="#5B606E">Manual rows need price, note, source URL, tier and seen date.</text>
+  <text x="462" y="370" font-size="10" fill="#5B606E">Show source and date as visible columns/chips, not hidden model data.</text>
+  <text x="462" y="386" font-size="10" fill="#5B606E">Do not silently drop source/URL when a price is edited.</text>
+  <text x="462" y="404" font-size="10" fill="#5B606E">OLX rows keep their advert link and "imported" badge.</text>
+
+  <rect x="444" y="438" width="520" height="108" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="462" y="458" font-size="12" font-weight="700" fill="#191B23">4. Save and search are safe</text>
+  <text x="462" y="476" font-size="10" fill="#5B606E">Track dirty state; disable Save until something changed.</text>
+  <text x="462" y="492" font-size="10" fill="#5B606E">"Find prices" must not remount the editor and discard unsaved edits.</text>
+  <text x="462" y="508" font-size="10" fill="#5B606E">Keep Save in a sticky footer; add Reset and a clear saved/unsaved status.</text>
+  <text x="462" y="526" font-size="10" fill="#5B606E">On save conflict, show "Reload latest" instead of only a toast.</text>
+
+  <rect x="444" y="560" width="520" height="108" rx="6" fill="#FFFFFF" stroke="#DDE1EA"/>
+  <text x="462" y="580" font-size="12" font-weight="700" fill="#191B23">5. Make matching explainable</text>
+  <text x="462" y="598" font-size="10" fill="#5B606E">Collapse "Matched by" into "How we matched" with bullets:</text>
+  <text x="462" y="614" font-size="10" fill="#5B606E">matched specs, missing specs, conflicts, confidence.</text>
+  <text x="462" y="630" font-size="10" fill="#5B606E">"Year not stated" becomes an inline warning with "Add year".</text>
+  <text x="462" y="646" font-size="10" fill="#5B606E">Link source names to the source record, not just prose.</text>
+
+  <rect x="444" y="682" width="520" height="66" rx="6" fill="#EEEEFB" stroke="#C9C9F4"/>
+  <text x="462" y="702" font-size="11" font-weight="700" fill="#3F3FB0">Status vocabulary</text>
+  <text x="462" y="718" font-size="10" fill="#3F3FB0">Saved · Unsaved changes · Finding prices… · Search failed</text>
+  <text x="462" y="734" font-size="10" fill="#5B606E">Use one relative timestamp with an absolute tooltip.</text>
+
+  <!-- legend -->
+  <text x="24" y="776" font-size="9" fill="#5B606E">Target rail card. It is intentionally compact: the first decision is "find anchors" or "add one manually", not "save an empty form".</text>
+</svg>
