@@ -8,9 +8,10 @@ import type { ResearchRun, RunTrigger } from '../../../shared/types';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IPriceResearchRunRepository } from '../../domain/repositories/interfaces/IPriceResearchRunRepository';
+import type { IPriceResearchRepository } from '../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IPriceResearchRuns, RunRequestReason } from '../../domain/ports/IPriceResearchRuns';
 import { NotFoundError, TooManyRequestsError } from '../../domain/shared/DomainError';
-import { nextAutoAt } from '../../domain/services/researchSchedule';
+import { nextAutoAt, RECHECK_WAIT_MS } from '../../domain/services/researchSchedule';
 import type { IJobQueue, PriceResearchJob } from '../ports/IJobQueue';
 import { SEARCH_CURRENCY } from './PriceResearchGraph';
 
@@ -27,6 +28,8 @@ export interface PriceResearchRunsDeps {
   products: Pick<IProductRepository, 'findByIdForWorkspace'>;
   listings: Pick<IListingRepository, 'findByProduct'>;
   runs: IPriceResearchRunRepository;
+  // Read only for a product with no runs yet: its last research attempt from before runs existed.
+  research: Pick<IPriceResearchRepository, 'findByProduct'>;
   queue: IJobQueue<PriceResearchJob>;
   // Whether a research profile is configured.
   configured: boolean;
@@ -59,6 +62,9 @@ export class PriceResearchRuns implements IPriceResearchRuns {
     if (!opts.force && last?.nextAutoAt && now.getTime() < Date.parse(last.nextAutoAt)) {
       return { run: last, enqueued: false, reason: 'not_due' };
     }
+    if (!opts.force && !last && (await this.researchedRecently(workspaceId, productId, now))) {
+      return { run: null, enqueued: false, reason: 'not_due' };
+    }
     const queuedSince = new Date(now.getTime() - QUEUED_TTL_MS).toISOString();
     if (await this.deps.runs.countQueued(workspaceId, queuedSince) >= MAX_QUEUED_RUNS_PER_WORKSPACE) {
       throw new TooManyRequestsError(TOO_MANY_QUEUED);
@@ -75,6 +81,13 @@ export class PriceResearchRuns implements IPriceResearchRuns {
     if (!run) return { run: await this.deps.runs.findActive(workspaceId, productId), enqueued: false, reason: 'active' };
     await this.enqueue(run, last);
     return { run, enqueued: true, reason: 'enqueued' };
+  }
+
+  // A product researched before runs existed waits the ok-run interval from that attempt, so the first
+  // automatic requests after the change do not queue research for every product at once.
+  private async researchedRecently(workspaceId: string, productId: string, now: Date): Promise<boolean> {
+    const lastAttemptAt = (await this.deps.research.findByProduct(workspaceId, productId))?.lastAttemptAt;
+    return typeof lastAttemptAt === 'string' && now.getTime() - Date.parse(lastAttemptAt) < RECHECK_WAIT_MS;
   }
 
   async latest(workspaceId: string, productId: string): Promise<{ active: ResearchRun | null; last: ResearchRun | null }> {

@@ -2,6 +2,7 @@ import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import {
   InMemoryListingRepository,
+  InMemoryPriceResearchRepository,
   InMemoryPriceResearchRunRepository,
   InMemoryProductRepository,
   money,
@@ -64,6 +65,7 @@ function setup(options: {
   runs?: InMemoryPriceResearchRunRepository;
   queue?: IJobQueue<PriceResearchJob>;
   onExpired?: (workspaceId: string, productId: string) => Promise<unknown>;
+  research?: InMemoryPriceResearchRepository;
 } = {}) {
   const products = new InMemoryProductRepository();
   const listings = new InMemoryListingRepository();
@@ -72,8 +74,9 @@ function setup(options: {
   const runs = options.runs ?? new InMemoryPriceResearchRunRepository();
   const queue = new RecordingJobQueue<PriceResearchJob>();
   let n = 0;
+  const research = options.research ?? new InMemoryPriceResearchRepository();
   const service = new PriceResearchRuns({
-    products, listings, runs,
+    products, listings, runs, research,
     queue: options.queue ?? queue,
     configured: options.configured ?? true,
     newId: () => `run-${++n}`,
@@ -199,6 +202,52 @@ describe('PriceResearchRuns.request', () => {
 
     const forced = await service.request(WS, PID, { force: true, trigger: 'manual' });
     expect(forced).toMatchObject({ enqueued: true, reason: 'enqueued' });
+  });
+
+  describe('a product researched before runs existed', () => {
+    function researchedAt(lastAttemptAt: string | null): InMemoryPriceResearchRepository {
+      const research = new InMemoryPriceResearchRepository();
+      research.items.set(`${WS}:${PID}`, {
+        productId: PID, retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null,
+        comparables: [], specs: null, dismissedUrls: [], lastAttemptAt, lastEstimate: null, updatedAt: at(-HOUR_MS),
+      });
+      return research;
+    }
+
+    it('is not due automatically within 7 days of its last research attempt', async () => {
+      const { service, queue, runs } = setup({ research: researchedAt(at(-6 * 24 * HOUR_MS)) });
+
+      await expect(service.request(WS, PID, { force: false, trigger: 'analyze' }))
+        .resolves.toEqual({ run: null, enqueued: false, reason: 'not_due' });
+      expect(queue.jobs).toHaveLength(0);
+      expect(runs.runs).toHaveLength(0);
+    });
+
+    it('is due once 7 days have passed since that attempt', async () => {
+      const { service } = setup({ research: researchedAt(at(-7 * 24 * HOUR_MS - 1)) });
+
+      await expect(service.request(WS, PID, { force: false, trigger: 'analyze' }))
+        .resolves.toMatchObject({ enqueued: true, reason: 'enqueued' });
+    });
+
+    it('runs at once when forced, or when it was never attempted', async () => {
+      const { service } = setup({ research: researchedAt(at(-HOUR_MS)) });
+      await expect(service.request(WS, PID, { force: true, trigger: 'manual' }))
+        .resolves.toMatchObject({ enqueued: true, reason: 'enqueued' });
+
+      const never = setup({ research: researchedAt(null) });
+      await expect(never.service.request(WS, PID, { force: false, trigger: 'analyze' }))
+        .resolves.toMatchObject({ enqueued: true, reason: 'enqueued' });
+    });
+
+    it('follows its runs, not the old attempt, once it has one', async () => {
+      const runs = new InMemoryPriceResearchRunRepository();
+      runs.runs.push(storedRun({ nextAutoAt: at(-1) }));
+      const { service } = setup({ runs, research: researchedAt(at(-HOUR_MS)) });
+
+      await expect(service.request(WS, PID, { force: false, trigger: 'analyze' }))
+        .resolves.toMatchObject({ enqueued: true, reason: 'enqueued' });
+    });
   });
 
   it('runs again automatically once the next automatic run time has passed', async () => {

@@ -507,6 +507,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     products: productRepo,
     listings: listingRepo,
     runs: priceResearchRunRepo,
+    research: priceResearchRepo,
     queue: priceResearchQueue,
     configured: researchConfig !== null,
     newId: idGenerator,
