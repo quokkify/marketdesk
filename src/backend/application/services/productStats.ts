@@ -15,6 +15,23 @@ export interface ViewEventInput {
   occurredAt: Date;
 }
 
+// Sync records view deltas through AnalyticsEventRepository.appendMany, whose ids are
+// deterministic UUID v5 values; seeded pre-tracking totals (migrations 038/039) get random v4 ids.
+const SYNC_RECORDED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-/i;
+
+export function isSyncRecordedEventId(id: string): boolean {
+  return SYNC_RECORDED_ID.test(id);
+}
+
+// View events that hold a pre-tracking total rather than growth.
+export function nonSyncViewEventIds(events: ReadonlyArray<ViewEventInput>): Set<string> {
+  return new Set(
+    events
+      .filter((event) => event.eventType === 'view' && !isSyncRecordedEventId(event.id))
+      .map((event) => event.id)
+  );
+}
+
 export interface ListingViews {
   delta7d: number;
   byDay: number[];
@@ -41,7 +58,7 @@ function startOfUtcDay(date: Date): number {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
-// The earliest view event of a listing holds its whole pre-tracking total, so it is never growth.
+// Baseline events (seeded pre-tracking totals, see nonSyncViewEventIds) are never growth.
 export function summarizeListingViews(
   events: ReadonlyArray<ViewEventInput>,
   baselineIds: ReadonlySet<string>,

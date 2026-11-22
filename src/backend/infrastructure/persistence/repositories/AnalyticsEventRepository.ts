@@ -34,19 +34,6 @@ export class AnalyticsEventRepository implements IAnalyticsEventRepository {
     else await databaseQuery(sql, values);
   }
 
-  async baselineViewEventIds(workspaceId: string): Promise<Set<string>> {
-    const sql = `
-      SELECT DISTINCT ON (listing_id) id
-      FROM analytics_events
-      WHERE workspace_id = $1 AND event_type = 'view' AND listing_id IS NOT NULL
-      ORDER BY listing_id, occurred_at ASC, id ASC
-    `;
-    const result: { rows: Array<{ id: string }> } = this.queryClient
-      ? await this.queryClient.query(sql, [workspaceId])
-      : await databaseQuery<{ id: string }>(sql, [workspaceId]);
-    return new Set(result.rows.map((row) => row.id));
-  }
-
   async findByRange(input: AnalyticsEventQuery): Promise<AnalyticsEventRecord[]> {
     const values: unknown[] = [input.workspaceId, input.from, input.to];
     const marketplaceClause = input.marketplaceId

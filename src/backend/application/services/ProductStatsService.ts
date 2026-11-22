@@ -8,6 +8,7 @@ import type { Listing } from '../../domain/entities/Listing';
 import {
   STATS_DAYS,
   needsActionReasons,
+  nonSyncViewEventIds,
   summarizeListingViews,
   summarizeProduct,
 } from './productStats';
@@ -18,7 +19,7 @@ const DAY_MS = 24 * 3600 * 1000;
 export interface ProductStatsDeps {
   products: Pick<IProductRepository, 'findByWorkspace'>;
   listings: Pick<IListingRepository, 'findByWorkspace'>;
-  analytics: Pick<IAnalyticsEventRepository, 'findByRange' | 'baselineViewEventIds'>;
+  analytics: Pick<IAnalyticsEventRepository, 'findByRange'>;
   awaitingReplyCounts?: (workspaceId: string) => Promise<Record<string, number>>;
   now?: () => Date;
 }
@@ -42,14 +43,13 @@ export class ProductStatsService {
   async statsByProduct(workspaceId: string): Promise<Record<string, ProductStats>> {
     const now = this.deps.now?.() ?? new Date();
     const from = new Date(now.getTime() - (STATS_DAYS + 1) * DAY_MS);
-    const [products, listings, events, baselineIds, awaiting] = await Promise.all([
+    const [products, listings, events, awaiting] = await Promise.all([
       this.deps.products.findByWorkspace(workspaceId),
       this.deps.listings.findByWorkspace(workspaceId),
       this.deps.analytics.findByRange({ workspaceId, from, to: new Date(now.getTime() + 1) }),
-      this.deps.analytics.baselineViewEventIds(workspaceId),
       this.deps.awaitingReplyCounts?.(workspaceId) ?? Promise.resolve<Record<string, number>>({}),
     ]);
-    const views = summarizeListingViews(events, baselineIds, now);
+    const views = summarizeListingViews(events, nonSyncViewEventIds(events), now);
 
     const listingsByProduct = new Map<string, Listing[]>();
     for (const listing of listings) {

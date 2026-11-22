@@ -148,3 +148,11 @@ describe('persistent pending counts', () => {
     expect(analysisStateFor({ status: 'done', count: 0 }, 1)).toEqual({ status: 'done', count: 1 });
   });
 });
+
+describe('pending count updates', () => {
+  // Regression guard: a fresh object for an unchanged count re-rendered the page in a loop.
+  it('returns the same state object when the pending count did not change', () => {
+    const prev = { status: 'done' as const, count: 2 };
+    expect(stateAfterPendingChange(prev, 2)).toBe(prev);
+  });
+});

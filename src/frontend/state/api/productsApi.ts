@@ -60,6 +60,19 @@ export function buildProductsListUrl(params?: ProductListParams): string {
   })}`;
 }
 
+// The needs-action list depends on listings (sync) and waiting buyers (sent replies) too.
+export function productListTags(
+  result: PaginatedResponse<Product> | undefined,
+  arg: ProductListParams | undefined
+): Array<{ type: 'Product' | 'Listing'; id: string } | { type: 'Awaiting' }> {
+  const tags: Array<{ type: 'Product' | 'Listing'; id: string } | { type: 'Awaiting' }> = [
+    ...(result?.items ?? []).map((p) => ({ type: 'Product' as const, id: p.id })),
+    { type: 'Product', id: 'LIST' },
+  ];
+  if (arg?.needsAction) tags.push({ type: 'Listing', id: 'LIST' }, { type: 'Awaiting' });
+  return tags;
+}
+
 export const productsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Views, growth, trend and needs-action reasons per product. Sync refreshes listings,
@@ -71,19 +84,14 @@ export const productsApi = baseApi.injectEndpoints({
       providesTags: [
         { type: 'Product', id: 'LIST' },
         { type: 'Listing', id: 'LIST' },
+        { type: 'Awaiting' },
       ],
     }),
 
     getProducts: builder.query<PaginatedResponse<Product>, ProductListParams | void>({
       query: (params) => buildProductsListUrl(params ?? undefined),
       transformResponse: (res: PaginatedApiResponse<Product>) => unwrapPaginated(res),
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.items.map((p) => ({ type: 'Product' as const, id: p.id })),
-              { type: 'Product' as const, id: 'LIST' },
-            ]
-          : [{ type: 'Product' as const, id: 'LIST' }],
+      providesTags: (result, _error, arg) => productListTags(result, arg ?? undefined),
     }),
 
     getProduct: builder.query<Product, string>({

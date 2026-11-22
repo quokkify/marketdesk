@@ -154,10 +154,11 @@ same server computation.
 
 ## Calls made in the design (not owner decisions)
 
-- **Baseline event.** Rows carry no baseline flag. Rule: per listing, the earliest `view` event is
-  the baseline and is excluded from `viewsDelta7d`, `viewsByDay` and the no-growth check. This covers
-  both migration 038/039 seeds and a first sync that records a full historical total for a listing
-  imported with `views = 0`. Cost: one genuine first delta per listing is dropped.
+- **Baseline event** (revised 2026-11-22 after review). Growth counts only view events recorded by
+  sync, which have deterministic UUID v5 ids; seeded pre-tracking totals (migrations 038/039, random
+  v4 ids) are baseline wherever they fall in time. The earlier "earliest event per listing" rule
+  dropped the first genuine delta and counted a seed replayed after the first sync as a spike.
+  Checked on prod: the three seeds are v4, every sync delta is v5.
 - **Needs action scope.** Only products with status `active`. Tab value `needs-action`; an old
   `?tab=attention` URL is mapped to it. The products list endpoint gets a `needsAction=true` filter
   and a count, computed in the application service (the catalogue is already filtered in memory

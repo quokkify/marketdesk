@@ -36,6 +36,4 @@ export interface AppendAnalyticsEvent {
 export interface IAnalyticsEventRepository {
   findByRange(query: AnalyticsEventQuery): Promise<AnalyticsEventRecord[]>;
   appendMany(events: AppendAnalyticsEvent[]): Promise<void>;
-  /** Id of each listing's earliest view event: it holds the pre-tracking total, not growth. */
-  baselineViewEventIds(workspaceId: string): Promise<Set<string>>;
 }

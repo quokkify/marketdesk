@@ -8,6 +8,7 @@ import {
   buildProductImageUploadRequest,
   buildProductRecheckRequest,
   buildProductsListUrl,
+  productListTags,
   productsApi,
 } from './productsApi';
 
@@ -183,5 +184,18 @@ describe('needs-action list query', () => {
     expect(buildProductsListUrl({ needsAction: true, limit: 1, offset: 0 })).toContain(
       'needsAction=true'
     );
+  });
+});
+
+describe('product list cache tags', () => {
+  // Regression guard: the Needs action list kept stale reasons after a sync or a sent reply.
+  it('refreshes the needs-action list after listing and conversation changes', () => {
+    const tags = productListTags(undefined, { needsAction: true });
+    expect(tags).toEqual(
+      expect.arrayContaining([{ type: 'Listing', id: 'LIST' }, { type: 'Awaiting' }])
+    );
+  });
+  it('keeps the plain list tied to products only', () => {
+    expect(productListTags(undefined, { limit: 25 })).toEqual([{ type: 'Product', id: 'LIST' }]);
   });
 });

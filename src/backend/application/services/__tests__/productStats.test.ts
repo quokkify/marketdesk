@@ -1,6 +1,8 @@
 import type { ProductStats } from '@shared/types';
 import {
   compareByStats,
+  isSyncRecordedEventId,
+  nonSyncViewEventIds,
   needsActionReasons,
   summarizeListingViews,
   summarizeProduct,
@@ -179,5 +181,27 @@ describe('compareByStats', () => {
     expect(compareByStats(undefined, s(5), 'views')).toBeGreaterThan(0);
     expect(compareByStats(s(null), s(0), 'views')).toBeGreaterThan(0);
     expect(compareByStats(undefined, undefined, 'views')).toBe(0);
+  });
+});
+
+describe('baseline events', () => {
+  // Sync writes deterministic UUID v5 ids; migration seeds of pre-tracking totals get random v4 ids.
+  const SYNC_ID = '3f2a9c1e-7b4d-5e21-a9f0-1c2d3e4f5a6b';
+  const SEED_ID = '3f2a9c1e-7b4d-4e21-a9f0-1c2d3e4f5a6b';
+
+  it('tells sync-recorded events from seeded totals', () => {
+    expect(isSyncRecordedEventId(SYNC_ID)).toBe(true);
+    expect(isSyncRecordedEventId(SEED_ID)).toBe(false);
+  });
+
+  // Regression guard: a seed written after the first sync (migration replay) showed as a spike,
+  // and the first genuine sync delta was dropped as the "earliest" event.
+  it('counts every sync delta and no seeded total, whatever their order', () => {
+    const events = [
+      ev(SYNC_ID, 'L1', 2, '2026-11-20T10:00:00Z'),
+      ev(SEED_ID, 'L1', 500, '2026-11-21T10:00:00Z'),
+    ];
+    const views = summarizeListingViews(events, nonSyncViewEventIds(events), now);
+    expect(views.get('L1')!.delta7d).toBe(2);
   });
 });

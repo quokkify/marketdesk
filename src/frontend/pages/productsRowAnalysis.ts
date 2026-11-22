@@ -22,6 +22,7 @@ export function stateAfterPendingChange(
   pending: number
 ): RowAnalysisState | undefined {
   if (prev?.status === 'running') return prev;
+  if (prev?.status === 'done' && prev.count === pending) return prev;
   if (pending > 0) return { status: 'done', count: pending };
   if (prev?.status === 'done' && prev.count > 0) return { status: 'reviewed' };
   return prev;
