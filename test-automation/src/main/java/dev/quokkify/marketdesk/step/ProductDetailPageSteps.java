@@ -24,12 +24,6 @@ public class ProductDetailPageSteps
     return this;
   }
 
-  @Step("Suggest improvements")
-  public ProductDetailPageSteps suggestImprovements() {
-    page.suggestImprovementsButton().shouldBe(Condition.enabled).click();
-    return this;
-  }
-
   @Step("Replace the draft reply to the buyer message {buyerText} with {reply} and send it")
   public ProductDetailPageSteps editAndSendDraft(String buyerText, String reply) {
     page.replaceReplyText(buyerText, reply);
@@ -71,6 +65,12 @@ public class ProductDetailPageSteps
   @Step("Find prices")
   public ProductDetailPageSteps findPrices() {
     page.findPricesButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
+  @Step("Review the price")
+  public ProductDetailPageSteps reviewPrice() {
+    page.reviewPriceButton().shouldBe(Condition.enabled).click();
     return this;
   }
 

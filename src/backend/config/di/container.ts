@@ -105,13 +105,21 @@ import { AiUsageRepository } from '../../infrastructure/persistence/repositories
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import { ConversationReplyHandler } from '../../infrastructure/jobQueue/JobHandlers/ConversationReplyHandler';
-import { PriceResearchHandler } from '../../infrastructure/jobQueue/JobHandlers/PriceResearchHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
-import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceProposals } from '../../application/services/verdict/PriceProposals';
+import { ListingSeoProposals } from '../../application/services/verdict/ListingSeoProposals';
+import { SaleVerdictGraph } from '../../application/services/verdict/SaleVerdictGraph';
+import { SaleVerdictRuns } from '../../application/services/verdict/SaleVerdictRuns';
+import { buildInfoCheck } from '../../application/services/verdict/infoCheckGraph';
+import { buildPriceCheck } from '../../application/services/verdict/priceCheckGraph';
+import { buildPhotosCheck } from '../../application/services/verdict/photosCheckGraph';
+import { RecordedResearchRun } from '../../application/services/recordedResearchRun';
+import { SaleVerdictRepository } from '../../infrastructure/persistence/repositories/SaleVerdictRepository';
+import { SaleVerdictHandler } from '../../infrastructure/jobQueue/JobHandlers/SaleVerdictHandler';
 import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
@@ -120,7 +128,6 @@ import { CreateProductUseCase } from '../../application/usecases/CreateProductUs
 import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUseCase';
 import { PublishListingUseCase } from '../../application/usecases/PublishListingUseCase';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
-import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
 import { MarketplaceUpdateEnqueuer } from '../../application/services/MarketplaceUpdateEnqueuer';
 import { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
@@ -163,7 +170,7 @@ import type {
   ConversationReplyJob,
   IJobQueue,
   JobEnqueueOptions,
-  PriceResearchJob,
+  SaleVerdictJob,
   PublishListingJob,
   SyncMarketplaceJob,
 } from '../../application/ports/IJobQueue';
@@ -213,11 +220,11 @@ const CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE = 'Conversation reply run not qu
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
-const PRICE_RESEARCH_QUEUE = 'price-research';
+const SALE_VERDICT_QUEUE = 'sale-verdict';
 
 export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
-  // A failed research run is recorded on the run and retried by its schedule, never by the queue.
-  if (name === PRICE_RESEARCH_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
+  // A failed run is recorded on the run and retried by its schedule or a new request, never by the queue.
+  if (name === SALE_VERDICT_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -466,7 +473,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
-  const priceResearchQueue = createQueue<PriceResearchJob>(PRICE_RESEARCH_QUEUE);
+  const saleVerdictQueue = createQueue<SaleVerdictJob>(SALE_VERDICT_QUEUE);
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -504,36 +511,21 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   const priceResearchRunRepo = new PriceResearchRunRepository(pool);
   const priceResearchRuns = new PriceResearchRuns({
-    products: productRepo,
-    listings: listingRepo,
     runs: priceResearchRunRepo,
-    research: priceResearchRepo,
-    queue: priceResearchQueue,
-    configured: researchConfig !== null,
-    newId: idGenerator,
     now: () => new Date(),
-    // hermesEngine is created below; the hook runs only once the container is built.
-    onExpired: async (workspaceId: string, productId: string): Promise<void> => {
-      await hermesEngine.reestimateAfterResearch(workspaceId, productId, null);
-    },
+  });
+  const priceEstimateService = new PriceEstimateService({
+    ai: aiProvider,
+    research: priceResearchRepo,
+    runs: priceResearchRuns,
     logger: overrides.logger,
   });
-  const hermesEngine = new HermesDecisionEngine(
-    productRepo,
-    listingRepo,
-    eventRepo,
-    eventPublisher,
-    aiProvider,
-    new PriceEstimateService({
-      ai: aiProvider,
-      research: priceResearchRepo,
-      runs: priceResearchRuns,
-      logger: overrides.logger,
-    }),
-    priceResearchRuns,
-    idGenerator,
-    overrides.logger
-  );
+  const priceProposals = new PriceProposals({
+    events: eventRepo,
+    estimates: priceEstimateService,
+    ai: aiProvider,
+    idFactory: idGenerator,
+  });
 
   // 7. Application use cases.
   const createProductUC = new CreateProductUseCase(
@@ -553,7 +545,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
-  const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
   const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
     listingRepo,
     marketplaceRepo,
@@ -626,14 +617,61 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   const productAssistanceGraph = new ProductAssistanceGraph(
     productAIDraftService,
-    productRecheckService,
     productRepo,
     listingRepo,
     marketplaceRepo,
+    priceResearchRepo,
     aiProvider,
     undefined,
-    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real', logger: overrides.logger }
+    { logger: overrides.logger }
   );
+  const saleVerdictRepo = new SaleVerdictRepository(pool);
+  const listingSeoProposals = new ListingSeoProposals({
+    events: eventRepo,
+    ai: aiProvider,
+    idFactory: idGenerator,
+  });
+  const saleVerdictGraph = new SaleVerdictGraph({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    workspaces: workspaceRepo,
+    verdicts: saleVerdictRepo,
+    checks: {
+      info: buildInfoCheck({ recheck: productRecheckService, seo: listingSeoProposals, logger: overrides.logger }),
+      price: buildPriceCheck({
+        proposals: priceProposals,
+        research: priceResearchRepo,
+        runs: priceResearchRuns,
+        recorded: new RecordedResearchRun({
+          runs: priceResearchRunRepo,
+          graph: priceResearchGraph,
+          events: eventPublisher,
+          now: () => new Date(),
+          logger: overrides.logger,
+        }),
+        configured: researchConfig !== null,
+        newId: idGenerator,
+      }),
+      photos: buildPhotosCheck(),
+    },
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  const saleVerdictRuns = new SaleVerdictRuns({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    workspaces: workspaceRepo,
+    verdicts: saleVerdictRepo,
+    researchRuns: priceResearchRunRepo,
+    queue: saleVerdictQueue,
+    recheck: productRecheckService,
+    infoCheckFor: (recheck) => buildInfoCheck({ recheck, seo: listingSeoProposals, logger: overrides.logger }),
+    newId: idGenerator,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
   const listingService = new ListingApplicationService(
     listingRepo,
     publishListingUC,
@@ -642,7 +680,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   const hermesService = new HermesApplicationService(
     eventRepo,
-    runHermesUC,
     approveEventUC,
     dismissEventUC
   );
@@ -947,21 +984,13 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
 
-  const priceResearchHandler = new PriceResearchHandler({
-    runs: priceResearchRunRepo,
-    graph: priceResearchGraph,
-    afterRun: async (workspaceId, productId, result) => {
-      await hermesEngine.reestimateAfterResearch(
-        workspaceId,
-        productId,
-        result && { outcome: result.outcome, rowsChanged: result.rowsChanged },
-      );
-    },
-    events: eventPublisher,
+  const saleVerdictHandler = new SaleVerdictHandler({
+    verdicts: saleVerdictRepo,
+    graph: saleVerdictGraph,
     now: () => new Date(),
     logger: overrides.logger,
   });
-  priceResearchQueue.registerHandler((data) => priceResearchHandler.handle(data));
+  saleVerdictQueue.registerHandler((data) => saleVerdictHandler.handle(data));
 
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
@@ -1038,6 +1067,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productRepo,
     priceResearchRepo,
     priceResearchRuns,
+    researchConfigured: researchConfig !== null,
+    saleVerdictRuns,
     productStatsService,
     listingRepo,
     marketplaceRepo,
@@ -1068,7 +1099,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     syncQueue as ManagedQueue<unknown>,
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
-    priceResearchQueue as ManagedQueue<unknown>,
+    saleVerdictQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

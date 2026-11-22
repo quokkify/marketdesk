@@ -47,7 +47,6 @@ const fakeAi: IAIProvider = {
   estimatePrice: async () => {
     throw new Error('not used');
   },
-  suggestPrice: async () => ({ suggestedPrice: 1, reasoning: 'x', confidence: 'low' }),
   generateTitle: async (product) => product.name,
   analyzeListing: async () => ({ score: 0, suggestions: [] }),
   analyzeListingSeo: async () => ({ recommendations: [], disclaimer: 'Review only.' }),
@@ -116,9 +115,9 @@ describe('buildContainer (composition root)', () => {
     });
   });
 
-  it('runs a price research job once: a failed run is recorded on the run, not retried', () => {
-    expect(buildBullAddOptions('price-research')).toMatchObject({ attempts: 1 });
-    expect(buildBullAddOptions('price-research')).not.toHaveProperty('backoff');
+  it('runs a sale verdict job once: a failed run is recorded on the run, not retried', () => {
+    expect(buildBullAddOptions('sale-verdict')).toMatchObject({ attempts: 1 });
+    expect(buildBullAddOptions('sale-verdict')).not.toHaveProperty('backoff');
   });
 
   it('populates every required AppDeps field', () => {
@@ -204,7 +203,7 @@ describe('buildContainer (composition root)', () => {
     expect('subscriber' in build()).toBe(false);
   });
 
-  it('creates exactly the publish, sync, conversation-retention, conversation-reply and price-research queues', () => {
+  it('creates exactly the publish, sync, conversation-retention, conversation-reply and sale-verdict queues', () => {
     const names: string[] = [];
     const scheduled: Array<{ name: string; options: unknown }> = [];
     buildContainer({
@@ -227,7 +226,7 @@ describe('buildContainer (composition root)', () => {
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'price-research']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'sale-verdict']);
     expect(scheduled).toEqual([
       {
         name: 'conversation-retention',

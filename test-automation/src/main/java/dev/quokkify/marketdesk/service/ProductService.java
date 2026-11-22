@@ -1,6 +1,5 @@
 package dev.quokkify.marketdesk.service;
 
-import dev.quokkify.marketdesk.model.ImprovementRequestPojo;
 import dev.quokkify.marketdesk.model.ListingRequestPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.util.JsonConverter;
@@ -15,12 +14,9 @@ public class ProductService extends MarketDeskApiService {
   private static final String PRICE_AND_FLOOR_PATCH = "{\"sellingPrice\": %s, \"minAcceptablePrice\": %s}";
   private static final String NAME_PATCH = "{\"name\": \"%s\"}";
   private static final String PRODUCT_LISTINGS = PRODUCTS + "/%s/listings";
-  private static final String PRODUCT_IMPROVEMENTS = PRODUCTS + "/%s/improvements";
   private static final String PRODUCT_STATS = PRODUCTS + "/stats";
   private static final String NEEDS_ACTION_PRODUCTS = PRODUCTS + "?needsAction=true";
   private static final String STATUS_PATCH = "{\"status\": \"%s\"}";
-  private static final String HERMES_RUN = "/api/hermes/products/%s/run";
-  private static final String HERMES_RUN_BODY = "{\"trigger\": \"manual\"}";
   private static final String HERMES_PENDING_COUNTS = "/api/hermes/events/pending-counts";
   private static final String HERMES_DISMISS = "/api/hermes/events/%s/dismiss";
 
@@ -72,10 +68,6 @@ public class ProductService extends MarketDeskApiService {
     return patch(authorized(token), PRODUCT.formatted(productId), STATUS_PATCH.formatted(status));
   }
 
-  public ValidatableResponse runHermes(String token, String productId) {
-    return post(authorized(token), HERMES_RUN.formatted(productId), HERMES_RUN_BODY);
-  }
-
   public ValidatableResponse getPendingCounts(String token) {
     return get(authorized(token), HERMES_PENDING_COUNTS);
   }
@@ -95,9 +87,5 @@ public class ProductService extends MarketDeskApiService {
 
   public ValidatableResponse createListing(String token, String productId, ListingRequestPojo body) {
     return post(authorized(token), PRODUCT_LISTINGS.formatted(productId), JsonConverter.toJsonIgnoreNulls(body));
-  }
-
-  public ValidatableResponse proposeImprovements(String token, String productId, ImprovementRequestPojo body) {
-    return post(authorized(token), PRODUCT_IMPROVEMENTS.formatted(productId), JsonConverter.toJsonIgnoreNulls(body));
   }
 }

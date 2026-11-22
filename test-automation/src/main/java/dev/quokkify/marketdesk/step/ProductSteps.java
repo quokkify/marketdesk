@@ -1,10 +1,6 @@
 package dev.quokkify.marketdesk.step;
 
-import java.util.List;
-
 import dev.quokkify.marketdesk.model.AccountPojo;
-import dev.quokkify.marketdesk.model.ImprovementRequestPojo;
-import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.ProductVerification;
@@ -12,7 +8,6 @@ import dev.quokkify.step.ApiSteps;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
-import org.apache.http.HttpStatus;
 
 public class ProductSteps extends ApiSteps<ProductVerification> {
 
@@ -51,16 +46,6 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
   @Step("Set the status of product {productId} to {status}")
   public ValidatableResponse updateStatus(AccountPojo account, String productId, String status) {
     return service.updateStatus(account.token(), productId, status);
-  }
-
-  @Step("Analyze product {productId} with AI")
-  public List<String> runHermes(AccountPojo account, String productId) {
-    // The run answers synchronously but with 202 Accepted, carrying the created suggestions.
-    return service.runHermes(account.token(), productId)
-        .statusCode(HttpStatus.SC_ACCEPTED)
-        .extract()
-        .jsonPath()
-        .getList("data.id", String.class);
   }
 
   @Step("Get pending AI suggestion counts")
@@ -108,11 +93,5 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
   @Step("Rename product {productId} to {name}")
   public ValidatableResponse updateName(AccountPojo account, String productId, String name) {
     return service.updateName(account.token(), productId, name);
-  }
-
-  @Step("Ask for improvements of the product and its listing")
-  public ValidatableResponse proposeImprovements(AccountPojo account, ProductListingPojo productListing) {
-    return service.proposeImprovements(account.token(), productListing.productId(),
-        new ImprovementRequestPojo(productListing.listingId()));
   }
 }

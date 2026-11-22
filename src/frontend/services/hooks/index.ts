@@ -3,13 +3,16 @@
 // workspace slice; detail queries and mutations are re-exported verbatim with
 // friendlier names. Import these from feature components (Group 9) rather than
 // reaching into state/api directly.
+import { useEffect, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query/react';
-import { useAppSelector } from '../../state/hooks.js';
+import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
+import { baseApi } from '../../state/api/baseApi.js';
+import { verdictMark, verdictSettled } from '../../components/products/verdictDisplay.js';
+import type { VerdictMark } from '../../components/products/verdictDisplay.js';
 import {
   useGetProductsQuery,
   useGetProductQuery,
   useRecheckProductMutation,
-  useProposeProductImprovementsMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,
@@ -51,6 +54,7 @@ import {
   useDismissHermesEventMutation,
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
+  useGetProductVerdictQuery,
   useGetAnalyticsOverviewQuery,
   useGetPriceHistoryQuery,
   useGetWorkspaceQuery,
@@ -91,7 +95,6 @@ export function useProducts(params: ProductListParams = {}, options?: ProductsOp
 }
 export const useProduct = useGetProductQuery;
 export const useRecheckProduct = useRecheckProductMutation;
-export const useProposeProductImprovements = useProposeProductImprovementsMutation;
 export const useProductListings = useGetProductListingsQuery;
 export const useCreateProduct = useCreateProductMutation;
 export const useGenerateProductAIDraft = useGenerateProductAIDraftMutation;
@@ -160,6 +163,34 @@ export const useApproveHermesEvent = useApproveHermesEventMutation;
 export const useDismissHermesEvent = useDismissHermesEventMutation;
 export const useExecuteCategoryRecreationOperation = useExecuteCategoryRecreationOperationMutation;
 export const useRunHermes = useRunHermesMutation;
+
+export const VERDICT_POLL_MS = 3000;
+
+// The sale verdict of one product. It polls only while a run is active; when the run ends, what
+// the run changed (suggestions, price research, the catalogue row) is read again.
+export function useProductVerdict(productId: string | undefined) {
+  const dispatch = useAppDispatch();
+  const [pollingInterval, setPollingInterval] = useState(0);
+  const result = useGetProductVerdictQuery(productId ?? skipToken, { pollingInterval });
+  const view = result.currentData;
+  const mark = useRef<VerdictMark | null>(null);
+  useEffect(() => {
+    if (!productId || !view) return;
+    const next = verdictMark(productId, view);
+    setPollingInterval(next.active ? VERDICT_POLL_MS : 0);
+    if (verdictSettled(mark.current, next)) {
+      dispatch(
+        baseApi.util.invalidateTags([
+          { type: 'Product', id: 'LIST' },
+          { type: 'HermesEvent', id: 'LIST' },
+          { type: 'PriceResearch', id: productId },
+        ])
+      );
+    }
+    mark.current = next;
+  }, [view, productId, dispatch]);
+  return result;
+}
 
 // ---- Analytics ----
 export function useAnalyticsOverview(

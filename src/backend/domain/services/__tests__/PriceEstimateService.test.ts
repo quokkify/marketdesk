@@ -57,7 +57,6 @@ function activeRun(): ResearchRun {
 
 function runsWith(active: ResearchRun | null): IPriceResearchRuns {
   return {
-    request: async () => ({ run: active, enqueued: false, reason: 'active' }),
     latest: async () => ({ active, last: null }),
   };
 }
@@ -79,7 +78,7 @@ class RecordingEstimateAI extends StubAIProvider {
   }
 }
 
-function setup(options: { answers?: PriceEstimate[]; runs?: IPriceResearchRuns | null; missingAccessories?: string | null } = {}) {
+function setup(options: { answers?: PriceEstimate[]; runs?: IPriceResearchRuns | null; missingAccessories?: string | null; listingPrice?: number } = {}) {
   const repo = new InMemoryPriceResearchRepository();
   const ai = new RecordingEstimateAI(options.answers ?? [answer()]);
   const service = new PriceEstimateService({ ai, research: repo, runs: options.runs ?? null });
@@ -89,7 +88,7 @@ function setup(options: { answers?: PriceEstimate[]; runs?: IPriceResearchRuns |
     costPrice: money(1), sellingPrice: money(100), condition: 'good', category: 'projectors',
     missingAccessories: options.missingAccessories ?? null,
   }));
-  const listing = unwrap(Listing.create({ id: 'l1', productId: PID, marketplaceId: 'm1', price: money(100) }));
+  const listing = unwrap(Listing.create({ id: 'l1', productId: PID, marketplaceId: 'm1', price: money(options.listingPrice ?? 100) }));
   return { repo, ai, service, product, listing };
 }
 
@@ -180,9 +179,32 @@ describe('PriceEstimateService', () => {
     expect(block).toContain('"missingAccessories":"pilot"');
   });
 
-  it('keeps the research note it is given on the stored estimate', async () => {
-    const { repo, service, product, listing } = setup();
-    await service.estimate(product, listing, { researchNote: 'Market research failed; the estimate uses saved data.' });
-    expect(repo.items.get(`${WS}:${PID}`)?.lastEstimate?.researchNote).toBe('Market research failed; the estimate uses saved data.');
+  // The listing price is the one judged, even when a marketplace import moved it away from the product's (100).
+  it('suggests a lower price from the listing price when it is above the product price', async () => {
+    const { repo, service, product, listing } = setup({ answers: [answer({ startPrice: 150, floorPrice: 120 })], listingPrice: 400 });
+    repo.items.set(`${WS}:${PID}`, research());
+
+    const result = await service.estimate(product, listing);
+
+    expect(result.suggestion).toMatchObject({ type: 'suggested_lower_price', change: { from: 400, to: 150 } });
+  });
+
+  it('suggests a higher price from the listing price when it is below the product price', async () => {
+    const { repo, service, product, listing } = setup({ answers: [answer({ startPrice: 90, floorPrice: 80 })], listingPrice: 50 });
+    repo.items.set(`${WS}:${PID}`, research());
+
+    const result = await service.estimate(product, listing);
+
+    expect(result.suggestion).toMatchObject({ type: 'suggested_higher_price', change: { from: 50, to: 90 } });
+  });
+
+  it('does not hide the suggestion as within threshold when only the product price is near the estimate', async () => {
+    const { repo, service, product, listing } = setup({ answers: [answer({ startPrice: 99, floorPrice: 80 })], listingPrice: 400 });
+    repo.items.set(`${WS}:${PID}`, research());
+
+    const result = await service.estimate(product, listing);
+
+    expect(result.stored?.hiddenReason).toBeNull();
+    expect(result.suggestion).toMatchObject({ type: 'suggested_lower_price', change: { from: 400, to: 99 } });
   });
 });

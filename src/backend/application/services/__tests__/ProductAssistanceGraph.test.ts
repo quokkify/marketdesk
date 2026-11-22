@@ -1,56 +1,57 @@
 import { Ok } from '../../../domain/shared/Result';
-import { Listing } from '../../../domain/entities/Listing';
-import type { IAIProvider } from '../../../domain/ports/IAIProvider';
-import { money, unwrap } from '../../../domain/testkit/support';
-import { OfflineHeuristicAIProvider } from '../../../infrastructure/external/OfflineHeuristicAIProvider';
+import { OFFLINE_AI_NOTICE, type IAIProvider } from '../../../domain/ports/IAIProvider';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
+import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import { ProductAssistanceGraph } from '../ProductAssistanceGraph';
 import type { ProductAIDraftService } from '../ProductAIDraftService';
-import type { ProductRecheckService } from '../ProductRecheckService';
 
 const draft = { mode: 'title' as const, fields: { name: 'Camera' }, confidence: 0.7,
   uncertainFields: [], missingInfoQuestions: [], notes: [] };
 
+const storedEstimate = (reasoning = 'Comparable used offers', hiddenReason: string | null = null) => ({
+  lastEstimate: { hiddenReason, estimate: { startPrice: 95, floorPrice: 80, reasoning, confidence: 'medium' } },
+});
+
 function setup(options: {
-  sandboxMode?: boolean;
   listing?: object;
-  ai?: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>;
+  stored?: object | null;
+  researchError?: Error;
+  analyzeListingSeo?: IAIProvider['analyzeListingSeo'];
 } = {}) {
   const generateDraft = jest.fn(async () => Ok(draft));
-  const recheck = jest.fn(async () => ({ productId: 'p1', canPublish: false }));
   const product = {
-    id: 'p1', name: 'Camera', description: 'Camera with lens and accessories.',
+    id: 'p1', workspaceId: 'w1', name: 'Camera', description: 'Camera with lens and accessories.',
     category: 'Cameras', condition: 'good', tags: [], imageCount: 1,
-    costPrice: { amount: 60, currency: 'PLN' },
+    costPrice: { amount: 60, currency: 'PLN' }, sellingPrice: { amount: 100, currency: 'PLN' },
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
   };
   const listing = options.listing ?? {
-    id: 'l1', productId: 'p1', marketplaceId: 'm1', views: 10,
+    id: 'l1', productId: 'p1', marketplaceId: 'm1', status: 'expired', marketplaceListingId: 'olx-1',
     updatedAt: new Date('2026-09-25T10:00:00.000Z'),
     price: { amount: 100, currency: 'PLN' },
   };
   const findProduct = jest.fn(async () => product);
   const findListing = jest.fn(async () => listing);
   const findMarketplace = jest.fn(async () => ({ id: 'm1', key: 'olx' }));
-  const analyzeListingSeo = jest.fn(async () => ({
-    recommendations: [{ field: 'description', proposedValue: 'Camera with lens and bag.', rationale: 'More detail.' }],
+  const findResearch = jest.fn(async () => {
+    if (options.researchError) throw options.researchError;
+    return options.stored === undefined ? storedEstimate() : options.stored;
+  });
+  const analyzeListingSeo = jest.fn(options.analyzeListingSeo ?? (async () => ({
+    recommendations: [{ field: 'description' as const, proposedValue: 'Camera with lens and bag.', rationale: 'More detail.' }],
     disclaimer: 'Review before applying.',
-  }));
-  const suggestPrice = jest.fn(async () => ({ suggestedPrice: 95, reasoning: 'Current views', confidence: 'medium' }));
+  })));
   const graph = new ProductAssistanceGraph(
     { generateDraft } as unknown as ProductAIDraftService,
-    { recheck } as unknown as ProductRecheckService,
     { findByIdForWorkspace: findProduct } as unknown as IProductRepository,
     { findByIdForWorkspace: findListing } as unknown as IListingRepository,
     { findByIdForWorkspace: findMarketplace } as unknown as IMarketplaceRepository,
-    (options.ai ?? { analyzeListingSeo, suggestPrice }) as unknown as IAIProvider,
-    undefined,
-    { sandboxMode: options.sandboxMode },
+    { findByProduct: findResearch } as unknown as IPriceResearchRepository,
+    { analyzeListingSeo } as unknown as IAIProvider,
   );
-  return { graph, generateDraft, recheck, findProduct, findListing, findMarketplace,
-    analyzeListingSeo, suggestPrice };
+  return { graph, generateDraft, findResearch, analyzeListingSeo };
 }
 
 describe('ProductAssistanceGraph', () => {
@@ -60,90 +61,64 @@ describe('ProductAssistanceGraph', () => {
     expect(s.generateDraft).toHaveBeenCalledWith({ mode: 'title', title: 'Camera', workspaceId: 'w1' });
   });
 
-  it('routes publication help through the existing guarded recheck', async () => {
+  it('revives with the stored research estimate as the price and asks no price model', async () => {
     const s = setup();
-    await s.graph.publicationReview({ productId: 'p1', listingId: 'l1', workspaceId: 'w1' });
-    expect(s.recheck).toHaveBeenCalledWith({ productId: 'p1', listingId: 'l1', workspaceId: 'w1' });
-  });
-
-  it('returns scoped, review-only copy and price proposals without applying them', async () => {
-    const s = setup();
-    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-    expect(s.findProduct).toHaveBeenCalledWith('p1', 'w1');
-    expect(s.findListing).toHaveBeenCalledWith('l1', 'w1');
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(s.findResearch).toHaveBeenCalledWith('w1', 'p1');
     expect(s.analyzeListingSeo).toHaveBeenCalledTimes(1);
-    expect(s.suggestPrice).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ graphVersion: 'product-assistance@1', productId: 'p1', reviewOnly: true,
-      copy: [{ field: 'description' }], price: { suggestedPrice: 95 } });
-  });
-
-  it('gives the price suggestion the product cost', async () => {
-    const s = setup();
-    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 60 }));
-  });
-
-  // The OLX sandbox adds simulated views on every sync. They are no demand signal, so the
-  // price suggestion never gets them and its reasoning never cites them.
-  it('gives the price suggestion no views for a listing on the OLX sandbox', async () => {
-    const s = setup({ sandboxMode: true });
-    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
-  });
-
-  it.each([
-    { when: 'OLX runs for real', sandboxMode: false, key: 'olx' },
-    { when: 'the listing is not on OLX', sandboxMode: true, key: 'allegro' },
-  ])('gives the price suggestion the listing views when $when', async ({ sandboxMode, key }) => {
-    const s = setup({ sandboxMode });
-    s.findMarketplace.mockResolvedValueOnce({ id: 'm1', key });
-    await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-    expect(s.suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 10 }));
-  });
-
-  it('never cites simulated sandbox views in the offline price reasoning', async () => {
-    const listing = unwrap(Listing.create({
-      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
-    }));
-    const s = setup({ sandboxMode: true, listing, ai: new OfflineHeuristicAIProvider() });
-
-    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-
-    expect(result.price?.reasoning).not.toMatch(/views/);
-    expect(result.price).toMatchObject({
-      suggestedPrice: 100,
-      reasoning: expect.stringMatching(/^There is not enough sales signal to change the price/),
+    expect(result).toMatchObject({
+      aiIssues: [],
+      price: { current: 100, proposed: 95, currency: 'PLN', rationale: 'Comparable used offers' },
+      description: { proposed: 'Camera with lens and bag.' },
     });
   });
 
-  // After a switch from stub to real on the same database, a listing published in the sandbox
-  // keeps its simulated views. Its category still carries the sandbox taxonomy marker.
-  it('gives no views for a listing published in the sandbox once OLX runs for real', async () => {
-    const ai = new OfflineHeuristicAIProvider();
-    const suggestPrice = jest.spyOn(ai, 'suggestPrice');
-    const listing = unwrap(Listing.create({
-      id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(100), views: 57,
-      marketplaceCategory: {
-        providerCategoryId: '1001', name: 'Cameras', path: ['Electronics', 'Cameras'],
-        source: 'provider_taxonomy', confidence: 1, isLeaf: true,
-        taxonomyVerifiedAt: '2026-10-24T10:00:00.000Z', taxonomyStaleAt: '2026-10-25T10:00:00.000Z',
-        sandbox: true,
-      },
-    }));
-    const s = setup({ sandboxMode: false, listing, ai });
-
-    const result = await s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' });
-
-    expect(result.price?.reasoning).not.toMatch(/views/);
-    expect(suggestPrice).toHaveBeenCalledWith(expect.objectContaining({ recentViews: 0 }));
+  it('names the price as an issue and proposes none when no estimate is stored', async () => {
+    const s = setup({ stored: null });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.aiIssues).toEqual(['price']);
+    expect(result.price).toBeUndefined();
   });
 
-  it('rejects a listing that does not belong to the scoped product before calling Hermes', async () => {
-    const s = setup();
-    s.findListing.mockResolvedValueOnce({ id: 'l1', productId: 'other', marketplaceId: 'm1',
-      views: 0, updatedAt: new Date(), price: { amount: 100, currency: 'PLN' } });
-    await expect(s.graph.proposeImprovements({ workspaceId: 'w1', productId: 'p1', listingId: 'l1' }))
-      .rejects.toThrow('Listing not found for product');
+  it('names the price as an issue when the research holds no estimate yet', async () => {
+    const s = setup({ stored: { lastEstimate: null } });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.aiIssues).toEqual(['price']);
+  });
+
+  it('offers no price from an estimate the price check hides', async () => {
+    const s = setup({ stored: storedEstimate('Comparable used offers', 'low_confidence') });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.aiIssues).toEqual(['price']);
+    expect(result.price).toBeUndefined();
+  });
+
+  it('names the price as an issue when the research cannot be read, and still proposes', async () => {
+    const s = setup({ researchError: new Error('db down') });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.aiIssues).toEqual(['price']);
+    expect(result.price).toBeUndefined();
+    expect(result.description).toMatchObject({ proposed: 'Camera with lens and bag.' });
+  });
+
+  it('offers no price built from offline heuristics', async () => {
+    const s = setup({ stored: storedEstimate(`${OFFLINE_AI_NOTICE} The current price is kept.`) });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.price).toBeUndefined();
+  });
+
+  it('survives a failed copy step and names it', async () => {
+    const s = setup({ analyzeListingSeo: async () => { throw new Error('Hermes down'); } });
+    const result = await s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' });
+    expect(result.aiIssues).toEqual(['copy']);
+    expect(result.price).toMatchObject({ proposed: 95 });
+  });
+
+  it('refuses a listing that is not expired before calling Hermes', async () => {
+    const s = setup({ listing: { id: 'l1', productId: 'p1', marketplaceId: 'm1', status: 'live',
+      marketplaceListingId: 'olx-1', updatedAt: new Date(), price: { amount: 100, currency: 'PLN' } } });
+    await expect(s.graph.proposeRevival({ workspaceId: 'w1', listingId: 'l1' })).rejects.toThrow();
     expect(s.analyzeListingSeo).not.toHaveBeenCalled();
+    expect(s.findResearch).not.toHaveBeenCalled();
   });
 });

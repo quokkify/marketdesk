@@ -1,7 +1,7 @@
 import { ProductController, parseStringList } from '../ProductController';
 import { statusForError } from '../../formatters/ResponseFormatter';
-import type { IPriceResearchRuns } from '../../../../domain/ports/IPriceResearchRuns';
-import type { ResearchRun } from '../../../../../shared/types';
+import type { SaleVerdictRuns } from '../../../../application/services/verdict/SaleVerdictRuns';
+import type { SaleVerdict } from '../../../../../shared/types';
 
 describe('ProductController list parsing', () => {
   it('preserves commas inside JSON-encoded tag values', () => {
@@ -56,15 +56,23 @@ describe('ProductController recheck', () => {
 });
 
 describe('ProductController price research refresh', () => {
-  type Answer = Awaited<ReturnType<IPriceResearchRuns['request']>>;
-  const run = { id: 'run-1', status: 'queued' } as unknown as ResearchRun;
+  const run = { id: 'run-1', status: 'queued' } as unknown as SaleVerdict;
 
-  async function refresh(answer: Answer) {
-    const request = jest.fn(async () => answer);
-    const runs: IPriceResearchRuns = { request, latest: async () => ({ active: null, last: null }) };
+  async function refresh(options: {
+    configured?: boolean;
+    currency?: string | null;
+    product?: object | null;
+    enqueued?: boolean;
+  } = {}) {
+    const request = jest.fn(async () => ({ run, enqueued: options.enqueued ?? true }));
+    const findProduct = jest.fn(async () => (options.product === undefined ? { id: 'product-1' } : options.product));
+    const findListings = jest.fn(async () =>
+      options.currency === null ? [] : [{ price: { currency: options.currency ?? 'PLN' } }]);
     const controller = new ProductController(
-      {} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
-      () => 'id', undefined, undefined, undefined, runs,
+      {} as never, {} as never, {} as never, { findByIdForWorkspace: findProduct } as never,
+      { findByProduct: findListings } as never, {} as never,
+      () => 'id', undefined, undefined, undefined, undefined, undefined,
+      { request } as unknown as SaleVerdictRuns, options.configured ?? true,
     );
     const req = { params: { id: 'product-1' }, user: { workspaceId: 'workspace-1', userId: 'user-1' } } as never;
     const json = jest.fn();
@@ -74,30 +82,39 @@ describe('ProductController price research refresh', () => {
     return { request, status, json, next };
   }
 
-  it('queues a forced manual run and answers 202 with the run', async () => {
-    const { request, status, json } = await refresh({ run, enqueued: true, reason: 'enqueued' });
+  it('requests the price scope with a forced research and answers 202 with the run', async () => {
+    const { request, status, json } = await refresh();
 
-    expect(request).toHaveBeenCalledWith('workspace-1', 'product-1', { force: true, trigger: 'manual' });
+    expect(request).toHaveBeenCalledWith('workspace-1', 'product-1', ['price'], 'manual', { forceResearch: true });
     expect(status).toHaveBeenCalledWith(202);
     expect(json).toHaveBeenCalledWith({ success: true, data: { run } });
   });
 
   it('answers 200 with the run already queued or running', async () => {
-    const { status, json } = await refresh({ run, enqueued: false, reason: 'active' });
+    const { status, json } = await refresh({ enqueued: false });
 
     expect(status).toHaveBeenCalledWith(200);
     expect(json).toHaveBeenCalledWith({ success: true, data: { run } });
   });
 
   it.each([
-    ['not_configured' as const, 503, 'Market search is not configured'],
-    ['not_pln' as const, 422, 'OLX search needs a PLN listing'],
-  ])('answers %s synchronously with %i', async (reason, code, message) => {
-    const { next, status } = await refresh({ run: null, enqueued: false, reason });
+    ['without a research profile', { configured: false }, 503, 'Market search is not configured'],
+    ['for a listing in another currency', { currency: 'EUR' }, 422, 'OLX search needs a PLN listing'],
+    ['for a product without a listing', { currency: null }, 422, 'OLX search needs a PLN listing'],
+  ])('answers synchronously %s and requests no run', async (_name, options, code, message) => {
+    const { request, next, status } = await refresh(options);
 
     const error = next.mock.calls[0]?.[0];
     expect(statusForError(error)).toBe(code);
     expect(error).toMatchObject({ message });
+    expect(request).not.toHaveBeenCalled();
     expect(status).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 for a product of another workspace before anything else', async () => {
+    const { request, next } = await refresh({ product: null, configured: false });
+
+    expect(statusForError(next.mock.calls[0]?.[0])).toBe(404);
+    expect(request).not.toHaveBeenCalled();
   });
 });

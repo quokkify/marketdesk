@@ -67,11 +67,6 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
         .path("data.updatedAt");
   }
 
-  @Step("Run the AI analysis of product {productId}")
-  public ValidatableResponse runProductAnalysis(AccountPojo account, String productId) {
-    return service.runProductAnalysis(account.token(), productId);
-  }
-
   @Step("Get price research without authentication")
   public ValidatableResponse getPriceResearchUnauthenticated(String productId) {
     return service.getPriceResearch(productId);

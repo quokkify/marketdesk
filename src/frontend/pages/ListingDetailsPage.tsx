@@ -23,7 +23,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
-  AIProviderSource,
   HermesEvent,
   HermesStatusView,
   Listing,
@@ -31,7 +30,6 @@ import type {
   Product,
   ProductCategoryProvenance,
   ProductRecheckResult,
-  ProductImprovementSuggestions,
 } from '@shared/types';
 import type {
   HermesRunInput,
@@ -41,7 +39,6 @@ import type {
 import {
   useProduct,
   useRecheckProduct,
-  useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
   useUploadProductImage,
@@ -59,6 +56,7 @@ import {
   useHermesEvents,
   useHermesStatus,
   useRunHermes,
+  useProductVerdict,
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
@@ -77,7 +75,8 @@ import { usePendingPublicationPolling } from './usePendingPublicationPolling.js'
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
-import { aiUsageLine } from '../components/hermes/aiUsageText.js';
+import VerdictSummary from '../components/products/VerdictSummary.js';
+import { isVerdictStale } from '../components/products/verdictDisplay.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
@@ -223,42 +222,6 @@ export function productHermesAnalyzingNote(
         ? 'Offline heuristics are analyzing'
         : 'Analyzing';
   return `${subject} this product only. Any recommendation will remain review-only.`;
-}
-
-// Who answered a product analysis. Its suggestions record their provider, so they decide; a run
-// without suggestions falls back to the provider status read beside it. Unknown when neither
-// says or the suggestions disagree, so no provider is ever credited by guess.
-export function productAnalysisProvider(
-  events: ReadonlyArray<Pick<HermesEvent, 'source'>>,
-  statusProvider: HermesStatusView['activeProvider'] | undefined
-): AIProviderSource | undefined {
-  if (events.length === 0) return statusProvider;
-  const sources = new Set(events.map((event) => event.source));
-  const [source] = sources;
-  return sources.size === 1 ? source : undefined;
-}
-
-const ANALYSIS_PROVIDER_NAMES: Record<AIProviderSource, string> = {
-  hermes: 'Hermes',
-  offline: 'Offline heuristics',
-};
-
-export function productHermesSuccessMessage(
-  eventCount: number,
-  provider: AIProviderSource | undefined
-): string {
-  if (eventCount === 0) {
-    return provider
-      ? `${ANALYSIS_PROVIDER_NAMES[provider]} found no new SEO suggestion for this product.`
-      : 'No new SEO suggestion was found for this product.';
-  }
-  if (!provider) {
-    return eventCount === 1
-      ? 'An SEO suggestion is ready for human review.'
-      : `${eventCount} SEO suggestions are ready for human review.`;
-  }
-  const changes = eventCount === 1 ? 'an SEO change' : `${eventCount} SEO changes`;
-  return `${ANALYSIS_PROVIDER_NAMES[provider]} suggested ${changes} for human review.`;
 }
 
 export const PublicationReadinessAction: React.FC<{
@@ -716,7 +679,6 @@ const ListingDetailsPage: React.FC = () => {
   const [uploadProductImage] = useUploadProductImage();
   const [deleteProductImage] = useDeleteProductImage();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
-  const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [reactivateListing, { isLoading: reactivating }] = useReactivateListing();
@@ -728,12 +690,13 @@ const ListingDetailsPage: React.FC = () => {
   const [setMarketplaceCategory, { isLoading: verifyingCategory }] = useSetListingMarketplaceCategory();
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
-  const [runHermes, { isLoading: analyzing }] = useRunHermes();
+  const [runHermes, { isLoading: startingRun }] = useRunHermes();
+  const verdictView = useProductVerdict(productId).currentData;
+  const analyzing = startingRun || Boolean(verdictView?.active);
   const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
-  const [improvements, setImprovements] = useState<ProductImprovementSuggestions | null>(null);
   const [priceListing, setPriceListing] = useState<Listing | null>(null);
   const [publishCandidate, setPublishCandidate] = useState<{
     listing: Listing;
@@ -758,7 +721,6 @@ const ListingDetailsPage: React.FC = () => {
   const publicationReviewOpen = useRef(false);
   const submissionInFlight = useRef(false);
   const recheckRequestIdentity = useRef(0);
-  const improvementRequestIdentity = useRef(0);
 
   const listingItems = listings.data ?? [];
   const listingMarketplaceIds = new Set(listingItems.map((listing) => listing.marketplaceId));
@@ -899,20 +861,6 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
-  const handleProposeImprovements = async () => {
-    const requestIdentity = ++improvementRequestIdentity.current;
-    setImprovements(null);
-    try {
-      const result = await proposeImprovements({
-        productId, listingId: primaryListing?.id,
-      }).unwrap();
-      if (requestIdentity === improvementRequestIdentity.current) setImprovements(result);
-    } catch (err) {
-      if (requestIdentity !== improvementRequestIdentity.current) return;
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
   const handleAnalyzeWithHermes = async () => {
     const disabledReason = productHermesDisabledReason({
       settingsLoaded: Boolean(hermesSettings.currentData),
@@ -925,24 +873,8 @@ const ListingDetailsPage: React.FC = () => {
     }
     setAnalysisState({ status: 'idle' });
     try {
-      // The status is read again beside the run, so a page left open while Hermes went offline
-      // never credits Hermes for an answer the offline heuristics gave.
-      const [events, status] = await Promise.all([
-        runHermes(productScopedHermesRunInput(productId)).unwrap(),
-        hermesStatus.refetch(),
-      ]);
-      await hermesEvents.refetch();
-      const message = productHermesSuccessMessage(
-        events.length,
-        productAnalysisProvider(events, status.isSuccess ? status.data?.activeProvider : undefined)
-      );
-      setAnalysisState({ status: 'success', message });
-      dispatch(
-        enqueueToast({
-          message,
-          severity: 'success',
-        })
-      );
+      // The run ends in the background; the verdict query follows it.
+      await runHermes(productScopedHermesRunInput(productId)).unwrap();
     } catch (err) {
       const message = errorMessage(err);
       setAnalysisState({ status: 'error', message });
@@ -950,11 +882,17 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
+  const handleReviewPrice = async () => {
+    try {
+      await runHermes({ ...productScopedHermesRunInput(productId), scope: ['price'] }).unwrap();
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
+
   useEffect(() => {
     recheckRequestIdentity.current += 1;
-    improvementRequestIdentity.current += 1;
     setRecheckResult(null);
-    setImprovements(null);
     setAnalysisState({ status: 'idle' });
   }, [productId, principalCacheKey]);
 
@@ -1259,13 +1197,6 @@ const ListingDetailsPage: React.FC = () => {
     : analysisState.status === 'idle'
       ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
       : analysisState.message;
-  const improvementsStale = Boolean(
-    improvements &&
-      (improvements.productId !== p.id ||
-        improvements.productUpdatedAt !== p.updatedAt ||
-        (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt))
-  );
-
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
@@ -1427,15 +1358,43 @@ const ListingDetailsPage: React.FC = () => {
             currency={currency}
             listingCurrency={primaryListing?.currency ?? null}
           />
+          <Card title="Sale verdict" subtitle="Is this product ready to sell?">
+            <Stack spacing={1.5}>
+              <VerdictSummary
+                verdict={verdictView?.latest ?? null}
+                running={analyzing}
+                lastFailed={verdictView?.lastFailed ?? false}
+                stale={
+                  verdictView?.latest
+                    ? isVerdictStale(verdictView.latest, p.updatedAt, primaryListing?.updatedAt)
+                    : false
+                }
+              />
+              {!verdictView?.latest && !analyzing && (
+                <Typography variant="body2" color="text.secondary">
+                  Not checked yet. Run Analyze to get a verdict.
+                </Typography>
+              )}
+              <Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={analyzing || !productId || !hermesSettings.currentData}
+                  onClick={() => void handleReviewPrice()}
+                  data-testid="review-price-button"
+                >
+                  Review price
+                </Button>
+              </Box>
+            </Stack>
+          </Card>
           <ProductHermesCard
             analyzing={analyzing}
             activeProvider={activeProvider}
             analyzeDisabled={Boolean(analyzeDisabledReason)}
-            suggesting={proposingImprovements}
             note={hermesNote}
             noteIsError={analysisState.status === 'error'}
             onAnalyze={() => void handleAnalyzeWithHermes()}
-            onSuggest={() => void handleProposeImprovements()}
           >
             {hermesEvents.isLoading || hermesEvents.isFetching ? (
               <LoadingSkeleton lines={2} height={96} />
@@ -1465,41 +1424,6 @@ const ListingDetailsPage: React.FC = () => {
                   Category correction always uses separate audited delist and recreate reviews.
                 </Typography>
               </Stack>
-            )}
-            {improvements && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Suggested improvements</Typography>
-                {improvementsStale ? (
-                  <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
-                ) : (
-                  <Stack spacing={1.5}>
-                    {improvements.copy.map((suggestion, index) => (
-                      <Box key={`${suggestion.field}-${index}`}>
-                        <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
-                        <Typography variant="body2">{suggestion.proposedValue}</Typography>
-                        <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
-                      </Box>
-                    ))}
-                    {improvements.price && (
-                      <Box>
-                        <Typography variant="subtitle2">Suggested price: {formatMoney(improvements.price.suggestedPrice, currency)}</Typography>
-                        <Typography variant="body2">{improvements.price.reasoning}</Typography>
-                      </Box>
-                    )}
-                    {improvements.copy.length === 0 && !improvements.price && (
-                      <Typography variant="body2">No suggestions for this product.</Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary">
-                      Suggestions are for review only. Edit the product or listing to apply them.
-                    </Typography>
-                    {aiUsageLine(improvements.aiUsage) && (
-                      <Typography data-testid="ai-usage-line" variant="caption" color="text.secondary">
-                        {aiUsageLine(improvements.aiUsage)}
-                      </Typography>
-                    )}
-                  </Stack>
-                )}
-              </Box>
             )}
             <Divider />
             <PublicationReadinessSection

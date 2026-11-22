@@ -169,16 +169,4 @@ describeDb('PriceResearchRunRepository (PostgreSQL integration, TEMP table)', ()
     await expect(repo().findLastFinished(WS, P1)).resolves.toMatchObject({ id: runId(1), finishedAt: later(30) });
     await expect(repo().findLastFinished(OTHER_WS, P1)).resolves.toBeNull();
   });
-
-  it('counts the workspace runs queued at or after a time', async () => {
-    if (!tempReady) return;
-    await queue(1, P1, later(-90));
-    await queue(2, P2, NOW);
-    await queue(3, '00000000-0000-4000-8000-000000000403', later(5));
-    await queue(4, '00000000-0000-4000-8000-000000000404', NOW, OTHER_WS);
-    await repo().claim(runId(3), later(6), later(16));
-
-    await expect(repo().countQueued(WS, later(-60))).resolves.toBe(1);
-    await expect(repo().countQueued(WS, later(-120))).resolves.toBe(2);
-  });
 });

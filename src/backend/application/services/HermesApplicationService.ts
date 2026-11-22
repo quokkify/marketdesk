@@ -1,13 +1,12 @@
-// Application service (facade) for Hermes workflows: run the decision engine,
-// approve/dismiss events, and expose paginated event queries for controllers.
+// Application service (facade) for Hermes workflows: approve/dismiss events and expose
+// paginated event queries for controllers.
 
 import { Result, Ok } from '../../domain/shared/Result';
 import type { IEventRepository } from '../../domain/repositories/interfaces/IEventRepository';
 import type { HermesEventStatus, PaginatedResponse } from '../../../shared/types';
-import { RunHermesUseCase } from '../usecases/RunHermesUseCase';
 import { ApproveHermesEventUseCase } from '../usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../usecases/DismissHermesEventUseCase';
-import type { RunHermesDTO, ListEventsQueryDTO } from '../dto/HermesDTO';
+import type { ListEventsQueryDTO } from '../dto/HermesDTO';
 import type { ApproveEventDTO, DismissEventDTO } from '../dto/ApproveEventDTO';
 import { presentHermesEvent, type HermesEventView } from '../dto/presenters';
 import { normalizeLimit, normalizeOffset, paginate } from '../dto/pagination';
@@ -15,15 +14,9 @@ import { normalizeLimit, normalizeOffset, paginate } from '../dto/pagination';
 export class HermesApplicationService {
   constructor(
     private readonly eventRepo: IEventRepository,
-    private readonly runHermesUseCase: RunHermesUseCase,
     private readonly approveEventUseCase: ApproveHermesEventUseCase,
     private readonly dismissEventUseCase: DismissHermesEventUseCase,
   ) {}
-
-  async runHermes(dto: RunHermesDTO): Promise<Result<HermesEventView[]>> {
-    const result = await this.runHermesUseCase.execute(dto);
-    return result.isErr() ? result : Ok(result.value.map(presentHermesEvent));
-  }
 
   async approveEvent(dto: ApproveEventDTO): Promise<Result<HermesEventView>> {
     const result = await this.approveEventUseCase.execute(dto);

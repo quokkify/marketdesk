@@ -48,7 +48,6 @@ import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import type {
   IAIProvider,
   PriceEstimateContext,
-  PriceSuggestion,
   ListingAnalysis,
 } from '../ports/IAIProvider';
 import type { AgentRecommendationRecord, ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
@@ -408,9 +407,6 @@ export class InMemoryPriceResearchRunRepository implements IPriceResearchRunRepo
     const last = finished.sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))[0];
     return last ? { ...last } : null;
   }
-  async countQueued(workspaceId: string, queuedSince: string): Promise<number> {
-    return this.runs.filter((r) => r.workspaceId === workspaceId && r.status === 'queued' && r.queuedAt >= queuedSince).length;
-  }
   async claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null> {
     const run = this.runs.find((r) => r.id === runId && r.status === 'queued');
     if (!run) return null;
@@ -436,9 +432,16 @@ export class RecordingEventPublisher implements IEventPublisher {
   }
 }
 
+// A configured price doubles as the estimate's start price.
+export interface StubPrice {
+  suggestedPrice: number;
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 export class StubAIProvider implements IAIProvider {
   constructor(
-    private readonly price: PriceSuggestion = {
+    private readonly price: StubPrice = {
       suggestedPrice: 0,
       reasoning: 'stub',
       confidence: 'low',
@@ -455,13 +458,10 @@ export class StubAIProvider implements IAIProvider {
     private readonly estimateAnswer?: PriceEstimate | Error,
   ) {}
 
-  async suggestPrice(): Promise<PriceSuggestion> {
-    return this.price;
-  }
   async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
     if (this.estimateAnswer instanceof Error) throw this.estimateAnswer;
     if (this.estimateAnswer) return this.estimateAnswer;
-    // A configured price suggestion doubles as the estimate; the default stays low confidence.
+    // A configured price doubles as the estimate; the default stays low confidence.
     const start = this.price.suggestedPrice > 0 ? this.price.suggestedPrice : context.listing.price.amount;
     return {
       startPrice: start,

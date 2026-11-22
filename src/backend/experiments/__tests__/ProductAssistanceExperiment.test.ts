@@ -16,12 +16,13 @@ describe('offline assistance experiments', () => {
     expect(crossWorkspace.transitions).toEqual([
       { node: 'route', phase: 'started' },
       { node: 'route', phase: 'completed' },
-      { node: 'improve', phase: 'started' },
-      { node: 'improve', phase: 'failed' },
+      { node: 'revive', phase: 'started' },
+      { node: 'revive', phase: 'failed' },
     ]);
     const invalid = results.find((result) => result.caseId === 'tool-command-in-output')!;
-    expect(invalid.error).toBe('INVALID_OUTPUT');
-    expect(invalid.output).toBeUndefined();
+    expect(invalid.error).toBeUndefined();
+    expect(invalid.output?.aiIssues).toEqual(['copy']);
+    expect(invalid.output?.description).toBeUndefined();
     expect(invalid.toolCalls.map((call) => call.tool)).toEqual(['analyzeListingSeo']);
   });
 
@@ -102,7 +103,7 @@ describe('offline assistance experiments', () => {
   it('retains a failed run for analysis without approving a decision', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'assistance-failed-'));
     const failure = jest
-      .spyOn(ProductAssistanceGraph.prototype, 'proposeImprovements')
+      .spyOn(ProductAssistanceGraph.prototype, 'proposeRevival')
       .mockRejectedValueOnce(new Error('Never export token=FAILURE-SECRET'));
     try {
       const run = await writeAssistanceExperiment(directory, {

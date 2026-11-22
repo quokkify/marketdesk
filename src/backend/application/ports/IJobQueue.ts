@@ -89,9 +89,13 @@ export interface ConversationReplyJob {
   messageId: string;
 }
 
-// One price research graph run. Ids only: the run row holds its state.
-export interface PriceResearchJob {
+// One sale verdict run. Ids only: the run row holds its scope and state.
+export interface SaleVerdictJob {
   workspaceId: string;
   productId: string;
   runId: string;
+  // Research even when the schedule says it is not due.
+  forceResearch: boolean;
+  // The queued research run recorded at request time for a forced research; the price check claims it.
+  researchRunId?: string;
 }

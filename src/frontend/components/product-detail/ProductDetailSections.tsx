@@ -552,14 +552,12 @@ const ANALYZE_LABELS: Record<
 export const ProductHermesCard: React.FC<{
   analyzing: boolean;
   analyzeDisabled: boolean;
-  suggesting: boolean;
   note: string;
   noteIsError?: boolean;
   activeProvider?: HermesStatusView['activeProvider'];
   onAnalyze: () => void;
-  onSuggest: () => void;
   children?: React.ReactNode;
-}> = ({ analyzing, analyzeDisabled, suggesting, note, noteIsError = false, activeProvider, onAnalyze, onSuggest, children }) => (
+}> = ({ analyzing, analyzeDisabled, note, noteIsError = false, activeProvider, onAnalyze, children }) => (
   <Card
     title="Hermes"
     subtitle="Review-only suggestions for this product"
@@ -572,9 +570,6 @@ export const ProductHermesCard: React.FC<{
       <Stack spacing={1}>
         <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
           {ANALYZE_LABELS[activeProvider ?? 'unknown'][analyzing ? 'running' : 'idle']}
-        </Button>
-        <Button fullWidth variant="outlined" disabled={suggesting} onClick={onSuggest}>
-          {suggesting ? 'Preparing suggestions…' : 'Suggest improvements'}
         </Button>
         <Typography variant="caption" color={noteIsError ? 'error.main' : 'text.secondary'} role={noteIsError ? 'alert' : undefined}>
           {note}

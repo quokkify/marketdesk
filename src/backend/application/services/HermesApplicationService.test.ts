@@ -23,7 +23,7 @@ describe('HermesApplicationService.listEvents', () => {
     await eventRepo.save(event('current', 'product-1'));
     await eventRepo.save(event('other', 'product-2'));
 
-    const service = new HermesApplicationService(eventRepo, {} as never, {} as never, {} as never);
+    const service = new HermesApplicationService(eventRepo, {} as never, {} as never);
 
     const page = await service.listEvents({
       workspaceId: 'workspace-1',

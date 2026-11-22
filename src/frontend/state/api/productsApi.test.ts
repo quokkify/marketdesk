@@ -148,6 +148,22 @@ describe('product deletion cache invalidation', () => {
     });
   });
 
+  it('refetches the sale verdict and the product list after a recheck, which writes the verdict', async () => {
+    await whileTheProductIsOnScreen(async (store) => {
+      const verdict = store.dispatch(hermesApi.endpoints.getProductVerdict.initiate('product-1'));
+      await verdict;
+      requested.length = 0;
+      await store.dispatch(
+        productsApi.endpoints.recheckProduct.initiate({ productId: 'product-1', listingId: 'listing-1' })
+      );
+      const refetched = ['GET /api/hermes/products/product-1/verdict', 'GET /api/products'];
+      await settle(() => refetched.every((request) => requested.includes(request)));
+      verdict.unsubscribe();
+
+      expect(requested).toEqual(expect.arrayContaining(['POST /api/products/product-1/recheck', ...refetched]));
+    });
+  });
+
   it('refetches nothing when the server refuses the delete', async () => {
     deleteResponse = {
       status: 409,

@@ -86,7 +86,7 @@ export function uploadRateLimiter(limit = 30): RateLimitRequestHandler {
 }
 
 // One allowance for every route that calls the AI provider, so a workspace cannot multiply it by
-// spreading calls over drafts, rechecks, improvements and Hermes runs.
+// spreading calls over drafts, rechecks and Hermes runs.
 export function aiRateLimiter(limit: number): RateLimitRequestHandler {
   return build(limit, keyByWorkspace);
 }

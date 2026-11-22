@@ -17,7 +17,8 @@ public class AiUsageUiTest extends BaseUiTest {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    productSteps.proposeImprovements(account, productListing);
+    verdictSteps.enableListingSeo(account);
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     aiUsageSteps.getUsageOnceCounted(account, 1);
     hermesLimitsSteps.writeLimitsFetchedAgo(Duration.ZERO);
     hermesLimitsSteps.getLimitsOnceReported(account, "fresh");
@@ -34,10 +35,10 @@ public class AiUsageUiTest extends BaseUiTest {
   }
 
   @Test
-  public void productPageShowsOfflineUsageLine() {
+  public void revivalDialogShowsOfflineUsageLine() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    ProductListingPojo productListing = listingSteps.createExpiredOlxProductListing(account);
     loginPageSteps
         .openLoginPage()
         .signIn(account.email(), account.password())
@@ -45,7 +46,7 @@ public class AiUsageUiTest extends BaseUiTest {
         .productsCatalogueIsShown();
     productDetailPageSteps
         .openProductPage(productListing)
-        .suggestImprovements()
+        .openRevivalDialog()
         .verify()
         .showsOfflineUsageLine();
   }

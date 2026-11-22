@@ -20,6 +20,8 @@ export interface RecheckProductInput {
   listingId: string;
   workspaceId: string;
   actorId?: string;
+  // A verdict run has no actor: it reuses the checks without writing the user's recheck activity.
+  skipActivityLog?: boolean;
 }
 
 export type OlxTaxonomyResolverFactory = (marketplaceId: string) => Promise<OlxTrustedTaxonomyResolver>;
@@ -75,12 +77,16 @@ export class ProductRecheckService {
     private readonly clock: () => Date = () => new Date(),
   ) {}
 
+  private async record(input: RecheckProductInput, entry: Parameters<IActivityLogRepository['record']>[0]): Promise<void> {
+    if (!input.skipActivityLog) await this.activityLog.record(entry);
+  }
+
   async recheck(input: RecheckProductInput): Promise<ProductRecheckResult> {
     const product = await this.productRepo.findByIdForWorkspace(input.productId, input.workspaceId);
     if (!product) throw new NotFoundError(`Product not found: ${input.productId}`);
     const checkedAt = this.clock();
     const productUpdatedAt = product.updatedAt.toISOString();
-    await this.activityLog.record({
+    await this.record(input, {
       id: this.idGenerator(), workspaceId: input.workspaceId, entityType: 'product', entityId: product.id,
       actorType: 'user', actorId: input.actorId, action: 'product.recheck.started',
       metadata: { productUpdatedAt, listingId: input.listingId, checkedAt: checkedAt.toISOString() },
@@ -199,7 +205,7 @@ export class ProductRecheckService {
           suggestion, confirmationRequired: suggestion !== null,
         },
       };
-      await this.activityLog.record({
+      await this.record(input, {
         id: this.idGenerator(), workspaceId: input.workspaceId, entityType: 'product', entityId: product.id,
         actorType: 'user', actorId: input.actorId, action: 'product.recheck.completed',
         metadata: {
@@ -214,7 +220,7 @@ export class ProductRecheckService {
       return result;
     } catch (error) {
       try {
-        await this.activityLog.record({
+        await this.record(input, {
           id: this.idGenerator(), workspaceId: input.workspaceId, entityType: 'product', entityId: product.id,
           actorType: 'user', actorId: input.actorId, action: 'product.recheck.failed',
           metadata: {

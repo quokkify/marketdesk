@@ -103,16 +103,6 @@ export class PriceResearchRunRepository implements IPriceResearchRunRepository {
     return rows[0] ? toRun(rows[0]) : null;
   }
 
-  async countQueued(workspaceId: string, queuedSince: string): Promise<number> {
-    const { rows } = await query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM price_research_runs
-       WHERE workspace_id = $1 AND status = 'queued' AND queued_at >= ${UTC('$2')}`,
-      [workspaceId, queuedSince],
-      this.queryClient,
-    );
-    return Number(rows[0]?.count ?? 0);
-  }
-
   async claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null> {
     const { rows } = await query<RunRow>(
       `UPDATE price_research_runs

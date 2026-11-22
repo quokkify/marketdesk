@@ -3,7 +3,6 @@
 
 import { OfflineHeuristicAIProvider } from '../OfflineHeuristicAIProvider';
 import { Product, type CreateProductProps } from '../../../domain/entities/Product';
-import { Listing } from '../../../domain/entities/Listing';
 import {
   listingSeoOutputSchema,
   type ListingSeoInput,
@@ -33,179 +32,11 @@ function buildProduct(overrides: Partial<CreateProductProps> = {}): Product {
   );
 }
 
-function buildListing(price: number): Listing {
-  return unwrap(
-    Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(price) }),
-  );
-}
-
 describe('OfflineHeuristicAIProvider', () => {
   const provider = new OfflineHeuristicAIProvider();
 
   it('reports itself as the offline source, so its results are never labelled Hermes', async () => {
     await expect(provider.activeProvider()).resolves.toBe('offline');
-  });
-
-  describe('suggestPrice', () => {
-    it('prices an unpriced listing at cost plus 30 percent, rounded to whole zloty', async () => {
-      const suggestion = await provider.suggestPrice({
-        listing: buildListing(0),
-        recentViews: 0,
-        conversionRate: 0,
-        costPrice: 15.5,
-      });
-
-      expect(suggestion).toEqual({
-        suggestedPrice: 20,
-        confidence: 'low',
-        reasoning: endsWithOfflineNotice,
-      });
-      expect(suggestion.reasoning).not.toMatch(/unknown/);
-    });
-
-    it('suggests 1 PLN for an unpriced listing whose cost is unknown', async () => {
-      const suggestion = await provider.suggestPrice({
-        listing: buildListing(0),
-        recentViews: 0,
-        conversionRate: 0,
-      });
-
-      expect(suggestion).toEqual({
-        suggestedPrice: 1,
-        confidence: 'low',
-        reasoning: endsWithOfflineNotice,
-      });
-      expect(suggestion.reasoning).toMatch(/product cost is unknown/);
-    });
-
-    it.each([
-      { recentViews: 50, conversionRate: 0 },
-      { recentViews: 200, conversionRate: 0.02 },
-    ])(
-      'keeps the exact current price at $recentViews views and conversion $conversionRate',
-      async ({ recentViews, conversionRate }) => {
-        const suggestion = await provider.suggestPrice({
-          listing: buildListing(29.99),
-          recentViews,
-          conversionRate,
-          costPrice: 10,
-        });
-
-        expect(suggestion).toEqual({
-          suggestedPrice: 29.99,
-          confidence: 'low',
-          reasoning: endsWithOfflineNotice,
-        });
-      },
-    );
-
-    it('cuts the price by 10 percent when more than 50 views brought no sales', async () => {
-      const suggestion = await provider.suggestPrice({
-        listing: buildListing(120),
-        recentViews: 51,
-        conversionRate: 0,
-        costPrice: 80,
-      });
-
-      expect(suggestion).toEqual({
-        suggestedPrice: 108,
-        confidence: 'low',
-        reasoning: endsWithOfflineNotice,
-      });
-      expect(suggestion.reasoning).not.toMatch(/unknown/);
-    });
-
-    it('cuts the price by 10 percent with only a 1 PLN floor when the cost is unknown', async () => {
-      const suggestion = await provider.suggestPrice({
-        listing: buildListing(120),
-        recentViews: 51,
-        conversionRate: 0,
-      });
-
-      expect(suggestion).toEqual({
-        suggestedPrice: 108,
-        confidence: 'low',
-        reasoning: endsWithOfflineNotice,
-      });
-      expect(suggestion.reasoning).toMatch(/product cost is unknown/);
-    });
-
-    it('stops the cut at cost plus 5 percent, rounded up to whole zloty', async () => {
-      // 104 * 1.05 = 109.2 rounds up to 110, above the 10% cut to 108.
-      const suggestion = await provider.suggestPrice({
-        listing: buildListing(120),
-        recentViews: 80,
-        conversionRate: 0,
-        costPrice: 104,
-      });
-
-      expect(suggestion).toEqual({
-        suggestedPrice: 110,
-        confidence: 'low',
-        reasoning: endsWithOfflineNotice,
-      });
-    });
-
-    it.each([
-      { branch: 'a 10 percent cut', price: 120, costPrice: 80, recentViews: 51 },
-      { branch: 'a cut down to the floor', price: 120, costPrice: 104, recentViews: 80 },
-      { branch: 'a kept price', price: 100, costPrice: 96, recentViews: 80 },
-    ])(
-      'regression: says no sale is recorded yet instead of claiming views brought no sales ($branch)',
-      async ({ price, costPrice, recentViews }) => {
-        // Callers pass conversionRate 0 when no sale is recorded, not when sales were measured.
-        const suggestion = await provider.suggestPrice({
-          listing: buildListing(price),
-          recentViews,
-          conversionRate: 0,
-          costPrice,
-        });
-
-        expect(suggestion.reasoning).toMatch(/no recorded sale yet/);
-        expect(suggestion.reasoning).not.toMatch(/brought no sales/);
-      },
-    );
-
-    it.each([
-      { branch: 'an unpriced listing', price: 0, recentViews: 0, suggestedPrice: 1 },
-      { branch: 'a cut with a 1 PLN floor', price: 120, recentViews: 51, suggestedPrice: 108 },
-    ])(
-      'regression: describes a recorded cost of 0 as no positive cost, not as unknown ($branch)',
-      async ({ price, recentViews, suggestedPrice }) => {
-        const suggestion = await provider.suggestPrice({
-          listing: buildListing(price),
-          recentViews,
-          conversionRate: 0,
-          costPrice: 0,
-        });
-
-        expect(suggestion.suggestedPrice).toBe(suggestedPrice);
-        expect(suggestion.reasoning).toMatch(/no positive product cost is recorded/i);
-        expect(suggestion.reasoning).not.toMatch(/unknown/);
-      },
-    );
-
-    it.each([
-      { price: 100, costPrice: 96 },
-      { price: 105, costPrice: 100 },
-    ])(
-      'keeps the price $price when no cut stays above cost $costPrice plus 5 percent',
-      async ({ price, costPrice }) => {
-        const suggestion = await provider.suggestPrice({
-          listing: buildListing(price),
-          recentViews: 80,
-          conversionRate: 0,
-          costPrice,
-        });
-
-        expect(suggestion).toEqual({
-          suggestedPrice: price,
-          confidence: 'low',
-          reasoning: endsWithOfflineNotice,
-        });
-        expect(suggestion.reasoning).toMatch(/current price is kept/);
-      },
-    );
   });
 
   describe('generateTitle', () => {

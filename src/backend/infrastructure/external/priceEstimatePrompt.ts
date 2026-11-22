@@ -91,8 +91,8 @@ export function buildPriceEstimatePrompt(ctx: PriceEstimateContext): string {
       specs: research?.specs ?? null,
       comparables: groupByTier(research?.comparables ?? []),
     }),
-    // The engine compares the estimate with the product price, which an approval changes.
-    `current price: ${product.sellingPrice.amount} ${currency}`,
+    // The engine compares the estimate with the listing price, the one the verdict judges.
+    `current price: ${listing.price.amount} ${currency}`,
     `days live: ${counter(daysLive)}`,
     `views: ${counter(listing.views)}`,
     `watchers: ${counter(listing.watchers)}`,

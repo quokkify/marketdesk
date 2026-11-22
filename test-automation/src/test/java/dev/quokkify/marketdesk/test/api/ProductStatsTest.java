@@ -13,6 +13,7 @@ import org.testng.annotations.Test;
 public class ProductStatsTest extends BaseTest {
 
   private static final String ACTIVE = "active";
+  private static final String INFO = "info";
   private static final String LISTING_PROBLEM = "listing_problem";
 
   @Test
@@ -28,8 +29,10 @@ public class ProductStatsTest extends BaseTest {
   public void pendingCountsFollowSuggestions() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
+    verdictSteps.enableListingSeo(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    List<String> eventIds = productSteps.runHermes(account, productListing.productId());
+    List<String> eventIds = verdictSteps.eventIds(
+        verdictSteps.analyzeAndAwait(account, productListing.productId()), INFO);
     productSteps.verify().hasPendingSuggestions(productSteps.getPendingCounts(account), productListing.productId());
     for (String eventId : eventIds) {
       productSteps.verify().verifyResponseStatusCode(productSteps.dismissEvent(account, eventId), HttpStatus.SC_OK);
