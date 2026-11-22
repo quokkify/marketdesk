@@ -114,7 +114,7 @@ What to check:
 
 ### 4. Review Hermes suggestions
 
-1. On the product page, find the **Hermes** card in the right column. A product Hermes has not looked at shows the chip **Not analysed** and the button **Analyze product**.
+1. On the product page, find the **Hermes** card in the right column. A product Hermes has not looked at shows the chip **Not analysed** and the button **Analyze product**. A line under the button says who answers: **Hermes** while a Hermes Agent API server is configured and reachable, and the **offline heuristics** when the built-in heuristics answer, which is the default for testers. While the provider status is still loading or unknown, the line names neither.
 2. Choose **Analyze product**. This asks the listing SEO agent, which is switched on by default, to check the price, the product info and the photos of this product. While it runs, the chip counts the steps. When it ends, the chip shows the verdict (for example **Needs you**), and the rows under it show each result: market prices, Price, Info, Photos and Suggestions. Choose a row to open the drawer on its tab: **Market prices**, **Checks**, **Suggestions**, or **Log and history** for everything Hermes did for this product. Press Esc or **Close** to close the drawer.
 3. In the **Suggestions** tab, find the proposed title, description or price wording with its reason, and choose **Apply** or dismiss it. You can also open **Hermes AI** in the sidebar. Applying a suggestion changes the product in MarketDesk and queues an update for any live listing of the product. When the card offers **Set price to …**, that button applies the price suggestion the same way.
 

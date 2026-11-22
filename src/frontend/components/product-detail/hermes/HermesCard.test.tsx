@@ -120,4 +120,22 @@ describe('HermesCard', () => {
     expect(html).not.toContain('hermes-primary-action');
     expect(html).not.toContain('hermes-analyze-again');
   });
+
+  it('shows who answers in one caption under the actions', () => {
+    const html = render({ note: 'Hermes analyzes this product only. Any recommendation will remain review-only.' });
+
+    expect(tagOf(html, 'hermes-provider-note')).not.toContain('role="alert"');
+    expect(html).toContain('Hermes analyzes this product only.');
+    expect(html.indexOf('hermes-primary-action')).toBeLessThan(html.indexOf('hermes-provider-note'));
+    expect(html.indexOf('hermes-provider-note')).toBeLessThan(html.indexOf('hermes-row-prices'));
+    expect(render()).not.toContain('hermes-provider-note');
+  });
+
+  it('shows an analyze start error inline as an alert', () => {
+    const html = render({ error: 'Hermes settings are switched off.' });
+
+    expect(tagOf(html, 'hermes-analyze-error')).toContain('role="alert"');
+    expect(html).toContain('Hermes settings are switched off.');
+    expect(render()).not.toContain('hermes-analyze-error');
+  });
 });

@@ -5,7 +5,7 @@ import type {
   SaleVerdict,
   VerdictCheck,
 } from '@shared/types';
-import { hermesCardState } from './hermesCardModel';
+import { hermesCardState, hermesProviderNote } from './hermesCardModel';
 
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 const T_CHECK = '2026-11-22T10:00:00.000Z'; // 2h before NOW
@@ -470,5 +470,31 @@ describe('hermesCardState rows', () => {
     expect(waiting).toMatchObject({ value: '4', detail: '2 waiting for you', status: 'attention' });
     const none = state({ suggestionTotal: 4 }).rows[4]!;
     expect(none).toMatchObject({ value: '4', detail: 'None waiting', status: 'idle' });
+  });
+});
+
+describe('hermesProviderNote', () => {
+  const REVIEW_ONLY = 'Any recommendation will remain review-only.';
+
+  it('names the provider that answers a run in progress, as the old card did', () => {
+    expect(hermesProviderNote('hermes', true, true)).toBe(`Hermes is analyzing this product only. ${REVIEW_ONLY}`);
+    expect(hermesProviderNote('hermes', null, true)).toBe(`Hermes is analyzing this product only. ${REVIEW_ONLY}`);
+    expect(hermesProviderNote('offline', null, true)).toBe(
+      `Offline heuristics are analyzing this product only. ${REVIEW_ONLY}`
+    );
+  });
+
+  it('names the provider that will answer while nothing runs', () => {
+    expect(hermesProviderNote('hermes', true, false)).toBe(`Hermes analyzes this product only. ${REVIEW_ONLY}`);
+    expect(hermesProviderNote('offline', null, false)).toBe(
+      `Offline heuristics analyze this product only while Hermes is unavailable. ${REVIEW_ONLY}`
+    );
+  });
+
+  it('never credits Hermes while its tools are unsafe, and stays neutral while the provider is unknown', () => {
+    expect(hermesProviderNote('hermes', false, true)).toBe(`Analyzing this product only. ${REVIEW_ONLY}`);
+    expect(hermesProviderNote(undefined, undefined, true)).toBe(`Analyzing this product only. ${REVIEW_ONLY}`);
+    expect(hermesProviderNote('hermes', false, false)).toBe(REVIEW_ONLY);
+    expect(hermesProviderNote(undefined, undefined, false)).toBe(REVIEW_ONLY);
   });
 });

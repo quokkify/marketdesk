@@ -9,6 +9,10 @@ import { MARK_SIZE, ROW_PAD_Y, STATUS_TEXT, StatusMark } from './StatusMark.js';
 export interface HermesCardProps {
   state: HermesCardState;
   analyzeDisabledReason: string | null;
+  // Who answers the analysis, under the actions.
+  note?: string;
+  // Why the last analyze request was refused.
+  error?: string | null;
   busy: boolean;
   onAnalyze: () => void;
   onSetPrice: (eventId: string) => void;
@@ -63,7 +67,16 @@ const StepRow: React.FC<{ row: HermesCardRow; onOpen: (tab: HermesDrawerTab) => 
   );
 };
 
-export const HermesCard: React.FC<HermesCardProps> = ({ state, analyzeDisabledReason, busy, onAnalyze, onSetPrice, onOpen }) => {
+export const HermesCard: React.FC<HermesCardProps> = ({
+  state,
+  analyzeDisabledReason,
+  note,
+  error,
+  busy,
+  onAnalyze,
+  onSetPrice,
+  onOpen,
+}) => {
   const analyzeBlocked = busy || analyzeDisabledReason !== null;
   const { primary } = state;
   return (
@@ -111,6 +124,16 @@ export const HermesCard: React.FC<HermesCardProps> = ({ state, analyzeDisabledRe
           {analyzeDisabledReason && (
             <Typography variant="caption" color="text.secondary">
               {analyzeDisabledReason}
+            </Typography>
+          )}
+          {error && (
+            <Typography variant="caption" color="error.main" role="alert" data-testid="hermes-analyze-error">
+              {error}
+            </Typography>
+          )}
+          {note && (
+            <Typography variant="caption" color="text.secondary" data-testid="hermes-provider-note">
+              {note}
             </Typography>
           )}
           <Box sx={{ mx: -2.5, borderTop: 1, borderColor: 'divider' }}>

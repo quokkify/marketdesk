@@ -53,6 +53,7 @@ import {
   useCreateProductListing,
   usePriceHistory,
   useHermesEvents,
+  useHermesStatus,
   useApproveHermesEvent,
   useRunHermes,
   useProductVerdict,
@@ -117,7 +118,7 @@ import { PricesTabContainer } from '../components/product-detail/hermes/PricesTa
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
 import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
 import { buildHistory, historyQueryState } from '../components/product-detail/hermes/hermesHistory.js';
-import { hermesCardState } from '../components/product-detail/hermes/hermesCardModel.js';
+import { hermesCardState, hermesProviderNote } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
 export { mainPreviewImageSx };
@@ -696,6 +697,8 @@ const ListingDetailsPage: React.FC = () => {
   const priceResearchQuery = usePriceResearchView(productId);
   const priceResearch = priceResearchQuery.currentData ?? null;
   const analyzing = startingRun || Boolean(verdictView?.active);
+  const hermesStatus = useHermesStatus().currentData;
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
@@ -895,10 +898,12 @@ const ListingDetailsPage: React.FC = () => {
       productId,
     });
     if (disabledReason) return;
+    setAnalyzeError(null);
     try {
       // The run ends in the background; the verdict query follows it.
       await runHermes(productScopedHermesRunInput(productId)).unwrap();
     } catch (err) {
+      setAnalyzeError(errorMessage(err));
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
@@ -928,6 +933,7 @@ const ListingDetailsPage: React.FC = () => {
 
   useEffect(() => {
     setDrawerTab(null);
+    setAnalyzeError(null);
   }, [productId]);
 
   const beginPublicationReview = useCallback(
@@ -1398,6 +1404,8 @@ const ListingDetailsPage: React.FC = () => {
           <HermesCard
             state={hermesState}
             analyzeDisabledReason={analyzeDisabledReason}
+            note={hermesProviderNote(hermesStatus?.activeProvider, hermesStatus?.hermesToolsSafe, analyzing)}
+            error={analyzeError}
             busy={analyzing || settingPrice}
             onAnalyze={() => void handleAnalyzeWithHermes()}
             onSetPrice={(eventId) => void handleSetPrice(eventId)}

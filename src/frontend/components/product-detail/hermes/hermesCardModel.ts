@@ -1,6 +1,7 @@
 // What the Hermes card on the product page shows, computed from API data so the component has no logic.
 import type {
   HermesEvent,
+  HermesStatusView,
   PriceResearchView,
   ProductVerdictView,
   ResearchNode,
@@ -225,6 +226,27 @@ function footerText(input: HermesCardInput, running: boolean): string {
   const latest = input.verdict?.latest ?? null;
   const at = (latest && (newestCheckAt(latest) ?? latest.completedAt)) ?? input.research?.lastRun?.finishedAt ?? null;
   return at ? `Last run ${formatRelative(at, input.now)}` : 'No runs yet';
+}
+
+const REVIEW_ONLY = 'Any recommendation will remain review-only.';
+
+// Who answers the analysis: offline heuristics stand in while Hermes is unavailable. Neutral while
+// the provider status is still unknown, and never credits Hermes while its API server is refused
+// for having tools enabled.
+export function hermesProviderNote(
+  activeProvider: HermesStatusView['activeProvider'] | undefined,
+  hermesToolsSafe: HermesStatusView['hermesToolsSafe'] | undefined,
+  analyzing: boolean
+): string {
+  const provider = activeProvider === 'hermes' && hermesToolsSafe === false ? undefined : activeProvider;
+  if (analyzing) {
+    const subject =
+      provider === 'hermes' ? 'Hermes is analyzing' : provider === 'offline' ? 'Offline heuristics are analyzing' : 'Analyzing';
+    return `${subject} this product only. ${REVIEW_ONLY}`;
+  }
+  if (provider === 'hermes') return `Hermes analyzes this product only. ${REVIEW_ONLY}`;
+  if (provider === 'offline') return `Offline heuristics analyze this product only while Hermes is unavailable. ${REVIEW_ONLY}`;
+  return REVIEW_ONLY;
 }
 
 export function hermesCardState(input: HermesCardInput): HermesCardState {
