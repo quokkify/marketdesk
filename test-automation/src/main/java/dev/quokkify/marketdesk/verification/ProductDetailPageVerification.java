@@ -84,9 +84,9 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The page says {message}")
-  public ProductDetailPageVerification showsAlert(String message) {
-    page.alertWithText(message).shouldBe(Condition.visible, getTimeout());
+  @Step("The last price search says {text}")
+  public ProductDetailPageVerification showsLastResearchRun(String text) {
+    page.lastResearchRunLine().shouldHave(Condition.text(text), getTimeout());
     return this;
   }
 

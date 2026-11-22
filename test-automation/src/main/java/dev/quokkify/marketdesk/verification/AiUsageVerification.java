@@ -14,13 +14,13 @@ public class AiUsageVerification extends BaseApiVerification<AiUsageVerification
     return this;
   }
 
-  // Offline heuristics report no tokens: the sum stays null, never 0.
-  @Step("Today counts {analyses} analysis, all of them offline, without tokens")
-  public AiUsageVerification countsOfflineAnalysesToday(ValidatableResponse response, int analyses) {
+  // Offline heuristics and refused Hermes calls report no tokens: the sum stays null, never 0.
+  @Step("Today counts {offline} offline and {hermes} Hermes analyses, without tokens")
+  public AiUsageVerification countsAnalysesToday(ValidatableResponse response, int offline, int hermes) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data.today.analyses", Matchers.equalTo(analyses));
-    response.body("data.today.offlineAnalyses", Matchers.equalTo(analyses));
-    response.body("data.today.hermesAnalyses", Matchers.equalTo(0));
+    response.body("data.today.analyses", Matchers.equalTo(offline + hermes));
+    response.body("data.today.offlineAnalyses", Matchers.equalTo(offline));
+    response.body("data.today.hermesAnalyses", Matchers.equalTo(hermes));
     response.body("data.today.totalTokens", Matchers.nullValue());
     return self();
   }

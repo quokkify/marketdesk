@@ -40,7 +40,7 @@ public class ProductDetailPage implements Page {
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
   private static final String SELLING_PRICE = "//label[text()='Selling price']/following::input[1]";
   private static final String SAVE_CHANGES = "Save changes";
-  private static final String ALERT = "[role=\"alert\"]";
+  private static final String LAST_RESEARCH_RUN = "[data-testid=\"price-research-last-run\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
 
   public void open(String productId) {
@@ -156,8 +156,8 @@ public class ProductDetailPage implements Page {
     return Selenide.$$(BUTTON).findBy(Condition.text(SAVE_CHANGES));
   }
 
-  public SelenideElement alertWithText(String text) {
-    return Selenide.$$(ALERT).findBy(Condition.text(text));
+  public SelenideElement lastResearchRunLine() {
+    return Selenide.$(LAST_RESEARCH_RUN);
   }
 
   public SelenideElement comparableOlxLink() {

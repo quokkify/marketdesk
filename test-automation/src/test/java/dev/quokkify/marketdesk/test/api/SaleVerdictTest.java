@@ -11,7 +11,8 @@ import dev.quokkify.marketdesk.test.BaseTest;
 import io.restassured.response.ValidatableResponse;
 import org.testng.annotations.Test;
 
-// The API stack has no research profile and offline Hermes heuristics, so the price check cannot estimate.
+// The API stack has offline Hermes heuristics, and its research profile mock has no answers for these products: the
+// price research fails, so the price check cannot estimate.
 public class SaleVerdictTest extends BaseTest {
 
   private static final String INFO = "info";
@@ -19,6 +20,9 @@ public class SaleVerdictTest extends BaseTest {
   private static final String PHOTOS = "photos";
   private static final String NEEDS_HUMAN = "needs_human";
   private static final String FIX = "fix";
+  private static final String CHECK_FAILED = "check_failed";
+  // The mock answered but refused the call; an unreachable mock or a wrong toolset answer gives another code.
+  private static final String HERMES_UNAVAILABLE = "hermes_unavailable";
 
   private AccountPojo accountWithSandbox() {
     AccountPojo account = authSteps.registerNewAccount();
@@ -51,12 +55,15 @@ public class SaleVerdictTest extends BaseTest {
         .checkStatusIs(view, PHOTOS, "ready");
   }
 
+  // The first analysis researches the price; a failed research with nothing saved leaves the price to the seller.
   @Test
-  public void researchNotConfiguredGetsPriceNeedsHuman() {
+  public void failedResearchWithoutSavedResearchGetsPriceNeedsHuman() {
     AccountPojo account = accountWithSandbox();
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     verdictSteps.verify().checkIs(analyzeAndAwait(account, productListing.productId()), PRICE, NEEDS_HUMAN,
-        "not_configured");
+        CHECK_FAILED);
+    priceResearchSteps.verify().lastRunFailed(
+        priceResearchSteps.awaitResearchRun(account, productListing.productId()), HERMES_UNAVAILABLE);
   }
 
   // The price research and estimate are PLN-only, so a listing in another currency is left to the seller.
@@ -191,15 +198,16 @@ public class SaleVerdictTest extends BaseTest {
     listingSteps.verify().hasPriceIssueAndNoPriceProposal(listingSteps.requestRevivalProposal(account, listingId));
   }
 
-  // The refresh runs the price scope of a verdict: without a research profile it still answers "not
-  // configured", and neither it nor the verdict's price check leaves a research run row.
+  // The refresh runs the price scope of a verdict: its research run is recorded, and the price check ends with
+  // it. The mock refuses the identify calls for this product, so the run fails before any tier.
   @Test
   public void refreshResearchRunsPriceScope() {
     AccountPojo account = accountWithSandbox();
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     String productId = productListing.productId();
-    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
-    verdictSteps.verify().checkIs(analyzeAndAwait(account, productId), PRICE, NEEDS_HUMAN, "not_configured");
-    priceResearchSteps.verify().hasNoRun(priceResearchSteps.getPriceResearch(account, productId));
+    priceResearchSteps.verify().isRefreshAccepted(priceResearchSteps.refreshPriceResearch(account, productId));
+    verdictSteps.verify().checkIs(verdictSteps.awaitVerdict(account, productId), PRICE, NEEDS_HUMAN, CHECK_FAILED);
+    priceResearchSteps.verify().lastRunFailed(priceResearchSteps.awaitResearchRun(account, productId),
+        HERMES_UNAVAILABLE);
   }
 }

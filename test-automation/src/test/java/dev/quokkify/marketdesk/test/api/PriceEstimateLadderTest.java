@@ -10,9 +10,9 @@ import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
 import org.testng.annotations.Test;
 
-// The API stack has no Hermes and no research profile: the offline heuristic provider keeps the
-// listing price as the start price with low confidence, and the market search reports not configured.
-// The verdict's price check estimates only from saved research, so each test saves some first.
+// The API stack has no main Hermes profile: the offline heuristic provider keeps the listing price as the start
+// price with low confidence. Its research profile mock has no answers for these products, so the research the
+// verdict's price check runs fails, and the check estimates only from saved research, so each test saves some first.
 public class PriceEstimateLadderTest extends BaseTest {
 
   // Above the substitute ceiling, so the offline start price (the listing price) must be cut to it.

@@ -7,8 +7,8 @@ import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import io.restassured.response.ValidatableResponse;
 import org.testng.annotations.Test;
 
-// The stand has no research profile; the sample product has no photos and its OLX category is not an exact leaf,
-// so its verdict is "Needs you" with a failing Photos check.
+// The stand's research profile mock has no answers for the sample product, so its price research fails; the product
+// has no photos and its OLX category is not an exact leaf, so its verdict is "Needs you" with a failing Photos check.
 public class SaleVerdictUiTest extends BaseUiTest {
 
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();

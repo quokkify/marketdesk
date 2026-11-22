@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-9a8b7c6d5e4f4a3b2c1d0e9f8a7b6c5d",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"anchors\":[{\"tier\":\"substitute_new\",\"price\":279,\"currency\":\"PLN\",\"title\":\"Lumora Kid K2 — Media Expert\",\"url\":\"https://www.mediaexpert.pl/telewizory-i-rtv/projektory/projektory-tradycyjne/projektor-lumora-kid-k2-hd-1280-x-720-200-ansi-lumen\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280×720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lumens\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]},{\"tier\":\"substitute_new\",\"price\":299.99,\"currency\":\"PLN\",\"title\":\"Beamix HX300 — Media Expert\",\"url\":\"https://www.mediaexpert.pl/telewizory-i-rtv/projektory/projektory-tradycyjne/projektor-beamix-hx300\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280 x 720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lumens\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]}]}",
+        "reasoning_content": "**Comparing new substitutes**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 26195,
+    "completion_tokens": 621,
+    "total_tokens": 26816
+  }
+}

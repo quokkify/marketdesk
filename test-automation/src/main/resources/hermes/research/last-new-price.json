@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-1c2d3e4f5a6b47c8d9e0f1a2b3c4d5e6",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"anchors\":[{\"tier\":\"last_new_price\",\"price\":749,\"currency\":\"PLN\",\"title\":\"AOPEN QH11 — Ceneo (ostatnia cena)\",\"url\":\"https://www.ceneo.pl/190004172\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280×720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lumens\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]},{\"tier\":\"last_new_price\",\"price\":789,\"currency\":\"PLN\",\"title\":\"AOPEN QH11 — Komputronik (archived)\",\"url\":\"https://www.komputronik.pl/product/904417/aopen-qh11-projektor.html\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280 x 720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lum.\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]}]}",
+        "reasoning_content": "**Looking up the last new price**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 40614,
+    "completion_tokens": 415,
+    "total_tokens": 41029
+  }
+}

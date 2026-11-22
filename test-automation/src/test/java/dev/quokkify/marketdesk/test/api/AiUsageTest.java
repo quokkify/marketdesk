@@ -6,9 +6,15 @@ import dev.quokkify.marketdesk.test.BaseTest;
 
 import org.testng.annotations.Test;
 
-// The API test stack has no Hermes, so every analysis runs on the offline heuristics; Hermes token counts are
-// checked by hand on production. The verdict's listing SEO call is the analysis the usage report counts.
+// The API test stack has no main Hermes profile, so the verdict's listing SEO call runs on the offline heuristics;
+// Hermes token counts are checked by hand on production. The verdict's price check also researches the price on
+// the research profile mock, which has no answer for these products: identify is tried twice (IDENTIFY_ATTEMPTS
+// in PriceResearchGraph.ts), and both refused attempts count as Hermes calls.
 public class AiUsageTest extends BaseTest {
+
+  private static final int OFFLINE = 1;
+  private static final int REFUSED_RESEARCH = 2;
+  private static final int ANALYSES = OFFLINE + REFUSED_RESEARCH;
 
   private ProductListingPojo listingWithSeoAgent(AccountPojo account) {
     marketplaceSteps.connectSandboxOlx(account);
@@ -25,11 +31,12 @@ public class AiUsageTest extends BaseTest {
   }
 
   @Test
-  public void usageCountsAnOfflineAnalysisToday() {
+  public void usageCountsTheOfflineSeoCallAndTheRefusedResearchToday() {
     AccountPojo account = authSteps.registerNewAccount();
     ProductListingPojo productListing = listingWithSeoAgent(account);
     verdictSteps.analyzeAndAwait(account, productListing.productId());
-    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
+    aiUsageSteps.verify().countsAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, ANALYSES), OFFLINE,
+        REFUSED_RESEARCH);
   }
 
   @Test
@@ -38,8 +45,10 @@ public class AiUsageTest extends BaseTest {
     verdictSteps.analyzeAndAwait(account, listingWithSeoAgent(account).productId());
     AccountPojo other = authSteps.registerNewAccount();
     verdictSteps.analyzeAndAwait(other, listingWithSeoAgent(other).productId());
-    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
-    aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(other, 1), 1);
+    aiUsageSteps.verify().countsAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, ANALYSES), OFFLINE,
+        REFUSED_RESEARCH);
+    aiUsageSteps.verify().countsAnalysesToday(aiUsageSteps.getUsageOnceCounted(other, ANALYSES), OFFLINE,
+        REFUSED_RESEARCH);
   }
 
   @Test
