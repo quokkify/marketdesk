@@ -135,6 +135,20 @@ export function errorReason(code: string | null): string {
   return (code && ERROR_REASONS[code]) || FALLBACK_REASON;
 }
 
+// The codes a sale verdict (analysis) run fails with; some share a name with a search code.
+const VERDICT_ERROR_REASONS: Record<string, string> = {
+  expired: 'the analysis took too long and was stopped',
+  run_error: 'the analysis stopped with an error',
+  store_failed: 'the result could not be saved',
+  research_active: 'a price search was already running',
+  enqueue_failed: 'the analysis could not be started',
+};
+
+// A verdict run's error code in words; an unknown or missing code gives the fallback, never the raw code.
+export function verdictErrorReason(code: string | null): string {
+  return (code && VERDICT_ERROR_REASONS[code]) || FALLBACK_REASON;
+}
+
 // When the anchors were last updated: the last finished run, else the research's own version.
 export function anchorsUpdatedAt(last: ResearchRun | null, research: PriceResearch | null): string | null {
   if (last?.status === 'finished' && last.finishedAt) return last.finishedAt;

@@ -17,7 +17,7 @@ import {
   overallColor,
   overallLabel,
 } from '../../products/verdictDisplay.js';
-import { anchorsUpdatedAt, errorReason, runProgressText } from '../priceResearchModel.js';
+import { anchorsUpdatedAt, runProgressText, verdictErrorReason } from '../priceResearchModel.js';
 
 export type HermesDrawerTab = 'prices' | 'checks' | 'suggestions' | 'history';
 export type RowStatus = 'ok' | 'bad' | 'attention' | 'running' | 'idle';
@@ -95,6 +95,16 @@ function finishedNodes(research: PriceResearchView | null): number {
   if (!research?.run) return RESEARCH_NODES;
   const nodes = research.run.nodes;
   return (Object.keys(nodes) as ResearchNode[]).filter((node) => NODE_OVER.has(nodes[node] ?? '')).length;
+}
+
+// A market search with no analysis running (autopilot, or a search queued on its own) counts its own
+// steps: "Searching prices n/5".
+function searchingState(input: HermesCardInput): Pick<HermesCardState, 'chip' | 'lead'> {
+  const done = finishedNodes(input.research);
+  return {
+    chip: { label: `Searching prices ${Math.min(done + 1, RESEARCH_NODES)}/${RESEARCH_NODES}`, color: 'primary', outlined: false },
+    lead: runProgressText(input.research?.run ?? null) ?? 'Searching prices…',
+  };
 }
 
 function runningState(input: HermesCardInput, researchActive: boolean): Pick<HermesCardState, 'chip' | 'lead'> {
@@ -220,15 +230,16 @@ function footerText(input: HermesCardInput, running: boolean): string {
 export function hermesCardState(input: HermesCardInput): HermesCardState {
   const latest = input.verdict?.latest ?? null;
   const researchActive = runProgressText(input.research?.run ?? null) !== null;
-  const running = (input.verdict?.active ?? null) !== null || researchActive;
+  const active = input.verdict?.active ?? null;
+  const running = active !== null || researchActive;
 
   let head: Pick<HermesCardState, 'chip' | 'lead' | 'primary' | 'showAnalyzeAgain'>;
   if (running) {
-    head = { ...runningState(input, researchActive), primary: { kind: 'none' }, showAnalyzeAgain: false };
+    const progress = active ? runningState(input, researchActive) : searchingState(input);
+    head = { ...progress, primary: { kind: 'none' }, showAnalyzeAgain: false };
   } else if (input.verdict?.lastFailed) {
-    // The verdict view does not expose why a verdict run failed; only a research run that itself failed explains it.
-    const lastRun = input.research?.lastRun ?? null;
-    const reason = errorReason(lastRun?.outcome === 'failed' ? lastRun.errorCode : null);
+    // The failed run's own code; a research run's failure never stands in for it.
+    const reason = verdictErrorReason(input.verdict.lastFailedCode);
     head = {
       chip: { label: LAST_RUN_FAILED_LABEL, color: 'error', outlined: false },
       lead: `The last run failed: ${reason}.`,
@@ -246,12 +257,13 @@ export function hermesCardState(input: HermesCardInput): HermesCardState {
     };
   }
 
-  const shown = running ? (input.verdict?.active ?? null) : latest;
+  // Only an analysis checks Price, Info and Photos; during a search alone they keep the last verdict.
+  const shown = active ?? latest;
   return {
     ...head,
     rows: [
       pricesRow(input, researchActive),
-      ...CHECK_ROWS.map((name) => checkRow(name, shown, running, input.now)),
+      ...CHECK_ROWS.map((name) => checkRow(name, shown, active !== null, input.now)),
       suggestionsRow(input),
     ],
     footer: footerText(input, running),

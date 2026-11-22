@@ -150,10 +150,16 @@ function state(input: Partial<Parameters<typeof hermesCardState>[0]> = {}) {
   });
 }
 
-const view = (latest: SaleVerdict | null, active: SaleVerdict | null = null, lastFailed = false) => ({
+const view = (
+  latest: SaleVerdict | null,
+  active: SaleVerdict | null = null,
+  lastFailed = false,
+  lastFailedCode: string | null = null
+) => ({
   latest,
   active,
   lastFailed,
+  lastFailedCode,
 });
 
 describe('hermesCardState matrix', () => {
@@ -247,14 +253,10 @@ describe('hermesCardState matrix', () => {
     expect(s.showAnalyzeAgain).toBe(false);
   });
 
-  it('last run failed shows the plain reason from the research run, never the code', () => {
-    const s = state({
-      verdict: view(verdict(), null, true),
-      research: research({ lastRun: run({ status: 'finished', outcome: 'failed', errorCode: 'timeout' }) }),
-    });
+  it('last run failed shows the plain reason of the failed run, never the code', () => {
+    const s = state({ verdict: view(verdict(), null, true, 'expired') });
     expect(s.chip).toEqual({ label: 'Last run failed', color: 'error', outlined: false });
-    expect(s.lead).toContain('the search took too long');
-    expect(s.lead).not.toContain('timeout');
+    expect(s.lead).toBe('The last run failed: the analysis took too long and was stopped.');
     expect(s.primary).toEqual({ kind: 'analyze', label: 'Analyze again' });
     expect(s.showAnalyzeAgain).toBe(false);
   });
@@ -274,23 +276,64 @@ describe('hermesCardState decisions', () => {
     expect(s.chip.label).toBe('Last run failed');
   });
 
-  it('failed does not borrow the reason of a research run that did not fail', () => {
+  it.each([
+    ['expired', 'the analysis took too long and was stopped'],
+    ['run_error', 'the analysis stopped with an error'],
+    ['store_failed', 'the result could not be saved'],
+    ['research_active', 'a price search was already running'],
+    ['enqueue_failed', 'the analysis could not be started'],
+  ])('a failed run with code %s gives its own reason', (code, reason) => {
+    const s = state({ verdict: view(verdict(), null, true, code) });
+    expect(s.lead).toBe(`The last run failed: ${reason}.`);
+    expect(s.lead).not.toContain(code);
+  });
+
+  it('failed never borrows the reason of a failed research run', () => {
     const s = state({
-      verdict: view(verdict(), null, true),
-      research: research({ lastRun: run({ status: 'finished', outcome: 'ok', errorCode: 'timeout' }) }),
+      verdict: view(verdict(), null, true, 'run_error'),
+      research: research({ lastRun: run({ status: 'finished', outcome: 'failed', errorCode: 'timeout' }) }),
     });
-    expect(s.lead).toBe('The last run failed: something went wrong.');
+    expect(s.lead).toBe('The last run failed: the analysis stopped with an error.');
   });
 
-  it('failed without any error code uses the fallback sentence', () => {
-    const s = state({ verdict: view(null, null, true) });
-    expect(s.lead).toContain('something went wrong');
+  it('failed with an unknown or missing code uses the fallback sentence', () => {
+    expect(state({ verdict: view(null, null, true) }).lead).toBe('The last run failed: something went wrong.');
+    const unknown = state({ verdict: view(null, null, true, 'weird_new_code') }).lead;
+    expect(unknown).toBe('The last run failed: something went wrong.');
   });
 
-  it('a research run alone, with no verdict run, is still a run in progress', () => {
+  // A search with no analysis running (autopilot, or a queued run) counts its own 5 steps.
+  it('a research run alone, with no verdict run, is a price search out of 5', () => {
     const s = state({ verdict: view(verdict()), research: research({ run: run() }) });
-    expect(s.chip).toEqual({ label: 'Analyzing 3/8', color: 'primary', outlined: false });
+    expect(s.chip).toEqual({ label: 'Searching prices 3/5', color: 'primary', outlined: false });
+    expect(s.lead).toBe('Searching prices: 1 of 4');
+    expect(s.primary).toEqual({ kind: 'none' });
     expect(s.showAnalyzeAgain).toBe(false);
+  });
+
+  it('a research run alone keeps the last verdict in the check rows', () => {
+    const rows = state({
+      verdict: view(priceFix()),
+      pendingEvents: [event('e-1')],
+      research: research({ lastEstimate: ESTIMATE, run: run() }),
+    }).rows;
+    expect(rows.map((r) => [r.key, r.status])).toEqual([
+      ['prices', 'running'],
+      ['price', 'bad'],
+      ['info', 'ok'],
+      ['photos', 'attention'],
+      ['suggestions', 'attention'],
+    ]);
+    expect(rows.find((r) => r.key === 'price')?.value).toBe('349 zł → 169 zł');
+  });
+
+  it('a research run alone before any verdict leaves the check rows idle', () => {
+    const rows = state({ research: research({ run: run() }) }).rows;
+    expect(rows.slice(1, 4).map((r) => [r.status, r.detail])).toEqual([
+      ['idle', 'Not checked yet'],
+      ['idle', 'Not checked yet'],
+      ['idle', 'Not checked yet'],
+    ]);
   });
 
   it('fix for a reason other than price analyzes again without a secondary button', () => {
