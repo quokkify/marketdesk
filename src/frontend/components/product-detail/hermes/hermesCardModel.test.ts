@@ -200,7 +200,18 @@ describe('hermesCardState matrix', () => {
     const s = state({
       verdict: view(null, verdict({ status: 'running', overall: null, checks: {}, researchRunId: 'run-1' })),
     });
-    expect(s.chip.label).toBe('Analyzing 1/8');
+    expect(s.chip.label).toBe('Analyzing 6/8');
+  });
+
+  it('keeps counting the linked research nodes as done after the run finishes (no backwards step)', () => {
+    const s = state({
+      verdict: view(
+        null,
+        verdict({ status: 'running', overall: null, checks: { price: check('price', 'ready') }, researchRunId: 'run-1' })
+      ),
+      research: research({ run: null, lastRun: run({ status: 'finished', outcome: 'ok', finishedAt: T_CHECK }) }),
+    });
+    expect(s.chip.label).toBe('Analyzing 7/8');
   });
 
   it('fix on price with a pending event offers set_price', () => {
@@ -261,6 +272,14 @@ describe('hermesCardState decisions', () => {
   it('failed beats stale', () => {
     const s = state({ verdict: view(verdict(), null, true), stale: true });
     expect(s.chip.label).toBe('Last run failed');
+  });
+
+  it('failed does not borrow the reason of a research run that did not fail', () => {
+    const s = state({
+      verdict: view(verdict(), null, true),
+      research: research({ lastRun: run({ status: 'finished', outcome: 'ok', errorCode: 'timeout' }) }),
+    });
+    expect(s.lead).toBe('The last run failed: something went wrong.');
   });
 
   it('failed without any error code uses the fallback sentence', () => {

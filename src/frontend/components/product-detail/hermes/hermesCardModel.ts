@@ -90,8 +90,10 @@ function finishedChecks(verdict: SaleVerdict | null): number {
   }).length;
 }
 
+// Once a linked run has finished the view no longer carries it, and all its nodes are over.
 function finishedNodes(research: PriceResearchView | null): number {
-  const nodes = research?.run?.nodes ?? {};
+  if (!research?.run) return RESEARCH_NODES;
+  const nodes = research.run.nodes;
   return (Object.keys(nodes) as ResearchNode[]).filter((node) => NODE_OVER.has(nodes[node] ?? '')).length;
 }
 
@@ -224,7 +226,9 @@ export function hermesCardState(input: HermesCardInput): HermesCardState {
   if (running) {
     head = { ...runningState(input, researchActive), primary: { kind: 'none' }, showAnalyzeAgain: false };
   } else if (input.verdict?.lastFailed) {
-    const reason = errorReason(input.research?.lastRun?.errorCode ?? null);
+    // The verdict view does not expose why a verdict run failed; only a research run that itself failed explains it.
+    const lastRun = input.research?.lastRun ?? null;
+    const reason = errorReason(lastRun?.outcome === 'failed' ? lastRun.errorCode : null);
     head = {
       chip: { label: LAST_RUN_FAILED_LABEL, color: 'error', outlined: false },
       lead: `The last run failed: ${reason}.`,
