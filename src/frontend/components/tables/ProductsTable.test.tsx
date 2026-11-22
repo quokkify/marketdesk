@@ -68,10 +68,24 @@ describe('ProductsTable catalogue hierarchy', () => {
 
   it('renders only the stage 1 columns', () => {
     expect(PRODUCT_TABLE_COLUMNS.map((column) => column.key)).toEqual([
-      'select', 'product', 'status', 'price', 'updated', 'ai', 'actions',
+      'select',
+      'product',
+      'status',
+      'price',
+      'updated',
+      'ai',
+      'actions',
     ]);
     const html = markup(<ProductsTable products={[product]} currency="PLN" />);
-    for (const gone of ['Markets', 'Cost', 'Profit', 'Tags', 'featured', 'margin', 'Marketplace count unavailable']) {
+    for (const gone of [
+      'Markets',
+      'Cost',
+      'Profit',
+      'Tags',
+      'featured',
+      'margin',
+      'Marketplace count unavailable',
+    ]) {
       expect(html).not.toContain(gone);
     }
   });
@@ -160,13 +174,85 @@ describe('ProductsTable catalogue hierarchy', () => {
   });
 });
 
+describe('row analysis in the table', () => {
+  it('renders the analyze button and a review toggle for pending suggestions', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        onToggleReview={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'done', count: 2 } }}
+      />
+    );
+    expect(html).toContain('aria-label="Analyze with AI: Wireless Headphones"');
+    expect(html).toContain('2 to review');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('href="/products/p-1#');
+  });
+
+  it('places the review content in a full-width row under the expanded product only', () => {
+    const other = { ...product, id: 'p-2', name: 'Other' };
+    const html = markup(
+      <ProductsTable
+        products={[product, other]}
+        onToggleReview={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'done', count: 1 } }}
+        expandedProductId="p-1"
+        renderReview={(p) => <span>review-of-{p.id}</span>}
+      />
+    );
+    expect(html).toContain('review-of-p-1');
+    expect(html).not.toContain('review-of-p-2');
+    expect(html).toContain('colSpan="7"');
+    expect(html).toContain('aria-expanded="true"');
+    expect(html.indexOf('review-of-p-1')).toBeLessThan(html.indexOf('Other'));
+  });
+
+  it('disables the analyze button while running', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        analysisByProductId={{ 'p-1': { status: 'running' } }}
+      />
+    );
+    const button =
+      html.match(/<button[^>]*aria-label="Analyze with AI: Wireless Headphones"[^>]*>/)?.[0] ?? '';
+    expect(button).toContain('disabled');
+  });
+
+  it('shows why analysis is unavailable', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAnalyze={() => {}}
+        analyzeDisabledReason="The listing SEO agent is switched off for this workspace."
+      />
+    );
+    expect(html).toContain('The listing SEO agent is switched off for this workspace.');
+  });
+
+  it('puts Analyze with AI first in the row menu when available', () => {
+    const items = productRowMenuItems(
+      product,
+      { onAnalyze: () => {}, onOpen: () => {} },
+      () => {}
+    ) as ElementLike[];
+    expect(textContent(items[0])).toContain('Analyze with AI');
+  });
+});
+
 describe('product row actions menu', () => {
   it('lists Open, Edit and Delete and routes each to its handler before closing the menu', () => {
     const onOpen = jest.fn();
     const onEdit = jest.fn();
     const onDelete = jest.fn();
     const close = jest.fn();
-    const items = productRowMenuItems(product, { onOpen, onEdit, onDelete }, close) as ElementLike[];
+    const items = productRowMenuItems(
+      product,
+      { onOpen, onEdit, onDelete },
+      close
+    ) as ElementLike[];
 
     expect(items.map((item) => textContent(item))).toEqual(['Open', 'Edit', 'Delete']);
     (items[0]!.props.onClick as () => void)();
@@ -180,15 +266,25 @@ describe('product row actions menu', () => {
 
   it('gives every table row and card the delete handler', () => {
     const onDelete = jest.fn();
-    const table = ProductsTable({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
-    const cards = ProductsCards({ products: [product], onOpen: jest.fn(), onDelete }) as ElementLike;
-    const rowActions = [...findByType(table, ProductRowActions), ...findByType(cards, ProductRowActions)];
+    const table = ProductsTable({
+      products: [product],
+      onOpen: jest.fn(),
+      onDelete,
+    }) as ElementLike;
+    const cards = ProductsCards({
+      products: [product],
+      onOpen: jest.fn(),
+      onDelete,
+    }) as ElementLike;
+    const rowActions = [
+      ...findByType(table, ProductRowActions),
+      ...findByType(cards, ProductRowActions),
+    ];
 
     expect(rowActions).toHaveLength(2);
-    expect(rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)).toEqual([
-      onDelete,
-      onDelete,
-    ]);
+    expect(
+      rowActions.map((actions) => (actions.props.handlers as { onDelete?: unknown }).onDelete)
+    ).toEqual([onDelete, onDelete]);
   });
 
   it('omits actions that have no handler', () => {

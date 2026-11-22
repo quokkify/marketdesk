@@ -2,10 +2,12 @@ import React, { useId, useState } from 'react';
 import {
   Avatar,
   Box,
+  Button,
   Checkbox,
-  Link,
   Chip,
+  CircularProgress,
   IconButton,
+  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -20,11 +22,15 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
@@ -41,6 +47,8 @@ import {
   productTileTone,
   shortListingSku,
 } from '../../pages/productsCatalogueState.js';
+import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAnalysis.js';
+import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
@@ -140,13 +148,7 @@ function UpdatedAt({ value }: { value: string }) {
 }
 
 export type ProductTableColumnKey =
-  | 'select'
-  | 'product'
-  | 'status'
-  | 'price'
-  | 'updated'
-  | 'ai'
-  | 'actions';
+  'select' | 'product' | 'status' | 'price' | 'updated' | 'ai' | 'actions';
 
 export const PRODUCT_TABLE_COLUMNS: ReadonlyArray<{
   key: ProductTableColumnKey;
@@ -193,6 +195,8 @@ function handleRowClick(
 }
 
 export interface ProductRowHandlers {
+  onAnalyze?: (product: Product) => void;
+  analyzeDisabled?: boolean;
   onOpen?: (product: Product) => void;
   onEdit?: (product: Product) => void;
   onDelete?: (product: Product) => void;
@@ -210,6 +214,16 @@ export function productRowMenuItems(
     handler(product);
   };
   const items: React.ReactElement[] = [];
+  if (handlers.onAnalyze) {
+    items.push(
+      <MenuItem key="analyze" disabled={handlers.analyzeDisabled} onClick={run(handlers.onAnalyze)}>
+        <ListItemIcon>
+          <AutoAwesomeOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText>Analyze with AI</ListItemText>
+      </MenuItem>
+    );
+  }
   if (handlers.onOpen) {
     items.push(
       <MenuItem key="open" onClick={run(handlers.onOpen)}>
@@ -330,6 +344,103 @@ export interface ProductsCollectionProps {
   selectedIds?: ReadonlySet<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   awaitingByProductId?: Record<string, number>;
+  analysisByProductId?: Record<string, RowAnalysisState>;
+  onAnalyze?: (product: Product) => void;
+  analyzeDisabledReason?: string | null;
+  expandedProductId?: string | null;
+  onToggleReview?: (product: Product) => void;
+  renderReview?: (product: Product) => React.ReactNode;
+}
+
+const reviewRegionId = (product: Product) => `product-review-${product.id}`;
+
+function rowHandlers(props: ProductsCollectionProps): ProductRowHandlers {
+  return {
+    onAnalyze: props.onAnalyze,
+    analyzeDisabled: Boolean(props.analyzeDisabledReason),
+    onOpen: props.onOpen,
+    onEdit: props.onEdit,
+    onDelete: props.onDelete,
+  };
+}
+
+function ReviewToggle({
+  product,
+  count,
+  expanded,
+  onToggle,
+}: {
+  product: Product;
+  count: number;
+  expanded: boolean;
+  onToggle?: (product: Product) => void;
+}) {
+  return (
+    <Button
+      size="small"
+      variant="text"
+      aria-expanded={expanded ? 'true' : 'false'}
+      aria-controls={reviewRegionId(product)}
+      endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      onClick={() => onToggle?.(product)}
+      sx={{ whiteSpace: 'nowrap', textTransform: 'none', fontWeight: 700 }}
+    >
+      {`${count} to review`}
+    </Button>
+  );
+}
+
+function RowAnalysisControl({
+  product,
+  props,
+}: {
+  product: Product;
+  props: ProductsCollectionProps;
+}) {
+  const state = props.analysisByProductId?.[product.id];
+  if (!props.onAnalyze && !state) return null;
+  const reason = props.analyzeDisabledReason ?? null;
+  const running = state?.status === 'running';
+  const label = rowAnalysisLabel(state);
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+      {props.onAnalyze && (
+        <Tooltip title={reason ?? 'Analyze with AI'}>
+          <span>
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label={`Analyze with AI: ${product.name}`}
+              disabled={!canStartRowAnalysis(state, reason)}
+              onClick={() => props.onAnalyze?.(product)}
+            >
+              {running ? (
+                <CircularProgress size={16} />
+              ) : (
+                <AutoAwesomeOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      {state?.status === 'done' && state.count > 0 ? (
+        <ReviewToggle
+          product={product}
+          count={state.count}
+          expanded={props.expandedProductId === product.id}
+          onToggle={props.onToggleReview}
+        />
+      ) : label ? (
+        <Typography
+          variant="caption"
+          color={state?.status === 'error' ? 'error.main' : 'text.secondary'}
+          sx={{ maxWidth: 180 }}
+        >
+          {label}
+        </Typography>
+      ) : null}
+    </Stack>
+  );
 }
 
 export type ProductsTableProps = ProductsCollectionProps;
@@ -431,47 +542,63 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                 </TableRow>
               ))
             : products.map((product) => (
-                <TableRow
-                  key={product.id}
-                  hover
-                  selected={selectedIds.has(product.id)}
-                  onClick={(event) => handleRowClick(event, product, props.onOpen)}
-                  onAuxClick={(event) => handleRowClick(event, product, props.onOpen)}
-                  sx={{ cursor: props.onOpen ? 'pointer' : undefined }}
-                >
-                  <TableCell padding="checkbox" data-row-stop>
-                    <Checkbox
-                      slotProps={{ input: { 'aria-label': `Select ${product.name}` } }}
-                      checked={selectedIds.has(product.id)}
-                      onChange={(_event, checked) =>
-                        onSelectionChange?.(toggleSelection(selectedIds, product.id, checked))
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <ProductIdentity product={product} />
-                  </TableCell>
-                  <TableCell>
-                    <ProductStatusBadge status={product.status} />
-                    <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+                <React.Fragment key={product.id}>
+                  <TableRow
+                    hover
+                    selected={selectedIds.has(product.id)}
+                    onClick={(event) => handleRowClick(event, product, props.onOpen)}
+                    onAuxClick={(event) => handleRowClick(event, product, props.onOpen)}
+                    sx={{ cursor: props.onOpen ? 'pointer' : undefined }}
                   >
-                    {formatMoney(product.sellingPrice, props.currency)}
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    <UpdatedAt value={product.updatedAt} />
-                  </TableCell>
-                  <TableCell data-row-stop />
-                  <TableCell align="right" data-row-stop>
-                    <ProductRowActions
-                      product={product}
-                      handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
-                    />
-                  </TableCell>
-                </TableRow>
+                    <TableCell padding="checkbox" data-row-stop>
+                      <Checkbox
+                        slotProps={{ input: { 'aria-label': `Select ${product.name}` } }}
+                        checked={selectedIds.has(product.id)}
+                        onChange={(_event, checked) =>
+                          onSelectionChange?.(toggleSelection(selectedIds, product.id, checked))
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <ProductIdentity product={product} />
+                    </TableCell>
+                    <TableCell>
+                      <ProductStatusBadge status={product.status} />
+                      <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {formatMoney(product.sellingPrice, props.currency)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                      <UpdatedAt value={product.updatedAt} />
+                    </TableCell>
+                    <TableCell data-row-stop>
+                      <RowAnalysisControl product={product} props={props} />
+                    </TableCell>
+                    <TableCell align="right" data-row-stop>
+                      <ProductRowActions product={product} handlers={rowHandlers(props)} />
+                    </TableCell>
+                  </TableRow>
+                  {props.expandedProductId === product.id && props.renderReview && (
+                    <TableRow>
+                      <TableCell
+                        id={reviewRegionId(product)}
+                        colSpan={PRODUCT_TABLE_COLUMNS.length}
+                        data-row-stop
+                        sx={{ bgcolor: 'action.hover', py: 2 }}
+                      >
+                        {props.renderReview(product)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               ))}
         </TableBody>
       </Table>
@@ -525,10 +652,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
               </Box>
               <ProductStatusBadge status={product.status} />
               <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
-              <ProductRowActions
-                product={product}
-                handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
-              />
+              <ProductRowActions product={product} handlers={rowHandlers(props)} />
             </Stack>
             <Box
               sx={{
@@ -558,6 +682,16 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 </Typography>
               </Box>
             </Box>
+            {(props.onAnalyze || props.analysisByProductId?.[product.id]) && (
+              <Box sx={{ mt: 1.5 }}>
+                <RowAnalysisControl product={product} props={props} />
+              </Box>
+            )}
+            {props.expandedProductId === product.id && props.renderReview && (
+              <Box id={reviewRegionId(product)} sx={{ mt: 1.5 }}>
+                {props.renderReview(product)}
+              </Box>
+            )}
           </Box>
         );
       })}
