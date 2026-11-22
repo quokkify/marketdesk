@@ -332,6 +332,14 @@ export interface ProductWizardViewProps {
 
 // On narrow screens the footer wraps and the primary button fills the last row.
 const PRIMARY_BUTTON_SX = { width: { xs: '100%', sm: 'auto' } };
+// On a phone the review step is taller than the screen. The fields scroll inside the dialog and the
+// footer stays below them, so Publish to OLX is reachable without scrolling and covers nothing.
+const ROOT_SX = { height: { xs: '100%', sm: 'auto' } };
+const BODY_SX = {
+  flex: { xs: '1 1 0', sm: '0 0 auto' },
+  minHeight: { xs: 0, sm: 'auto' },
+  overflowY: { xs: 'auto', sm: 'visible' },
+};
 
 export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
   activeStep,
@@ -374,79 +382,81 @@ export const ProductWizardView: React.FC<ProductWizardViewProps> = ({
   const reason = activeStep === 0 ? photosReason : publishOffered ? publishReason : draftReason;
 
   return (
-    <Stack spacing={3}>
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          Step {activeStep + 1} of {STEPS.length}
-        </Typography>
-        <Typography variant="h6" component="h2">
-          {activeStep === 0 ? STEPS[0] : 'Review and publish'}
-        </Typography>
-      </Box>
-
-      {serverError && (
-        <Alert severity="error">
-          The product was not created: {serverError.replace(/\.$/, '')}. Fix the highlighted fields
-          and try again.
-        </Alert>
-      )}
-
-      {activeStep === 0 ? (
-        <Stack spacing={2}>
-          <ProductImageUploader
-            images={values.images}
-            error={errors.images}
-            disabled={submitting}
-            onChange={(images) => onChange('images', images)}
-            onUpload={onUploadImage}
-            onDelete={onDeleteImage}
-          />
+    <Stack spacing={3} sx={ROOT_SX}>
+      <Stack spacing={3} sx={BODY_SX}>
+        <Box>
           <Typography variant="caption" color="text.secondary">
-            Reorder photos with the arrow controls or mark any photo as the cover.
+            Step {activeStep + 1} of {STEPS.length}
           </Typography>
-        </Stack>
-      ) : (
-        <Stack spacing={2}>
-          <NameSkuFields
-            {...fieldProps}
-            showSku={showWizardSku(values, errors)}
-            showCategory={false}
-          />
-          <DescriptionTagsFields {...fieldProps} showTags={false} />
-          <PriceFields {...fieldProps} currency={currency} />
-          <Typography variant="body2" color="text.secondary" aria-live="polite">
-            {pricing
-              ? `Profit ${formatMoney(pricing.profit, currency)}${marginText(pricing.marginPercent)}`
-              : 'Add a cost price to see profit and margin.'}
+          <Typography variant="h6" component="h2">
+            {activeStep === 0 ? STEPS[0] : 'Review and publish'}
           </Typography>
-          {warning && (
-            <BelowCostConfirmationAlert
-              warning={warning}
-              confirmed={belowCostConfirmed}
-              hasError={belowCostHasError || reason === BELOW_COST_REASON}
-              onConfirmedChange={onBelowCostConfirmedChange}
-            />
-          )}
-          {searchCategories && (
-            <OlxCategoryPicker
-              value={olxCategory}
-              onChange={onOlxCategoryChange}
-              changing={categoryChanging}
-              onChangingChange={onCategoryChangingChange}
-              search={searchCategories}
-              seed={values.name}
+        </Box>
+
+        {serverError && (
+          <Alert severity="error">
+            The product was not created: {serverError.replace(/\.$/, '')}. Fix the highlighted
+            fields and try again.
+          </Alert>
+        )}
+
+        {activeStep === 0 ? (
+          <Stack spacing={2}>
+            <ProductImageUploader
+              images={values.images}
+              error={errors.images}
               disabled={submitting}
+              onChange={(images) => onChange('images', images)}
+              onUpload={onUploadImage}
+              onDelete={onDeleteImage}
             />
-          )}
-          {marketplaceStatus === 'none' && <NoMarketplaceConnectedCard />}
-          {marketplaceStatus === 'unavailable' && (
-            <Alert severity="error">
-              Marketplace connections could not be loaded. You can still save the product as a
-              draft.
-            </Alert>
-          )}
-        </Stack>
-      )}
+            <Typography variant="caption" color="text.secondary">
+              Reorder photos with the arrow controls or mark any photo as the cover.
+            </Typography>
+          </Stack>
+        ) : (
+          <Stack spacing={2}>
+            <NameSkuFields
+              {...fieldProps}
+              showSku={showWizardSku(values, errors)}
+              showCategory={false}
+            />
+            <DescriptionTagsFields {...fieldProps} showTags={false} />
+            <PriceFields {...fieldProps} currency={currency} />
+            <Typography variant="body2" color="text.secondary" aria-live="polite">
+              {pricing
+                ? `Profit ${formatMoney(pricing.profit, currency)}${marginText(pricing.marginPercent)}`
+                : 'Add a cost price to see profit and margin.'}
+            </Typography>
+            {warning && (
+              <BelowCostConfirmationAlert
+                warning={warning}
+                confirmed={belowCostConfirmed}
+                hasError={belowCostHasError || reason === BELOW_COST_REASON}
+                onConfirmedChange={onBelowCostConfirmedChange}
+              />
+            )}
+            {searchCategories && (
+              <OlxCategoryPicker
+                value={olxCategory}
+                onChange={onOlxCategoryChange}
+                changing={categoryChanging}
+                onChangingChange={onCategoryChangingChange}
+                search={searchCategories}
+                seed={values.name}
+                disabled={submitting}
+              />
+            )}
+            {marketplaceStatus === 'none' && <NoMarketplaceConnectedCard />}
+            {marketplaceStatus === 'unavailable' && (
+              <Alert severity="error">
+                Marketplace connections could not be loaded. You can still save the product as a
+                draft.
+              </Alert>
+            )}
+          </Stack>
+        )}
+      </Stack>
 
       <Stack spacing={1}>
         {reason && (
