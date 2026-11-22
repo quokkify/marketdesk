@@ -56,12 +56,19 @@ export function filterAnchorRows(
   items: unknown[],
   ctx: { currency: string; ownUrl: string | null; dismissed: ReadonlySet<string>; today: string },
 ): PriceComparable[] {
+  return capAnchorRows(anchorRows(items, ctx));
+}
+
+// The agent's rows that pass the checks, deduplicated by normalized URL, without the row caps:
+// a caller that drops more rows afterwards applies capAnchorRows last.
+export function anchorRows(
+  items: unknown[],
+  ctx: { currency: string; ownUrl: string | null; dismissed: ReadonlySet<string>; today: string },
+): PriceComparable[] {
   const ownUrl = ctx.ownUrl ? normalizeAnchorUrl(ctx.ownUrl) : null;
   const seen = new Set<string>();
-  const perTier = new Map<AnchorTier, number>();
   const rows: PriceComparable[] = [];
   for (const item of items) {
-    if (rows.length >= MAX_AUTO_ROWS) break;
     if (typeof item !== 'object' || item === null) continue;
     const { tier, price, currency, title, url, classAttributes } = item as Record<string, unknown>;
     if (typeof url !== 'string' || typeof title !== 'string') continue;
@@ -71,11 +78,9 @@ export function filterAnchorRows(
     const anchorTier = tier as AnchorTier;
     const normalized = normalizeAnchorUrlForTier(url, anchorTier);
     if (!normalized || normalized === ownUrl || seen.has(normalized) || ctx.dismissed.has(normalized)) continue;
-    if ((perTier.get(anchorTier) ?? 0) >= MAX_ANCHORS_PER_TIER) continue;
     const note = title.trim().slice(0, MAX_TITLE_LENGTH).trim();
     if (note === '') continue;
     seen.add(normalized);
-    perTier.set(anchorTier, (perTier.get(anchorTier) ?? 0) + 1);
     rows.push({
       price, note, url: normalized, source: 'auto', tier: anchorTier, seenAt: ctx.today,
       // Carried as given: the caller parses the attributes first; an empty list counts as none.
@@ -85,6 +90,20 @@ export function filterAnchorRows(
     });
   }
   return rows;
+}
+
+// The first MAX_ANCHORS_PER_TIER rows of each tier, at most MAX_AUTO_ROWS in all, in order.
+export function capAnchorRows(rows: PriceComparable[]): PriceComparable[] {
+  const perTier = new Map<AnchorTier | null | undefined, number>();
+  const kept: PriceComparable[] = [];
+  for (const row of rows) {
+    if (kept.length >= MAX_AUTO_ROWS) break;
+    const count = perTier.get(row.tier) ?? 0;
+    if (count >= MAX_ANCHORS_PER_TIER) continue;
+    perTier.set(row.tier, count + 1);
+    kept.push(row);
+  }
+  return kept;
 }
 
 // The research profile must expose exactly the web toolset (web_search + web_extract), nothing else.

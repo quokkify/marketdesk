@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { getPool, query } from '../../../config/database';
+import { NotFoundError } from '../../../domain/shared/DomainError';
 import type {
   IPriceResearchRepository,
   PriceResearchEdit,
@@ -103,7 +104,8 @@ export class PriceResearchRepository implements IPriceResearchRepository {
       if (!row) throw new Error(`Price research of product ${productId} could not be saved`);
       return toPriceResearch(row);
     });
-    if (!saved) throw new Error(`Product ${productId} has no price research in this workspace`);
+    // The product was deleted (or is another workspace's) since the caller looked it up.
+    if (!saved) throw new NotFoundError(`Product not found: ${productId}`);
     return saved;
   }
 

@@ -46,10 +46,20 @@ const SYSTEM = [
   'Report only pages, adverts and offers you actually opened and saw; never invent or guess a page, a title or a price.',
 ].join(' ');
 
+// Attribute names, units and text values come from web pages via the model: only short tokens of
+// letters, digits, spaces and % . / × - pass, so no sentence can ride along into a later prompt.
+const MAX_ATTRIBUTE_TOKEN = 40;
+const ATTRIBUTE_TOKEN = /^[\p{L}\p{N} %./×-]+$/u;
+const attributeToken = z.string().trim().min(1).max(MAX_ATTRIBUTE_TOKEN).regex(ATTRIBUTE_TOKEN);
+
 const attributeSchema = z.object({
-  name: z.string().min(1),
-  value: z.union([z.string(), z.number()]),
-  unit: z.string().nullish(),
+  name: attributeToken,
+  value: z.union([attributeToken, z.number().finite()]),
+  unit: z
+    .string()
+    .nullish()
+    .transform((unit) => (unit?.trim() ? unit.trim() : null))
+    .pipe(attributeToken.nullable()),
   match: z.enum(['equal', 'ratio']),
 });
 
@@ -221,14 +231,11 @@ export function buildTierPrompt(
 }
 
 // Separate calls rename attributes otherwise ("brightness" vs "ANSI lumens"), and the class check
-// matches by name.
+// matches by name. The names stay in the identification data block; the instruction only points there.
 function attributeNamesLine(attributes: readonly ClassAttribute[]): string[] {
   if (attributes.length === 0) return [];
-  const names = attributes
-    .map(({ name, unit }) => (unit ? `${JSON.stringify(name)} (${unit})` : JSON.stringify(name)))
-    .join(', ');
   return [
-    `Every offer's classAttributes must use exactly these names and units from the identification: ${names}.`,
+    "Every offer's classAttributes must use exactly the attribute names and units listed in the identification data (its classAttributes), no other names.",
   ];
 }
 

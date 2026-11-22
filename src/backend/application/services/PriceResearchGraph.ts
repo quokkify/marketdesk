@@ -14,7 +14,7 @@ import type { IPriceResearchRepository } from '../../domain/repositories/interfa
 import type { AITextCompletionClient } from '../../infrastructure/external/HermesAI';
 import type { HermesReachability } from '../../infrastructure/external/HermesHealthProbe';
 import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../domain/shared/DomainError';
-import { filterAnchorRows, isResearchToolsetSafe } from '../../infrastructure/external/anchorLadderPrompt';
+import { anchorRows, capAnchorRows, isResearchToolsetSafe } from '../../infrastructure/external/anchorLadderPrompt';
 import {
   buildIdentifyPrompt,
   buildTierPrompt,
@@ -265,15 +265,15 @@ export class PriceResearchGraph {
     return { ident: null, errorCode: failure.code };
   }
 
-  // Code checks on the tiers that answered: row filter (dismissals come at save time, under the
-  // lock), class, price sanity. Then the outcome: partial counts only with class-checked substitutes.
+  // Code checks on the tiers that answered: row filter, class, price sanity; dismissals and the row
+  // caps come at save time, under the lock. Then the outcome: partial counts only with class-checked substitutes.
   private filter(ctx: RunContext, state: ResearchGraphState): Partial<ResearchGraphState> {
     const answered = TIER_NODES.filter((node) => state.found[node] !== undefined);
     if (answered.length === 0) {
       return { outcome: 'failed', errorCode: ctx.signal.aborted ? 'timeout' : 'all_tiers_failed', rows: [] };
     }
     const items = answered.flatMap((node) => (state.found[node] ?? []).map((item) => asTierItem(item, TIER_OF[node])));
-    const filtered = filterAnchorRows(items, {
+    const filtered = anchorRows(items, {
       currency: SEARCH_CURRENCY,
       ownUrl: ctx.listing.externalUrl,
       dismissed: new Set(),
@@ -294,7 +294,7 @@ export class PriceResearchGraph {
     const research = await this.deps.research.saveLadderLocked(ctx.workspaceId, ctx.product.id, (current) => {
       const existing = current?.comparables ?? [];
       const dismissed = new Set(current?.dismissedUrls ?? []);
-      const found = state.rows.filter((row) => !row.url || !dismissed.has(row.url));
+      const found = capAnchorRows(state.rows.filter((row) => !row.url || !dismissed.has(row.url)));
       const kept = existing.filter((row) => row.source === 'auto' && row.tier && keepTiers.has(row.tier));
       const comparables = mergeLadder(existing, [...kept, ...found]);
       rowsChanged = JSON.stringify(comparables) !== JSON.stringify(existing);
@@ -335,9 +335,14 @@ export class PriceResearchGraph {
     }));
   }
 
+  // Progress reporting must not end the run: a failing onNode is logged and the run goes on.
   private async mark(ctx: RunContext, node: ResearchNode, status: NodeStatus): Promise<void> {
     ctx.nodes[node] = status;
-    await ctx.onNode(node, status);
+    try {
+      await ctx.onNode(node, status);
+    } catch (error) {
+      this.deps.logger?.error({ productId: ctx.product.id, node, status, err: error }, 'Price research progress report failed');
+    }
   }
 
   private logFailure(ctx: RunContext, node: ResearchNode, failure: NodeFailure, attempt?: number): void {

@@ -112,6 +112,7 @@ function setup(options: {
   research?: InMemoryPriceResearchRepository;
   currency?: string;
   limit?: number;
+  logger?: { warn(context: object, message: string): void; error(context: object, message: string): void };
 } = {}) {
   const products = new InMemoryProductRepository();
   const listings = new InMemoryListingRepository();
@@ -133,6 +134,7 @@ function setup(options: {
     profile: options.profile === undefined ? profile(client) : options.profile,
     limiter: createResearchCallLimiter(options.limit ?? 3),
     now: () => NOW,
+    logger: options.logger,
   });
   const transitions: Array<[ResearchNode, NodeStatus]> = [];
   const run = (signal: AbortSignal = new AbortController().signal) => graph.run({
@@ -315,6 +317,40 @@ describe('PriceResearchGraph', () => {
     expect(saved.comparables[0]).toEqual(manual);
     expect(saved.comparables.map((row) => row.url)).not.toContain(EXTRALINK_URL);
     expect(saved.dismissedUrls).toEqual([EXTRALINK_URL]);
+  });
+
+  it('applies the per-tier cap after the class filter and the dismissals', async () => {
+    const research = new InMemoryPriceResearchRepository();
+    const urls = Array.from({ length: 6 }, (_, i) => `https://x-kom.pl/p/projector-${i}`);
+    seed(research, [], [urls[0]]);
+    const offBenq = {
+      tier: 'substitute_new', price: 590, currency: 'PLN', title: 'BenQ W600', url: BENQ_URL,
+      classAttributes: [{ name: 'native resolution', value: '1920x1080', unit: null, match: 'equal' }],
+    };
+    const client = new ScriptedResearchClient({
+      substitutesNew: async () => JSON.stringify({
+        anchors: [offBenq, ...urls.map((url, i) => ({
+          tier: 'substitute_new', price: 250 + i, currency: 'PLN', title: `Projector ${i}`, url, classAttributes: CLASS_720P,
+        }))],
+      }),
+    });
+    await setup({ client, research }).run();
+    const saved = stored(research)!.comparables.filter((row) => row.tier === 'substitute_new').map((row) => row.url);
+    expect(saved).toEqual(urls.slice(1));
+  });
+
+  it('logs a failing onNode and finishes the run', async () => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    const logger = { warn: (_: object, m: string) => warnings.push(m), error: (_: object, m: string) => errors.push(m) };
+    const s = setup({ logger });
+    const result = await s.graph.run({
+      workspaceId: WS, productId: PID, signal: new AbortController().signal,
+      onNode: async () => { throw new Error('progress store down'); },
+    });
+    expect(result.outcome).toBe('ok');
+    expect(stored(s.research)).toBeDefined();
+    expect(errors.length).toBeGreaterThan(0);
   });
 
   it('reports no change and writes nothing when the run finds the stored ladder again', async () => {
