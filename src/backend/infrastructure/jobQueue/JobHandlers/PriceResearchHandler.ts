@@ -1,7 +1,8 @@
 // Job handler: one price research graph run per queued run. It claims the run by id (a job whose run
 // is no longer queued exits without calling Hermes), holds a 10 minute lease, runs the graph within a
 // 7 minute budget while recording node progress, and finishes the run with its outcome and the next
-// automatic run time. Then afterRun (the re-estimate) runs and price_research.completed is published.
+// automatic run time. Then afterRun (the re-estimate) runs for every finished run, with no result when
+// the graph threw or timed out, and price_research.completed is published.
 // Every outcome completes the job (attempts: 1): a failure is recorded on the run, never retried by
 // the queue.
 
@@ -35,7 +36,7 @@ export interface PriceResearchHandlerLogger {
 export interface PriceResearchHandlerDeps {
   runs: IPriceResearchRunRepository;
   graph: Pick<PriceResearchGraph, 'run'>;
-  afterRun: (workspaceId: string, productId: string, result: GraphResult) => Promise<void>;
+  afterRun: (workspaceId: string, productId: string, result: GraphResult | null) => Promise<void>;
   events: IEventPublisher;
   now: () => Date;
   logger?: PriceResearchHandlerLogger;
@@ -80,7 +81,7 @@ export class PriceResearchHandler {
 
     const outcome = result?.outcome ?? 'failed';
     await this.finish(run, outcome, result, errorCode);
-    if (result) await this.afterRun(run, result);
+    await this.afterRun(run, result);
     await this.deps.events.publish({
       type: 'price_research.completed',
       aggregateType: 'product',
@@ -113,7 +114,7 @@ export class PriceResearchHandler {
   }
 
   // The research is stored already; a failed re-estimate must not lose the completion event.
-  private async afterRun(run: ResearchRun, result: GraphResult): Promise<void> {
+  private async afterRun(run: ResearchRun, result: GraphResult | null): Promise<void> {
     try {
       await this.deps.afterRun(run.workspaceId, run.productId, result);
     } catch (error) {

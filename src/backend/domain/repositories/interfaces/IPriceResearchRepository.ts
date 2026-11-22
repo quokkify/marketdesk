@@ -19,5 +19,6 @@ export interface IPriceResearchRepository {
     productId: string,
     apply: (current: PriceResearch | null) => { comparables: PriceComparable[]; specs: string | null } | null,
   ): Promise<PriceResearch | null>;
-  saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void>;
+  // False when refused: the stored estimate was computed from newer research (see the SQL guard).
+  saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<boolean>;
 }

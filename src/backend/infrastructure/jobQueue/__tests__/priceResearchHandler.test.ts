@@ -55,6 +55,7 @@ function setup(options: {
   const logger = new Logger();
   const order: string[] = [];
   const inputs: ResearchRunInput[] = [];
+  const afterRunResults: Array<GraphResult | null> = [];
   const graphRun = options.graph ?? (async () => OK_RESULT);
   const handler = new PriceResearchHandler({
     runs,
@@ -64,8 +65,9 @@ function setup(options: {
         return graphRun(input);
       },
     },
-    afterRun: async () => {
+    afterRun: async (_workspaceId, _productId, result) => {
       order.push('afterRun');
+      afterRunResults.push(result);
       await options.afterRun?.();
     },
     events: {
@@ -77,7 +79,7 @@ function setup(options: {
     now: () => NOW,
     logger,
   });
-  return { handler, runs, events, logger, order, inputs };
+  return { handler, runs, events, logger, order, inputs, afterRunResults };
 }
 
 describe('PriceResearchHandler', () => {
@@ -207,5 +209,26 @@ describe('PriceResearchHandler', () => {
 
     expect(runs.runs[0]).toMatchObject({ status: 'finished', outcome: 'failed', errorCode: 'run_error', consecutiveFailures: 1, nextAutoAt: at(HOUR_MS) });
     expect(logger.errors.map((e) => e.message)).toEqual(['Price research run failed']);
+  });
+
+  it('calls afterRun without a result when the graph throws or times out, so the stored research is re-estimated', async () => {
+    const { handler, order, afterRunResults } = setup({
+      graph: async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); },
+    });
+
+    await handler.handle(job);
+
+    expect(afterRunResults).toEqual([null]);
+    expect(order).toEqual(['afterRun', 'event']);
+  });
+
+  it('does not call afterRun for a run it could not claim', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(run({ status: 'finished', outcome: 'ok' }));
+    const { handler, afterRunResults } = setup({ runs });
+
+    await expect(handler.handle(job)).resolves.toEqual({ kind: 'skipped' });
+
+    expect(afterRunResults).toEqual([]);
   });
 });

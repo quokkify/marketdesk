@@ -195,8 +195,8 @@ export class PriceResearchRepository implements IPriceResearchRepository {
   // An estimate computed from older research than the stored one's is not written (null is oldest), so
   // an Analyze that read the ladder before a run saved cannot overwrite the run's re-estimate. The
   // estimate is not part of the research version: updated_at moves only when the row is created.
-  async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
-    await query(
+  async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<boolean> {
+    const { rowCount } = await query(
       `INSERT INTO product_price_research (product_id, workspace_id, last_estimate, updated_at)
        VALUES ($1, $2, $3::jsonb, ${NOW_UTC})
        ON CONFLICT (product_id) DO UPDATE SET
@@ -209,5 +209,6 @@ export class PriceResearchRepository implements IPriceResearchRepository {
       [productId, workspaceId, JSON.stringify(stored), stored.researchUpdatedAt],
       this.queryClient,
     );
+    return rowCount > 0;
   }
 }

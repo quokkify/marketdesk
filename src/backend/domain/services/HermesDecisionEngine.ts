@@ -36,10 +36,9 @@ import type { Workspace } from '../entities/Workspace';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
-import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
 import type { Listing } from '../entities/Listing';
 import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
-import { PriceEstimateService } from '../../application/services/PriceEstimateService';
+import type { PriceEstimateService } from './PriceEstimateService';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import {
   isAIProviderSourceAware,
@@ -75,22 +74,14 @@ const PRICE_ESTIMATE_PENDING: Suggestion = {
 };
 
 // One pending price event per product: a new one closes the earlier pending ones (applied or
-// otherwise resolved events are never touched).
-const PRICE_EVENT_TYPES: ReadonlySet<HermesEventType> = new Set([
+// otherwise resolved events are never touched). The job's "unavailable" notice closes only earlier
+// notices, so a background failure never takes away a priced suggestion the seller can still act on.
+const PRICE_EVENT_TYPES: readonly HermesEventType[] = [
   'suggested_lower_price',
   'suggested_higher_price',
   'price_estimate_unavailable',
-]);
-
-function closePendingPriceEvents(pending: readonly HermesEvent[], productId: string): HermesEvent[] {
-  return pending.filter(
-    (e) =>
-      e.productId === productId &&
-      PRICE_EVENT_TYPES.has(e.type) &&
-      e.status === 'pending_review' &&
-      e.dismiss().isOk(),
-  );
-}
+];
+const PRICE_NOTICE_TYPES: readonly HermesEventType[] = ['price_estimate_unavailable'];
 
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
 
@@ -114,27 +105,16 @@ export class HermesDecisionEngine {
     private readonly eventRepo: IEventRepository,
     private readonly eventPublisher: IEventPublisher,
     private readonly aiProvider: IAIProvider,
-    private readonly priceResearchRepo: IPriceResearchRepository,
+    private readonly priceEstimates: PriceEstimateService,
     private readonly researchRuns: IPriceResearchRuns | null,
     private readonly idFactory: IdFactory,
     private readonly logger?: HermesEngineLogger
-  ) {
-    this.priceEstimates = new PriceEstimateService({
-      ai: aiProvider,
-      research: priceResearchRepo,
-      runs: researchRuns,
-      logger,
-    });
-  }
-
-  private readonly priceEstimates: PriceEstimateService;
+  ) {}
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
     const events: HermesEvent[] = [];
     const closed: HermesEvent[] = [];
     const products = await this.productRepo.findByWorkspace(workspace.id);
-    // Read before any of this run's events are saved, so only earlier ones are closed.
-    const pending = await this.eventRepo.findPendingReview(workspace.id);
 
     for (const product of products) {
       // Asked before and after the AI calls, so a switch to the offline heuristics at
@@ -169,7 +149,10 @@ export class HermesDecisionEngine {
         });
         if (created.isErr()) continue;
         const event = created.value;
-        if (PRICE_EVENT_TYPES.has(event.type)) closed.push(...closePendingPriceEvents(pending, product.id));
+        // This run's events are saved at its end, so only earlier ones are closed.
+        if (PRICE_EVENT_TYPES.includes(event.type)) {
+          closed.push(...(await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES)));
+        }
 
         event.setAutonomyDecision(decision);
         const unsupportedAutomaticChange =
@@ -386,9 +369,10 @@ export class HermesDecisionEngine {
 
   /**
    * The research job's re-estimate: estimates from the stored research without requesting a run or
-   * running SEO, and replaces the product's pending price event. An estimate not worth surfacing
-   * still closes the pending ones: they predate the research the job just stored. Null when the
-   * product or its listing is gone, or nothing is surfaced.
+   * running SEO, and replaces the product's pending price event (an "unavailable" result replaces
+   * only earlier notices). A stored estimate not worth surfacing still closes the pending ones: they
+   * predate the research the job just stored. An estimate refused as stale closes nothing. Null when
+   * the product or its listing is gone, or nothing is surfaced.
    */
   async reestimatePrice(workspaceId: string, productId: string): Promise<HermesEvent | null> {
     const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
@@ -396,19 +380,24 @@ export class HermesDecisionEngine {
     const [primary] = await this.listingRepo.findByProduct(product.id);
     if (!primary) return null;
     const offlineBefore = await this.aiAnswersOffline();
-    const { suggestion } = await this.priceEstimates.estimate(product, primary);
-    if (suggestion) return this.savePriceEvent(product, suggestion, offlineBefore);
-    const closed = closePendingPriceEvents(await this.eventRepo.findPendingReview(workspaceId), product.id);
+    const { suggestion, stored } = await this.priceEstimates.estimate(product, primary);
+    if (suggestion) {
+      const supersedes = suggestion.type === 'price_estimate_unavailable' ? PRICE_NOTICE_TYPES : PRICE_EVENT_TYPES;
+      return this.savePriceEvent(product, suggestion, offlineBefore, supersedes);
+    }
+    if (stored === null) return null;
+    const closed = await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
     if (closed.length > 0) await this.eventRepo.saveAll(closed);
     return null;
   }
 
-  // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change. The earlier
-  // pending price events of the product are closed in the same save.
+  // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change. The product's
+  // earlier pending events of the superseded types are closed in the same save.
   private async savePriceEvent(
     product: Product,
     suggestion: Suggestion,
     offlineBefore: boolean,
+    supersedes: readonly HermesEventType[] = PRICE_EVENT_TYPES,
   ): Promise<HermesEvent | null> {
     const source =
       suggestion.change === null
@@ -430,9 +419,18 @@ export class HermesDecisionEngine {
       source,
     });
     if (created.isErr()) return null;
-    const pending = await this.eventRepo.findPendingReview(product.workspaceId);
-    await this.eventRepo.saveAll([...closePendingPriceEvents(pending, product.id), created.value]);
+    const closed = await this.closePendingPriceEvents(product, supersedes);
+    await this.eventRepo.saveAll([...closed, created.value]);
     return created.value;
+  }
+
+  // Dismisses (in memory; the caller saves them) the product's pending events of the given types.
+  private async closePendingPriceEvents(
+    product: Product,
+    types: readonly HermesEventType[],
+  ): Promise<HermesEvent[]> {
+    const pending = await this.eventRepo.findPendingByProduct(product.workspaceId, product.id, types);
+    return pending.filter((e) => e.dismiss().isOk());
   }
 
   private agentRecommendationRecord(params: {

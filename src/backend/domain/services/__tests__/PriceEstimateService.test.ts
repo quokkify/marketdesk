@@ -1,13 +1,13 @@
-import { Product } from '../../../domain/entities/Product';
-import { Listing } from '../../../domain/entities/Listing';
+import { Product } from '../../entities/Product';
+import { Listing } from '../../entities/Listing';
 import {
   InMemoryPriceResearchRepository,
   StubAIProvider,
   money,
   unwrap,
-} from '../../../domain/testkit/support';
-import type { PriceEstimateContext } from '../../../domain/ports/IAIProvider';
-import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
+} from '../../testkit/support';
+import type { PriceEstimateContext } from '../../ports/IAIProvider';
+import type { IPriceResearchRuns } from '../../ports/IPriceResearchRuns';
 import type { PriceComparable, PriceEstimate, PriceResearch, ResearchRun } from '../../../../shared/types';
 import { buildPriceEstimatePrompt } from '../../../infrastructure/external/priceEstimatePrompt';
 import { PriceEstimateService } from '../PriceEstimateService';
@@ -128,7 +128,8 @@ describe('PriceEstimateService', () => {
 
     const analyze = await service.estimate(product, listing);
 
-    expect(analyze.stored?.researchUpdatedAt).toBe(OLD_VERSION);
+    // Refused: the job's newer estimate stays, and the stale one is neither stored nor proposed.
+    expect(analyze).toEqual({ suggestion: null, stored: null, skipped: null });
     const stored = repo.items.get(`${WS}:${PID}`)?.lastEstimate;
     expect(jobVersion > OLD_VERSION).toBe(true);
     expect(stored?.researchUpdatedAt).toBe(jobVersion);

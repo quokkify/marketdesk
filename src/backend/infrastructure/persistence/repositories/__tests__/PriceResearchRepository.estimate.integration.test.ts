@@ -84,9 +84,9 @@ describeDb('PriceResearchRepository.saveEstimate guard (PostgreSQL integration, 
   it('older researchUpdatedAt does not overwrite', async () => {
     if (!ready) return;
     const repo = await seed(NEWER);
-    await repo.saveEstimate(WS, PID, stored(70, NEWER));
-    await repo.saveEstimate(WS, PID, stored(90, OLDER));
-    await repo.saveEstimate(WS, PID, stored(95, null));
+    await expect(repo.saveEstimate(WS, PID, stored(70, NEWER))).resolves.toBe(true);
+    await expect(repo.saveEstimate(WS, PID, stored(90, OLDER))).resolves.toBe(false);
+    await expect(repo.saveEstimate(WS, PID, stored(95, null))).resolves.toBe(false);
 
     const research = await repo.findByProduct(WS, PID);
     expect(research?.lastEstimate).toMatchObject({ researchUpdatedAt: NEWER, estimate: { startPrice: 70 } });

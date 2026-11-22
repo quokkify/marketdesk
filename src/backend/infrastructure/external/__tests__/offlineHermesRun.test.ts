@@ -9,6 +9,7 @@ import { HermesCompletionClient } from '../HermesCompletionClient';
 import { HermesHealthProbe } from '../HermesHealthProbe';
 import { OfflineHeuristicAIProvider } from '../OfflineHeuristicAIProvider';
 import { HermesDecisionEngine } from '../../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../../domain/services/PriceEstimateService';
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import { Workspace } from '../../../domain/entities/Workspace';
@@ -89,7 +90,7 @@ function setup() {
     new InMemoryEventRepository(),
     new RecordingEventPublisher(),
     selector,
-    new InMemoryPriceResearchRepository(),
+    new PriceEstimateService({ ai: selector, research: new InMemoryPriceResearchRepository(), runs: null }),
     null,
     sequentialIdFactory('offline-run'),
   );
@@ -174,7 +175,7 @@ describe('offline price estimate on an Analyze run', () => {
       }));
     }
     const engine = new HermesDecisionEngine(productRepo, listingRepo, new InMemoryEventRepository(),
-      new RecordingEventPublisher(), new OfflineHeuristicAIProvider(), researchRepo, null, sequentialIdFactory('offline-price'));
+      new RecordingEventPublisher(), new OfflineHeuristicAIProvider(), new PriceEstimateService({ ai: new OfflineHeuristicAIProvider(), research: researchRepo, runs: null }), null, sequentialIdFactory('offline-price'));
     const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS', autonomyLevel: 'full_auto', guardrails: OPEN_GUARDRAILS }));
     await engine.runProductSeo(workspace, 'p1');
     return (await researchRepo.findByProduct('w1', 'p1'))?.lastEstimate;

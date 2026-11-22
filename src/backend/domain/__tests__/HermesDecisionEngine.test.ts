@@ -1,4 +1,5 @@
 import { HermesDecisionEngine } from '../services/HermesDecisionEngine';
+import { PriceEstimateService } from '../services/PriceEstimateService';
 import { Product } from '../entities/Product';
 import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
@@ -81,7 +82,7 @@ function makeEngine(overrides?: {
     eventRepo,
     publisher,
     ai,
-    overrides?.priceResearchRepo ?? new EvidencedResearchRepository(),
+    new PriceEstimateService({ ai, research: overrides?.priceResearchRepo ?? new EvidencedResearchRepository(), runs: null }),
     null,
     sequentialIdFactory(),
   );
@@ -380,7 +381,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       eventRepo,
       publisher,
       ai,
-      new EvidencedResearchRepository(),
+      new PriceEstimateService({ ai, research: new EvidencedResearchRepository(), runs: null }),
       null,
       sequentialIdFactory('g'),
     );
@@ -543,7 +544,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       new InMemoryEventRepository(),
       new RecordingEventPublisher(),
       ai,
-      new EvidencedResearchRepository(),
+      new PriceEstimateService({ ai, research: new EvidencedResearchRepository(), runs: null }),
       null,
       sequentialIdFactory('s'),
     );
@@ -713,7 +714,7 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       eventRepo,
       new RecordingEventPublisher(),
       ai,
-      new EvidencedResearchRepository(),
+      new PriceEstimateService({ ai, research: new EvidencedResearchRepository(), runs: null }),
       null,
       sequentialIdFactory('seo'),
     );
@@ -879,14 +880,16 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     const eventRepo = new InMemoryEventRepository();
     const priceResearchRepo = options.priceResearchRepo ?? new EvidencedResearchRepository();
     if (options.research) priceResearchRepo.items.set('w1:p1', options.research);
+    const ai = new StubAIProvider(undefined, '', undefined, undefined, answer);
+    const runs = options.runs ?? null;
     const engine = new HermesDecisionEngine(
       productRepo,
       listingRepo,
       eventRepo,
       new RecordingEventPublisher(),
-      new StubAIProvider(undefined, '', undefined, undefined, answer),
-      priceResearchRepo,
-      options.runs ?? null,
+      ai,
+      new PriceEstimateService({ ai, research: priceResearchRepo, runs, logger: options.logger }),
+      runs,
       sequentialIdFactory('pe'),
       options.logger,
     );
@@ -1130,17 +1133,44 @@ describe('HermesDecisionEngine pending price events', () => {
     return { startPrice, floorPrice: startPrice - 5, retailAnchor: null, usedRange: null, reasoning: 'Used units.', confidence: 'medium' };
   }
 
-  // Answers the estimates in order; the last answer repeats.
+  // Answers the estimates in order (an Error fails that call); the last answer repeats. beforeAnswer
+  // runs once inside the next call, as a research job finishing meanwhile would.
   class SequencedAI extends StubAIProvider {
     private calls = 0;
-    constructor(private readonly answers: PriceEstimate[]) {
+    beforeAnswer: (() => Promise<void>) | null = null;
+    constructor(private readonly answers: Array<PriceEstimate | Error>) {
       super(undefined, 'A better title for search');
     }
     async estimatePrice(): Promise<PriceEstimate> {
       const answer = this.answers[Math.min(this.calls, this.answers.length - 1)];
       this.calls += 1;
+      const hook = this.beforeAnswer;
+      this.beforeAnswer = null;
+      if (hook) await hook();
+      if (answer instanceof Error) throw answer;
       return answer;
     }
+  }
+
+  // The product's pending price events come from a by-product query, never a workspace scan.
+  class ProductScopedEventRepository extends InMemoryEventRepository {
+    async findPendingReview(): Promise<HermesEvent[]> {
+      throw new Error('price events must not scan the workspace');
+    }
+  }
+
+  function activeRunsUntilDone() {
+    const active = {
+      id: 'r1', workspaceId: 'w1', productId: 'p1', trigger: 'analyze' as const, status: 'running' as const, nodes: {},
+      outcome: null, failedTiers: [], errorCode: null, consecutiveFailures: 0, queuedAt: '2026-11-22T00:00:00.000Z',
+      startedAt: null, finishedAt: null, leaseUntil: null, nextAutoAt: null,
+    };
+    const state = { running: true };
+    const runs: IPriceResearchRuns = {
+      request: async () => ({ run: active, enqueued: true, reason: 'enqueued' }),
+      latest: async () => ({ active: state.running ? active : null, last: null }),
+    };
+    return { runs, state };
   }
 
   function addProduct(productRepo: InMemoryProductRepository, listingRepo: InMemoryListingRepository, id: string) {
@@ -1154,14 +1184,15 @@ describe('HermesDecisionEngine pending price events', () => {
     listingRepo.items.set(listing.id, listing);
   }
 
-  function setup(answers: PriceEstimate[], runs: IPriceResearchRuns | null = null) {
+  function setup(answers: Array<PriceEstimate | Error>, runs: IPriceResearchRuns | null = null) {
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
-    const eventRepo = new InMemoryEventRepository();
+    const eventRepo = new ProductScopedEventRepository();
     const priceResearchRepo = new EvidencedResearchRepository();
+    const ai = new SequencedAI(answers);
     const engine = new HermesDecisionEngine(
-      productRepo, listingRepo, eventRepo, new RecordingEventPublisher(), new SequencedAI(answers),
-      priceResearchRepo, runs, sequentialIdFactory('pp'),
+      productRepo, listingRepo, eventRepo, new RecordingEventPublisher(), ai,
+      new PriceEstimateService({ ai, research: priceResearchRepo, runs }), runs, sequentialIdFactory('pp'),
     );
     addProduct(productRepo, listingRepo, 'p1');
     const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS', autonomyLevel: 'suggest_only' }));
@@ -1169,7 +1200,7 @@ describe('HermesDecisionEngine pending price events', () => {
       [...eventRepo.items.values()].filter(
         (e) => e.productId === productId && PRICE_TYPES.includes(e.type) && e.status === 'pending_review',
       );
-    return { engine, eventRepo, productRepo, listingRepo, priceResearchRepo, workspace, pendingPrice };
+    return { engine, ai, eventRepo, productRepo, listingRepo, priceResearchRepo, workspace, pendingPrice };
   }
 
   it('a second Analyze leaves exactly one pending price event for the product', async () => {
@@ -1257,6 +1288,52 @@ describe('HermesDecisionEngine pending price events', () => {
 
     expect(event).toBeNull();
     expect(pendingPrice()).toEqual([]);
+  });
+
+  it("an Analyze that read older research than the job's leaves the job's event pending and adds none", async () => {
+    const { engine, ai, workspace, pendingPrice, priceResearchRepo } = setup([priceAnswer(90), priceAnswer(70)]);
+    let jobEvent: HermesEvent | null = null;
+    // While Analyze waits on its estimate (ladder V1), the job stores ladder V2 and re-estimates.
+    ai.beforeAnswer = async () => {
+      await priceResearchRepo.saveLadderLocked('w1', 'p1', () => ({
+        comparables: [{ price: 75, note: 'same model, used', source: 'auto', tier: 'same_model_used' }],
+        specs: null,
+      }));
+      jobEvent = await engine.reestimatePrice('w1', 'p1');
+    };
+
+    const analyzed = await engine.runProductSeo(workspace, 'p1');
+
+    expect(jobEvent).not.toBeNull();
+    expect(analyzed.filter((e) => PRICE_TYPES.includes(e.type))).toEqual([]);
+    expect(pendingPrice().map((e) => e.id)).toEqual([jobEvent!.id]);
+    expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.estimate.startPrice).toBe(70);
+  });
+
+  it("the job's unavailable notice does not supersede a pending priced suggestion", async () => {
+    const { engine, workspace, pendingPrice } = setup([priceAnswer(90), new Error('model answered nonsense')]);
+    const analyzed = await engine.runProductSeo(workspace, 'p1');
+    const priced = analyzed.find((e) => e.type === 'suggested_lower_price');
+
+    const notice = await engine.reestimatePrice('w1', 'p1');
+
+    expect(notice).toMatchObject({ type: 'price_estimate_unavailable', status: 'pending_review' });
+    expect(priced?.status).toBe('pending_review');
+    expect(pendingPrice().map((e) => e.id).sort()).toEqual([priced!.id, notice!.id].sort());
+  });
+
+  it("the job's unavailable notice replaces the earlier searching notice", async () => {
+    const { runs, state } = activeRunsUntilDone();
+    const { engine, workspace, pendingPrice, priceResearchRepo } = setup([new Error('model answered nonsense')], runs);
+    const stored = priceResearchRepo.findByProduct.bind(priceResearchRepo);
+    priceResearchRepo.findByProduct = async (workspaceId, productId) => (state.running ? null : stored(workspaceId, productId));
+    const searching = (await engine.runProductSeo(workspace, 'p1')).find((e) => e.type === 'price_estimate_unavailable');
+
+    state.running = false;
+    const notice = await engine.reestimatePrice('w1', 'p1');
+
+    expect(searching?.status).toBe('dismissed');
+    expect(pendingPrice().map((e) => e.id)).toEqual([notice!.id]);
   });
 
   it('leaves approved price events, other products and other event types untouched', async () => {

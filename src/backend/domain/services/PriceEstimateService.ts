@@ -3,8 +3,8 @@
 // review-only suggestion. Analyze calls it after requesting research; the research job calls it
 // after a run that changed the ladder. It never starts research and never runs SEO.
 
-import type { Product } from '../../domain/entities/Product';
-import type { Listing } from '../../domain/entities/Listing';
+import type { Product } from '../entities/Product';
+import type { Listing } from '../entities/Listing';
 import type {
   AnchorTier,
   EstimateHiddenReason,
@@ -16,11 +16,11 @@ import type {
   ProposedChange,
   StoredPriceEstimate,
 } from '../../../shared/types';
-import type { IPriceResearchRepository } from '../../domain/repositories/interfaces/IPriceResearchRepository';
-import type { IPriceResearchRuns } from '../../domain/ports/IPriceResearchRuns';
-import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type IAIProvider } from '../../domain/ports/IAIProvider';
-import { ServiceUnavailableError } from '../../domain/shared/DomainError';
-import { applyLadderRules, estimateHiddenReason, validatePriceEstimate } from '../../domain/services/priceEstimate';
+import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
+import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
+import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type IAIProvider } from '../ports/IAIProvider';
+import { ServiceUnavailableError } from '../shared/DomainError';
+import { applyLadderRules, estimateHiddenReason, validatePriceEstimate } from './priceEstimate';
 
 export interface PriceSuggestion {
   type: HermesEventType;
@@ -94,6 +94,8 @@ export class PriceEstimateService {
    * valid but not worth surfacing, and an info-only "unavailable" suggestion when it is unusable or
    * the call failed for any other reason; provider unavailability propagates. With no ladder stored
    * and a research run active, nothing is estimated: the run's job produces the first estimate.
+   * An estimate the store refuses (computed from older research than the stored one) is neither
+   * kept nor proposed: the newer estimate and its suggestion stand.
    * `researchNote` is kept on the stored estimate (Analyze notes a research run it could not request).
    */
   async estimate(
@@ -157,7 +159,7 @@ export class PriceEstimateService {
     }
     const hiddenReason = estimateHiddenReason(estimate, currentPrice);
     const kept = await this.remember(product, estimate, hiddenReason, researchNote, researchUpdatedAt);
-    if (hiddenReason !== null) return { suggestion: null, stored: kept, skipped: null };
+    if (kept === null || hiddenReason !== null) return { suggestion: null, stored: kept, skipped: null };
     const isLower = estimate.startPrice < currentPrice;
     return {
       suggestion: {
@@ -190,14 +192,15 @@ export class PriceEstimateService {
     }
   }
 
-  // The stored estimate is display-only, so a failed write is logged and the price path goes on.
+  // Null when the store refused the estimate as stale. A failed write is logged and the price path
+  // goes on: the stored estimate is display-only.
   private async remember(
     product: Product,
     estimate: PriceEstimate,
     hiddenReason: EstimateHiddenReason | null,
     researchNote: string | null,
     researchUpdatedAt: string | null,
-  ): Promise<StoredPriceEstimate> {
+  ): Promise<StoredPriceEstimate | null> {
     const stored: StoredPriceEstimate = {
       estimate,
       estimatedAt: new Date().toISOString(),
@@ -206,7 +209,7 @@ export class PriceEstimateService {
       researchUpdatedAt,
     };
     try {
-      await this.deps.research.saveEstimate(product.workspaceId, product.id, stored);
+      if (!(await this.deps.research.saveEstimate(product.workspaceId, product.id, stored))) return null;
     } catch (error) {
       this.deps.logger?.warn({ productId: product.id, err: error }, 'Storing the last price estimate failed');
     }

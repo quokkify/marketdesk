@@ -112,6 +112,7 @@ import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
 // --- Application: use cases + services + ports ---
@@ -517,7 +518,12 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     eventRepo,
     eventPublisher,
     aiProvider,
-    priceResearchRepo,
+    new PriceEstimateService({
+      ai: aiProvider,
+      research: priceResearchRepo,
+      runs: priceResearchRuns,
+      logger: overrides.logger,
+    }),
     priceResearchRuns,
     idGenerator,
     overrides.logger
@@ -931,11 +937,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const priceResearchHandler = new PriceResearchHandler({
     runs: priceResearchRunRepo,
     graph: priceResearchGraph,
-    // Re-estimates when the run changed the ladder, or when no estimate exists yet (an Analyze
-    // skipped it while the run was pending).
+    // Re-estimates from the stored research when the run changed the ladder, threw or timed out (no
+    // result), or when no estimate exists yet (an Analyze skipped it while the run was pending).
     afterRun: async (workspaceId, productId, result) => {
-      const stored = result.rowsChanged ? null : await priceResearchRepo.findByProduct(workspaceId, productId);
-      if (result.rowsChanged || !stored?.lastEstimate) await hermesEngine.reestimatePrice(workspaceId, productId);
+      const reestimate =
+        result === null ||
+        result.rowsChanged ||
+        !(await priceResearchRepo.findByProduct(workspaceId, productId))?.lastEstimate;
+      if (reestimate) await hermesEngine.reestimatePrice(workspaceId, productId);
     },
     events: eventPublisher,
     now: () => new Date(),

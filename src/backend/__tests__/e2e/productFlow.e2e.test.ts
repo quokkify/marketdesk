@@ -43,6 +43,7 @@ import { unwrap } from '../../domain/testkit/support';
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 
 import { CreateProductUseCase } from '../../application/usecases/CreateProductUseCase';
 import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUseCase';
@@ -141,7 +142,7 @@ async function buildE2E(): Promise<E2EContext> {
     eventRepo,
     events,
     aiProvider,
-    new InMemoryPriceResearchRepository(),
+    new PriceEstimateService({ ai: aiProvider, research: new InMemoryPriceResearchRepository(), runs: null }),
     null,
     idGenerator
   );

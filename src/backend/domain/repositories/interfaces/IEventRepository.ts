@@ -1,5 +1,5 @@
 import type { HermesEvent } from '../../entities/HermesEvent';
-import type { HermesEventStatus } from '../../../../shared/types';
+import type { HermesEventStatus, HermesEventType } from '../../../../shared/types';
 import type { AgentRecommendationRecord } from '../../agents/MarketDeskAgentCatalog';
 
 export interface IEventRepository {
@@ -9,6 +9,8 @@ export interface IEventRepository {
   findByWorkspace(workspaceId: string): Promise<HermesEvent[]>;
   findByStatus(workspaceId: string, status: HermesEventStatus): Promise<HermesEvent[]>;
   findPendingReview(workspaceId: string): Promise<HermesEvent[]>;
+  /** The product's pending_review events of the given types. */
+  findPendingByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
   save(event: HermesEvent): Promise<void>;
   /** Atomically inserts a semantic recommendation once. */
   saveRecommendationIfAbsent(event: HermesEvent, idempotencyKey: string): Promise<boolean>;

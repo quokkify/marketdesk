@@ -15,6 +15,7 @@ import {
 } from '../entities/OlxPublicationQuota';
 import type {
   HermesEventStatus,
+  HermesEventType,
   MarketplaceKey,
   PriceEstimate,
   PriceComparable,
@@ -206,6 +207,15 @@ export class InMemoryEventRepository implements IEventRepository {
   async findPendingReview(workspaceId: string): Promise<HermesEvent[]> {
     return this.findByStatus(workspaceId, 'pending_review');
   }
+  async findPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+  ): Promise<HermesEvent[]> {
+    return (await this.findByStatus(workspaceId, 'pending_review')).filter(
+      (e) => e.productId === productId && types.includes(e.type),
+    );
+  }
   async save(event: HermesEvent): Promise<void> {
     this.items.set(event.id, event);
   }
@@ -332,14 +342,15 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
   }
   // Mirrors the SQL guard: an estimate from older research is not written (null is oldest), and the
   // estimate does not move the research version of an existing row.
-  async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
+  async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<boolean> {
     const key = `${workspaceId}:${productId}`;
     const current = this.items.get(key);
     const currentVersion = current?.lastEstimate?.researchUpdatedAt ?? null;
     if (currentVersion !== null && (stored.researchUpdatedAt === null || Date.parse(stored.researchUpdatedAt) < Date.parse(currentVersion))) {
-      return;
+      return false;
     }
     this.items.set(key, { ...this.blank(productId), ...current, lastEstimate: stored });
+    return true;
   }
   private blank(productId: string): PriceResearch {
     return {
