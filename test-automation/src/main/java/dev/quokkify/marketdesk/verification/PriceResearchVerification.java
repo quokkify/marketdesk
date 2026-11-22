@@ -16,6 +16,8 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
   private static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
   private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
+  private static final String CONFLICT = "CONFLICT";
+  private static final String RESEARCH_CHANGED = "Price research changed since you opened it. Reload and try again.";
 
   @Override
   protected PriceResearchVerification self() {
@@ -122,6 +124,13 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   public PriceResearchVerification isRefreshNotConfigured(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_SERVICE_UNAVAILABLE, SERVICE_UNAVAILABLE);
     response.body("error.message", Matchers.equalTo(SEARCH_NOT_CONFIGURED));
+    return self();
+  }
+
+  @Step("Save is refused because the price research changed since the form was opened")
+  public PriceResearchVerification isStale(ValidatableResponse response) {
+    failsWith(response, HttpStatus.SC_CONFLICT, CONFLICT);
+    response.body("error.message", Matchers.equalTo(RESEARCH_CHANGED));
     return self();
   }
 

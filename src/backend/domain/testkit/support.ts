@@ -3,6 +3,7 @@
 
 import { Result } from '../shared/Result';
 import { Money } from '../valueObjects/Money';
+import { researchChangedSince } from '../services/priceResearchEdit';
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
@@ -287,8 +288,10 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
   async upsert(
     workspaceId: string,
     research: Omit<PriceResearch, 'updatedAt' | 'specs' | 'lastAttemptAt' | 'lastEstimate'>,
-  ): Promise<PriceResearch> {
+    baseUpdatedAt?: string | null,
+  ): Promise<PriceResearch | null> {
     const previous = this.items.get(`${workspaceId}:${research.productId}`);
+    if (researchChangedSince(previous?.updatedAt ?? null, baseUpdatedAt) && previous) return null;
     const saved: PriceResearch = {
       specs: null,
       lastAttemptAt: null,
@@ -318,11 +321,11 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
   }
   async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {
     const key = `${workspaceId}:${productId}`;
-    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastAttemptAt: attemptedAt });
+    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastAttemptAt: attemptedAt, updatedAt: new Date().toISOString() });
   }
   async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
     const key = `${workspaceId}:${productId}`;
-    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastEstimate: stored });
+    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastEstimate: stored, updatedAt: new Date().toISOString() });
   }
   private blank(productId: string): PriceResearch {
     return {

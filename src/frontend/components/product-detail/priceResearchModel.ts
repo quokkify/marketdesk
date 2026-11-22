@@ -28,6 +28,8 @@ export interface PriceResearchForm {
   retailSource: string;
   retailCheckedAt: string;
   comparables: { price: string; note: string; url?: string; source?: PriceComparableSource; tier?: AnchorTier; seenAt?: string }[];
+  // The updatedAt of the research this form was built from; the server refuses the save if it moved on.
+  baseUpdatedAt: string | null;
 }
 
 export interface PriceResearchBody {
@@ -36,6 +38,7 @@ export interface PriceResearchBody {
   retailSource: string | null;
   retailCheckedAt: string | null;
   comparables: PriceComparable[];
+  baseUpdatedAt: string | null;
 }
 
 export type PriceResearchBodyResult =
@@ -44,7 +47,7 @@ export type PriceResearchBodyResult =
 
 export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = ''): PriceResearchForm {
   if (!r) {
-    return { retailPrice: '', retailCurrency: defaultCurrency, retailSource: '', retailCheckedAt: '', comparables: [] };
+    return { retailPrice: '', retailCurrency: defaultCurrency, retailSource: '', retailCheckedAt: '', comparables: [], baseUpdatedAt: null };
   }
   return {
     retailPrice: r.retailPrice === null ? '' : String(r.retailPrice),
@@ -59,6 +62,7 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
       ...(c.tier ? { tier: c.tier } : {}),
       ...(c.seenAt ? { seenAt: c.seenAt } : {}),
     })),
+    baseUpdatedAt: r.updatedAt,
   };
 }
 
@@ -133,6 +137,7 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
       retailSource: source || null,
       retailCheckedAt: checkedAt || null,
       comparables,
+      baseUpdatedAt: f.baseUpdatedAt,
     },
   };
 }

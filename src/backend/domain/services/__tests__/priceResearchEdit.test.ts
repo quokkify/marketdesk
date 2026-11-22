@@ -1,5 +1,5 @@
 import type { PriceComparable } from '../../../../shared/types';
-import { dismissedAfterEdit } from '../priceResearchEdit';
+import { dismissedAfterEdit, researchChangedSince } from '../priceResearchEdit';
 
 const URL_A = 'https://allegro.pl/oferta/projektor-123';
 const auto = (url: string): PriceComparable => ({ price: 100, note: 'a', url, source: 'auto', tier: 'substitute_new' });
@@ -31,5 +31,36 @@ describe('dismissedAfterEdit', () => {
 
   it('keeps earlier dismissals', () => {
     expect(dismissedAfterEdit([auto(URL_A)], [], ['https://ceneo.pl/1'])).toEqual(['https://ceneo.pl/1', URL_A]);
+  });
+});
+
+// Regression guard: a form built before Analyze stored new auto rows must not tombstone them on save.
+describe('researchChangedSince', () => {
+  const STORED = '2026-11-22T10:00:00.123Z';
+
+  it('skips the check when the client sends no base', () => {
+    expect(researchChangedSince(STORED, undefined)).toBe(false);
+    expect(researchChangedSince(null, undefined)).toBe(false);
+  });
+
+  it('accepts the exact stored stamp, also written with an offset', () => {
+    expect(researchChangedSince(STORED, STORED)).toBe(false);
+    expect(researchChangedSince(STORED, '2026-11-22T12:00:00.123+02:00')).toBe(false);
+  });
+
+  it('refuses a stamp that differs by one millisecond', () => {
+    expect(researchChangedSince(STORED, '2026-11-22T10:00:00.122Z')).toBe(true);
+  });
+
+  it('refuses a form built from no research once research exists', () => {
+    expect(researchChangedSince(STORED, null)).toBe(true);
+  });
+
+  it('accepts a form built from no research while there is still none', () => {
+    expect(researchChangedSince(null, null)).toBe(false);
+  });
+
+  it('refuses a form built from research that is gone', () => {
+    expect(researchChangedSince(null, STORED)).toBe(true);
   });
 });

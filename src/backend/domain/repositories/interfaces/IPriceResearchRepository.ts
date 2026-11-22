@@ -2,10 +2,12 @@ import type { PriceComparable, PriceResearch, StoredPriceEstimate } from '../../
 
 export interface IPriceResearchRepository {
   findByProduct(workspaceId: string, productId: string): Promise<PriceResearch | null>;
+  // Null when baseUpdatedAt is given and the stored row has moved on since (null base: a row now exists).
   upsert(
     workspaceId: string,
     research: Omit<PriceResearch, 'updatedAt' | 'specs' | 'lastAttemptAt' | 'lastEstimate'>,
-  ): Promise<PriceResearch>;
+    baseUpdatedAt?: string | null,
+  ): Promise<PriceResearch | null>;
   saveLadder(
     workspaceId: string,
     productId: string,

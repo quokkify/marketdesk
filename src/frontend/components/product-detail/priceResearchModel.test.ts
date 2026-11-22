@@ -47,6 +47,7 @@ describe('priceResearchModel', () => {
         retailSource: 'MediaMarkt',
         retailCheckedAt: '2026-11-21',
         comparables: research.comparables,
+        baseUpdatedAt: '2026-11-21T10:00:00.000Z',
       },
     });
   });
@@ -64,8 +65,14 @@ describe('priceResearchModel', () => {
   it('turns an empty form into an empty body', () => {
     expect(toPriceResearchBody(toPriceResearchForm(null))).toEqual({
       ok: true,
-      body: { retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null, comparables: [] },
+      body: { retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null, comparables: [], baseUpdatedAt: null },
     });
+  });
+
+  // Regression guard: a form opened before Analyze must not save over the rows Analyze stored.
+  it('sends the updatedAt the form was built from, so the server can refuse a stale save', () => {
+    const result = toPriceResearchBody({ ...toPriceResearchForm(research), retailSource: 'Ceneo' });
+    expect(result).toEqual({ ok: true, body: expect.objectContaining({ baseUpdatedAt: research.updatedAt }) });
   });
 
   it('rejects a retail price without a currency', () => {

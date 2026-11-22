@@ -25,3 +25,11 @@ export function dismissedAfterEdit(
   }
   return result;
 }
+
+// Whether the stored research moved on since the client built its form from `baseUpdatedAt`.
+// undefined skips the check (API clients that do not send it); null means the form saw no research.
+export function researchChangedSince(storedUpdatedAt: string | null, baseUpdatedAt: string | null | undefined): boolean {
+  if (baseUpdatedAt === undefined) return false;
+  if (storedUpdatedAt === null || baseUpdatedAt === null) return storedUpdatedAt !== baseUpdatedAt;
+  return new Date(storedUpdatedAt).getTime() !== new Date(baseUpdatedAt).getTime();
+}

@@ -53,6 +53,20 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.putPriceResearch(account.token(), productId, body);
   }
 
+  @Step("Save price research of product {productId} built from the version saved at {baseUpdatedAt}")
+  public ValidatableResponse savePriceResearchFrom(AccountPojo account, String productId, PriceResearchPojo research,
+      String baseUpdatedAt) {
+    return service.putPriceResearch(account.token(), productId, research.withExtraField("baseUpdatedAt", baseUpdatedAt));
+  }
+
+  @Step("Read when the price research of product {productId} was last changed")
+  public String priceResearchUpdatedAt(AccountPojo account, String productId) {
+    return service.getPriceResearch(account.token(), productId)
+        .statusCode(HttpStatus.SC_OK)
+        .extract()
+        .path("data.updatedAt");
+  }
+
   @Step("Run the AI analysis of product {productId}")
   public ValidatableResponse runProductAnalysis(AccountPojo account, String productId) {
     return service.runProductAnalysis(account.token(), productId);

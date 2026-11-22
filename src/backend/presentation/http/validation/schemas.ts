@@ -175,6 +175,8 @@ export const priceResearchSchema = z
     retailSource: z.string().max(200).nullable(),
     retailCheckedAt: isoDateSchema.nullable(),
     comparables: z.array(priceComparableSchema).max(MAX_COMPARABLES),
+    // The updatedAt the client's form was built from; null when it saw no research. Absent skips the check.
+    baseUpdatedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .strict()
   .superRefine((body, ctx) => {

@@ -3,7 +3,7 @@
 // service, and translates the Result via ResponseFormatter. No business logic here.
 
 import type { Request, Response, NextFunction } from 'express';
-import { dismissedAfterEdit } from '../../../domain/services/priceResearchEdit';
+import { dismissedAfterEdit, researchChangedSince } from '../../../domain/services/priceResearchEdit';
 import type { ProductApplicationService } from '../../../application/services/ProductApplicationService';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
@@ -20,12 +20,19 @@ import type { IMarketplaceRepository } from '../../../domain/repositories/interf
 import type { CreateProductDTO } from '../../../application/dto/CreateProductDTO';
 import type { UpdateProductDTO } from '../../../application/dto/UpdateProductDTO';
 import type { ListProductsQueryDTO, SortKey } from '../../../application/dto/ListProductsQueryDTO';
-import type { ProductStatus } from '../../../../shared/types';
+import type { PriceResearch, ProductStatus } from '../../../../shared/types';
 import { ConflictError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
 import { presentListing } from '../../../application/dto/presenters';
+
+const RESEARCH_CHANGED = 'Price research changed since you opened it. Reload and try again.';
+
+// The validated PUT body: the editable research plus the updatedAt the client's form was built from.
+type PriceResearchPutBody = Pick<PriceResearch, 'retailPrice' | 'retailCurrency' | 'retailSource' | 'retailCheckedAt' | 'comparables'> & {
+  baseUpdatedAt?: string | null;
+};
 
 function routeParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
@@ -203,9 +210,13 @@ export class ProductController {
       const workspaceId = req.user!.workspaceId!;
       await this.requireProduct(productId, workspaceId);
       const repo = this.requirePriceResearchRepo();
+      const { baseUpdatedAt, ...body } = req.body as PriceResearchPutBody;
       const stored = await repo.findByProduct(workspaceId, productId);
-      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], req.body.comparables, stored?.dismissedUrls ?? []);
-      ok(res, await repo.upsert(workspaceId, { ...req.body, productId, dismissedUrls }));
+      if (researchChangedSince(stored?.updatedAt ?? null, baseUpdatedAt)) throw new ConflictError(RESEARCH_CHANGED);
+      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], body.comparables, stored?.dismissedUrls ?? []);
+      const saved = await repo.upsert(workspaceId, { ...body, productId, dismissedUrls }, baseUpdatedAt);
+      if (!saved) throw new ConflictError(RESEARCH_CHANGED);
+      ok(res, saved);
     } catch (error) { next(error); }
   };
 

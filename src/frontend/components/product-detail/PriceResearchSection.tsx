@@ -288,7 +288,7 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
           )}
           <PriceAnchors productId={productId} research={research} currency={currency} listingCurrency={listingCurrency} />
           <PriceResearchEditor
-            key={`${productId}:${research?.updatedAt ?? 'none'}:${research?.lastAttemptAt ?? ''}`}
+            key={`${productId}:${research?.updatedAt ?? 'none'}`}
             productId={productId}
             research={research}
             currency={currency}

@@ -159,6 +159,22 @@ public class PriceResearchTest extends BaseTest {
             "https://evil.example/allegro.pl", "auto", "substitute_new", "2026-11-20"))));
   }
 
+  // A form opened before another save (or an analysis) must not overwrite what that save stored.
+  @Test
+  public void staleBaseUpdatedAtIs409() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    PriceResearchPojo research = PriceResearchPojo.sample();
+    priceResearchSteps.savePriceResearch(account, productId, research);
+    String openedAt = priceResearchSteps.priceResearchUpdatedAt(account, productId);
+    priceResearchSteps.verify().isSaved(
+        priceResearchSteps.savePriceResearchFrom(account, productId, research.withRetailPrice(450.0), openedAt));
+    priceResearchSteps.verify().isStale(
+        priceResearchSteps.savePriceResearchFrom(account, productId, research.withRetailPrice(400.0), openedAt));
+    priceResearchSteps.verify().holds(priceResearchSteps.getPriceResearch(account, productId),
+        research.withRetailPrice(450.0));
+  }
+
   @Test
   public void dismissedUrlsInBodyIs400() {
     AccountPojo account = authSteps.registerNewAccount();
