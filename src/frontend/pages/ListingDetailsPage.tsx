@@ -105,7 +105,6 @@ import { ConversationsSection } from '../components/product-detail/Conversations
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 import { RevivalDialog } from '../components/product-detail/RevivalDialog.js';
 import {
-  PriceResearchSection,
   ProductPriceDiscount,
   usePriceResearchView,
 } from '../components/product-detail/PriceResearchSection.js';
@@ -113,6 +112,7 @@ import { runProgressText } from '../components/product-detail/priceResearchModel
 import { HermesCard } from '../components/product-detail/hermes/HermesCard.js';
 import { HermesDrawer } from '../components/product-detail/hermes/HermesDrawer.js';
 import { ChecksTab } from '../components/product-detail/hermes/ChecksTab.js';
+import { PricesTabContainer } from '../components/product-detail/hermes/PricesTab.js';
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
 import { hermesCardState } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
@@ -687,7 +687,8 @@ const ListingDetailsPage: React.FC = () => {
   const [runHermes, { isLoading: startingRun }] = useRunHermes();
   const [approveEvent, { isLoading: settingPrice }] = useApproveHermesEvent();
   const verdictView = useProductVerdict(productId).currentData;
-  const priceResearch = usePriceResearchView(productId).currentData ?? null;
+  const priceResearchQuery = usePriceResearchView(productId);
+  const priceResearch = priceResearchQuery.currentData ?? null;
   const analyzing = startingRun || Boolean(verdictView?.active);
   const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
@@ -1392,11 +1393,14 @@ const ListingDetailsPage: React.FC = () => {
         title={`Hermes · ${p.name}`}
       >
         {shownDrawerTab === 'prices' && (
-          <PriceResearchSection
+          <PricesTabContainer
             productId={p.id}
-            currentPrice={p.sellingPrice}
+            view={priceResearchQuery.currentData}
+            error={priceResearchQuery.error}
+            refetch={priceResearchQuery.refetch}
             currency={currency}
             listingCurrency={primaryListing?.currency ?? null}
+            onAnalyze={() => void handleAnalyzeWithHermes()}
           />
         )}
         {shownDrawerTab === 'checks' && (
