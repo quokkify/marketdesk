@@ -62,6 +62,8 @@ export class RecordedResearchRun {
     run: { id: string; workspaceId: string; productId: string; trigger: RunTrigger },
     signal: AbortSignal,
     queuedRunId?: string,
+    // Called with the id of a run recorded here, before it executes.
+    onQueued?: (runId: string) => Promise<void>,
   ): Promise<RecordedRun | { kind: 'active' }> {
     if (queuedRunId) {
       const claimed = await this.execute(queuedRunId, signal);
@@ -69,6 +71,7 @@ export class RecordedResearchRun {
     }
     const queued = await this.deps.runs.insertQueued({ ...run, queuedAt: this.deps.now().toISOString() });
     if (!queued) return { kind: 'active' };
+    await onQueued?.(queued.id);
     return this.execute(queued.id, signal);
   }
 

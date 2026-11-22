@@ -31,7 +31,8 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
     if (this.rows.some((r) => r.status === 'queued' || r.status === 'running')) return null;
     const row: SaleVerdict = {
       id: run.id, productId: run.productId, listingId: null, graphVersion: run.graphVersion, scope: run.scope,
-      status: 'queued', overall: null, checks: {}, createdAt: run.queuedAt, completedAt: null,
+      status: 'queued', overall: null, checks: {}, researchRunId: null, errorCode: null, createdAt: run.queuedAt,
+      completedAt: null,
     };
     this.rows.push(row);
     return row;
@@ -53,6 +54,10 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
     return true;
   }
   async setListing(): Promise<void> {}
+  async setResearchRun(runId: string, researchRunId: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === runId);
+    if (row) row.researchRunId = researchRunId;
+  }
   async findLatestCompleted(): Promise<SaleVerdict | null> {
     return this.rows.filter((r) => r.status === 'completed').pop() ?? null;
   }
@@ -113,6 +118,14 @@ describe('SaleVerdictRuns', () => {
     await expect(researchRuns.findActive(WS, PID)).resolves.toMatchObject({
       id: 'run-2', status: 'queued', trigger: 'manual', queuedAt: NOW.toISOString(),
     });
+  });
+
+  it('links the verdict run to the forced research run it queued', async () => {
+    const { runs, verdicts } = setup();
+
+    await runs.request(WS, PID, ['price'], 'manual', { forceResearch: true });
+
+    await expect(verdicts.findActive()).resolves.toMatchObject({ id: 'run-1', researchRunId: 'run-2' });
   });
 
   it('records no research run for a request that does not force research', async () => {
@@ -208,7 +221,7 @@ describe('SaleVerdictRuns', () => {
 
   const stuck = (status: SaleVerdict['status'], queuedAgoMs: number): SaleVerdict => ({
     id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status,
-    overall: null, checks: {}, createdAt: new Date(NOW.getTime() - queuedAgoMs).toISOString(), completedAt: null,
+    overall: null, checks: {}, researchRunId: null, errorCode: null, createdAt: new Date(NOW.getTime() - queuedAgoMs).toISOString(), completedAt: null,
   });
   const MIN = 60 * 1000;
 

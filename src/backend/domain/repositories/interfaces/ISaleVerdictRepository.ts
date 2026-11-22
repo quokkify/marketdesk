@@ -29,6 +29,7 @@ export interface ISaleVerdictRepository {
   // queued → running for this run only; null when the run is no longer queued.
   claim(runId: string, startedAt: string, leaseUntil: string): Promise<SaleVerdict | null>;
   setListing(runId: string, listingId: string | null): Promise<void>;
+  setResearchRun(runId: string, researchRunId: string): Promise<void>;
   // queued or running → completed; false when the run already left those states.
   complete(runId: string, fields: CompletedVerdictFields): Promise<boolean>;
   // queued or running → failed; false when the run already left those states.

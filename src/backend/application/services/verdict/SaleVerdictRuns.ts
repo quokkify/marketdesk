@@ -187,6 +187,7 @@ export class SaleVerdictRuns {
       }
     }
     try {
+      if (researchRunId) await this.deps.verdicts.setResearchRun(run.id, researchRunId);
       await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch, researchRunId });
     } catch (error) {
       if (researchRunId) {

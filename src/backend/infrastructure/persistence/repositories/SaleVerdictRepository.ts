@@ -17,7 +17,7 @@ import type {
 const ISO_INSTANT = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 const iso = (column: string): string => `to_char(${column}, ${ISO_INSTANT}) AS ${column}`;
 const UTC = (param: string): string => `(${param}::timestamptz AT TIME ZONE 'UTC')`;
-const COLUMNS = `id, product_id, listing_id, graph_version, scope, status, overall, checks,
+const COLUMNS = `id, product_id, listing_id, graph_version, scope, status, overall, checks, error_code, research_run_id,
   ${iso('queued_at')}, ${iso('completed_at')}`;
 
 interface VerdictRow {
@@ -29,6 +29,8 @@ interface VerdictRow {
   status: VerdictRunStatus;
   overall: VerdictOverall | null;
   checks: Partial<Record<VerdictCheckName, VerdictCheck>>;
+  error_code: string | null;
+  research_run_id: string | null;
   queued_at: string;
   completed_at: string | null;
 }
@@ -43,6 +45,8 @@ function toVerdict(row: VerdictRow): SaleVerdict {
     status: row.status,
     overall: row.overall,
     checks: row.checks,
+    researchRunId: row.research_run_id,
+    errorCode: row.error_code,
     createdAt: row.queued_at,
     completedAt: row.completed_at,
   };
@@ -94,6 +98,14 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     await query(
       `UPDATE product_sale_verdicts SET listing_id = $2 WHERE id = $1`,
       [runId, listingId],
+      this.queryClient,
+    );
+  }
+
+  async setResearchRun(runId: string, researchRunId: string): Promise<void> {
+    await query(
+      `UPDATE product_sale_verdicts SET research_run_id = $2 WHERE id = $1`,
+      [runId, researchRunId],
       this.queryClient,
     );
   }

@@ -29,6 +29,21 @@ describe('RecordedResearchRun.start', () => {
     expect(runs.runs.map((r) => r.id)).toEqual(['new']);
   });
 
+  it('reports the id of a run it records, before the run executes, and not for a given queued run', async () => {
+    const { runs, recorded } = setup();
+    await runs.insertQueued({ ...NEW_RUN, id: 'queued-earlier', queuedAt: NOW.toISOString() });
+    const seen: Array<[string, string | undefined]> = [];
+    const onQueued = async (id: string) => {
+      seen.push([id, runs.runs.find((r) => r.id === id)?.status]);
+    };
+
+    await recorded.start(NEW_RUN, new AbortController().signal, 'queued-earlier', onQueued);
+    expect(seen).toEqual([]);
+
+    await recorded.start(NEW_RUN, new AbortController().signal, undefined, onQueued);
+    expect(seen).toEqual([['new', 'queued']]);
+  });
+
   it('executes the run queued at request time instead of inserting another', async () => {
     const { runs, recorded } = setup();
     await runs.insertQueued({ ...NEW_RUN, id: 'queued-earlier', queuedAt: NOW.toISOString() });

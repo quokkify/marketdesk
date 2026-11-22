@@ -536,6 +536,7 @@ CREATE TABLE IF NOT EXISTS product_sale_verdicts (
   overall VARCHAR(20),
   checks JSONB NOT NULL DEFAULT '{}'::jsonb,
   error_code VARCHAR(60),
+  research_run_id UUID,
   queued_at TIMESTAMP NOT NULL,
   started_at TIMESTAMP,
   completed_at TIMESTAMP,

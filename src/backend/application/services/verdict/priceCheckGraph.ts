@@ -10,6 +10,7 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import type { StoredPriceEstimate, VerdictCheck } from '../../../../shared/types';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
+import type { ISaleVerdictRepository } from '../../../domain/repositories/interfaces/ISaleVerdictRepository';
 import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
 import { researchDue } from '../../../domain/services/researchSchedule';
 import { checkFailed, priceCheckFromEstimate, type PriceCheckInput } from '../../../domain/services/saleVerdictRules';
@@ -37,6 +38,8 @@ export interface PriceCheckDeps {
   // Its latest() also writes a stuck active run as failed, which frees the product.
   runs: Pick<IPriceResearchRuns, 'latest'>;
   recorded: Pick<RecordedResearchRun, 'start'>;
+  // Links the verdict run to the research run recorded for it.
+  verdicts: Pick<ISaleVerdictRepository, 'setResearchRun'>;
   // Whether a research profile is configured.
   configured: boolean;
   newId: () => string;
@@ -78,6 +81,7 @@ export function buildPriceCheck(deps: PriceCheckDeps): CheckGraph {
         },
         ctx.signal,
         ctx.options.researchRunId,
+        ctx.runId ? (researchRunId) => deps.verdicts.setResearchRun(ctx.runId as string, researchRunId) : undefined,
       );
       // Another run holds the product (a research job, or one queued just before this).
       if (recorded.kind !== 'finished') return { input: { kind: 'research_running' } };
