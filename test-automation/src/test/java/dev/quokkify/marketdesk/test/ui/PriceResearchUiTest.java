@@ -1,10 +1,10 @@
 package dev.quokkify.marketdesk.test.ui;
 
+import java.util.List;
+
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
-
-import java.util.List;
 
 import org.testng.annotations.Test;
 
