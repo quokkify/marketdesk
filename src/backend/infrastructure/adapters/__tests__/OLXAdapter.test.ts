@@ -115,7 +115,7 @@ describe('OLXAdapter', () => {
   it('sends relative upload image URLs as absolute URLs on the public base URL', async () => {
     const bodies: unknown[] = [];
     const http = mockClient((config) => {
-      bodies.push(config.body);
+      if (config.method !== 'GET') bodies.push(config.body);
       return config.method === 'POST'
         ? { status: 201, data: { id: 123, status: 'active' } }
         : { status: 204, data: {} };
@@ -856,11 +856,54 @@ describe('OLXAdapter', () => {
       images: [{ url: 'https://img/1.jpg' }, { url: 'https://img/2.jpg' }],
       location: { city_id: 123, district_id: 456 },
       contact: { name: 'Seller', phone: '000000000' },
-      attributes: [
-        { code: 'state', value: 'used' },
-        { code: 'delivery', value: 'inpost-s' },
-      ],
+      attributes: [{ code: 'state', value: 'used' }],
     });
+  });
+
+  // Regression guard: PUT replaces the whole advert, so an update without
+  // ad_delivery silently switched Przesyłka OLX off on a revived prod advert.
+  it('keeps the advert OLX delivery packages when updating it', async () => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        if (config.method === 'GET') {
+          return {
+            status: 200,
+            data: { data: { id: 'olx-1', status: 'active', ad_delivery: { delivery_package_ids: ['pkg-s-1', 'pkg-s-2'] } } },
+          };
+        }
+        return { status: 204, data: {} };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      'GET https://www.olx.pl/api/partner/adverts/olx-1',
+      'PUT https://www.olx.pl/api/partner/adverts/olx-1',
+    ]);
+    const body = requests[1].body as Record<string, unknown>;
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1', 'pkg-s-2'] });
+    expect(body.attributes).toEqual([{ code: 'state', value: 'used' }]);
+  });
+
+  it('sends no OLX delivery packages when the advert has none', async () => {
+    let put: HttpRequestConfig | undefined;
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        if (config.method === 'PUT') put = config;
+        return { status: 200, data: { id: 'olx-1', status: 'active', ad_delivery: { delivery_package_ids: [] } } };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    expect(put?.body).not.toHaveProperty('ad_delivery');
   });
 
   it('retries retryable rate-limit failures then succeeds (idempotent updateListing)', async () => {
@@ -875,7 +918,8 @@ describe('OLXAdapter', () => {
     await expect(
       adapter.updateListing('olx-ok', { price: 10 }, publishInput),
     ).resolves.toBeUndefined();
-    expect(calls).toBe(3);
+    // Two rate-limited attempts, then the delivery read and the PUT.
+    expect(calls).toBe(4);
   });
 
   it('gives up after exhausting retries and throws the rate-limit error (updateListing)', async () => {

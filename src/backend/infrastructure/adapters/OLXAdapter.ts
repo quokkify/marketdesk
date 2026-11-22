@@ -123,6 +123,8 @@ interface OlxAdvertResponse {
   photos?: Array<{ url?: string | null }>;
   images?: Array<{ url?: string | null }>;
   updated_at?: string | null;
+  // Przesyłka OLX packages chosen by the seller; Poland only, see the Advert schema.
+  ad_delivery?: { delivery_package_ids?: unknown } | null;
   metrics?: { views?: unknown; favorites?: unknown; favourites?: unknown; watchers?: unknown; messages?: unknown };
   statistics?: Record<string, unknown>;
   stats?: Record<string, unknown>;
@@ -186,6 +188,8 @@ interface OlxResponseEnvelope<T> {
 export class OLXAdapter extends BaseMarketplaceAdapter {
   private readonly baseUrl: string;
   private readonly publicBaseUrl: string | undefined;
+  // Sandbox adverts never carry delivery packages, and every stub read grows their metrics.
+  private readonly usesStubTransport: boolean;
 
   constructor(
     http?: MarketplaceHttpClient,
@@ -199,6 +203,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     super(http ?? new StubMarketplaceHttpClient(OLXAdapter.stubResponder), 'olx', options);
     this.baseUrl = (config.baseUrl ?? OLX_PARTNER_BASE_URL).replace(/\/$/, '');
     this.publicBaseUrl = config.publicBaseUrl?.replace(/\/+$/, '');
+    this.usesStubTransport = !http;
   }
 
   protected async doPublish(input: ListingPublishInput): Promise<PublishResult> {
@@ -250,7 +255,10 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const updated = { ...current, ...changes };
     const categoryId = this.resolvePublishCategory(updated);
     this.assertPublishDetails(categoryId);
-    const body = this.buildAdvertPayload(updated, categoryId);
+    const body = this.buildAdvertPayload(updated, categoryId, { configuredDelivery: false });
+    // PUT replaces the whole advert: without ad_delivery OLX drops the seller's Przesyłka OLX packages.
+    const packageIds = await this.fetchDeliveryPackageIds(externalListingId);
+    if (packageIds.length > 0) body.ad_delivery = { delivery_package_ids: packageIds };
     await this.http.request({
       method: 'PUT',
       url: `${this.baseUrl}/adverts/${externalListingId}`,
@@ -258,9 +266,24 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     });
   }
 
+  private async fetchDeliveryPackageIds(externalListingId: string): Promise<Array<string | number>> {
+    if (this.usesStubTransport) return [];
+    const res = await this.http.request<unknown>({
+      method: 'GET',
+      url: `${this.baseUrl}/adverts/${externalListingId}`,
+    });
+    if (!res.data || typeof res.data !== 'object') return [];
+    const advert = this.unwrapAdvert(res.data as OlxAdvertResponse | OlxResponseEnvelope<OlxAdvertResponse>);
+    const ids = advert?.ad_delivery?.delivery_package_ids;
+    return Array.isArray(ids)
+      ? ids.filter((id): id is string | number => (typeof id === 'string' && id !== '') || typeof id === 'number')
+      : [];
+  }
+
   private buildAdvertPayload(
     input: ListingPublishInput,
     categoryId: number,
+    { configuredDelivery = true }: { configuredDelivery?: boolean } = {},
   ): Record<string, unknown> {
     const body: Record<string, unknown> = {
       title: input.productName,
@@ -293,7 +316,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         value: this.mapCondition(input.condition),
       });
     }
-    if (this.config.deliveryAttributeCode && this.config.deliveryOptionCode) {
+    if (configuredDelivery && this.config.deliveryAttributeCode && this.config.deliveryOptionCode) {
       attributes.push({
         code: this.config.deliveryAttributeCode,
         value: this.config.deliveryOptionCode,
