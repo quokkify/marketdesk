@@ -491,6 +491,10 @@ CREATE TABLE IF NOT EXISTS product_price_research (
   retail_source VARCHAR(200),
   retail_checked_at DATE,
   comparables JSONB NOT NULL DEFAULT '[]'::jsonb,
+  specs VARCHAR(300),
+  dismissed_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  last_attempt_at TIMESTAMP,
+  last_estimate JSONB,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -1,6 +1,7 @@
 import type { ComparableCandidate, PriceEstimate, PriceResearch } from '@shared/types';
 import {
   discountLine,
+  MAX_COMPARABLES,
   discountVsNew,
   estimateLines,
   mergeFoundComparables,
@@ -22,6 +23,7 @@ const research: PriceResearch = {
     { price: 250, note: '' },
     { price: 285, note: 'boxed' },
   ],
+  specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
   updatedAt: '2026-11-21T10:00:00.000Z',
 };
 
@@ -89,7 +91,7 @@ describe('priceResearchModel', () => {
     expect(errorsOf({ comparables: [{ price: '10000000000', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '-5', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '5', note: 'n'.repeat(301) }] })).toHaveProperty(['comparables.0.note']);
-    expect(errorsOf({ comparables: Array.from({ length: 11 }, () => ({ price: '5', note: '' })) })).toHaveProperty('comparables');
+    expect(errorsOf({ comparables: Array.from({ length: MAX_COMPARABLES + 1 }, () => ({ price: '5', note: '' })) })).toHaveProperty('comparables');
   });
 
   it('lists the estimate with the basis of every figure', () => {
@@ -143,9 +145,9 @@ describe('comparables found on OLX', () => {
   });
 
   it('capBlocksOverflow', () => {
-    expect(selectionFits({ ...emptyForm, comparables: rows(9) }, 3)).toBe(false);
-    expect(selectionFits({ ...emptyForm, comparables: rows(7) }, 3)).toBe(true);
-    expect(selectionFits({ ...emptyForm, comparables: [...rows(7), { price: '', note: '' }] }, 3)).toBe(true);
+    expect(selectionFits({ ...emptyForm, comparables: rows(MAX_COMPARABLES - 1) }, 3)).toBe(false);
+    expect(selectionFits({ ...emptyForm, comparables: rows(MAX_COMPARABLES - 3) }, 3)).toBe(true);
+    expect(selectionFits({ ...emptyForm, comparables: [...rows(MAX_COMPARABLES - 3), { price: '', note: '' }] }, 3)).toBe(true);
   });
 
   it('sourceNoteCountsWebRows', () => {

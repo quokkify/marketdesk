@@ -1,5 +1,6 @@
 package dev.quokkify.marketdesk.test.api;
 
+import java.util.List;
 import java.util.UUID;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
@@ -85,7 +86,7 @@ public class PriceResearchTest extends BaseTest {
   }
 
   @Test
-  public void elevenComparablesAreRejected() {
+  public void thirtyOneComparablesAreRejected() {
     AccountPojo account = authSteps.registerNewAccount();
     String productId = priceResearchSteps.createProduct(account);
     priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
@@ -122,5 +123,47 @@ public class PriceResearchTest extends BaseTest {
     priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
     priceResearchSteps.verify().proposesNoPriceChange(
         priceResearchSteps.runProductAnalysis(account, productListing.productId()));
+  }
+
+  private static final String ALLEGRO_OFFER = "https://allegro.pl/oferta/projektor-123";
+
+  @Test
+  public void putAcceptsAutoRowWithTier() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    PriceResearchPojo.Comparable comparable = new PriceResearchPojo.Comparable(300.0, "Projector",
+        ALLEGRO_OFFER + "?bi_s=x", "auto", "substitute_new", "2026-11-20");
+    priceResearchSteps.verify().isSaved(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withComparable(comparable)));
+    priceResearchSteps.verify().keepsAutoComparable(priceResearchSteps.getPriceResearch(account, productId), comparable);
+  }
+
+  @Test
+  public void deletingAutoRowRecordsDismissal() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    PriceResearchPojo.Comparable comparable = new PriceResearchPojo.Comparable(300.0, "Projector",
+        ALLEGRO_OFFER + "?bi_s=x", "auto", "substitute_new", "2026-11-20");
+    PriceResearchPojo research = PriceResearchPojo.sample();
+    priceResearchSteps.savePriceResearch(account, productId, research.withComparable(comparable));
+    priceResearchSteps.savePriceResearch(account, productId, research);
+    priceResearchSteps.verify().hasDismissed(priceResearchSteps.getPriceResearch(account, productId), ALLEGRO_OFFER);
+  }
+
+  @Test
+  public void autoRowOnUnknownHostIs400() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withComparable(new PriceResearchPojo.Comparable(300.0, "Projector",
+            "https://evil.example/allegro.pl", "auto", "substitute_new", "2026-11-20"))));
+  }
+
+  @Test
+  public void dismissedUrlsInBodyIs400() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isInvalid(priceResearchSteps.savePriceResearch(account, productId,
+        PriceResearchPojo.sample().withExtraField("dismissedUrls", List.of(ALLEGRO_OFFER))));
   }
 }

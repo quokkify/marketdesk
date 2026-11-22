@@ -3,6 +3,7 @@
 // service, and translates the Result via ResponseFormatter. No business logic here.
 
 import type { Request, Response, NextFunction } from 'express';
+import { dismissedAfterEdit } from '../../../domain/services/priceResearchEdit';
 import type { ProductApplicationService } from '../../../application/services/ProductApplicationService';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
@@ -201,7 +202,10 @@ export class ProductController {
       const productId = routeParam(req.params.id);
       const workspaceId = req.user!.workspaceId!;
       await this.requireProduct(productId, workspaceId);
-      ok(res, await this.requirePriceResearchRepo().upsert(workspaceId, { ...req.body, productId }));
+      const repo = this.requirePriceResearchRepo();
+      const stored = await repo.findByProduct(workspaceId, productId);
+      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], req.body.comparables, stored?.dismissedUrls ?? []);
+      ok(res, await repo.upsert(workspaceId, { ...req.body, productId, dismissedUrls }));
     } catch (error) { next(error); }
   };
 

@@ -1,5 +1,7 @@
 package dev.quokkify.marketdesk.service;
 
+import java.util.Map;
+
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.util.JsonConverter;
 
@@ -22,6 +24,10 @@ public class PriceResearchService extends MarketDeskApiService {
 
   // Keeps nulls: a null retail field clears the stored value.
   public ValidatableResponse putPriceResearch(String token, String productId, PriceResearchPojo body) {
+    return put(authorized(token), PRICE_RESEARCH.formatted(productId), JsonConverter.toJson(body));
+  }
+
+  public ValidatableResponse putPriceResearch(String token, String productId, Map<String, Object> body) {
     return put(authorized(token), PRICE_RESEARCH.formatted(productId), JsonConverter.toJson(body));
   }
 

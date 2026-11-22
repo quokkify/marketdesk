@@ -1,0 +1,27 @@
+import type { PriceComparable } from '../../../shared/types';
+import { normalizeAnchorUrl } from '../../../shared/anchorUrl';
+
+function autoUrls(rows: PriceComparable[]): Set<string> {
+  const urls = new Set<string>();
+  for (const row of rows) {
+    if (row.source !== 'auto' || !row.url) continue;
+    const normalized = normalizeAnchorUrl(row.url);
+    if (normalized !== null) urls.add(normalized);
+  }
+  return urls;
+}
+
+// An auto row the seller removed must not come back on the next search: its URL joins the dismissed list.
+// Only auto rows count; manual and web rows are the seller's own and never dismiss anything.
+export function dismissedAfterEdit(
+  before: PriceComparable[],
+  after: PriceComparable[],
+  dismissed: string[],
+): string[] {
+  const kept = autoUrls(after);
+  const result = [...dismissed];
+  for (const url of autoUrls(before)) {
+    if (!kept.has(url) && !result.includes(url)) result.push(url);
+  }
+  return result;
+}

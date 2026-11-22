@@ -44,6 +44,7 @@ function research(overrides: Partial<PriceResearch> = {}): PriceResearch {
     retailSource: 'x-kom',
     retailCheckedAt: '2026-11-20',
     comparables: [{ price: 350, note: 'sold fast' }],
+    specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
     updatedAt: '2026-11-20T10:00:00.000Z',
     ...overrides,
   };

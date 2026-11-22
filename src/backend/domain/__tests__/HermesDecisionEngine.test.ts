@@ -246,6 +246,7 @@ describe('HermesDecisionEngine.run', () => {
       retailSource: 'MediaMarkt',
       retailCheckedAt: '2026-11-21',
       comparables: [{ price: 250, note: 'Szczecin, used half a year' }],
+      specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
       updatedAt: '2026-11-21T00:00:00.000Z',
     };
 
@@ -811,6 +812,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       retailSource: 'MediaMarkt',
       retailCheckedAt: '2026-11-21',
       comparables: [],
+      specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
       updatedAt: '2026-11-21T00:00:00.000Z',
       ...overrides,
     };

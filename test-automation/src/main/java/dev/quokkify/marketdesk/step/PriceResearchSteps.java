@@ -1,5 +1,7 @@
 package dev.quokkify.marketdesk.step;
 
+import java.util.Map;
+
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
@@ -40,6 +42,11 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
   @Step("Save price research of product {productId}")
   public ValidatableResponse savePriceResearch(AccountPojo account, String productId, PriceResearchPojo research) {
     return service.putPriceResearch(account.token(), productId, research);
+  }
+
+  @Step("Save price research of product {productId} with an extra field")
+  public ValidatableResponse savePriceResearch(AccountPojo account, String productId, Map<String, Object> body) {
+    return service.putPriceResearch(account.token(), productId, body);
   }
 
   @Step("Run the AI analysis of product {productId}")

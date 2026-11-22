@@ -4,7 +4,7 @@ import type { ComparableCandidate, PriceComparable, PriceComparableSource, Price
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 
-export const MAX_COMPARABLES = 10;
+export const MAX_COMPARABLES = 30;
 export const MAX_SOURCE_LENGTH = 200;
 export const MAX_NOTE_LENGTH = 300;
 export const MAX_URL_LENGTH = 500;

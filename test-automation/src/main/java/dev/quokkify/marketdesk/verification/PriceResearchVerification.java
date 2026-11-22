@@ -51,6 +51,22 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("Price research keeps the tier and date of the auto comparable")
+  public PriceResearchVerification keepsAutoComparable(ValidatableResponse response, PriceResearchPojo.Comparable expected) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.comparables[0].source", Matchers.equalTo("auto"));
+    response.body("data.comparables[0].tier", Matchers.equalTo(expected.tier()));
+    response.body("data.comparables[0].seenAt", Matchers.equalTo(expected.seenAt()));
+    return self();
+  }
+
+  @Step("Price research lists the dismissed link {url}")
+  public PriceResearchVerification hasDismissed(ValidatableResponse response, String url) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.dismissedUrls", Matchers.contains(url));
+    return self();
+  }
+
   @Step("Price research has no retail anchor")
   public PriceResearchVerification hasNoRetailAnchor(ValidatableResponse response) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
