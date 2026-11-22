@@ -93,6 +93,8 @@ export interface AppDeps {
   productRepo: IProductRepository;
   priceResearchRepo?: IPriceResearchRepository;
   priceResearchRuns?: IPriceResearchRuns;
+  // Whether a research profile is configured (POST /api/products/:id/price-research/refresh).
+  researchConfigured?: boolean;
   saleVerdictRuns?: SaleVerdictRuns;
   productStatsService?: ProductStatsService;
   listingRepo: IListingRepository;
@@ -243,6 +245,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.priceResearchRuns,
       deps.productStatsService,
       deps.saleVerdictRuns,
+      deps.researchConfigured,
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,

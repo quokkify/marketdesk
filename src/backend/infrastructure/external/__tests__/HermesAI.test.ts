@@ -5,11 +5,9 @@ import {
   loadHermesConfig,
 } from '../HermesAI';
 import { Product } from '../../../domain/entities/Product';
-import { Listing } from '../../../domain/entities/Listing';
 import { Marketplace } from '../../../domain/entities/Marketplace';
 import { Money } from '../../../domain/valueObjects/Money';
 import { SELLER_DATA_RULE, sellerDataBlock } from '../sellerData';
-import type { PriceSuggestionContext } from '../../../domain/ports/IAIProvider';
 
 function money(amount: number): Money {
   const r = Money.of(amount, 'PLN');
@@ -30,17 +28,6 @@ function buildProduct(): Product {
     category: 'clothing',
     images: ['https://img/a.jpg'],
     tags: ['retro', 'sneakers'],
-  });
-  if (r.isErr()) throw r.error;
-  return r.value;
-}
-
-function buildListing(): Listing {
-  const r = Listing.create({
-    id: 'l1',
-    productId: 'p1',
-    marketplaceId: 'm1',
-    price: money(120),
   });
   if (r.isErr()) throw r.error;
   return r.value;
@@ -73,56 +60,6 @@ function parseBlock(prompt: string): Record<string, unknown> {
 }
 
 describe('HermesAI (IAIProvider)', () => {
-  it('suggestPrice returns the typed PriceSuggestion shape and passes a JSON schema', async () => {
-    const { client, calls } = fakeClient(
-      JSON.stringify({
-        suggestedPrice: 99.5,
-        reasoning: 'High views but low conversion — a small drop should convert.',
-        confidence: 'high',
-      })
-    );
-    const ai = new HermesAI(client);
-    const context: PriceSuggestionContext = {
-      listing: buildListing(),
-      recentViews: 300,
-      conversionRate: 0.01,
-      competitorPrice: 95,
-    };
-
-    const result = await ai.suggestPrice(context);
-
-    expect(result.suggestedPrice).toBe(99.5);
-    expect(result.confidence).toBe('high');
-    expect(result.reasoning).toContain('convert');
-    expect(calls[0].jsonSchema).toBeDefined();
-  });
-
-  it('suggestPrice falls back to current price / low confidence on unparseable output', async () => {
-    const { client } = fakeClient('not json at all');
-    const ai = new HermesAI(client);
-    const result = await ai.suggestPrice({
-      listing: buildListing(),
-      recentViews: 10,
-      conversionRate: 0.2,
-    });
-    expect(result.suggestedPrice).toBe(120); // current listing price
-    expect(result.confidence).toBe('low');
-  });
-
-  it('suggestPrice tolerates JSON wrapped in a fenced code block', async () => {
-    const { client } = fakeClient(
-      '```json\n{"suggestedPrice": 110, "reasoning": "ok", "confidence": "medium"}\n```'
-    );
-    const ai = new HermesAI(client);
-    const result = await ai.suggestPrice({
-      listing: buildListing(),
-      recentViews: 5,
-      conversionRate: 0.05,
-    });
-    expect(result.suggestedPrice).toBe(110);
-    expect(result.confidence).toBe('medium');
-  });
-
   it('generateTitle returns a cleaned single-line title and includes marketplace context', async () => {
     const { client, calls } = fakeClient('  "Retro Sneakers — Classic Lightly Worn"  ');
     const ai = new HermesAI(client);

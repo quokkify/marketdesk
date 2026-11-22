@@ -135,10 +135,6 @@ export const productRecheckSchema = z.object({
   listingId: z.string().trim().min(1, 'listingId is required'),
 }).strict();
 
-export const productImprovementSchema = z.object({
-  listingId: z.string().trim().min(1).optional(),
-}).strict();
-
 const MAX_COMPARABLES = 30;
 // Largest amount a NUMERIC(12,2) column holds.
 const MAX_RESEARCH_PRICE = 9_999_999_999.99;

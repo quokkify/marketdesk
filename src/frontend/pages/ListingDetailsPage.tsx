@@ -31,7 +31,6 @@ import type {
   Product,
   ProductCategoryProvenance,
   ProductRecheckResult,
-  ProductImprovementSuggestions,
 } from '@shared/types';
 import type {
   HermesRunInput,
@@ -41,7 +40,6 @@ import type {
 import {
   useProduct,
   useRecheckProduct,
-  useProposeProductImprovements,
   useProductListings,
   useUpdateProduct,
   useUploadProductImage,
@@ -77,7 +75,6 @@ import { usePendingPublicationPolling } from './usePendingPublicationPolling.js'
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
-import { aiUsageLine } from '../components/hermes/aiUsageText.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
@@ -716,7 +713,6 @@ const ListingDetailsPage: React.FC = () => {
   const [uploadProductImage] = useUploadProductImage();
   const [deleteProductImage] = useDeleteProductImage();
   const [recheckProduct, { isLoading: rechecking }] = useRecheckProduct();
-  const [proposeImprovements, { isLoading: proposingImprovements }] = useProposeProductImprovements();
   const [updateListing, { isLoading: pricing }] = useUpdateListing();
   const [relistListing, { isLoading: relisting }] = useRelistListing();
   const [reactivateListing, { isLoading: reactivating }] = useReactivateListing();
@@ -733,7 +729,6 @@ const ListingDetailsPage: React.FC = () => {
 
   const [editOpen, setEditOpen] = useState(false);
   const [recheckResult, setRecheckResult] = useState<ProductRecheckResult | null>(null);
-  const [improvements, setImprovements] = useState<ProductImprovementSuggestions | null>(null);
   const [priceListing, setPriceListing] = useState<Listing | null>(null);
   const [publishCandidate, setPublishCandidate] = useState<{
     listing: Listing;
@@ -758,7 +753,6 @@ const ListingDetailsPage: React.FC = () => {
   const publicationReviewOpen = useRef(false);
   const submissionInFlight = useRef(false);
   const recheckRequestIdentity = useRef(0);
-  const improvementRequestIdentity = useRef(0);
 
   const listingItems = listings.data ?? [];
   const listingMarketplaceIds = new Set(listingItems.map((listing) => listing.marketplaceId));
@@ -899,20 +893,6 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
-  const handleProposeImprovements = async () => {
-    const requestIdentity = ++improvementRequestIdentity.current;
-    setImprovements(null);
-    try {
-      const result = await proposeImprovements({
-        productId, listingId: primaryListing?.id,
-      }).unwrap();
-      if (requestIdentity === improvementRequestIdentity.current) setImprovements(result);
-    } catch (err) {
-      if (requestIdentity !== improvementRequestIdentity.current) return;
-      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
-    }
-  };
-
   const handleAnalyzeWithHermes = async () => {
     const disabledReason = productHermesDisabledReason({
       settingsLoaded: Boolean(hermesSettings.currentData),
@@ -952,9 +932,7 @@ const ListingDetailsPage: React.FC = () => {
 
   useEffect(() => {
     recheckRequestIdentity.current += 1;
-    improvementRequestIdentity.current += 1;
     setRecheckResult(null);
-    setImprovements(null);
     setAnalysisState({ status: 'idle' });
   }, [productId, principalCacheKey]);
 
@@ -1259,13 +1237,6 @@ const ListingDetailsPage: React.FC = () => {
     : analysisState.status === 'idle'
       ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
       : analysisState.message;
-  const improvementsStale = Boolean(
-    improvements &&
-      (improvements.productId !== p.id ||
-        improvements.productUpdatedAt !== p.updatedAt ||
-        (improvements.listingUpdatedAt && improvements.listingUpdatedAt !== primaryListing?.updatedAt))
-  );
-
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
@@ -1431,11 +1402,9 @@ const ListingDetailsPage: React.FC = () => {
             analyzing={analyzing}
             activeProvider={activeProvider}
             analyzeDisabled={Boolean(analyzeDisabledReason)}
-            suggesting={proposingImprovements}
             note={hermesNote}
             noteIsError={analysisState.status === 'error'}
             onAnalyze={() => void handleAnalyzeWithHermes()}
-            onSuggest={() => void handleProposeImprovements()}
           >
             {hermesEvents.isLoading || hermesEvents.isFetching ? (
               <LoadingSkeleton lines={2} height={96} />
@@ -1465,41 +1434,6 @@ const ListingDetailsPage: React.FC = () => {
                   Category correction always uses separate audited delist and recreate reviews.
                 </Typography>
               </Stack>
-            )}
-            {improvements && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Suggested improvements</Typography>
-                {improvementsStale ? (
-                  <Alert severity="warning">The product or listing changed. Request fresh suggestions.</Alert>
-                ) : (
-                  <Stack spacing={1.5}>
-                    {improvements.copy.map((suggestion, index) => (
-                      <Box key={`${suggestion.field}-${index}`}>
-                        <Typography variant="subtitle2">{suggestion.field === 'title' ? 'Title' : 'Description'}</Typography>
-                        <Typography variant="body2">{suggestion.proposedValue}</Typography>
-                        <Typography variant="caption" color="text.secondary">{suggestion.rationale}</Typography>
-                      </Box>
-                    ))}
-                    {improvements.price && (
-                      <Box>
-                        <Typography variant="subtitle2">Suggested price: {formatMoney(improvements.price.suggestedPrice, currency)}</Typography>
-                        <Typography variant="body2">{improvements.price.reasoning}</Typography>
-                      </Box>
-                    )}
-                    {improvements.copy.length === 0 && !improvements.price && (
-                      <Typography variant="body2">No suggestions for this product.</Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary">
-                      Suggestions are for review only. Edit the product or listing to apply them.
-                    </Typography>
-                    {aiUsageLine(improvements.aiUsage) && (
-                      <Typography data-testid="ai-usage-line" variant="caption" color="text.secondary">
-                        {aiUsageLine(improvements.aiUsage)}
-                      </Typography>
-                    )}
-                  </Stack>
-                )}
-              </Box>
             )}
             <Divider />
             <PublicationReadinessSection

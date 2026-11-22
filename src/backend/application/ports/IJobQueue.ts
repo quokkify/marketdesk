@@ -89,13 +89,6 @@ export interface ConversationReplyJob {
   messageId: string;
 }
 
-// One price research graph run. Ids only: the run row holds its state.
-export interface PriceResearchJob {
-  workspaceId: string;
-  productId: string;
-  runId: string;
-}
-
 // One sale verdict run. Ids only: the run row holds its scope and state.
 export interface SaleVerdictJob {
   workspaceId: string;

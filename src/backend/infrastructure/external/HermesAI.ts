@@ -10,8 +10,6 @@ import {
   PRICE_ESTIMATE_UNUSABLE_MESSAGE,
   type IAIProvider,
   type PriceEstimateContext,
-  type PriceSuggestionContext,
-  type PriceSuggestion,
   type ListingAnalysis,
 } from '../../domain/ports/IAIProvider';
 import type { PriceEstimate } from '../../../shared/types';
@@ -110,50 +108,6 @@ export class HermesAI implements IAIProvider {
   constructor(client: AITextCompletionClient, config?: Pick<HermesAIConfig, 'maxTokens'>) {
     this.client = client;
     this.maxTokens = config?.maxTokens ?? loadHermesConfig().maxTokens;
-  }
-
-  async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
-    const { listing, recentViews, conversionRate, competitorPrice } = context;
-    const currentPrice = listing.price.amount;
-    const currency = listing.price.currency;
-
-    const prompt = [
-      'You are a pricing strategist for an online marketplace listing.',
-      `Current price: ${currentPrice} ${currency}.`,
-      `Recent views: ${recentViews}. Conversion rate: ${(conversionRate * 100).toFixed(2)}%.`,
-      competitorPrice !== undefined
-        ? `Observed competitor price: ${competitorPrice} ${currency}.`
-        : 'No competitor price observed.',
-      'Suggest an optimal price and briefly justify it. Respond as JSON with keys',
-      '"suggestedPrice" (number, same currency), "reasoning" (string),',
-      '"confidence" (one of "high", "medium", "low").',
-    ].join('\n');
-
-    const raw = await this.complete('suggestPrice', {
-      system: 'You output concise, data-driven pricing recommendations as strict JSON.',
-      prompt,
-      maxTokens: this.maxTokens,
-      jsonSchema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          suggestedPrice: { type: 'number' },
-          reasoning: { type: 'string' },
-          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-        },
-        required: ['suggestedPrice', 'reasoning', 'confidence'],
-      },
-    });
-
-    const parsed = this.parseJson(raw);
-    const suggestedPrice = this.asFiniteNumber(parsed?.suggestedPrice, currentPrice);
-    const confidence = this.asConfidence(parsed?.confidence);
-    const reasoning =
-      typeof parsed?.reasoning === 'string' && parsed.reasoning.trim()
-        ? parsed.reasoning.trim()
-        : 'No reasoning provided by Hermes.';
-
-    return { suggestedPrice, reasoning, confidence };
   }
 
   async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
@@ -298,7 +252,7 @@ export class HermesAI implements IAIProvider {
     return fallback;
   }
 
-  private asConfidence(value: unknown): PriceSuggestion['confidence'] {
+  private asConfidence(value: unknown): 'high' | 'medium' | 'low' {
     return value === 'high' || value === 'medium' || value === 'low' ? value : 'low';
   }
 

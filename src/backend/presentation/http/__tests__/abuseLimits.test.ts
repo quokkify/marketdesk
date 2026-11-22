@@ -55,7 +55,6 @@ describe('AI rate limiter (regression guard)', () => {
   const aiCalls: Array<[string, string]> = [
     ['post', '/products/ai-draft'],
     ['post', '/products/p-1/recheck'],
-    ['post', '/products/p-1/improvements'],
     ['post', '/products/p-1/price-research/refresh'],
     ['post', '/hermes/products/p-1/run'],
   ];
@@ -82,7 +81,7 @@ describe('AI rate limiter (regression guard)', () => {
 
     await request(app).post('/products/ai-draft').set('x-workspace', 'ws-a').send({});
     await request(app).post('/hermes/products/p-1/run').set('x-workspace', 'ws-a').send({});
-    const third = await request(app).post('/products/p-1/improvements').set('x-workspace', 'ws-a').send({});
+    const third = await request(app).post('/products/p-1/recheck').set('x-workspace', 'ws-a').send({});
 
     expect(third.status).toBe(429);
   });

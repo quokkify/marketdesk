@@ -105,7 +105,6 @@ import { AiUsageRepository } from '../../infrastructure/persistence/repositories
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import { ConversationReplyHandler } from '../../infrastructure/jobQueue/JobHandlers/ConversationReplyHandler';
-import { PriceResearchHandler } from '../../infrastructure/jobQueue/JobHandlers/PriceResearchHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
@@ -121,7 +120,6 @@ import { buildPhotosCheck } from '../../application/services/verdict/photosCheck
 import { RecordedResearchRun } from '../../application/services/recordedResearchRun';
 import { SaleVerdictRepository } from '../../infrastructure/persistence/repositories/SaleVerdictRepository';
 import { SaleVerdictHandler } from '../../infrastructure/jobQueue/JobHandlers/SaleVerdictHandler';
-import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
 import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
@@ -130,7 +128,6 @@ import { CreateProductUseCase } from '../../application/usecases/CreateProductUs
 import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUseCase';
 import { PublishListingUseCase } from '../../application/usecases/PublishListingUseCase';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
-import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
 import { MarketplaceUpdateEnqueuer } from '../../application/services/MarketplaceUpdateEnqueuer';
 import { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
@@ -173,7 +170,6 @@ import type {
   ConversationReplyJob,
   IJobQueue,
   JobEnqueueOptions,
-  PriceResearchJob,
   SaleVerdictJob,
   PublishListingJob,
   SyncMarketplaceJob,
@@ -224,12 +220,11 @@ const CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE = 'Conversation reply run not qu
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
-const PRICE_RESEARCH_QUEUE = 'price-research';
 const SALE_VERDICT_QUEUE = 'sale-verdict';
 
 export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
   // A failed run is recorded on the run and retried by its schedule or a new request, never by the queue.
-  if (name === PRICE_RESEARCH_QUEUE || name === SALE_VERDICT_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
+  if (name === SALE_VERDICT_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -478,7 +473,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
-  const priceResearchQueue = createQueue<PriceResearchJob>(PRICE_RESEARCH_QUEUE);
   const saleVerdictQueue = createQueue<SaleVerdictJob>(SALE_VERDICT_QUEUE);
 
   // 6. Domain services.
@@ -517,19 +511,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   const priceResearchRunRepo = new PriceResearchRunRepository(pool);
   const priceResearchRuns = new PriceResearchRuns({
-    products: productRepo,
-    listings: listingRepo,
     runs: priceResearchRunRepo,
-    research: priceResearchRepo,
-    queue: priceResearchQueue,
-    configured: researchConfig !== null,
-    newId: idGenerator,
     now: () => new Date(),
-    // priceProposals is created below; the hook runs only once the container is built.
-    onExpired: async (workspaceId: string, productId: string): Promise<void> => {
-      await priceProposals.reestimateAfterResearch(workspaceId, productId, null);
-    },
-    logger: overrides.logger,
   });
   const priceEstimateService = new PriceEstimateService({
     ai: aiProvider,
@@ -538,26 +521,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     logger: overrides.logger,
   });
   const priceProposals = new PriceProposals({
-    products: productRepo,
-    listings: listingRepo,
     events: eventRepo,
     estimates: priceEstimateService,
-    runs: priceResearchRuns,
     ai: aiProvider,
     idFactory: idGenerator,
-    logger: overrides.logger,
   });
-  const hermesEngine = new HermesDecisionEngine(
-    productRepo,
-    listingRepo,
-    eventRepo,
-    eventPublisher,
-    aiProvider,
-    priceEstimateService,
-    priceResearchRuns,
-    idGenerator,
-    overrides.logger
-  );
 
   // 7. Application use cases.
   const createProductUC = new CreateProductUseCase(
@@ -577,7 +545,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     { sandboxMode: env.marketplaces.olx.adapterMode !== 'real' }
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
-  const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
   const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
     listingRepo,
     marketplaceRepo,
@@ -650,22 +617,19 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   const productAssistanceGraph = new ProductAssistanceGraph(
     productAIDraftService,
-    productRecheckService,
     productRepo,
     listingRepo,
     marketplaceRepo,
+    priceResearchRepo,
     aiProvider,
     undefined,
-    { sandboxMode: env.marketplaces.olx.adapterMode !== 'real', logger: overrides.logger }
+    { logger: overrides.logger }
   );
   const saleVerdictRepo = new SaleVerdictRepository(pool);
   const listingSeoProposals = new ListingSeoProposals({
-    products: productRepo,
-    listings: listingRepo,
     events: eventRepo,
     ai: aiProvider,
     idFactory: idGenerator,
-    logger: overrides.logger,
   });
   const saleVerdictGraph = new SaleVerdictGraph({
     products: productRepo,
@@ -715,7 +679,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   const hermesService = new HermesApplicationService(
     eventRepo,
-    runHermesUC,
     approveEventUC,
     dismissEventUC
   );
@@ -1020,22 +983,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
 
-  const priceResearchHandler = new PriceResearchHandler({
-    runs: priceResearchRunRepo,
-    graph: priceResearchGraph,
-    afterRun: async (workspaceId, productId, result) => {
-      await priceProposals.reestimateAfterResearch(
-        workspaceId,
-        productId,
-        result && { outcome: result.outcome, rowsChanged: result.rowsChanged },
-      );
-    },
-    events: eventPublisher,
-    now: () => new Date(),
-    logger: overrides.logger,
-  });
-  priceResearchQueue.registerHandler((data) => priceResearchHandler.handle(data));
-
   const saleVerdictHandler = new SaleVerdictHandler({
     verdicts: saleVerdictRepo,
     graph: saleVerdictGraph,
@@ -1119,6 +1066,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productRepo,
     priceResearchRepo,
     priceResearchRuns,
+    researchConfigured: researchConfig !== null,
     saleVerdictRuns,
     productStatsService,
     listingRepo,
@@ -1150,7 +1098,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     syncQueue as ManagedQueue<unknown>,
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
-    priceResearchQueue as ManagedQueue<unknown>,
     saleVerdictQueue as ManagedQueue<unknown>,
   ];
 

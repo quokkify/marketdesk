@@ -57,7 +57,6 @@ function activeRun(): ResearchRun {
 
 function runsWith(active: ResearchRun | null): IPriceResearchRuns {
   return {
-    request: async () => ({ run: active, enqueued: false, reason: 'active' }),
     latest: async () => ({ active, last: null }),
   };
 }

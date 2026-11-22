@@ -2,8 +2,6 @@ import { HermesEvent } from '../../../domain/entities/HermesEvent';
 import type { Product } from '../../../domain/entities/Product';
 import type { Listing } from '../../../domain/entities/Listing';
 import type { Workspace } from '../../../domain/entities/Workspace';
-import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
-import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
 import type { IAIProvider } from '../../../domain/ports/IAIProvider';
 import {
@@ -17,18 +15,14 @@ import {
 import {
   aiAnswersOffline,
   withOfflineNotice,
-  type HermesEngineLogger,
   type IdFactory,
 } from '../../../domain/services/proposalSupport';
 import type { AIProviderSource, HermesEventType } from '../../../../shared/types';
 
 export interface ListingSeoProposalsDeps {
-  products: IProductRepository;
-  listings: IListingRepository;
   events: IEventRepository;
   ai: Pick<IAIProvider, 'analyzeListingSeo'>;
   idFactory: IdFactory;
-  logger?: HermesEngineLogger;
 }
 
 /** Listing SEO proposals: always review-only and never auto-applied. */

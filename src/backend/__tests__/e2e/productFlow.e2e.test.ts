@@ -21,8 +21,6 @@ import {
   InMemoryMarketplaceRepository,
   InMemoryEventRepository,
   RecordingEventPublisher,
-  StubAIProvider,
-  InMemoryPriceResearchRepository,
   money,
 } from '../../domain/testkit/support';
 import {
@@ -42,14 +40,11 @@ import { unwrap } from '../../domain/testkit/support';
 
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
-import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
-import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 
 import { CreateProductUseCase } from '../../application/usecases/CreateProductUseCase';
 import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUseCase';
 import { PublishListingUseCase } from '../../application/usecases/PublishListingUseCase';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
-import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
 import { MarketplaceUpdateEnqueuer } from '../../application/services/MarketplaceUpdateEnqueuer';
 import { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
@@ -100,7 +95,6 @@ async function buildE2E(): Promise<E2EContext> {
   const activityLog = new InMemoryActivityLogRepository();
   const priceHistory = new RecordingPriceHistoryRecorder();
   const events = new RecordingEventPublisher();
-  const aiProvider = new StubAIProvider();
   const idGenerator = idFactory('id');
   const authStore = new InMemoryAuthStore();
 
@@ -135,16 +129,6 @@ async function buildE2E(): Promise<E2EContext> {
     productRepo,
     marketplaceRepo,
     events
-  );
-  const hermesEngine = new HermesDecisionEngine(
-    productRepo,
-    listingRepo,
-    eventRepo,
-    events,
-    aiProvider,
-    new PriceEstimateService({ ai: aiProvider, research: new InMemoryPriceResearchRepository(), runs: null }),
-    null,
-    idGenerator
   );
 
   // Synchronous publish queue backed by the real handler + domain finalizer.
@@ -194,7 +178,6 @@ async function buildE2E(): Promise<E2EContext> {
     } as any
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
-  const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
   const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
     listingRepo,
     marketplaceRepo,
@@ -237,7 +220,6 @@ async function buildE2E(): Promise<E2EContext> {
   );
   const hermesService = new HermesApplicationService(
     eventRepo,
-    runHermesUC,
     approveEventUC,
     dismissEventUC
   );

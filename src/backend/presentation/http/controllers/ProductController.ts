@@ -10,7 +10,7 @@ import type { ProductAIDraftService } from '../../../application/services/Produc
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
-import { SEARCH_NEEDS_PLN, SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
+import { SEARCH_CURRENCY, SEARCH_NEEDS_PLN, SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
 import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
@@ -107,6 +107,8 @@ export class ProductController {
     private readonly researchRuns?: IPriceResearchRuns,
     private readonly productStats?: ProductStatsService,
     private readonly saleVerdictRuns?: SaleVerdictRuns,
+    // Whether a research profile is configured.
+    private readonly researchConfigured = false,
   ) {}
 
   stats = async (req: Request, res: Response): Promise<void> => {
@@ -208,18 +210,6 @@ export class ProductController {
     }
   };
 
-  proposeImprovements = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      if (!this.assistance) throw new ServiceUnavailableError('Product assistance is unavailable');
-      const result = await this.assistance.proposeImprovements({
-        productId: routeParam(req.params.id),
-        workspaceId: req.user!.workspaceId!,
-        listingId: req.body.listingId,
-      });
-      ok(res, result);
-    } catch (error) { next(error); }
-  };
-
   getPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const productId = routeParam(req.params.id);
@@ -263,17 +253,21 @@ export class ProductController {
     } catch (error) { next(error); }
   };
 
+  // Researches again through the price scope of a sale verdict; the research runs in its job.
   refreshPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!this.researchRuns) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-      const result = await this.researchRuns.request(req.user!.workspaceId!, routeParam(req.params.id), {
-        force: true,
-        trigger: 'manual',
+      const workspaceId = req.user!.workspaceId!;
+      const productId = routeParam(req.params.id);
+      await this.requireProduct(productId, workspaceId);
+      if (!this.researchConfigured) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      if (!this.saleVerdictRuns) throw new ServiceUnavailableError('Sale verdicts are unavailable');
+      const [listing] = await this.listingRepo.findByProduct(productId);
+      if (!listing || listing.price.currency !== SEARCH_CURRENCY) throw new InvalidStateError(SEARCH_NEEDS_PLN);
+      const { run, enqueued } = await this.saleVerdictRuns.request(workspaceId, productId, ['price'], 'manual', {
+        forceResearch: true,
       });
-      if (result.reason === 'not_configured') throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-      if (result.reason === 'not_pln') throw new InvalidStateError(SEARCH_NEEDS_PLN);
       // The run continues in the background; a run already queued or running is answered as is.
-      ok(res, { run: result.run }, result.enqueued ? 202 : 200);
+      ok(res, { run }, enqueued ? 202 : 200);
     } catch (error) { next(error); }
   };
 

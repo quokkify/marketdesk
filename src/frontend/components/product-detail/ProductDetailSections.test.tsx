@@ -334,27 +334,22 @@ describe('product detail activity', () => {
 });
 
 describe('product detail Hermes card', () => {
-  it('offers Analyze with Hermes and Suggest improvements and routes each to its handler', () => {
+  it('offers Analyze with Hermes and routes it to its handler', () => {
     const onAnalyze = jest.fn();
-    const onSuggest = jest.fn();
     const tree = ProductHermesCard({
       analyzing: false,
       analyzeDisabled: false,
-      suggesting: false,
       note: 'Runs only the enabled listing SEO agent for this product.',
       activeProvider: 'hermes',
       onAnalyze,
-      onSuggest,
       children: <p>Pending recommendations</p>,
     }) as ElementLike;
     const buttons = findByType(tree, Button);
     const html = render(tree);
 
-    expect(buttons.map((button) => textContent(button))).toEqual(['Analyze with Hermes', 'Suggest improvements']);
+    expect(buttons.map((button) => textContent(button))).toEqual(['Analyze with Hermes']);
     (buttons[0]!.props.onClick as () => void)();
-    (buttons[1]!.props.onClick as () => void)();
     expect(onAnalyze).toHaveBeenCalledTimes(1);
-    expect(onSuggest).toHaveBeenCalledTimes(1);
     expect(html).toContain('Runs only the enabled listing SEO agent for this product.');
     expect(html).toContain('Pending recommendations');
   });
@@ -363,11 +358,9 @@ describe('product detail Hermes card', () => {
     const tree = ProductHermesCard({
       analyzing,
       analyzeDisabled: false,
-      suggesting: false,
       note: 'Analyzing this product only.',
       activeProvider,
       onAnalyze: () => undefined,
-      onSuggest: () => undefined,
     }) as ElementLike;
     return textContent(findByType(tree, Button)[0]);
   };
@@ -388,27 +381,21 @@ describe('product detail Hermes card', () => {
     const blocked = ProductHermesCard({
       analyzing: false,
       analyzeDisabled: true,
-      suggesting: true,
       note: 'The listing SEO agent is switched off for this workspace.',
       onAnalyze: () => undefined,
-      onSuggest: () => undefined,
     }) as ElementLike;
-    const [analyze, suggest] = findByType(blocked, Button);
+    const [analyze] = findByType(blocked, Button);
     const failed = render(
       <ProductHermesCard
         analyzing={false}
         analyzeDisabled={false}
-        suggesting={false}
         note="Hermes is unavailable"
         noteIsError
         onAnalyze={() => undefined}
-        onSuggest={() => undefined}
       />
     );
 
     expect(analyze!.props.disabled).toBe(true);
-    expect(suggest!.props.disabled).toBe(true);
-    expect(textContent(suggest)).toBe('Preparing suggestions…');
     expect(render(blocked)).toContain('The listing SEO agent is switched off for this workspace.');
     expect(failed).toContain('role="alert"');
     expect(failed).toContain('Hermes is unavailable');
