@@ -38,6 +38,7 @@ public class ProductDetailPage implements Page {
   private static final String VERDICT_CHECK = "[data-testid=\"verdict-check-%s\"]";
   private static final String EDIT_PRODUCT = "Edit product";
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
+  private static final String SELLING_PRICE = "//label[text()='Selling price']/following::input[1]";
   private static final String SAVE_CHANGES = "Save changes";
   private static final String ALERT = "[role=\"alert\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
@@ -145,6 +146,10 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement missingAccessoriesInput() {
     return Selenide.$x(MISSING_ACCESSORIES);
+  }
+
+  public SelenideElement sellingPriceInput() {
+    return Selenide.$x(SELLING_PRICE);
   }
 
   public SelenideElement saveChangesButton() {
