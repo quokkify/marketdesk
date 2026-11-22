@@ -31,7 +31,7 @@ export function buildHermesEventsUrl(params: HermesEventListParams = {}): string
 // page ends the feed even when the total is stale.
 export function hermesFeedNextOffset(
   lastPage: PaginatedResponse<HermesEvent>,
-  lastOffset: number,
+  lastOffset: number
 ): number | undefined {
   const next = lastOffset + lastPage.items.length;
   return lastPage.items.length > 0 && next < lastPage.total ? next : undefined;
@@ -77,7 +77,7 @@ export const hermesApi = baseApi.injectEndpoints({
       transformResponse: (res: PaginatedApiResponse<HermesEvent>) => unwrapPaginated(res),
       providesTags: (result) => [
         ...(result?.pages ?? []).flatMap((page) =>
-          page.items.map((e) => ({ type: 'HermesEvent' as const, id: e.id })),
+          page.items.map((e) => ({ type: 'HermesEvent' as const, id: e.id }))
         ),
         { type: 'HermesEvent' as const, id: 'LIST' },
       ],
@@ -148,6 +148,14 @@ export const hermesApi = baseApi.injectEndpoints({
 
     // Product-scoped analysis only: the backend has no catalogue-wide run, so callers
     // must choose one explicit product.
+    // Pending suggestions per product; every approve, dismiss and run invalidates the event list.
+    getHermesPendingCounts: builder.query<Record<string, number>, void>({
+      query: () => '/hermes/events/pending-counts',
+      transformResponse: (res: ApiResponse<{ byProductId: Record<string, number> }>) =>
+        unwrap(res).byProductId,
+      providesTags: [{ type: 'HermesEvent', id: 'LIST' }],
+    }),
+
     runHermes: builder.mutation<HermesEvent[], HermesRunInput>({
       query: buildProductHermesRunRequest,
       transformResponse: (res: ApiResponse<HermesEvent[]>) => unwrap(res),
@@ -171,4 +179,5 @@ export const {
   useDismissHermesEventMutation,
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
+  useGetHermesPendingCountsQuery,
 } = hermesApi;

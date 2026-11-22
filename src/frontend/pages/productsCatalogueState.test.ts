@@ -1,4 +1,4 @@
-import type { Product } from '@shared/types';
+import type { Product, ProductStats } from '@shared/types';
 import {
   catalogueFooterLabel,
   catalogueShowsSkeleton,
@@ -11,6 +11,10 @@ import {
   shortListingSku,
   tabStatus,
   updateProductsCatalogueSearch,
+  needsActionLabel,
+  sparklinePoints,
+  tabNeedsAction,
+  viewsSummary,
   visibleProductTabs,
 } from './productsCatalogueState';
 
@@ -143,13 +147,22 @@ describe('stage 1 catalogue helpers', () => {
     expect(parseProductsCatalogueState('?tab=sold').tab).toBe('sold');
     expect(tabStatus('sold')).toEqual(['sold']);
   });
-  it('still parses old attention links', () => {
-    expect(parseProductsCatalogueState('?tab=attention').tab).toBe('attention');
+  it('maps old attention links to the needs-action tab', () => {
+    expect(parseProductsCatalogueState('?tab=attention').tab).toBe('needs-action');
+    expect(parseProductsCatalogueState('?tab=needs-action').tab).toBe('needs-action');
   });
-  it('hides the attention tab while it is empty or unknown', () => {
-    expect(visibleProductTabs(0)).toEqual(['all', 'active', 'draft', 'sold']);
-    expect(visibleProductTabs(undefined)).toEqual(['all', 'active', 'draft', 'sold']);
-    expect(visibleProductTabs(2)).toEqual(['all', 'active', 'attention', 'draft', 'sold']);
+  it('always shows the needs-action tab', () => {
+    expect(visibleProductTabs()).toEqual(['all', 'active', 'needs-action', 'draft', 'sold']);
+  });
+  it('filters the needs-action tab by reason, not by a stored status', () => {
+    expect(tabStatus('needs-action')).toBeUndefined();
+    expect(tabNeedsAction('needs-action')).toBe(true);
+    expect(tabNeedsAction('active')).toBe(false);
+  });
+  it('offers sorting by views and growth', () => {
+    const values = PRODUCT_SORT_OPTIONS.map((o) => o.value);
+    expect(values).toEqual(expect.arrayContaining(['-viewsDelta7d', 'viewsDelta7d', '-views']));
+    expect(parseProductsCatalogueState('?sort=-viewsDelta7d').sort).toBe('-viewsDelta7d');
   });
   it('no longer offers cost sorting in the menu but accepts it from old URLs', () => {
     expect(PRODUCT_SORT_OPTIONS.map((o) => o.value)).not.toContain('costPrice');
@@ -175,5 +188,58 @@ describe('catalogue loading state', () => {
     expect(
       catalogueShowsSkeleton({ hasData: true, isFetching: false, pageOutOfRange: false })
     ).toBe(false);
+  });
+});
+
+describe('views presentation', () => {
+  const base: ProductStats = {
+    views: 10,
+    watchers: 3,
+    messages: 1,
+    viewsDelta7d: 2,
+    viewsByDay: [],
+    lastSyncAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    stale: false,
+    externalUrl: null,
+    listingStatus: 'live',
+    needsAction: [],
+  };
+  it('shows growth, no growth and stale data differently', () => {
+    expect(viewsSummary({ ...base, views: 128, viewsDelta7d: 14 }).delta).toEqual({
+      kind: 'up',
+      text: '▲ +14',
+    });
+    expect(viewsSummary({ ...base, views: 41, viewsDelta7d: 0 }).delta).toEqual({
+      kind: 'flat',
+      text: 'no growth',
+    });
+    expect(viewsSummary({ ...base, views: 203, viewsDelta7d: null, stale: true }).delta).toEqual({
+      kind: 'stale',
+      text: 'stale',
+    });
+    expect(viewsSummary({ ...base, views: 128 }).primary).toBe('128');
+  });
+  it('describes watchers, messages and freshness', () => {
+    expect(viewsSummary(base).secondary).toBe('3 watching · 1 msgs · synced 2h ago');
+  });
+  it('shows a dash without stats or views', () => {
+    expect(viewsSummary(undefined)).toEqual({ primary: '—', delta: null, secondary: null });
+    expect(viewsSummary({ ...base, views: null })).toEqual({
+      primary: '—',
+      delta: null,
+      secondary: null,
+    });
+  });
+  it('draws a flat line for equal values and nothing for no values', () => {
+    expect(sparklinePoints([3, 3, 3], 70, 18)).toBe('0,9 35,9 70,9');
+    expect(sparklinePoints([], 70, 18)).toBe('');
+  });
+  it('scales a rising series from bottom to top', () => {
+    expect(sparklinePoints([0, 5], 10, 10)).toBe('0,10 10,0');
+  });
+  it('names every needs-action reason', () => {
+    expect(needsActionLabel('buyer_waiting')).toBe('Buyer waiting');
+    expect(needsActionLabel('listing_problem')).toBe('Listing expired or failing on OLX');
+    expect(needsActionLabel('no_view_growth')).toBe('No view growth for 7 days');
   });
 });

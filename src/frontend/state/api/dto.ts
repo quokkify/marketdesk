@@ -27,6 +27,7 @@ export interface ProductListParams {
   priceMax?: number;
   tags?: string[];
   sort?: string; // e.g. "-updatedAt,+name"
+  needsAction?: boolean;
   limit?: number;
   offset?: number;
 }

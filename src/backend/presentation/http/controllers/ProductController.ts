@@ -26,6 +26,7 @@ import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
 import { presentListing } from '../../../application/dto/presenters';
+import type { ProductStatsService } from '../../../application/services/ProductStatsService';
 
 const RESEARCH_CHANGED = 'Price research changed since you opened it. Reload and try again.';
 
@@ -98,7 +99,13 @@ export class ProductController {
     private readonly assistance?: ProductAssistanceGraph,
     private readonly priceResearchRepo?: IPriceResearchRepository,
     private readonly anchorLadder?: AnchorLadderService,
+    private readonly productStats?: ProductStatsService,
   ) {}
+
+  stats = async (req: Request, res: Response): Promise<void> => {
+    if (!this.productStats) throw new ServiceUnavailableError('Product statistics are unavailable');
+    ok(res, { byProductId: await this.productStats.statsByProduct(req.user!.workspaceId!) });
+  };
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const query: ListProductsQueryDTO = {
@@ -109,10 +116,18 @@ export class ProductController {
       tags: parseStringList(req.query.tags),
       search: typeof req.query.search === 'string' ? req.query.search : undefined,
       sort: parseSort(req.query.sort),
+      needsAction: req.query.needsAction === 'true' ? true : undefined,
       limit: num(req.query.limit),
       offset: num(req.query.offset),
     };
-    const result = await this.products.listProducts(query);
+    const needsStats =
+      query.needsAction ||
+      query.sort?.some((key) => key.field === 'views' || key.field === 'viewsDelta7d');
+    const stats =
+      needsStats && this.productStats
+        ? await this.productStats.statsByProduct(query.workspaceId)
+        : undefined;
+    const result = await this.products.listProducts(query, stats);
     if (result.isErr()) return next(result.error);
     const page = result.value;
     paginated(res, page.items, {

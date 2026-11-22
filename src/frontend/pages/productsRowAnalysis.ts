@@ -22,9 +22,21 @@ export function stateAfterPendingChange(
   pending: number
 ): RowAnalysisState | undefined {
   if (prev?.status === 'running') return prev;
+  if (prev?.status === 'done' && prev.count === pending) return prev;
   if (pending > 0) return { status: 'done', count: pending };
   if (prev?.status === 'done' && prev.count > 0) return { status: 'reviewed' };
   return prev;
+}
+
+// The server's pending count survives reloads; a running, failed or just-reviewed row in this
+// session is more recent and wins.
+export function analysisStateFor(
+  session: RowAnalysisState | undefined,
+  pending: number | undefined
+): RowAnalysisState | undefined {
+  if (session?.status === 'running' || session?.status === 'error') return session;
+  if (pending !== undefined && pending > 0) return { status: 'done', count: pending };
+  return session;
 }
 
 export function canStartRowAnalysis(

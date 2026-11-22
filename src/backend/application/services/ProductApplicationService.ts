@@ -9,7 +9,8 @@ import type { Product } from '../../domain/entities/Product';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IProductImageStorage } from '../ports/IProductImageStorage';
-import type { PaginatedResponse, PriceSync } from '../../../shared/types';
+import type { PaginatedResponse, PriceSync, ProductStats } from '../../../shared/types';
+import { compareByStats } from './productStats';
 import { isUuid } from '../../../shared/validation/identifiers';
 import { CreateProductUseCase } from '../usecases/CreateProductUseCase';
 import { UpdateProductUseCase } from '../usecases/UpdateProductUseCase';
@@ -139,14 +140,20 @@ export class ProductApplicationService {
     return cleanup;
   }
 
-  async listProducts(query: ListProductsQueryDTO): Promise<Result<PaginatedResponse<ProductView>>> {
+  // `stats` is required for the needsAction filter and for sorting by views or growth.
+  async listProducts(
+    query: ListProductsQueryDTO,
+    stats?: Record<string, ProductStats>
+  ): Promise<Result<PaginatedResponse<ProductView>>> {
     const validated = this.pricingValidator.validateListQuery(query);
     if (validated.isErr()) return validated;
     const q = validated.value;
 
     const all = await this.productRepo.findByWorkspace(q.workspaceId);
-    const filtered = all.filter((p) => this.matches(p, q));
-    const sorted = this.sort(filtered, q.sort);
+    const filtered = all.filter(
+      (p) => this.matches(p, q) && (!q.needsAction || (stats?.[p.id]?.needsAction.length ?? 0) > 0)
+    );
+    const sorted = this.sort(filtered, q.sort, stats);
 
     const limit = normalizeLimit(q.limit);
     const offset = normalizeOffset(q.offset);
@@ -173,12 +180,30 @@ export class ProductApplicationService {
     return true;
   }
 
-  private sort(products: Product[], sort?: SortKey[]): Product[] {
+  private sort(
+    products: Product[],
+    sort?: SortKey[],
+    stats?: Record<string, ProductStats>
+  ): Product[] {
     if (!sort || sort.length === 0) {
       return [...products].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     }
     return [...products].sort((a, b) => {
       for (const key of sort) {
+        if (key.field === 'views' || key.field === 'viewsDelta7d') {
+          const left = stats?.[a.id];
+          const right = stats?.[b.id];
+          const missing = (s: ProductStats | undefined) => (s?.[key.field as 'views'] ?? null) === null;
+          // Products without a value stay last in both directions.
+          if (missing(left) || missing(right)) {
+            const cmp = compareByStats(left, right, key.field);
+            if (cmp !== 0) return cmp;
+            continue;
+          }
+          const cmp = compareByStats(left, right, key.field);
+          if (cmp !== 0) return key.dir === 'asc' ? cmp : -cmp;
+          continue;
+        }
         const cmp = this.compareField(a, b, key.field);
         if (cmp !== 0) return key.dir === 'asc' ? cmp : -cmp;
       }
