@@ -59,6 +59,15 @@ public class SaleVerdictTest extends BaseTest {
         "not_configured");
   }
 
+  // The price research and estimate are PLN-only, so a listing in another currency is left to the seller.
+  @Test
+  public void nonPlnListingGetsPriceNeedsHuman() {
+    AccountPojo account = accountWithSandbox();
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account,
+        ProductRequestPojo.sample().withPhoto().withCurrency("EUR"));
+    verdictSteps.verify().checkIs(analyzeAndAwait(account, productListing.productId()), PRICE, NEEDS_HUMAN, "not_pln");
+  }
+
   @Test
   public void noPhotosIsFix() {
     AccountPojo account = authSteps.registerNewAccount();

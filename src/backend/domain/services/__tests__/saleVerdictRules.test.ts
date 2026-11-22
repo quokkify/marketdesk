@@ -180,8 +180,8 @@ describe('combineVerdict', () => {
     expect(combineVerdict([pending], {}).overall).toBe('needs_human');
   });
 
-  it('ignores pending checks when others are ready', () => {
+  it('needs a human, not ready, while a check is pending and others are ready', () => {
     const pending = priceCheckFromEstimate({ kind: 'research_running' }, T1);
-    expect(combineVerdict([pending, photosCheck(1, T1)], {}).overall).toBe('ready');
+    expect(combineVerdict([pending, photosCheck(1, T1)], {}).overall).toBe('needs_human');
   });
 });

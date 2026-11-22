@@ -159,9 +159,8 @@ export function combineVerdict(
   const checks: VerdictChecks = { ...previous };
   for (const check of fresh) checks[check.check] = check;
 
-  const statuses = Object.values(checks)
-    .map((check) => check.status)
-    .filter((status) => status !== 'pending');
+  // A pending check is not judged yet, so the overall cannot be ready: it counts as needs_human.
+  const statuses = Object.values(checks).map((check) => (check.status === 'pending' ? 'needs_human' : check.status));
   let overall: VerdictOverall = 'ready';
   if (statuses.length === 0 || statuses.includes('needs_human')) overall = 'needs_human';
   else if (statuses.includes('fix')) overall = 'fix';

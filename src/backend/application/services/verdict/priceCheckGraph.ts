@@ -95,7 +95,8 @@ export function buildPriceCheck(deps: PriceCheckDeps): CheckGraph {
       return {
         input: {
           kind: 'estimated',
-          currentPrice: product.sellingPrice.amount,
+          // The listing price is judged: a marketplace import can move it away from the product's.
+          currentPrice: listing.price.amount,
           stored: withoutText(proposal.stored),
           suggestionType: proposal.suggestionType,
           eventIds: proposal.eventIds,

@@ -107,6 +107,10 @@ export const productsApi = baseApi.injectEndpoints({
     >({
       query: buildProductRecheckRequest,
       transformResponse: (res: ApiResponse<ProductRecheckResult>) => unwrap(res),
+      invalidatesTags: (_result, _error, { productId }) => [
+        { type: 'SaleVerdict', id: productId },
+        { type: 'Product', id: 'LIST' },
+      ],
     }),
 
     getPriceResearch: builder.query<PriceResearchView | null, string>({

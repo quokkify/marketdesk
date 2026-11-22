@@ -63,6 +63,7 @@ export function buildInfoCheck(deps: InfoCheckDeps): CheckGraph {
           productId: ctx.product.id,
           listingId: ctx.listing.id,
           workspaceId: ctx.workspace.id,
+          skipActivityLog: true,
         });
         return { items: result.items };
       })

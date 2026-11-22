@@ -144,6 +144,29 @@ describe('SaleVerdictRuns', () => {
     await expect(verdicts.findActive()).resolves.toBeNull();
   });
 
+  it('refuses a forced refresh while a research run is active and fails the new verdict run', async () => {
+    const { runs, verdicts, researchRuns, jobs } = setup();
+    await researchRuns.insertQueued({ id: 'research-0', workspaceId: WS, productId: PID, trigger: 'auto', queuedAt: NOW.toISOString() });
+
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toMatchObject({
+      message: ANALYSIS_RUNNING,
+    });
+
+    expect(verdicts.errorCodes.get('run-1')).toBe('research_active');
+    expect(jobs).toHaveLength(0);
+    await expect(verdicts.findActive()).resolves.toBeNull();
+  });
+
+  it('still fails the verdict run when finishing the queued research run throws', async () => {
+    const { runs, verdicts, researchRuns } = setup({ enqueue: async () => { throw new Error('redis down'); } });
+    researchRuns.finish = async () => { throw new Error('db down'); };
+
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toThrow('db down');
+
+    expect(verdicts.errorCodes.get('run-1')).toBe('enqueue_failed');
+    await expect(verdicts.findActive()).resolves.toBeNull();
+  });
+
   it('joins an active run that already forces the price research', async () => {
     const { runs, jobs } = setup();
     await runs.request(WS, PID, ['info', 'price'], 'manual', { forceResearch: true });

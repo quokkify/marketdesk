@@ -1379,7 +1379,7 @@ const ListingDetailsPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  disabled={analyzing || Boolean(analyzeDisabledReason)}
+                  disabled={analyzing || !productId || !hermesSettings.currentData}
                   onClick={() => void handleReviewPrice()}
                   data-testid="review-price-button"
                 >

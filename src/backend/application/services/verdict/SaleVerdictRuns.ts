@@ -171,15 +171,34 @@ export class SaleVerdictRuns {
     now: Date,
   ): Promise<void> {
     let researchRunId: string | undefined;
+    if (forceResearch) {
+      try {
+        researchRunId = await this.queueResearch(workspaceId, run.productId, now);
+      } catch (error) {
+        await this.failEnqueued(run, trigger, error, 'enqueue_failed');
+        throw error;
+      }
+      // A forced refresh with no research to run would be accepted for nothing.
+      if (!researchRunId) {
+        await this.deps.verdicts.fail(run.id, this.deps.now().toISOString(), 'research_active');
+        throw new ConflictError(ANALYSIS_RUNNING);
+      }
+    }
     try {
-      researchRunId = forceResearch ? await this.queueResearch(workspaceId, run.productId, now) : undefined;
       await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch, researchRunId });
     } catch (error) {
-      if (researchRunId) await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
-      this.deps.logger?.error({ productId: run.productId, runId: run.id, trigger, err: error }, 'Sale verdict run not queued');
-      await this.deps.verdicts.fail(run.id, this.deps.now().toISOString(), 'enqueue_failed');
+      try {
+        if (researchRunId) await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
+      } finally {
+        await this.failEnqueued(run, trigger, error, 'enqueue_failed');
+      }
       throw error;
     }
+  }
+
+  private async failEnqueued(run: SaleVerdict, trigger: VerdictTrigger, error: unknown, code: string): Promise<void> {
+    this.deps.logger?.error({ productId: run.productId, runId: run.id, trigger, err: error }, 'Sale verdict run not queued');
+    await this.deps.verdicts.fail(run.id, this.deps.now().toISOString(), code);
   }
 
   private async failQueuedResearch(workspaceId: string, productId: string, researchRunId: string): Promise<void> {
