@@ -61,7 +61,8 @@ const sameClassModelSchema = z.object({
 
 const MAX_SUCCESSOR_LENGTH = 120;
 
-function parseAttributes(value: unknown[]): ClassAttribute[] {
+// Valid attributes only, at most eight; an entry of another shape (flat fields, garbage) is dropped.
+export function parseClassAttributes(value: unknown[]): ClassAttribute[] {
   const attributes: ClassAttribute[] = [];
   for (const entry of value) {
     const parsed = attributeSchema.safeParse(entry);
@@ -135,14 +136,14 @@ export function parseIdentification(raw: string): Identification | null {
     if (parsed.success) {
       models.push({
         ...parsed.data,
-        classAttributes: parseAttributes(parsed.data.classAttributes),
+        classAttributes: parseClassAttributes(parsed.data.classAttributes),
       });
     }
   }
   return {
     model: model.trim(),
     specs: specsText.trim().slice(0, MAX_SPECS_LENGTH).trim(),
-    classAttributes: parseAttributes(Array.isArray(classAttributes) ? classAttributes : []),
+    classAttributes: parseClassAttributes(Array.isArray(classAttributes) ? classAttributes : []),
     successors: (Array.isArray(successors) ? successors : [])
       .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
       .map((entry) => entry.trim().slice(0, MAX_SUCCESSOR_LENGTH).trim())
@@ -211,11 +212,24 @@ export function buildTierPrompt(
     CLASS_RULE,
     SKIP_HOSTS_LINE,
     `Report at most ${MAX_ANCHORS_PER_TIER} offers, each of a page you opened, with its own price in ${input.currency} and its own classAttributes as seen on that page.`,
+    ...attributeNamesLine(ident.classAttributes),
     'Answer with strict JSON only, no prose and no markdown:',
     `{"anchors": [{"tier": "${tier}", "price": number, "currency": "${input.currency}", "title": string, "url": string, "classAttributes": [{"name": string, "value": string|number, "unit": string|null, "match": "equal"|"ratio"}]}]}`,
     'Return an empty anchors array if you found nothing.',
   ].join('\n');
   return { system: SYSTEM, prompt };
+}
+
+// Separate calls rename attributes otherwise ("brightness" vs "ANSI lumens"), and the class check
+// matches by name.
+function attributeNamesLine(attributes: readonly ClassAttribute[]): string[] {
+  if (attributes.length === 0) return [];
+  const names = attributes
+    .map(({ name, unit }) => (unit ? `${JSON.stringify(name)} (${unit})` : JSON.stringify(name)))
+    .join(', ');
+  return [
+    `Every offer's classAttributes must use exactly these names and units from the identification: ${names}.`,
+  ];
 }
 
 export function parseTierAnchors(raw: string): unknown[] | null {

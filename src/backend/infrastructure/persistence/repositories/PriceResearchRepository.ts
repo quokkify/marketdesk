@@ -1,6 +1,9 @@
 import type { Pool, PoolClient } from 'pg';
-import { query } from '../../../config/database';
-import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
+import { getPool, query } from '../../../config/database';
+import type {
+  IPriceResearchRepository,
+  PriceResearchEdit,
+} from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { PriceComparable, PriceResearch, StoredPriceEstimate } from '../../../../shared/types';
 
 // NUMERIC arrives as a string and DATE as a local-time Date; format both in SQL/JS so the value is exact.
@@ -46,7 +49,10 @@ function toPriceResearch(row: PriceResearchRow): PriceResearch {
 export class PriceResearchRepository implements IPriceResearchRepository {
   private readonly queryClient?: PoolClient | Pool;
 
-  constructor(pool?: Pool, client?: PoolClient) {
+  constructor(
+    private readonly pool?: Pool,
+    private readonly client?: PoolClient,
+  ) {
     this.queryClient = client || pool;
   }
 
@@ -60,68 +66,127 @@ export class PriceResearchRepository implements IPriceResearchRepository {
     return row ? toPriceResearch(row) : null;
   }
 
-  // With baseUpdatedAt the update applies only while the stored row still carries that stamp
-  // (null: only while there is no row); otherwise nothing is written and null comes back.
-  async upsert(
-    workspaceId: string,
-    research: Omit<PriceResearch, 'updatedAt' | 'specs' | 'lastAttemptAt' | 'lastEstimate'>,
-    baseUpdatedAt?: string | null,
-  ): Promise<PriceResearch | null> {
-    const checkBase = baseUpdatedAt !== undefined;
-    const base = baseUpdatedAt ? new Date(baseUpdatedAt).toISOString() : null;
-    const { rows } = await query<PriceResearchRow>(
-      `INSERT INTO product_price_research
-         (product_id, workspace_id, retail_price, retail_currency, retail_source, retail_checked_at, comparables, dismissed_urls, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, ${NOW_UTC})
-       ON CONFLICT (product_id) DO UPDATE SET
-         retail_price = EXCLUDED.retail_price,
-         retail_currency = EXCLUDED.retail_currency,
-         retail_source = EXCLUDED.retail_source,
-         retail_checked_at = EXCLUDED.retail_checked_at,
-         comparables = EXCLUDED.comparables,
-         dismissed_urls = EXCLUDED.dismissed_urls,
-         updated_at = ${NOW_UTC}
-       WHERE product_price_research.workspace_id = EXCLUDED.workspace_id
-         AND (NOT $9::boolean OR ${UPDATED_AT_ISO} IS NOT DISTINCT FROM $10::text)
-       RETURNING ${COLUMNS}`,
-      [
-        research.productId,
-        workspaceId,
-        research.retailPrice,
-        research.retailCurrency,
-        research.retailSource,
-        research.retailCheckedAt,
-        JSON.stringify(research.comparables),
-        JSON.stringify(research.dismissedUrls),
-        checkBase,
-        base,
-      ],
-      this.queryClient,
-    );
-    const row = rows[0];
-    return row ? toPriceResearch(row) : null;
-  }
-
-  // Leaves the retail fields and the dismissed list alone; the caller passes the already merged rows.
-  async saveLadder(
+  async saveEditLocked(
     workspaceId: string,
     productId: string,
-    ladder: { comparables: PriceComparable[]; specs: string | null; attemptedAt: string },
+    apply: (current: PriceResearch | null) => PriceResearchEdit,
   ): Promise<PriceResearch> {
-    const { rows } = await query<PriceResearchRow>(
-      `INSERT INTO product_price_research (product_id, workspace_id, comparables, specs, last_attempt_at, updated_at)
-       VALUES ($1, $2, $3::jsonb, $4, ($5::timestamptz AT TIME ZONE 'UTC'), ${NOW_UTC})
-       ON CONFLICT (product_id) DO UPDATE SET
-         comparables = EXCLUDED.comparables,
-         specs = EXCLUDED.specs,
-         last_attempt_at = EXCLUDED.last_attempt_at,
-         updated_at = ${NOW_UTC}
-       WHERE product_price_research.workspace_id = EXCLUDED.workspace_id
-       RETURNING ${COLUMNS}`,
-      [productId, workspaceId, JSON.stringify(ladder.comparables), ladder.specs, ladder.attemptedAt],
-      this.queryClient,
-    );
-    return toPriceResearch(rows[0]!);
+    const saved = await this.locked(workspaceId, productId, async (client, current) => {
+      const research = apply(current);
+      const { rows } = await query<PriceResearchRow>(
+        `INSERT INTO product_price_research
+           (product_id, workspace_id, retail_price, retail_currency, retail_source, retail_checked_at, comparables, dismissed_urls, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, ${NOW_UTC})
+         ON CONFLICT (product_id) DO UPDATE SET
+           retail_price = EXCLUDED.retail_price,
+           retail_currency = EXCLUDED.retail_currency,
+           retail_source = EXCLUDED.retail_source,
+           retail_checked_at = EXCLUDED.retail_checked_at,
+           comparables = EXCLUDED.comparables,
+           dismissed_urls = EXCLUDED.dismissed_urls,
+           updated_at = ${NOW_UTC}
+         WHERE product_price_research.workspace_id = EXCLUDED.workspace_id
+         RETURNING ${COLUMNS}`,
+        [
+          productId,
+          workspaceId,
+          research.retailPrice,
+          research.retailCurrency,
+          research.retailSource,
+          research.retailCheckedAt,
+          JSON.stringify(research.comparables),
+          JSON.stringify(research.dismissedUrls),
+        ],
+        client,
+      );
+      const row = rows[0];
+      if (!row) throw new Error(`Price research of product ${productId} could not be saved`);
+      return toPriceResearch(row);
+    });
+    if (!saved) throw new Error(`Product ${productId} has no price research in this workspace`);
+    return saved;
+  }
+
+  // Leaves the retail fields, the dismissed list and the last attempt alone.
+  async saveLadderLocked(
+    workspaceId: string,
+    productId: string,
+    apply: (current: PriceResearch | null) => { comparables: PriceComparable[]; specs: string | null } | null,
+  ): Promise<PriceResearch | null> {
+    return this.locked(workspaceId, productId, async (client, current) => {
+      const ladder = apply(current);
+      if (!ladder) return current;
+      const { rows } = await query<PriceResearchRow>(
+        `INSERT INTO product_price_research (product_id, workspace_id, comparables, specs, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, ${NOW_UTC})
+         ON CONFLICT (product_id) DO UPDATE SET
+           comparables = EXCLUDED.comparables,
+           specs = EXCLUDED.specs,
+           updated_at = ${NOW_UTC}
+         WHERE product_price_research.workspace_id = EXCLUDED.workspace_id
+         RETURNING ${COLUMNS}`,
+        [productId, workspaceId, JSON.stringify(ladder.comparables), ladder.specs],
+        client,
+      );
+      return rows[0] ? toPriceResearch(rows[0]) : null;
+    });
+  }
+
+  // Runs work in one transaction holding the research row with SELECT … FOR UPDATE. A missing row is
+  // created first so the lock has something to hold, and handed to work as null; when work writes
+  // nothing the transaction rolls back, so that placeholder never persists. A product that is gone
+  // (or belongs to another workspace) gets null without running work.
+  private async locked<T>(
+    workspaceId: string,
+    productId: string,
+    work: (client: PoolClient | Pool, current: PriceResearch | null) => Promise<T>,
+  ): Promise<T | null> {
+    return this.inTransaction(async (client) => {
+      const created = await query(
+        `INSERT INTO product_price_research (product_id, workspace_id, updated_at)
+         SELECT p.id, p.workspace_id, ${NOW_UTC} FROM products p WHERE p.id = $1 AND p.workspace_id = $2
+         ON CONFLICT (product_id) DO NOTHING
+         RETURNING product_id`,
+        [productId, workspaceId],
+        client,
+      );
+      const { rows } = await query<PriceResearchRow>(
+        `SELECT ${COLUMNS} FROM product_price_research WHERE workspace_id = $1 AND product_id = $2 FOR UPDATE`,
+        [workspaceId, productId],
+        client,
+      );
+      const row = rows[0];
+      if (!row) return { value: null, commit: false };
+      const current = created.rowCount > 0 ? null : toPriceResearch(row);
+      const value = await work(client, current);
+      // Unchanged placeholder or no write by work: nothing to keep.
+      return { value, commit: value !== current };
+    });
+  }
+
+  private async inTransaction<T>(
+    work: (client: PoolClient | Pool) => Promise<{ value: T; commit: boolean }>,
+  ): Promise<T> {
+    // A repository bound to a client runs inside its caller's transaction.
+    if (this.client) return (await work(this.client)).value;
+    const client = await (this.pool ?? (await getPool())).connect();
+    let releaseError: Error | undefined;
+    try {
+      await client.query('BEGIN');
+      const { value, commit } = await work(client);
+      await client.query(commit ? 'COMMIT' : 'ROLLBACK');
+      return value;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        // The original failure matters more; the broken connection is not returned to the pool.
+        releaseError = rollbackError instanceof Error ? rollbackError : new Error('Rollback failed');
+      }
+      throw error;
+    } finally {
+      client.release(releaseError);
+    }
   }
 
   async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {

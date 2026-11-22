@@ -1,6 +1,7 @@
 import {
   buildIdentifyPrompt,
   buildTierPrompt,
+  parseClassAttributes,
   parseIdentification,
   parseTierAnchors,
   researchItemFromProduct,
@@ -75,6 +76,22 @@ describe('priceResearchPrompts', () => {
       expect(prompt).toContain('Wanbo T6 Max');
       expect(prompt).toContain('XGIMI Elfin');
     }
+  });
+
+  it('tier prompts require the identification attribute names and units on every offer', () => {
+    for (const node of TIER_NODES) {
+      const { prompt } = buildTierPrompt(node, item, ident);
+      const line = prompt.split('\n').find((l) => l.startsWith('Every offer'));
+      expect(line).toBeDefined();
+      expect(line).toContain('exactly these names and units');
+      expect(line).toContain('"native resolution"');
+      expect(line).toContain('"brightness" (ANSI lumens)');
+    }
+  });
+
+  it('tier prompts name no attribute list when the class is unknown', () => {
+    const { prompt } = buildTierPrompt('substitutesNew', item, { ...ident, classAttributes: [] });
+    expect(prompt).not.toContain('Every offer');
   });
 
   it('substitutesNew admits sealed new items from private OLX sellers', () => {
@@ -216,6 +233,16 @@ describe('parseIdentification', () => {
     expect(parsed?.successors).toHaveLength(1);
     // Its same-class models carry no classAttributes array, so they are dropped.
     expect(parsed?.sameClassModels).toEqual([]);
+  });
+});
+
+describe('parseClassAttributes', () => {
+  it('keeps valid attributes and drops the rest', () => {
+    expect(parseClassAttributes([
+      { name: 'brightness', value: 200, unit: 'ANSI lumens', match: 'ratio' },
+      { name: 'nativeResolution', value: '720p' },
+      'garbage',
+    ])).toEqual([{ name: 'brightness', value: 200, unit: 'ANSI lumens', match: 'ratio' }]);
   });
 });
 

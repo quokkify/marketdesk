@@ -168,10 +168,10 @@ describe('offline price estimate on an Analyze run', () => {
     const listing = unwrap(Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(299), status: 'live' }));
     listingRepo.items.set(listing.id, listing);
     if (comparables.length > 0) {
-      await researchRepo.upsert('w1', {
+      await researchRepo.saveEditLocked('w1', 'p1', () => ({
         productId: 'p1', retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null,
         comparables, dismissedUrls: [],
-      });
+      }));
     }
     const engine = new HermesDecisionEngine(productRepo, listingRepo, new InMemoryEventRepository(),
       new RecordingEventPublisher(), new OfflineHeuristicAIProvider(), researchRepo, null, sequentialIdFactory('offline-price'));

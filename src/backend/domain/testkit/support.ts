@@ -3,7 +3,6 @@
 
 import { Result } from '../shared/Result';
 import { Money } from '../valueObjects/Money';
-import { researchChangedSince } from '../services/priceResearchEdit';
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
@@ -26,7 +25,10 @@ import type { IProductRepository } from '../repositories/interfaces/IProductRepo
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../repositories/interfaces/IMarketplaceRepository';
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
-import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
+import type {
+  IPriceResearchRepository,
+  PriceResearchEdit,
+} from '../repositories/interfaces/IPriceResearchRepository';
 import type {
   AuthorizeOlxPublicationInput,
   IOlxPublicationQuotaRepository,
@@ -285,38 +287,39 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
   async findByProduct(workspaceId: string, productId: string): Promise<PriceResearch | null> {
     return this.items.get(`${workspaceId}:${productId}`) ?? null;
   }
-  async upsert(
+  async saveEditLocked(
     workspaceId: string,
-    research: Omit<PriceResearch, 'updatedAt' | 'specs' | 'lastAttemptAt' | 'lastEstimate'>,
-    baseUpdatedAt?: string | null,
-  ): Promise<PriceResearch | null> {
-    const previous = this.items.get(`${workspaceId}:${research.productId}`);
-    if (researchChangedSince(previous?.updatedAt ?? null, baseUpdatedAt) && previous) return null;
+    productId: string,
+    apply: (current: PriceResearch | null) => PriceResearchEdit,
+  ): Promise<PriceResearch> {
+    const key = `${workspaceId}:${productId}`;
+    const research = apply(this.items.get(key) ?? null);
     const saved: PriceResearch = {
-      specs: null,
-      lastAttemptAt: null,
-      lastEstimate: null,
-      ...previous,
+      ...this.blank(productId),
+      ...this.items.get(key),
       ...research,
       updatedAt: new Date().toISOString(),
     };
-    this.items.set(`${workspaceId}:${research.productId}`, saved);
+    this.items.set(key, saved);
     return saved;
   }
-  async saveLadder(
+  async saveLadderLocked(
     workspaceId: string,
     productId: string,
-    ladder: { comparables: PriceComparable[]; specs: string | null; attemptedAt: string },
-  ): Promise<PriceResearch> {
+    apply: (current: PriceResearch | null) => { comparables: PriceComparable[]; specs: string | null } | null,
+  ): Promise<PriceResearch | null> {
+    const key = `${workspaceId}:${productId}`;
+    const current = this.items.get(key) ?? null;
+    const ladder = apply(current);
+    if (!ladder) return current;
     const saved: PriceResearch = {
       ...this.blank(productId),
-      ...this.items.get(`${workspaceId}:${productId}`),
+      ...current,
       comparables: ladder.comparables,
       specs: ladder.specs,
-      lastAttemptAt: ladder.attemptedAt,
       updatedAt: new Date().toISOString(),
     };
-    this.items.set(`${workspaceId}:${productId}`, saved);
+    this.items.set(key, saved);
     return saved;
   }
   async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {

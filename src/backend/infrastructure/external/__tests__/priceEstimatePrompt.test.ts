@@ -1,4 +1,4 @@
-import { buildAnchorLadderPrompt } from '../anchorLadderPrompt';
+import { buildIdentifyPrompt } from '../priceResearchPrompts';
 import { buildPriceEstimatePrompt, parsePriceEstimate } from '../priceEstimatePrompt';
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
@@ -72,9 +72,9 @@ describe('missing accessories in the prompts', () => {
     expect(prompt).toContain(RULE);
   });
 
-  it('never reaches the anchor ladder research prompt', () => {
+  it('never reaches the price research prompt', () => {
     const product = buildProduct('pilot');
-    const { system, prompt } = buildAnchorLadderPrompt({
+    const { system, prompt } = buildIdentifyPrompt({
       name: product.name,
       condition: product.condition,
       category: product.category,

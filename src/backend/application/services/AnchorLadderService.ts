@@ -1,45 +1,27 @@
-// Researches the price anchor ladder of a product through the web-enabled Hermes research profile
-// and stores it. The research profile is checked before every call and must enable exactly the web
-// toolset. From the first call attempt on, every outcome records the attempt, so a failing search
-// is not retried until the ladder is stale again.
+// Researches the price anchor ladder of a product through PriceResearchGraph and records the
+// attempt. From the first call attempt on, every outcome records the attempt, so a failing search
+// is not retried until the ladder is stale again. Setup refusals (unknown product, search not
+// configured, listing not in PLN) record nothing.
 
 import type { PriceResearch } from '../../../shared/types';
-import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
-import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IPriceResearchRepository } from '../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IPriceResearchRefresher, LadderOutcome } from '../../domain/ports/IPriceResearchRefresher';
-import type { AITextCompletionClient } from '../../infrastructure/external/HermesAI';
-import type { HermesReachability } from '../../infrastructure/external/HermesHealthProbe';
 import {
   BadGatewayError,
-  DomainError,
   NotFoundError,
   ServiceUnavailableError,
   ValidationError,
 } from '../../domain/shared/DomainError';
-import {
-  ANCHOR_LADDER_OPERATION,
-  buildAnchorLadderPrompt,
-  filterAnchorRows,
-  isResearchToolsetSafe,
-  parseAnchorLadder,
-} from '../../infrastructure/external/anchorLadderPrompt';
-import { mergeLadder } from '../../domain/services/anchorLadder';
 import { isResearchFresh } from '../../domain/services/researchFreshness';
-import { withAiOperation, withAiUsageScope } from '../ai/aiUsageScope';
+import {
+  SEARCH_NEEDS_PLN,
+  SEARCH_NOT_CONFIGURED,
+  SEARCH_UNUSABLE,
+  type GraphResult,
+  type PriceResearchGraph,
+} from './PriceResearchGraph';
 
-export const SEARCH_NOT_CONFIGURED = 'Market search is not configured';
-export const SEARCH_NEEDS_PLN = 'OLX search needs a PLN listing';
-export const SEARCH_UNUSABLE = 'Hermes returned no usable results';
-
-const SEARCH_CURRENCY = 'PLN';
-const AI_FEATURE = 'research';
-
-export interface ComparableResearchProfile {
-  client: AITextCompletionClient;
-  // A fresh answer for every search: the guard must not act on a cached toolset list.
-  checkProfile(): Promise<Pick<HermesReachability, 'reachable' | 'enabledToolsets'>>;
-}
+const RUN_BUDGET_MS = 7 * 60 * 1000;
 
 // Structural, so the container can pass its logger.
 export interface AnchorLadderLogger {
@@ -47,12 +29,32 @@ export interface AnchorLadderLogger {
   error(context: Record<string, unknown>, message: string): void;
 }
 
+function isSetupRefusal(error: unknown): boolean {
+  return error instanceof NotFoundError
+    || (error instanceof ServiceUnavailableError && error.message === SEARCH_NOT_CONFIGURED)
+    || (error instanceof ValidationError && error.message === SEARCH_NEEDS_PLN);
+}
+
+// A failed run keeps the errors of the single-call research: unavailability stays a 503,
+// an answer without usable content a bad gateway.
+function failureError(code: GraphResult['errorCode']): Error {
+  switch (code) {
+    case 'research_unreachable':
+      return new ServiceUnavailableError('Market search is unavailable: the research profile is not reachable');
+    case 'unsafe_toolset':
+      return new ServiceUnavailableError('Market search is unavailable: the research profile must enable only the web toolset');
+    case 'hermes_unavailable':
+    case 'timeout':
+      return new ServiceUnavailableError('Market search is unavailable: the research profile did not answer');
+    default:
+      return new BadGatewayError(SEARCH_UNUSABLE);
+  }
+}
+
 export class AnchorLadderService implements IPriceResearchRefresher {
   constructor(
-    private readonly productRepo: IProductRepository,
-    private readonly listingRepo: IListingRepository,
     private readonly priceResearchRepo: IPriceResearchRepository,
-    private readonly research: ComparableResearchProfile | null,
+    private readonly graph: Pick<PriceResearchGraph, 'run'>,
     private readonly now: () => Date = () => new Date(),
     private readonly logger?: AnchorLadderLogger,
   ) {}
@@ -71,83 +73,34 @@ export class AnchorLadderService implements IPriceResearchRefresher {
     }
   }
 
-  // The workspace check comes first, so another workspace's product is a 404 whatever the setup.
+  // The graph checks the workspace first, so another workspace's product is a 404 whatever the setup.
   async refresh(workspaceId: string, productId: string): Promise<PriceResearch> {
-    const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
-    if (!product) throw new NotFoundError(`Product not found: ${productId}`);
-    if (!this.research) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-
-    const listing = (await this.listingRepo.findByProduct(product.id))[0];
-    if (!listing || listing.price.currency !== SEARCH_CURRENCY) {
-      throw new ValidationError(SEARCH_NEEDS_PLN);
-    }
-
     const attemptedAt = this.now().toISOString();
+    let result: GraphResult;
     try {
-      return await this.runResearch(workspaceId, product, listing, this.research, attemptedAt);
+      result = await this.graph.run({
+        workspaceId,
+        productId,
+        signal: AbortSignal.timeout(RUN_BUDGET_MS),
+        onNode: async () => undefined,
+      });
     } catch (error) {
-      // The original failure matters more than a second one while recording the attempt.
-      try {
-        await this.priceResearchRepo.markAttempt(workspaceId, product.id, attemptedAt);
-      } catch (markError) {
-        this.logger?.warn({ productId: product.id, err: markError }, 'Recording the failed research attempt failed');
-      }
+      if (!isSetupRefusal(error)) await this.recordAttempt(workspaceId, productId, attemptedAt);
       throw error;
     }
+    await this.recordAttempt(workspaceId, productId, attemptedAt);
+    if (result.outcome === 'failed') throw failureError(result.errorCode);
+    const stored = await this.priceResearchRepo.findByProduct(workspaceId, productId);
+    if (!stored) throw new NotFoundError(`Product not found: ${productId}`);
+    return stored;
   }
 
-  private async runResearch(
-    workspaceId: string,
-    product: NonNullable<Awaited<ReturnType<IProductRepository['findByIdForWorkspace']>>>,
-    listing: Awaited<ReturnType<IListingRepository['findByProduct']>>[number],
-    research: ComparableResearchProfile,
-    attemptedAt: string,
-  ): Promise<PriceResearch> {
-    const categoryPath = listing.marketplaceCategory?.path ?? [];
-    const { system, prompt } = buildAnchorLadderPrompt({
-      name: product.name,
-      condition: product.condition,
-      category: categoryPath[categoryPath.length - 1] ?? product.category,
-      currency: listing.price.currency,
-    });
-
-    const profile = await research.checkProfile();
-    if (!profile.reachable) {
-      throw new ServiceUnavailableError('Market search is unavailable: the research profile is not reachable');
-    }
-    if (!isResearchToolsetSafe(profile.enabledToolsets)) {
-      const enabled = profile.enabledToolsets.length ? profile.enabledToolsets.join(', ') : 'none';
-      throw new ServiceUnavailableError(
-        `Market search is unavailable: the research profile must enable only the web toolset (enabled: ${enabled})`,
-      );
-    }
-
-    let raw: string;
+  // The original failure matters more than a second one while recording the attempt.
+  private async recordAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {
     try {
-      ({ value: raw } = await withAiUsageScope(
-        { workspaceId, feature: AI_FEATURE, productId: product.id },
-        () => withAiOperation(ANCHOR_LADDER_OPERATION, () => research.client.complete({ system, prompt })),
-      ));
-    } catch (error) {
-      // Unavailability stays a 503; a 2xx answer without usable content is a bad gateway.
-      if (error instanceof DomainError) throw error;
-      throw new BadGatewayError(SEARCH_UNUSABLE, error);
+      await this.priceResearchRepo.markAttempt(workspaceId, productId, attemptedAt);
+    } catch (markError) {
+      this.logger?.warn({ productId, err: markError }, 'Recording the research attempt failed');
     }
-
-    const parsed = parseAnchorLadder(raw);
-    if (!parsed) throw new BadGatewayError(SEARCH_UNUSABLE);
-
-    const stored = await this.priceResearchRepo.findByProduct(workspaceId, product.id);
-    const found = filterAnchorRows(parsed.anchors, {
-      currency: listing.price.currency,
-      ownUrl: listing.externalUrl,
-      dismissed: new Set(stored?.dismissedUrls ?? []),
-      today: attemptedAt.slice(0, 10),
-    });
-    return this.priceResearchRepo.saveLadder(workspaceId, product.id, {
-      comparables: mergeLadder(stored?.comparables ?? [], found),
-      specs: parsed.specs,
-      attemptedAt,
-    });
   }
 }

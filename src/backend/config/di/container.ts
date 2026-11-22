@@ -81,7 +81,12 @@ import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCrede
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
-import { HermesAI, loadHermesConfig, loadHermesResearchConfig } from '../../infrastructure/external/HermesAI';
+import {
+  HermesAI,
+  loadHermesConfig,
+  loadHermesResearchConfig,
+  loadHermesResearchMaxConcurrency,
+} from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsReader';
@@ -93,6 +98,8 @@ import { ReplyDraftAISelector } from '../../infrastructure/external/ReplyDraftAI
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
 import { AnchorLadderService } from '../../application/services/AnchorLadderService';
+import { PriceResearchGraph } from '../../application/services/PriceResearchGraph';
+import { createResearchCallLimiter } from '../../application/services/researchCallLimiter';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
@@ -470,19 +477,22 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   // The web-enabled research profile serves only the market search; a new probe per search keeps
   // its toolset guard from acting on a cached answer.
   const researchConfig = loadHermesResearchConfig();
-  const anchorLadderService = new AnchorLadderService(
-    productRepo,
-    listingRepo,
-    priceResearchRepo,
-    researchConfig
+  const priceResearchGraph = new PriceResearchGraph({
+    products: productRepo,
+    listings: listingRepo,
+    research: priceResearchRepo,
+    profile: researchConfig
       ? {
           client: new HermesCompletionClient(researchConfig, aiUsageSink),
           checkProfile: () => new HermesHealthProbe(researchConfig).reachability(),
         }
       : null,
-    undefined,
-    overrides.logger,
-  );
+    // One limiter for the process: every research run shares its slots.
+    limiter: createResearchCallLimiter(loadHermesResearchMaxConcurrency()),
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  const anchorLadderService = new AnchorLadderService(priceResearchRepo, priceResearchGraph, undefined, overrides.logger);
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,

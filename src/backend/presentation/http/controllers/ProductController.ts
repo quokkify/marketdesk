@@ -9,10 +9,8 @@ import type { ListingApplicationService } from '../../../application/services/Li
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
-import {
-  SEARCH_NOT_CONFIGURED,
-  type AnchorLadderService,
-} from '../../../application/services/AnchorLadderService';
+import type { AnchorLadderService } from '../../../application/services/AnchorLadderService';
+import { SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -211,12 +209,13 @@ export class ProductController {
       await this.requireProduct(productId, workspaceId);
       const repo = this.requirePriceResearchRepo();
       const { baseUpdatedAt, ...body } = req.body as PriceResearchPutBody;
-      const stored = await repo.findByProduct(workspaceId, productId);
-      if (researchChangedSince(stored?.updatedAt ?? null, baseUpdatedAt)) throw new ConflictError(RESEARCH_CHANGED);
-      const comparables = withNormalizedAutoUrls(body.comparables);
-      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], comparables, stored?.dismissedUrls ?? []);
-      const saved = await repo.upsert(workspaceId, { ...body, comparables, productId, dismissedUrls }, baseUpdatedAt);
-      if (!saved) throw new ConflictError(RESEARCH_CHANGED);
+      // Under the row lock a research run's save takes, so neither overwrites the other's rows or dismissals.
+      const saved = await repo.saveEditLocked(workspaceId, productId, (stored) => {
+        if (researchChangedSince(stored?.updatedAt ?? null, baseUpdatedAt)) throw new ConflictError(RESEARCH_CHANGED);
+        const comparables = withNormalizedAutoUrls(body.comparables);
+        const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], comparables, stored?.dismissedUrls ?? []);
+        return { ...body, comparables, productId, dismissedUrls };
+      });
       ok(res, saved);
     } catch (error) { next(error); }
   };
