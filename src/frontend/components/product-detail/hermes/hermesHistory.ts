@@ -179,7 +179,7 @@ export function buildHistory(input: {
         {
           label: event.title,
           status: event.status === 'applied' ? 'ok' : event.status === 'failed' ? 'bad' : 'none',
-          detail: event.detail ?? '',
+          detail: event.status === 'pending_review' ? 'Waiting for your review' : '',
         },
       ],
     });

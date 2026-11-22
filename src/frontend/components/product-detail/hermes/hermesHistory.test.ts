@@ -199,5 +199,8 @@ describe('buildHistory', () => {
       outcome: { label: 'Pending review', tone: 'warning' },
     });
     expect(entries[0]!.steps[0]!.label).toBe('Lower the price to 279');
+    expect(entries[0]!.steps[0]!.detail).toBe('Waiting for your review');
+    const resolved = buildHistory({ ...base, events: [event({ status: 'applied', detail: 'raw backend text' })] });
+    expect(resolved[0]!.steps[0]!.detail).toBe('');
   });
 });
