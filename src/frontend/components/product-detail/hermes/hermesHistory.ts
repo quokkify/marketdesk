@@ -12,7 +12,7 @@ import type {
 import { checkLabel, overallColor, overallLabel } from '../../products/verdictDisplay.js';
 import { errorReason } from '../priceResearchModel.js';
 
-export type StepStatus = 'ok' | 'bad' | 'none';
+export type StepStatus = 'ok' | 'bad' | 'attention' | 'none';
 export interface HistoryStep {
   label: string;
   status: StepStatus;
@@ -76,6 +76,13 @@ const RESEARCH_OUTCOMES = {
   failed: { label: 'Failed', tone: 'error' },
 } as const;
 
+const EVENT_STEP_STATUS: Partial<Record<HermesEventStatus, StepStatus>> = {
+  applied: 'ok',
+  failed: 'bad',
+  pending_review: 'attention',
+  pending_decision: 'attention',
+};
+
 const RUNNING: HistoryEntry['outcome'] = { label: 'Running', tone: 'info' };
 const FAILED: HistoryEntry['outcome'] = { label: 'Failed', tone: 'error' };
 
@@ -91,6 +98,13 @@ export function historyQueryState(queries: HistoryQuery[]): { loading: boolean; 
   const failed = queries.find((query) => query.isError);
   if (failed) return { loading: false, error: failed.error };
   return { loading: queries.some((query) => query.currentData === undefined), error: undefined };
+}
+
+// The entry opened by default: the newest run, since that is the log the seller just started; a
+// suggestion is created a moment after its analysis and would otherwise take the spot.
+export function defaultExpandedId(entries: HistoryEntry[]): string | null {
+  const run = entries.find((entry) => entry.title !== 'Suggestion');
+  return (run ?? entries[0])?.id ?? null;
 }
 
 export function formatDuration(ms: number): string {
@@ -200,7 +214,7 @@ export function buildHistory(input: {
       steps: [
         {
           label: event.title,
-          status: event.status === 'applied' ? 'ok' : event.status === 'failed' ? 'bad' : 'none',
+          status: EVENT_STEP_STATUS[event.status] ?? 'none',
           detail: event.status === 'pending_review' ? 'Waiting for your review' : '',
         },
       ],

@@ -1,5 +1,5 @@
 import type { HermesEvent, ResearchRun, SaleVerdict, VerdictCheck } from '@shared/types';
-import { buildHistory, historyQueryState } from './hermesHistory';
+import { buildHistory, defaultExpandedId, historyQueryState } from './hermesHistory';
 
 const T0 = '2026-11-20T10:00:00.000Z';
 const T1 = '2026-11-20T10:01:00.000Z';
@@ -200,6 +200,7 @@ describe('buildHistory', () => {
     });
     expect(entries[0]!.steps[0]!.label).toBe('Lower the price to 279');
     expect(entries[0]!.steps[0]!.detail).toBe('Waiting for your review');
+    expect(entries[0]!.steps[0]!.status).toBe('attention');
     const resolved = buildHistory({ ...base, events: [event({ status: 'applied', detail: 'raw backend text' })] });
     expect(resolved[0]!.steps[0]!.detail).toBe('');
   });
@@ -239,5 +240,20 @@ describe('historyQueryState', () => {
       loading: false,
       error: failure,
     });
+  });
+});
+
+describe('defaultExpandedId', () => {
+  const entry = (id: string, title: 'Analysis' | 'Price search' | 'Suggestion') =>
+    ({ id, at: T0, title, startedBy: 'you', durationMs: null, outcome: { label: 'x', tone: 'default' }, steps: [] }) as const;
+
+  it('opens the newest run, skipping suggestions above it', () => {
+    expect(defaultExpandedId([entry('s', 'Suggestion'), entry('a', 'Analysis'), entry('p', 'Price search')])).toBe('a');
+    expect(defaultExpandedId([entry('a', 'Analysis'), entry('s', 'Suggestion')])).toBe('a');
+  });
+
+  it('falls back to the newest entry when there is no run, and to null when empty', () => {
+    expect(defaultExpandedId([entry('s1', 'Suggestion'), entry('s2', 'Suggestion')])).toBe('s1');
+    expect(defaultExpandedId([])).toBeNull();
   });
 });

@@ -45,7 +45,7 @@ describe('HistoryTab', () => {
     expect(html).toMatch(/data-testid="history-entry-outcome"[^>]*>(?:<style[^>]*>[^<]*<\/style>)?<span[^>]*>Ready to sell/);
   });
 
-  it('the newest entry is expanded and lists its steps with a word for each status', () => {
+  it('the newest run is expanded and lists its steps with a word for each status', () => {
     const html = render({ entries: [entry(0), entry(1)] });
 
     expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
@@ -56,6 +56,17 @@ describe('HistoryTab', () => {
     expect(html).toContain('Needs a fix: ');
     expect(html).toContain('Not run: ');
     expect(html).toContain('Only one photo');
+  });
+
+  it('opens the newest run, not a suggestion made after it', () => {
+    const suggestion = entry(0, { id: 'sug', title: 'Suggestion', startedBy: 'Hermes', durationMs: null, steps: [{ label: 'Shorten the title', status: 'attention', detail: 'Waiting for your review' }] });
+    const html = render({ entries: [suggestion, entry(1, { id: 'run' })] });
+    const [first, second] = html.split('data-testid="history-entry"').slice(1);
+
+    expect(first).toContain('aria-expanded="false"');
+    expect(second).toContain('aria-expanded="true"');
+    expect(first).toContain('Needs you: ');
+    expect(html).not.toContain('Not run: Shorten');
   });
 
   it('a running entry shows no duration', () => {

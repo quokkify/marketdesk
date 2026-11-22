@@ -16,7 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ErrorRetry } from '../../common/ErrorRetry.js';
 import { LoadingSkeleton } from '../../common/Skeleton.js';
 import { formatDateTime } from '../../../utils/formatters.js';
-import { formatDuration, type HistoryEntry, type HistoryStep } from './hermesHistory.js';
+import { defaultExpandedId, formatDuration, type HistoryEntry, type HistoryStep } from './hermesHistory.js';
 import type { RowStatus } from './hermesCardModel.js';
 import { STATUS_TEXT, StatusMark } from './StatusMark.js';
 
@@ -35,6 +35,7 @@ const CHIP_COLOR = {
 function stepStatus(step: HistoryStep): RowStatus {
   if (step.status === 'ok') return 'ok';
   if (step.status === 'bad') return 'bad';
+  if (step.status === 'attention') return 'attention';
   return step.detail === 'Running' ? 'running' : 'idle';
 }
 
@@ -120,6 +121,7 @@ export interface HistoryTabProps {
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({ entries, loading, error, onRetry }) => {
   const [shown, setShown] = useState(PAGE_SIZE);
+  const expandedId = defaultExpandedId(entries);
   if (loading) return <LoadingSkeleton lines={3} height={56} />;
   if (error) return <ErrorRetry error={error} onRetry={onRetry} title="History unavailable" />;
   if (entries.length === 0) {
@@ -132,8 +134,8 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({ entries, loading, error,
   return (
     <Stack spacing={1.5}>
       <Stack sx={{ border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden', '& > * + *': { borderTop: 1, borderColor: 'divider' } }}>
-        {entries.slice(0, shown).map((entry, index) => (
-          <EntryRow key={entry.id} entry={entry} defaultExpanded={index === 0} />
+        {entries.slice(0, shown).map((entry) => (
+          <EntryRow key={entry.id} entry={entry} defaultExpanded={entry.id === expandedId} />
         ))}
       </Stack>
       {entries.length > shown && (
