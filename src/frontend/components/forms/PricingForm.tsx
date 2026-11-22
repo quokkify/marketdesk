@@ -1,6 +1,7 @@
 // Compact price editor for a single listing (used on the listing detail page).
 import React, { useMemo, useState } from 'react';
 import { Alert, Button, InputAdornment, Stack, TextField, Typography } from '@mui/material';
+import { numberInputProps } from './numberInput.js';
 
 export interface PricingFormProps {
   currentPrice: number;
@@ -48,7 +49,7 @@ export const PricingForm: React.FC<PricingFormProps> = ({
             input: {
               startAdornment: <InputAdornment position="start">{currency}</InputAdornment>,
             },
-            htmlInput: { min: 0, step: '0.01' },
+            htmlInput: numberInputProps({ min: 0, step: '0.01' }),
           }}
           fullWidth
         />

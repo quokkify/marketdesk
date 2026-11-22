@@ -110,6 +110,7 @@ import type {
 } from '../components/forms/index.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 import { advancePublicationJourney } from '../workflows/publicationJourneyGraph.js';
+import { numberInputProps } from '../components/forms/numberInput.js';
 import { submitWizardProduct } from '../workflows/creationJourney.js';
 import type { TargetConnection } from '../workflows/creationJourney.js';
 
@@ -969,7 +970,7 @@ const ProductsPage: React.FC = () => {
                 onChange={(event) =>
                   navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)
                 }
-                slotProps={{ htmlInput: { min: 0 } }}
+                slotProps={{ htmlInput: numberInputProps({ min: 0 }) }}
               />
               <TextField
                 size="small"
@@ -979,7 +980,7 @@ const ProductsPage: React.FC = () => {
                 onChange={(event) =>
                   navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)
                 }
-                slotProps={{ htmlInput: { min: 0 } }}
+                slotProps={{ htmlInput: numberInputProps({ min: 0 }) }}
               />
               <Autocomplete
                 multiple

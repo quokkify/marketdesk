@@ -121,4 +121,10 @@ public class ProductDetailPageVerification
     page.anchorClassLine().shouldHave(Condition.text(text), getTimeout());
     return this;
   }
+
+  @Step("The selling price field holds exactly {price}")
+  public ProductDetailPageVerification sellingPriceIs(String price) {
+    page.sellingPriceInput().shouldHave(Condition.exactValue(price), getTimeout());
+    return this;
+  }
 }
