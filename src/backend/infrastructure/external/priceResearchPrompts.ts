@@ -53,21 +53,22 @@ const attributeSchema = z.object({
   match: z.enum(['equal', 'ratio']),
 });
 
-const identificationSchema = z.object({
+const sameClassModelSchema = z.object({
   model: z.string().trim().min(1),
-  specs: z.string().transform((s) => s.trim().slice(0, MAX_SPECS_LENGTH).trim()),
-  classAttributes: z.array(attributeSchema).max(MAX_ATTRIBUTES),
-  successors: z.array(z.string()).max(MAX_SUCCESSORS),
-  sameClassModels: z
-    .array(
-      z.object({
-        model: z.string().min(1),
-        classAttributes: z.array(attributeSchema).max(MAX_ATTRIBUTES),
-        url: z.string(),
-      })
-    )
-    .max(MAX_SAME_CLASS_MODELS),
+  classAttributes: z.array(z.unknown()),
+  url: z.string().min(1),
 });
+
+const MAX_SUCCESSOR_LENGTH = 120;
+
+function parseAttributes(value: unknown[]): ClassAttribute[] {
+  const attributes: ClassAttribute[] = [];
+  for (const entry of value) {
+    const parsed = attributeSchema.safeParse(entry);
+    if (parsed.success) attributes.push(parsed.data);
+  }
+  return attributes.slice(0, MAX_ATTRIBUTES);
+}
 
 // The only item fields a prompt may carry; the graph builds every prompt input through this.
 export function researchItemFromProduct(
@@ -112,9 +113,43 @@ export function buildIdentifyPrompt(input: ResearchItem): { system: string; prom
   return { system: SYSTEM, prompt };
 }
 
+// Tolerant: arrays are clamped and invalid elements dropped, so a partly good answer still yields
+// an identification. Only the model and the classAttributes array itself are mandatory.
 export function parseIdentification(raw: string): Identification | null {
-  const parsed = identificationSchema.safeParse(extractObject(raw));
-  return parsed.success ? parsed.data : null;
+  const value = extractObject(raw);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const { model, specs, classAttributes, successors, sameClassModels } = value as Record<
+    string,
+    unknown
+  >;
+  if (typeof model !== 'string' || model.trim() === '' || !Array.isArray(classAttributes))
+    return null;
+  const specsText =
+    typeof specs === 'string'
+      ? specs
+      : specs === undefined || specs === null
+        ? ''
+        : JSON.stringify(specs);
+  const models: Identification['sameClassModels'] = [];
+  for (const entry of Array.isArray(sameClassModels) ? sameClassModels : []) {
+    const parsed = sameClassModelSchema.safeParse(entry);
+    if (parsed.success) {
+      models.push({
+        ...parsed.data,
+        classAttributes: parseAttributes(parsed.data.classAttributes),
+      });
+    }
+  }
+  return {
+    model: model.trim(),
+    specs: specsText.trim().slice(0, MAX_SPECS_LENGTH).trim(),
+    classAttributes: parseAttributes(classAttributes),
+    successors: (Array.isArray(successors) ? successors : [])
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+      .map((entry) => entry.trim().slice(0, MAX_SUCCESSOR_LENGTH).trim())
+      .slice(0, MAX_SUCCESSORS),
+    sameClassModels: models.slice(0, MAX_SAME_CLASS_MODELS),
+  };
 }
 
 const TIER_INSTRUCTIONS: Record<

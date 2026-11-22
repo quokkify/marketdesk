@@ -49,7 +49,7 @@ function allPrompts(input = item): { system: string; prompt: string }[] {
 describe('priceResearchPrompts', () => {
   it('every prompt names its node and the skip-hosts line', () => {
     const identify = buildIdentifyPrompt(item);
-    expect(identify.prompt).toContain('identify');
+    expect(identify.prompt).toContain('Node: identify');
     expect(identify.prompt).toContain('allegro.pl, mediaexpert.pl, kaufland.pl and alza');
     for (const node of TIER_NODES) {
       const { prompt } = buildTierPrompt(node, item, ident);
@@ -123,6 +123,11 @@ describe('priceResearchPrompts', () => {
   });
 });
 
+const SPIKE_IDENT =
+  '{"model":"AOPEN QH11 (QH11 / MR.JT411.002)","specs":{"nativeResolution":"1280\\u00d7720 (720p)","ansiLumens":200,"lightSource":"LED, rated for up to 50,000 hours","portability":"Portable; approximately 1.3 kg"},"successors":["AOPEN QH12a \\u2014 1280\\u00d7720, 135 ANSI lumens"],"sameClassModels":[{"model":"Strong N1","nativeResolution":"1280\\u00d7720 (720p)","ansiLumens":150,"url":"https://www.avxperten.pl/strong-n1-dataprojektor-150-lumenow-led-720p-1280x720-bialy.asp"},{"model":"BenQ GV30","nativeResolution":"1280\\u00d7720 (720p)","ansiLumens":300,"url":"https://www.benq.eu/en-eu/projector/portable/gv30/spec.html"}]}';
+
+const attrOf = (name: string) => ({ name, value: 1, match: 'equal' });
+
 describe('parseIdentification', () => {
   const valid = {
     model: 'Wanbo T2 Max',
@@ -152,22 +157,65 @@ describe('parseIdentification', () => {
     expect(parseIdentification('[1,2]')).toBeNull();
   });
 
-  it('truncates specs to 300 chars and rejects more than the allowed counts', () => {
+  it('clamps specs to 300 chars and arrays to their maximums', () => {
     expect(
       parseIdentification(JSON.stringify({ ...valid, specs: 'a'.repeat(500) }))?.specs
     ).toHaveLength(300);
     const attr = valid.classAttributes[0];
+    const many = parseIdentification(
+      JSON.stringify({
+        ...valid,
+        classAttributes: Array(10).fill(attr),
+        successors: Array(7).fill('b'.repeat(200)),
+        sameClassModels: Array(7).fill(valid.sameClassModels[0]),
+      })
+    );
+    expect(many?.classAttributes).toHaveLength(8);
+    expect(many?.successors).toHaveLength(5);
+    expect(many?.successors[0]).toHaveLength(120);
+    expect(many?.sameClassModels).toHaveLength(5);
+  });
+
+  it('drops invalid attributes and same-class models instead of failing the parse', () => {
+    const parsed = parseIdentification(
+      JSON.stringify({
+        ...valid,
+        classAttributes: [
+          attrOf('ok'),
+          { name: 'n', value: null, match: 'equal' },
+          { name: 'n', value: 1, match: 'weird' },
+        ],
+        sameClassModels: [{ ...valid.sameClassModels[0], url: null }, valid.sameClassModels[0]],
+      })
+    );
+    expect(parsed?.classAttributes.map((a) => a.name)).toEqual(['ok']);
+    expect(parsed?.sameClassModels).toHaveLength(1);
+  });
+
+  it('accepts specs given as an object by stringifying it', () => {
+    const parsed = parseIdentification(
+      JSON.stringify({ ...valid, specs: { nativeResolution: '720p', ansiLumens: 200 } })
+    );
+    expect(parsed?.specs).toBe('{"nativeResolution":"720p","ansiLumens":200}');
+  });
+
+  it('keeps an empty classAttributes array (class unknown) and requires the key', () => {
     expect(
-      parseIdentification(JSON.stringify({ ...valid, classAttributes: Array(9).fill(attr) }))
-    ).toBeNull();
-    expect(
-      parseIdentification(JSON.stringify({ ...valid, successors: Array(6).fill('a') }))
-    ).toBeNull();
-    expect(
-      parseIdentification(
-        JSON.stringify({ ...valid, sameClassModels: Array(6).fill(valid.sameClassModels[0]) })
-      )
-    ).toBeNull();
+      parseIdentification(JSON.stringify({ ...valid, classAttributes: [] }))?.classAttributes
+    ).toEqual([]);
+  });
+
+  it('handles the real spike answer, which lacks classAttributes', () => {
+    expect(parseIdentification(SPIKE_IDENT)).toBeNull();
+    const parsed = parseIdentification(
+      JSON.stringify({ ...JSON.parse(SPIKE_IDENT), classAttributes: [] })
+    );
+    expect(parsed?.model).toBe('AOPEN QH11 (QH11 / MR.JT411.002)');
+    expect(parsed?.classAttributes).toEqual([]);
+    expect(parsed?.specs).toContain('1280');
+    expect(parsed?.successors).toHaveLength(1);
+    // Its same-class models carry no classAttributes array, so they are dropped.
+    expect(parsed?.sameClassModels).toEqual([]);
   });
 });
 
