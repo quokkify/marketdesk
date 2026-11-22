@@ -17,3 +17,15 @@ export function nextAutoAt(outcome: RunOutcome, consecutiveFailures: number, fin
       : Math.min(FIRST_FAILURE_WAIT_MS * 2 ** (Math.max(consecutiveFailures, 1) - 1), MAX_FAILURE_WAIT_MS);
   return new Date(finishedAt.getTime() + waitMs);
 }
+
+// Whether automatic research is due: after the last finished run's nextAutoAt. A product with no runs
+// yet that was researched before runs existed waits the ok-run interval from that attempt, so the
+// first automatic requests after the change do not research every product at once.
+export function researchDue(
+  last: { nextAutoAt: string | null } | null,
+  lastAttemptAt: string | null | undefined,
+  now: Date,
+): boolean {
+  if (last) return !last.nextAutoAt || now.getTime() >= Date.parse(last.nextAutoAt);
+  return !(typeof lastAttemptAt === 'string' && now.getTime() - Date.parse(lastAttemptAt) < RECHECK_WAIT_MS);
+}
