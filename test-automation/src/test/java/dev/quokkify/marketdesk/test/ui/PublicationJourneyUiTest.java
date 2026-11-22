@@ -119,6 +119,9 @@ public class PublicationJourneyUiTest extends BaseUiTest {
     productsPageSteps
         .useWindowSize(PHONE_WIDTH, PHONE_HEIGHT)
         .openProductsPage()
+        .verify()
+        .viewportIs(PHONE_WIDTH, PHONE_HEIGHT)
+        .backToSteps()
         .openNewProductDialog()
         .fillWizardForSandboxCameras(uniqueName())
         .verify()

@@ -23,7 +23,8 @@ public class ProductsPage implements Page {
   private static final String PRODUCT_COLUMN = "Product";
   private static final String UPDATED_COLUMN = "Updated";
   private static final String AI_COLUMN = "AI";
-  private static final By PRODUCT_LINK = By.tagName("a");
+  // The q4j table snapshot accepts only XPath and CSS item locators.
+  private static final By PRODUCT_LINK = By.cssSelector("a");
   private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
   private static final String FILTERS_PANEL = "#products-filters .MuiCard-root";
   private static final String FILTERS_ENTERED = "#products-filters.MuiCollapse-entered";
@@ -41,9 +42,16 @@ public class ProductsPage implements Page {
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String CLOSE = "Close";
   private static final String ARIA_LABEL = "aria-label";
+  private static final String INNER_WIDTH_SCRIPT = "return window.innerWidth;";
+  private static final String INNER_HEIGHT_SCRIPT = "return window.innerHeight;";
   private static final String CLICK_TWICE_SCRIPT = "arguments[0].click(); arguments[0].click();";
+  // Typing and picking scroll the dialog content, so it is scrolled back to the top before measuring:
+  // the button must fit without any scrolling.
   private static final String FULLY_IN_VIEWPORT_SCRIPT =
-      "const r = arguments[0].getBoundingClientRect();"
+      "const content = arguments[0].closest('[role=\"dialog\"]').querySelector('.MuiDialogContent-root');"
+          + "if (content) { content.scrollTop = 0; }"
+          + "window.scrollTo(0, 0);"
+          + "const r = arguments[0].getBoundingClientRect();"
           + "return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;";
   private static final String PHOTO_INPUT = "input[type=\"file\"]";
   private static final String CONTINUE = "Continue";
@@ -150,6 +158,19 @@ public class ProductsPage implements Page {
 
   public boolean isFullyInViewport(WebElement element) {
     return Boolean.TRUE.equals(Selenide.executeJavaScript(FULLY_IN_VIEWPORT_SCRIPT, element));
+  }
+
+  public long viewportWidth() {
+    return readNumber(INNER_WIDTH_SCRIPT);
+  }
+
+  public long viewportHeight() {
+    return readNumber(INNER_HEIGHT_SCRIPT);
+  }
+
+  private static long readNumber(String script) {
+    Number value = Selenide.executeJavaScript(script);
+    return value == null ? -1 : value.longValue();
   }
 
   public void resizeWindow(int width, int height) {

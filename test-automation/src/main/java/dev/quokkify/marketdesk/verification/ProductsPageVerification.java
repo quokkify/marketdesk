@@ -49,6 +49,14 @@ public class ProductsPageVerification
     return this;
   }
 
+  // The window size includes browser chrome, so the page may get less height than asked, never more width.
+  @Step("The page is laid out {width}px wide and at most {height}px high")
+  public ProductsPageVerification viewportIs(int width, int height) {
+    assertThat(page.viewportWidth()).isEqualTo(width);
+    assertThat(page.viewportHeight()).isPositive().isLessThanOrEqualTo(height);
+    return this;
+  }
+
   @Step("Publish to OLX is fully inside the viewport without scrolling")
   public ProductsPageVerification publishToOlxIsFullyInViewport() {
     page.publishToOlxButton().shouldHave(
