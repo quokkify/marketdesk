@@ -14,7 +14,8 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
 
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final int FILTERS_GAP_PX = 16;
-  private static final String ACTIVE_TAB = "Active";
+  // A product created through the API starts as a draft, so it is listed on All, not on Active.
+  private static final String CURRENT_TAB = "All";
 
   @Test
   public void catalogueShowsOnlyUsefulColumns() {
@@ -66,21 +67,21 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
   }
 
   @Test
-  public void suggestionIsApprovedInPlaceOnTheActiveTab() {
+  public void suggestionIsApprovedInPlaceOnTheCurrentTab() {
     signInWithOneListedProduct();
     productsPageSteps
-        .openTab(ACTIVE_TAB)
+        .openTab(CURRENT_TAB)
         .analyzeRow(PRODUCT_NAME)
         .verify()
         .reviewExpandedUnder(PRODUCT_NAME)
         .isOnProductsPage()
-        .activeTabSelected();
+        .tabSelected(CURRENT_TAB);
     productsPageSteps
         .approveFirstSuggestion(PRODUCT_NAME)
         .verify()
         .rowShowsAllReviewed(PRODUCT_NAME)
         .isOnProductsPage()
-        .activeTabSelected();
+        .tabSelected(CURRENT_TAB);
   }
 
   @Test

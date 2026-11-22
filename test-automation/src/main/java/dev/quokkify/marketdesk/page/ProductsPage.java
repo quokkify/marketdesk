@@ -17,6 +17,7 @@ public class ProductsPage implements Page {
   private static final String BODY_ROWS = CATALOGUE_TABLE + " tbody tr";
   private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
   private static final String FILTERS_PANEL = "#products-filters .MuiCard-root";
+  private static final String FILTERS_ENTERED = "#products-filters.MuiCollapse-entered";
   private static final String ANALYZE_BUTTON = "button[aria-label=\"Analyze with AI: %s\"]";
   private static final String REVIEW_TOGGLE = "button[aria-controls^=\"product-review-\"]";
   private static final String REVIEW_REGION = "[id^=\"product-review-\"]";
@@ -42,6 +43,10 @@ public class ProductsPage implements Page {
 
   public SelenideElement filtersButton() {
     return Selenide.$(FILTERS_BUTTON);
+  }
+
+  public SelenideElement filtersFullyOpen() {
+    return Selenide.$(FILTERS_ENTERED);
   }
 
   public SelenideElement filtersPanel() {

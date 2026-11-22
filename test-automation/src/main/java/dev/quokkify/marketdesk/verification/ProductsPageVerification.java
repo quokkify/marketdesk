@@ -20,7 +20,6 @@ public class ProductsPageVerification
   private static final String PRODUCTS_PATH = "/products";
   private static final String EXPANDED = "aria-expanded";
   private static final String SELECTED = "aria-pressed";
-  private static final String ACTIVE_TAB = "Active";
   private static final Pattern ANALYSIS_RESULT = Pattern.compile("\\d+ to review|No new suggestions");
   private static final String ALL_REVIEWED = "All reviewed";
 
@@ -78,9 +77,9 @@ public class ProductsPageVerification
     return this;
   }
 
-  @Step("The Active tab is still selected")
-  public ProductsPageVerification activeTabSelected() {
-    page.tab(ACTIVE_TAB).shouldHave(Condition.attribute(SELECTED, "true"));
+  @Step("The {label} tab is still selected")
+  public ProductsPageVerification tabSelected(String label) {
+    page.tab(label).shouldHave(Condition.attribute(SELECTED, "true"));
     return this;
   }
 

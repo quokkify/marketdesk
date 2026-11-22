@@ -34,6 +34,8 @@ public class ProductsPageSteps
     page.filtersButton().shouldBe(Condition.visible).click();
     page.filtersButton().shouldHave(Condition.attribute(EXPANDED, "true"));
     page.filtersPanel().shouldBe(Condition.visible);
+    // Measure only after the Collapse transition ends; mid-animation the card overflows its wrapper.
+    page.filtersFullyOpen().shouldBe(Condition.exist);
     return this;
   }
 
