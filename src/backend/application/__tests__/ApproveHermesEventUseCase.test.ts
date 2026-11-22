@@ -18,6 +18,8 @@ import {
   RecordingJobQueue,
   idFactory,
 } from '../testkit/support';
+import { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import { PriceChangeService } from '../services/PriceChangeService';
 import type { PublishListingJob } from '../ports/IJobQueue';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
 import { GuardrailViolationError, InvalidStateError } from '../../domain/shared/DomainError';
@@ -132,6 +134,13 @@ function setup(
     },
   };
 
+  const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
+    listingRepo,
+    marketplaceRepo,
+    publishQueue,
+    idFactory('rec'),
+    accountRepo
+  );
   const useCase = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
@@ -142,6 +151,14 @@ function setup(
     publishQueue,
     publisher,
     idFactory('rec'),
+    new PriceChangeService(
+      productRepo,
+      listingRepo,
+      priceHistory,
+      marketplaceUpdateEnqueuer,
+      idFactory('rec')
+    ),
+    marketplaceUpdateEnqueuer,
     accountRepo,
     olxQuota
   );

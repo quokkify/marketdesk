@@ -111,6 +111,8 @@ import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUs
 import { PublishListingUseCase } from '../../application/usecases/PublishListingUseCase';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
 import { RunHermesUseCase } from '../../application/usecases/RunHermesUseCase';
+import { MarketplaceUpdateEnqueuer } from '../../application/services/MarketplaceUpdateEnqueuer';
+import { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../../application/usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../../application/usecases/DismissHermesEventUseCase';
 import { ProductApplicationService } from '../../application/services/ProductApplicationService';
@@ -494,9 +496,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     workspaceRepo,
     idGenerator
   );
-  const updateProductUC = new UpdateProductUseCase(productRepo, eventPublisher, (work) =>
-    withPoolTransaction(pool, (client) => work(new ProductRepository(pool, client)))
-  );
   const publishListingUC = new PublishListingUseCase(
     listingRepo,
     productRepo,
@@ -510,6 +509,25 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   const syncMarketplaceUC = new SyncMarketplaceUseCase(marketplaceRepo, listingRepo, syncQueue);
   const runHermesUC = new RunHermesUseCase(hermesEngine, workspaceRepo);
+  const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
+    listingRepo,
+    marketplaceRepo,
+    publishQueue,
+    idGenerator,
+    marketplaceAccountRepo
+  );
+  const priceChangeService = new PriceChangeService(
+    productRepo,
+    listingRepo,
+    priceHistoryRepo,
+    marketplaceUpdateEnqueuer,
+    idGenerator
+  );
+  const updateProductUC = new UpdateProductUseCase(productRepo, eventPublisher, (work) =>
+    withPoolTransaction(pool, (client) => work(new ProductRepository(pool, client))),
+    undefined,
+    priceChangeService
+  );
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
@@ -520,6 +538,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     publishQueue,
     eventPublisher,
     idGenerator,
+    priceChangeService,
+    marketplaceUpdateEnqueuer,
     marketplaceAccountRepo,
     olxPublicationQuotaService
   );
@@ -967,6 +987,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     authUserStore,
     priceHistoryReader: priceHistoryRepo,
     priceHistoryRecorder: priceHistoryRepo,
+    priceChangeService,
     idGenerator,
     logger: overrides.logger,
     requestLogger: overrides.logger,

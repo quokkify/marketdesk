@@ -9,7 +9,7 @@ import type { Product } from '../../domain/entities/Product';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IProductImageStorage } from '../ports/IProductImageStorage';
-import type { PaginatedResponse } from '../../../shared/types';
+import type { PaginatedResponse, PriceSync } from '../../../shared/types';
 import { isUuid } from '../../../shared/validation/identifiers';
 import { CreateProductUseCase } from '../usecases/CreateProductUseCase';
 import { UpdateProductUseCase } from '../usecases/UpdateProductUseCase';
@@ -63,9 +63,11 @@ export class ProductApplicationService {
     return result.isErr() ? result : Ok(presentProduct(result.value));
   }
 
-  async updateProduct(dto: UpdateProductDTO): Promise<Result<ProductView>> {
-    const result = await this.updateProductUseCase.execute(dto);
-    return result.isErr() ? result : Ok(presentProduct(result.value));
+  async updateProduct(dto: UpdateProductDTO): Promise<Result<ProductView & { priceSync?: PriceSync }>> {
+    const result = await this.updateProductUseCase.executeWithPriceSync(dto);
+    if (result.isErr()) return result;
+    const { product, priceSync } = result.value;
+    return Ok({ ...presentProduct(product), ...(priceSync ? { priceSync } : {}) });
   }
 
   async getProduct(id: string, workspaceId: string): Promise<ProductView | null> {

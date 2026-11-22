@@ -38,6 +38,7 @@ import { ProductImageUploadService as DefaultProductImageUploadService } from '.
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { ProductController } from './controllers/ProductController';
 import { ConversationController } from './controllers/ConversationController';
+import type { PriceChangeService } from '../../application/services/PriceChangeService';
 import { ListingController } from './controllers/ListingController';
 import { MarketplaceController } from './controllers/MarketplaceController';
 import { HermesController } from './controllers/HermesController';
@@ -110,6 +111,7 @@ export interface AppDeps {
   // Optional ports (graceful degradation until wired).
   priceHistoryReader?: IPriceHistoryReader;
   priceHistoryRecorder?: IPriceHistoryRecorder;
+  priceChangeService?: PriceChangeService;
   idGenerator?: IdGenerator;
   logger?: ErrorLogger;
   // Writes one line per API request; absent in tests that do not care about the log.
@@ -238,8 +240,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,
-      priceHistoryRecorder: deps.priceHistoryRecorder,
-      idGenerator: deps.idGenerator,
+      priceChangeService: deps.priceChangeService,
       productRepo: deps.productRepo,
       marketplaceRepo: deps.marketplaceRepo,
       olxTaxonomyResolver: deps.olxTaxonomyResolver,

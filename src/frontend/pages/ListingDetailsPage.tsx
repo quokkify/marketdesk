@@ -86,6 +86,7 @@ import { ListingsTable } from '../components/tables/index.js';
 import { OlxCategoryPicker, ProductForm } from '../components/forms/index.js';
 import type { ProductFormValues, WizardOlxCategory } from '../components/forms/index.js';
 import { PricingForm } from '../components/forms/index.js';
+import { priceSyncMessage } from '../components/product-detail/priceSyncMessage.js';
 import { SeoRecommendationQueue } from '../components/hermes/index.js';
 import {
   mainPreviewImageSx,
@@ -820,8 +821,11 @@ const ListingDetailsPage: React.FC = () => {
 
   const handleEdit = async (values: ProductFormValues) => {
     try {
-      await updateProduct({ id: productId, patch: values }).unwrap();
-      dispatch(enqueueToast({ message: 'Product updated.', severity: 'success' }));
+      const updated = await updateProduct({ id: productId, patch: values }).unwrap();
+      const message = updated.priceSync
+        ? priceSyncMessage(updated.priceSync, formatMoney(updated.sellingPrice, currency))
+        : 'Product updated.';
+      dispatch(enqueueToast({ message, severity: 'success' }));
       setEditOpen(false);
     } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
@@ -831,8 +835,13 @@ const ListingDetailsPage: React.FC = () => {
   const handleUpdatePrice = async (price: number) => {
     if (!priceListing) return;
     try {
-      await updateListing({ id: priceListing.id, patch: { price } }).unwrap();
-      dispatch(enqueueToast({ message: 'Listing price updated.', severity: 'success' }));
+      const updated = await updateListing({ id: priceListing.id, patch: { price } }).unwrap();
+      dispatch(
+        enqueueToast({
+          message: priceSyncMessage(updated.priceSync, formatMoney(updated.price, updated.currency)),
+          severity: 'success',
+        }),
+      );
       setPriceListing(null);
     } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
@@ -1678,13 +1687,18 @@ const ListingDetailsPage: React.FC = () => {
         maxWidth="xs"
       >
         {priceListing && (
-          <PricingForm
-            currentPrice={priceListing.price}
-            costPrice={p.costPrice ?? undefined}
-            currency={currency}
-            submitting={pricing}
-            onSubmit={handleUpdatePrice}
-          />
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              The price is also updated on OLX: the advert is rewritten from MarketDesk data.
+            </Typography>
+            <PricingForm
+              currentPrice={priceListing.price}
+              costPrice={p.costPrice ?? undefined}
+              currency={currency}
+              submitting={pricing}
+              onSubmit={handleUpdatePrice}
+            />
+          </Stack>
         )}
       </Modal>
     </Box>

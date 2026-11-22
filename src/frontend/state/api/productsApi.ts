@@ -10,6 +10,7 @@ import type {
   ProductImprovementSuggestions,
   PriceResearch,
   ComparableCandidate,
+  PriceSync,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
@@ -133,9 +134,9 @@ export const productsApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<{ deleted: boolean }>) => unwrap(res),
     }),
 
-    updateProduct: builder.mutation<Product, UpdateProductArg>({
+    updateProduct: builder.mutation<Product & { priceSync?: PriceSync }, UpdateProductArg>({
       query: ({ id, patch }) => ({ url: `/products/${id}`, method: 'PATCH', body: patch }),
-      transformResponse: (res: ApiResponse<Product>) => unwrap(res),
+      transformResponse: (res: ApiResponse<Product & { priceSync?: PriceSync }>) => unwrap(res),
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Product', id },
         { type: 'Product', id: 'LIST' },
