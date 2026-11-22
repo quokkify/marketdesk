@@ -156,7 +156,8 @@ export function discountLine(price: number, research: PriceResearch | null, curr
   return `${percentText(percent)} vs new · ${formatMoney(research.retailPrice, currency)}${origin ? ` (${origin})` : ''}`;
 }
 
-// A price the owner types over a web row is no longer the advert's price, so the row becomes manual.
+// A price the owner types over a web or auto row is no longer the advert's price, so the row becomes manual.
+// An auto row keeps its tier, so it still counts toward its tier's anchor.
 export function editComparablePrice(
   rows: PriceResearchForm['comparables'],
   index: number,
@@ -164,7 +165,12 @@ export function editComparablePrice(
 ): PriceResearchForm['comparables'] {
   return rows.map((row, i) => {
     if (i !== index) return row;
-    if (row.source !== 'web' || row.price === price) return { ...row, price };
+    if (row.price === price) return { ...row, price };
+    if (row.source === 'auto') {
+      const { url: _url, seenAt: _seenAt, ...rest } = row;
+      return { ...rest, price, source: 'manual' };
+    }
+    if (row.source !== 'web') return { ...row, price };
     const { source: _source, url: _url, ...manual } = row;
     return { ...manual, price };
   });

@@ -224,4 +224,17 @@ describe('automatic comparables through the form', () => {
     const result = toPriceResearchBody(toPriceResearchForm({ ...research, comparables: [auto] }));
     expect(result).toEqual({ ok: true, body: expect.objectContaining({ comparables: [auto] }) });
   });
+
+  const auto = {
+    price: '280', note: 'Phone', url: 'https://www.olx.pl/d/oferta/a-CID99-ID1a.html',
+    source: 'auto' as const, tier: 'substitute_used' as const, seenAt: '2026-11-22',
+  };
+
+  it('dropsAutoMarkersWhenPriceOfAutoRowChanges', () => {
+    expect(editComparablePrice([auto], 0, '260')).toEqual([{ price: '260', note: 'Phone', source: 'manual', tier: 'substitute_used' }]);
+  });
+
+  it('keepsAutoRowWhenPriceIsUnchanged', () => {
+    expect(editComparablePrice([auto], 0, '280')).toEqual([auto]);
+  });
 });
