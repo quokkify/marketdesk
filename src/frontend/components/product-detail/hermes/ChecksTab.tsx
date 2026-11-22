@@ -11,6 +11,8 @@ export interface ChecksTabProps {
   // The price fix the card offers, if any.
   setPrice: { label: string; eventId: string } | null;
   busy: boolean;
+  // An analysis is running, so a missing verdict is on its way.
+  running: boolean;
   now: Date;
   onSetPrice: (eventId: string) => void;
   onOpenPrices: () => void;
@@ -29,6 +31,7 @@ export const ChecksTab: React.FC<ChecksTabProps> = ({
   verdict,
   setPrice,
   busy,
+  running,
   now,
   onSetPrice,
   onOpenPrices,
@@ -84,7 +87,7 @@ export const ChecksTab: React.FC<ChecksTabProps> = ({
       </Stack>
     ) : (
       <Typography variant="body2" color="text.secondary">
-        Not checked yet. Run Analyze to get a verdict.
+        {running ? 'Checking…' : 'Not checked yet. Run Analyze to get a verdict.'}
       </Typography>
     )}
     {children}

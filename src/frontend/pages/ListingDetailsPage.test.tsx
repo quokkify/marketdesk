@@ -134,11 +134,17 @@ describe('ListingDetailsPage presentation', () => {
     const oneToFix = verdict({ price: check('fix'), info: check('ready'), photos: check('ready') });
     const twoToFix = verdict({ price: check('fix'), info: check('needs_human'), photos: check('ready') });
 
-    expect(hermesFixHint(oneToFix, false)).toBe('Hermes: 1 thing to fix');
-    expect(hermesFixHint(twoToFix, false)).toBe('Hermes: 2 things to fix');
-    expect(hermesFixHint(verdict({ price: check('ready'), info: check('ready') }), false)).toBeNull();
-    expect(hermesFixHint(null, false)).toBeNull();
-    expect(hermesFixHint(twoToFix, true)).toBeNull();
+    const pendingOnly = verdict({ price: check('fix'), info: check('pending'), photos: check('pending') });
+
+    expect(hermesFixHint(oneToFix, false, false)).toBe('Hermes: 1 thing to fix');
+    expect(hermesFixHint(twoToFix, false, false)).toBe('Hermes: 2 things to fix');
+    expect(hermesFixHint(verdict({ price: check('ready'), info: check('ready') }), false, false)).toBeNull();
+    expect(hermesFixHint(null, false, false)).toBeNull();
+    expect(hermesFixHint(twoToFix, true, false)).toBeNull();
+    // Task 5 review: checks still pending are not things to fix, and a stale verdict gives no hint.
+    expect(hermesFixHint(pendingOnly, false, false)).toBe('Hermes: 1 thing to fix');
+    expect(hermesFixHint(verdict({ price: check('pending'), info: check('pending') }), false, false)).toBeNull();
+    expect(hermesFixHint(twoToFix, false, true)).toBeNull();
   });
 
   it('marks a recheck stale immediately when the saved product version changes', () => {

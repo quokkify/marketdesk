@@ -56,7 +56,10 @@ import {
   useApproveHermesEvent,
   useRunHermes,
   useProductVerdict,
+  VERDICT_POLL_MS,
 } from '../services/hooks/index.js';
+import { useGetProductVerdictsQuery } from '../state/api/hermesApi.js';
+import { useGetPriceResearchRunsQuery } from '../state/api/productsApi.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
 import { useProductDeletion } from '../hooks/useProductDeletion.js';
@@ -96,8 +99,6 @@ import {
   ProductGalleryCard,
   ProductIdentityHero,
   productDetailRailSx,
-  ProductActivityCard,
-  productActivityItems,
   ProductTimelineCard,
   PublicationReadinessSection,
 } from '../components/product-detail/ProductDetailSections.js';
@@ -114,6 +115,8 @@ import { HermesDrawer } from '../components/product-detail/hermes/HermesDrawer.j
 import { ChecksTab } from '../components/product-detail/hermes/ChecksTab.js';
 import { PricesTabContainer } from '../components/product-detail/hermes/PricesTab.js';
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
+import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
+import { buildHistory } from '../components/product-detail/hermes/hermesHistory.js';
 import { hermesCardState } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
@@ -211,11 +214,14 @@ export function productHermesDisabledReason(input: {
   return null;
 }
 
-// The price card's pointer to the Hermes checks: how many checks of the latest verdict are not
-// ready. Nothing while a run is in progress, before the first verdict, or when all checks pass.
-export function hermesFixHint(verdict: SaleVerdict | null, running: boolean): string | null {
-  if (running || !verdict) return null;
-  const count = Object.values(verdict.checks).filter((check) => check && check.status !== 'ready').length;
+// The price card's pointer to the Hermes checks: how many checks of the latest verdict need
+// a fix. Nothing while a run is in progress, before the first verdict, when the verdict is stale,
+// or when no check needs a fix.
+export function hermesFixHint(verdict: SaleVerdict | null, running: boolean, stale: boolean): string | null {
+  if (running || stale || !verdict) return null;
+  const count = Object.values(verdict.checks).filter(
+    (check) => check && (check.status === 'fix' || check.status === 'needs_human')
+  ).length;
   if (count === 0) return null;
   return `Hermes: ${count} ${count === 1 ? 'thing' : 'things'} to fix`;
 }
@@ -711,6 +717,14 @@ const ListingDetailsPage: React.FC = () => {
   // The drawer keeps its last tab on screen while it slides closed.
   const [shownDrawerTab, setShownDrawerTab] = useState<HermesDrawerTab>('checks');
   if (drawerTab && drawerTab !== shownDrawerTab) setShownDrawerTab(drawerTab);
+  // The history lists load once the drawer has been opened on any tab for this product.
+  const [drawerOpenedFor, setDrawerOpenedFor] = useState<string | null>(null);
+  if (drawerTab && drawerOpenedFor !== productId) setDrawerOpenedFor(productId);
+  const historyArgs = productId && drawerOpenedFor === productId ? productId : skipToken;
+  const runActive = analyzing || runProgressText(priceResearch?.run ?? null) !== null;
+  const historyPolling = { pollingInterval: runActive ? VERDICT_POLL_MS : 0 };
+  const researchRuns = useGetPriceResearchRunsQuery(historyArgs, historyPolling);
+  const verdictHistory = useGetProductVerdictsQuery(historyArgs, historyPolling);
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
   // The advert queued from this page, followed until OLX answers.
@@ -1208,16 +1222,17 @@ const ListingDetailsPage: React.FC = () => {
   });
   const now = new Date();
   const latestVerdict = verdictView?.latest ?? null;
+  const verdictStale = latestVerdict ? isVerdictStale(latestVerdict, p.updatedAt, primaryListing?.updatedAt) : false;
   const hermesState = hermesCardState({
     verdict: verdictView ?? null,
     research: priceResearch,
-    stale: latestVerdict ? isVerdictStale(latestVerdict, p.updatedAt, primaryListing?.updatedAt) : false,
+    stale: verdictStale,
     pendingEvents: recommendations,
     suggestionTotal: recommendationTotal,
     currency,
     now,
   });
-  const fixHint = hermesFixHint(latestVerdict, analyzing || runProgressText(priceResearch?.run ?? null) !== null);
+  const fixHint = hermesFixHint(latestVerdict, runActive, verdictStale);
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
@@ -1408,6 +1423,7 @@ const ListingDetailsPage: React.FC = () => {
             verdict={latestVerdict}
             setPrice={hermesState.primary.kind === 'set_price' ? hermesState.primary : null}
             busy={analyzing || settingPrice}
+            running={runActive}
             now={now}
             onSetPrice={(eventId) => void handleSetPrice(eventId)}
             onOpenPrices={() => setDrawerTab('prices')}
@@ -1453,12 +1469,19 @@ const ListingDetailsPage: React.FC = () => {
           />
         )}
         {shownDrawerTab === 'history' && (
-          <ProductActivityCard
-            items={productActivityItems(priceHistory.data ?? [], recommendations, currency)}
-            loading={listings.isLoading || priceHistory.isLoading || hermesEvents.isLoading}
-            error={priceHistory.isError ? priceHistory.error : hermesEvents.isError ? hermesEvents.error : undefined}
+          <HistoryTab
+            key={p.id}
+            entries={buildHistory({
+              researchRuns: researchRuns.currentData ?? [],
+              verdicts: verdictHistory.currentData ?? [],
+              events: recommendations,
+              currency,
+            })}
+            loading={researchRuns.isLoading || verdictHistory.isLoading || hermesEvents.isLoading}
+            error={researchRuns.isError ? researchRuns.error : verdictHistory.isError ? verdictHistory.error : hermesEvents.isError ? hermesEvents.error : undefined}
             onRetry={() => {
-              if (priceHistory.isError) void priceHistory.refetch();
+              if (researchRuns.isError) void researchRuns.refetch();
+              if (verdictHistory.isError) void verdictHistory.refetch();
               if (hermesEvents.isError) void hermesEvents.refetch();
             }}
           />

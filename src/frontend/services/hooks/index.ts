@@ -184,6 +184,7 @@ export function useProductVerdict(productId: string | undefined) {
           { type: 'Product', id: 'LIST' },
           { type: 'HermesEvent', id: 'LIST' },
           { type: 'PriceResearch', id: productId },
+          { type: 'SaleVerdict', id: productId },
         ])
       );
     }

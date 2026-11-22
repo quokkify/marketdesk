@@ -1,7 +1,6 @@
 import React, { useId, useState } from 'react';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   ButtonBase,
@@ -24,7 +23,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
+import type { Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
@@ -468,88 +467,6 @@ export const ProductTimelineCard: React.FC<{ product: Product; listing?: Listing
     </Card>
   );
 };
-
-export interface ProductActivityItem {
-  id: string;
-  actor: 'hermes' | 'user';
-  title: string;
-  detail?: string;
-  at: string;
-}
-
-const ACTIVITY_LIMIT = 8;
-const ACTOR_LABEL: Record<ProductActivityItem['actor'], string> = { hermes: 'Hermes', user: 'A user' };
-
-// Activity with a known actor: recorded price changes and pending Hermes suggestions.
-export function productActivityItems(
-  history: PriceHistory[],
-  events: HermesEvent[],
-  currency: string,
-): ProductActivityItem[] {
-  const priceChanges: ProductActivityItem[] = history.map((entry) => ({
-    id: `price:${entry.id}`,
-    actor: entry.changedBy,
-    title:
-      entry.oldPrice != null
-        ? `Changed the price ${formatMoney(entry.oldPrice, currency)} → ${formatMoney(entry.newPrice, currency)}`
-        : `Set the price to ${formatMoney(entry.newPrice, currency)}`,
-    detail: entry.reason,
-    at: entry.createdAt,
-  }));
-  const suggestions: ProductActivityItem[] = events.map((event) => ({
-    id: `event:${event.id}`,
-    actor: 'hermes',
-    title: event.title,
-    detail: event.status === 'pending_review' ? 'Waiting for your review' : undefined,
-    at: event.createdAt,
-  }));
-  return [...priceChanges, ...suggestions]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, ACTIVITY_LIMIT);
-}
-
-export const ProductActivityCard: React.FC<{
-  items: ProductActivityItem[];
-  loading?: boolean;
-  error?: unknown;
-  onRetry?: () => void;
-}> = ({ items, loading = false, error, onRetry }) => (
-  <Card title="Activity" subtitle="Price changes and Hermes suggestions">
-    {loading ? (
-      <LoadingSkeleton lines={3} height={36} />
-    ) : error ? (
-      <ErrorRetry error={error} onRetry={onRetry} title="Activity unavailable" compact />
-    ) : items.length === 0 ? (
-      <Typography variant="body2" color="text.secondary">No recorded price changes or Hermes suggestions yet.</Typography>
-    ) : (
-      <Stack spacing={1.5}>
-        {items.map((item) => (
-          <Stack key={item.id} direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
-            <Avatar
-              aria-hidden
-              sx={(theme) => ({
-                width: 28,
-                height: 28,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                bgcolor: alpha(item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary, 0.14),
-                color: item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary,
-              })}
-            >
-              {item.actor === 'hermes' ? 'H' : 'U'}
-            </Avatar>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>{ACTOR_LABEL[item.actor]}</Typography>
-              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{item.title}</Typography>
-              {item.detail && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{item.detail}</Typography>}
-            </Box>
-            <Typography variant="caption" color="text.secondary" title={formatDateTime(item.at)} sx={{ whiteSpace: 'nowrap' }}>{formatRelative(item.at)}</Typography>
-          </Stack>
-        ))}
-      </Stack>
-    )}
-  </Card>
-);
 
 export const PublicationReadinessSection: React.FC<{
   action: React.ReactNode;

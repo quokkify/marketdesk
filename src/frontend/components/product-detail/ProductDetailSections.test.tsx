@@ -2,15 +2,13 @@ import React from 'react';
 import { Button } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
+import type { Listing, PriceHistory, Product } from '@shared/types';
 import { darkTheme } from '../../theme/darkTheme';
 import { lightTheme } from '../../theme/lightTheme';
 import {
   OlxInsightsCard,
   PriceHistoryCard,
   PricingSummaryCard,
-  ProductActivityCard,
-  productActivityItems,
   productHeroMenuItems,
   PublicationReadinessSection,
   ProductCategoryEvidence,
@@ -297,49 +295,6 @@ describe('product detail statistics card', () => {
     expect(live).not.toContain('Open OLX');
     expect(live).not.toContain('href="https://www.olx.pl');
     expect(draft).not.toContain('Sandbox advert');
-  });
-});
-
-describe('product detail activity', () => {
-  const recommendation: HermesEvent = {
-    id: 'event-1',
-    workspaceId: 'workspace-1',
-    productId: product.id,
-    type: 'suggested_better_title',
-    severity: 'info',
-    status: 'pending_review',
-    title: 'Suggested better title',
-    proposedChange: { kind: 'title', field: 'title', from: 'Old', to: 'New' },
-    createdAt: '2026-07-16T09:30:00.000Z',
-  };
-
-  it('lists actor-attributed price changes and Hermes suggestions, newest first', () => {
-    const items = productActivityItems(history, [recommendation], 'PLN');
-
-    expect(items.map((item) => [item.actor, item.title, item.detail])).toEqual([
-      ['hermes', 'Suggested better title', 'Waiting for your review'],
-      ['hermes', 'Changed the price 349 zł → 329 zł', 'Approved recommendation'],
-      ['user', 'Set the price to 349 zł', undefined],
-    ]);
-  });
-
-  it('renders actor names and an honest empty state', () => {
-    const html = render(<ProductActivityCard items={productActivityItems(history, [], 'PLN')} />);
-    const empty = render(<ProductActivityCard items={[]} />);
-
-    expect(html).toContain('Hermes');
-    expect(html).toContain('A user');
-    expect(html).toContain('Changed the price 349 zł → 329 zł');
-    expect(empty).toContain('No recorded price changes or Hermes suggestions yet.');
-  });
-
-  it('keeps loading and error states distinct from the empty activity state', () => {
-    const loading = render(<ProductActivityCard items={[]} loading />);
-    const failed = render(<ProductActivityCard items={[]} error={{ status: 503 }} onRetry={() => undefined} />);
-
-    expect(loading).not.toContain('No recorded price changes or Hermes suggestions yet.');
-    expect(failed).toContain('Activity unavailable');
-    expect(failed).not.toContain('No recorded price changes or Hermes suggestions yet.');
   });
 });
 

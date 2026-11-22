@@ -79,6 +79,14 @@ const RESEARCH_OUTCOMES = {
 const RUNNING: HistoryEntry['outcome'] = { label: 'Running', tone: 'info' };
 const FAILED: HistoryEntry['outcome'] = { label: 'Failed', tone: 'error' };
 
+export function formatDuration(ms: number): string {
+  const seconds = Math.max(ms > 0 ? 1 : 0, Math.round(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) return `${rest} s`;
+  return rest === 0 ? `${minutes} min` : `${minutes} min ${rest} s`;
+}
+
 function duration(from: string, to: string | null): number | null {
   if (!to) return null;
   const ms = Date.parse(to) - Date.parse(from);

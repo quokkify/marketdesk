@@ -44,6 +44,7 @@ function render(props: Partial<React.ComponentProps<typeof ChecksTab>> = {}): st
         verdict={verdict}
         setPrice={null}
         busy={false}
+        running={false}
         now={NOW}
         onSetPrice={() => undefined}
         onOpenPrices={() => undefined}
@@ -83,5 +84,19 @@ describe('ChecksTab', () => {
 
     expect(html).toContain('Not checked yet. Run Analyze to get a verdict.');
     expect(html).toContain('Readiness');
+  });
+
+  it('says Checking while an analysis runs and there is no verdict yet', () => {
+    const html = render({ verdict: null, running: true });
+
+    expect(html).toContain('Checking…');
+    expect(html).not.toContain('Run Analyze to get a verdict.');
+  });
+
+  it('keeps the latest verdict on screen while a new analysis runs', () => {
+    const html = render({ running: true });
+
+    expect(html).not.toContain('Checking…');
+    expect(html).toContain('Only one photo.');
   });
 });
