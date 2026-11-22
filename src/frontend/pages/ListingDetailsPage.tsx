@@ -67,7 +67,7 @@ import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
 import type { ToastSeverity } from '../state/slices/uiSlice.js';
 import type { ListingReactivationResult } from '../state/api/listingsApi.js';
-import { formatCurrency, formatDateTime, formatMoney } from '../utils/formatters.js';
+import { formatDateTime, formatMoney } from '../utils/formatters.js';
 import { isSandboxMarketplace } from '../utils/sandbox.js';
 import { PUBLICATION_JOURNEY_VERSION } from '../workflows/publicationJourneyContract.js';
 import type { PublicationJourneyState } from '../workflows/publicationJourneyContract.js';
@@ -823,7 +823,7 @@ const ListingDetailsPage: React.FC = () => {
     try {
       const updated = await updateProduct({ id: productId, patch: values }).unwrap();
       const message = updated.priceSync
-        ? priceSyncMessage(updated.priceSync, formatCurrency(updated.sellingPrice, currency))
+        ? priceSyncMessage(updated.priceSync, formatMoney(updated.sellingPrice, currency))
         : 'Product updated.';
       dispatch(enqueueToast({ message, severity: 'success' }));
       setEditOpen(false);
@@ -838,7 +838,7 @@ const ListingDetailsPage: React.FC = () => {
       const updated = await updateListing({ id: priceListing.id, patch: { price } }).unwrap();
       dispatch(
         enqueueToast({
-          message: priceSyncMessage(updated.priceSync, formatCurrency(updated.price, updated.currency)),
+          message: priceSyncMessage(updated.priceSync, formatMoney(updated.price, updated.currency)),
           severity: 'success',
         }),
       );

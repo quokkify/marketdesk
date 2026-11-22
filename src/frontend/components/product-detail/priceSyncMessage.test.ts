@@ -1,7 +1,7 @@
 import type { PriceSync } from '@shared/types';
 import { priceSyncMessage } from './priceSyncMessage.js';
 
-const PRICE = '318,00 zł';
+const PRICE = '318 zł';
 const sync = (over: Partial<PriceSync>): PriceSync => ({
   unchanged: false,
   marketplaceUpdates: [],
@@ -13,7 +13,7 @@ const update = { listingId: 'l1' } as PriceSync['marketplaceUpdates'][number];
 describe('priceSyncMessage', () => {
   it('says the price was sent when an OLX update was queued', () => {
     expect(priceSyncMessage(sync({ marketplaceUpdates: [update] }), PRICE)).toBe(
-      'Price 318,00 zł saved and sent to OLX.',
+      'Price 318 zł saved and sent to OLX.',
     );
   });
 
@@ -22,14 +22,14 @@ describe('priceSyncMessage', () => {
     (reason) => {
       expect(
         priceSyncMessage(sync({ skippedLiveListings: [{ listingId: 'l1', reason }] }), PRICE),
-      ).toBe('Price 318,00 zł saved. Not sent to OLX: OLX is not connected.');
+      ).toBe('Price 318 zł saved. Not sent to OLX: OLX is not connected.');
     },
   );
 
   it('uses an unknown reason as is', () => {
     expect(
       priceSyncMessage(sync({ skippedLiveListings: [{ listingId: 'l1', reason: 'rate limited' }] }), PRICE),
-    ).toBe('Price 318,00 zł saved. Not sent to OLX: rate limited.');
+    ).toBe('Price 318 zł saved. Not sent to OLX: rate limited.');
   });
 
   it('prefers sent over skipped', () => {
@@ -41,7 +41,7 @@ describe('priceSyncMessage', () => {
         }),
         PRICE,
       ),
-    ).toBe('Price 318,00 zł saved and sent to OLX.');
+    ).toBe('Price 318 zł saved and sent to OLX.');
   });
 
   it.each([
@@ -49,6 +49,6 @@ describe('priceSyncMessage', () => {
     ['unchanged', sync({ unchanged: true })],
     ['undefined', undefined],
   ])('only says saved for %s', (_name, value) => {
-    expect(priceSyncMessage(value, PRICE)).toBe('Price 318,00 zł saved.');
+    expect(priceSyncMessage(value, PRICE)).toBe('Price 318 zł saved.');
   });
 });
