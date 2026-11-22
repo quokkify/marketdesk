@@ -77,6 +77,7 @@ import {
   PRODUCT_SEARCH_DEBOUNCE_MS,
   PRODUCT_SORT_OPTIONS,
   productsToCsv,
+  tabNeedsAction,
   tabStatus,
   updateProductsCatalogueSearch,
   visibleProductTabs,
@@ -381,6 +382,7 @@ const ProductsPage: React.FC = () => {
       offset: catalogue.page * PRODUCTS_PAGE_SIZE,
     };
     const status = tabStatus(catalogue.tab);
+    if (tabNeedsAction(catalogue.tab)) p.needsAction = true;
     if (status) p.status = status;
     if (catalogue.search.trim()) p.search = catalogue.search.trim();
     if (catalogue.tags.length) p.tags = catalogue.tags;
@@ -397,7 +399,7 @@ const ProductsPage: React.FC = () => {
   const allCount = useProducts({ limit: 1, offset: 0 });
   const { currentData: awaitingByProductId } = useGetAwaitingCountsQuery();
   const activeCount = useProducts({ status: ['active'], limit: 1, offset: 0 });
-  const attentionCount = useProducts({ status: ['attention'], limit: 1, offset: 0 });
+  const needsActionCount = useProducts({ needsAction: true, limit: 1, offset: 0 });
   const draftCount = useProducts({ status: ['draft'], limit: 1, offset: 0 });
   const soldCount = useProducts({ status: ['sold'], limit: 1, offset: 0 });
   const totalPages = currentData ? Math.ceil(currentData.total / PRODUCTS_PAGE_SIZE) : 0;
@@ -774,11 +776,11 @@ const ProductsPage: React.FC = () => {
             },
           }}
         >
-          {visibleProductTabs(attentionCount.data?.total).map((value) => {
+          {visibleProductTabs().map((value) => {
             const [label, countQuery] = {
               all: ['All', allCount],
               active: ['Active', activeCount],
-              attention: ['Attention', attentionCount],
+              'needs-action': ['Needs action', needsActionCount],
               draft: ['Drafts', draftCount],
               sold: ['Sold', soldCount],
             }[value] as [string, typeof allCount];

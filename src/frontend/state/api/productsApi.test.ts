@@ -43,28 +43,37 @@ describe('product deletion cache invalidation', () => {
   const NativeRequest = globalThis.Request;
   const nativeFetch = globalThis.fetch;
   const requested: string[] = [];
-  const emptyPage = { success: true, data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } };
+  const emptyPage = {
+    success: true,
+    data: [],
+    pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+  };
   let deleteResponse: { status: number; body: unknown };
 
   beforeAll(() => {
     // fetchBaseQuery builds a Request from the relative `/api` base URL, which Node cannot parse.
     globalThis.Request = class extends NativeRequest {
       constructor(input: RequestInfo | URL, init?: RequestInit) {
-        super(typeof input === 'string' ? new URL(input, 'http://marketdesk.test').toString() : input, init);
+        super(
+          typeof input === 'string' ? new URL(input, 'http://marketdesk.test').toString() : input,
+          init
+        );
       }
     } as typeof Request;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init);
       const { pathname } = new URL(request.url);
       requested.push(`${request.method} ${pathname}`);
-      const { status, body } = request.method === 'DELETE'
-        ? deleteResponse
-        : {
-            status: 200,
-            body: pathname === '/api/hermes/events' || pathname === '/api/products'
-              ? emptyPage
-              : { success: true, data: pathname === '/api/listings' ? [] : {} },
-          };
+      const { status, body } =
+        request.method === 'DELETE'
+          ? deleteResponse
+          : {
+              status: 200,
+              body:
+                pathname === '/api/hermes/events' || pathname === '/api/products'
+                  ? emptyPage
+                  : { success: true, data: pathname === '/api/listings' ? [] : {} },
+            };
       return new Response(JSON.stringify(body), {
         status,
         headers: { 'content-type': 'application/json' },
@@ -106,7 +115,7 @@ describe('product deletion cache invalidation', () => {
   ];
 
   async function whileTheProductIsOnScreen(
-    run: (store: ReturnType<typeof newStore>) => Promise<void>,
+    run: (store: ReturnType<typeof newStore>) => Promise<void>
   ): Promise<void> {
     const store = newStore();
     const subscriptions = [
@@ -133,7 +142,7 @@ describe('product deletion cache invalidation', () => {
       await settle(() => viewsOfTheProduct.every((request) => requested.includes(request)));
 
       expect(requested).toEqual(
-        expect.arrayContaining(['DELETE /api/products/product-1', ...viewsOfTheProduct]),
+        expect.arrayContaining(['DELETE /api/products/product-1', ...viewsOfTheProduct])
       );
     });
   });
@@ -141,11 +150,16 @@ describe('product deletion cache invalidation', () => {
   it('refetches nothing when the server refuses the delete', async () => {
     deleteResponse = {
       status: 409,
-      body: { success: false, error: { code: 'CONFLICT', message: 'Delist the live listing first.' } },
+      body: {
+        success: false,
+        error: { code: 'CONFLICT', message: 'Delist the live listing first.' },
+      },
     };
 
     await whileTheProductIsOnScreen(async (store) => {
-      const result = await store.dispatch(productsApi.endpoints.deleteProduct.initiate('product-1'));
+      const result = await store.dispatch(
+        productsApi.endpoints.deleteProduct.initiate('product-1')
+      );
       await settle(() => requested.length > 1, 200);
 
       expect('error' in result ? result.error : undefined).toMatchObject({ status: 409 });
@@ -161,5 +175,13 @@ describe('product recheck API request', () => {
       method: 'POST',
       body: { listingId: 'listing-1' },
     });
+  });
+});
+
+describe('needs-action list query', () => {
+  it('asks the API for products that need action', () => {
+    expect(buildProductsListUrl({ needsAction: true, limit: 1, offset: 0 })).toContain(
+      'needsAction=true'
+    );
   });
 });
