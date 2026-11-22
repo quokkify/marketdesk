@@ -58,7 +58,7 @@ import {
   useProductVerdict,
   VERDICT_POLL_MS,
 } from '../services/hooks/index.js';
-import { useGetProductVerdictsQuery } from '../state/api/hermesApi.js';
+import { HISTORY_LIMIT, useGetProductVerdictsQuery } from '../state/api/hermesApi.js';
 import { useGetPriceResearchRunsQuery } from '../state/api/productsApi.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
@@ -725,6 +725,11 @@ const ListingDetailsPage: React.FC = () => {
   const historyPolling = { pollingInterval: runActive ? VERDICT_POLL_MS : 0 };
   const researchRuns = useGetPriceResearchRunsQuery(historyArgs, historyPolling);
   const verdictHistory = useGetProductVerdictsQuery(historyArgs, historyPolling);
+  // Every suggestion of the product, resolved ones included; the card and the Suggestions tab keep the pending-only call.
+  const eventHistory = useHermesEvents(
+    { productId, sort: '-createdAt', limit: HISTORY_LIMIT },
+    { skip: historyArgs === skipToken }
+  );
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
   // The advert queued from this page, followed until OLX answers.
@@ -1474,15 +1479,15 @@ const ListingDetailsPage: React.FC = () => {
             entries={buildHistory({
               researchRuns: researchRuns.currentData ?? [],
               verdicts: verdictHistory.currentData ?? [],
-              events: recommendations,
+              events: eventHistory.data?.items ?? [],
               currency,
             })}
-            loading={researchRuns.isLoading || verdictHistory.isLoading || hermesEvents.isLoading}
-            error={researchRuns.isError ? researchRuns.error : verdictHistory.isError ? verdictHistory.error : hermesEvents.isError ? hermesEvents.error : undefined}
+            loading={researchRuns.isLoading || verdictHistory.isLoading || eventHistory.isLoading}
+            error={researchRuns.isError ? researchRuns.error : verdictHistory.isError ? verdictHistory.error : eventHistory.isError ? eventHistory.error : undefined}
             onRetry={() => {
               if (researchRuns.isError) void researchRuns.refetch();
               if (verdictHistory.isError) void verdictHistory.refetch();
-              if (hermesEvents.isError) void hermesEvents.refetch();
+              if (eventHistory.isError) void eventHistory.refetch();
             }}
           />
         )}

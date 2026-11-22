@@ -203,4 +203,21 @@ describe('buildHistory', () => {
     const resolved = buildHistory({ ...base, events: [event({ status: 'applied', detail: 'raw backend text' })] });
     expect(resolved[0]!.steps[0]!.detail).toBe('');
   });
+
+  it('resolved suggestions keep a plain outcome label, never a raw status code', () => {
+    const entries = buildHistory({
+      ...base,
+      events: [
+        event({ id: 'e-applied', status: 'applied', createdAt: T2 }),
+        event({ id: 'e-dismissed', status: 'dismissed', createdAt: T1 }),
+        event({ id: 'e-failed', status: 'failed', createdAt: T0 }),
+      ],
+    });
+    expect(entries.map((e) => e.outcome)).toEqual([
+      { label: 'Applied', tone: 'success' },
+      { label: 'Dismissed', tone: 'default' },
+      { label: 'Action failed', tone: 'error' },
+    ]);
+    expect(entries.map((e) => e.steps[0]!.status)).toEqual(['ok', 'none', 'bad']);
+  });
 });
