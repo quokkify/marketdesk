@@ -17,13 +17,13 @@ import {
 } from '../../../application/services/PriceResearchGraph';
 import { SEARCH_NAME_TOO_SHORT } from '../../external/anchorLadderPrompt';
 import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../../domain/shared/DomainError';
-import { nextAutoAt } from '../../../domain/services/researchSchedule';
+import { nextAutoAt, RECHECK_WAIT_MS } from '../../../domain/services/researchSchedule';
 
 const RUN_BUDGET_MS = 7 * 60 * 1000;
 const LEASE_MS = 10 * 60 * 1000;
 
 // Refusals that mean the research could not be attempted: they schedule nothing and count no failure.
-const NOT_ATTEMPTED = new Set(['product_missing', 'not_configured', 'not_pln', 'unsafe_toolset']);
+const NOT_ATTEMPTED = new Set(['product_missing', 'not_configured', 'not_pln']);
 
 export type PriceResearchJobResult = { kind: 'skipped' } | { kind: 'finished'; outcome: RunOutcome };
 
@@ -103,7 +103,12 @@ export class PriceResearchHandler {
       errorCode,
       consecutiveFailures,
       finishedAt: finished.toISOString(),
-      nextAutoAt: attempted ? nextAutoAt(outcome, consecutiveFailures, finished).toISOString() : null,
+      // A name with nothing to search will not change by itself: retried only after the recheck wait.
+      nextAutoAt: !attempted
+        ? null
+        : errorCode === 'name_too_short'
+          ? new Date(finished.getTime() + RECHECK_WAIT_MS).toISOString()
+          : nextAutoAt(outcome, consecutiveFailures, finished).toISOString(),
     });
   }
 

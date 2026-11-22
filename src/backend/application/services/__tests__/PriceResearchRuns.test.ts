@@ -129,6 +129,45 @@ describe('PriceResearchRuns.request', () => {
     expect(queue.jobs).toHaveLength(1);
   });
 
+  it('treats a queued run older than 60 minutes as a lost job and queues a new run', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'prev', outcome: 'failed', consecutiveFailures: 1, finishedAt: at(-3 * HOUR_MS) }));
+    runs.runs.push(storedRun({ id: 'lost', status: 'queued', outcome: null, startedAt: null, finishedAt: null, queuedAt: at(-61 * 60 * 1000) }));
+    const { service, queue } = setup({ runs });
+
+    const result = await service.request(WS, PID, { force: true, trigger: 'manual' });
+
+    expect(result).toMatchObject({ enqueued: true, reason: 'enqueued', run: { id: 'run-1' } });
+    expect(runs.runs.find((r) => r.id === 'lost')).toMatchObject({
+      status: 'finished', outcome: 'failed', errorCode: 'job_lost', consecutiveFailures: 2,
+      finishedAt: NOW.toISOString(), nextAutoAt: at(2 * HOUR_MS),
+    });
+    expect(queue.jobs).toHaveLength(1);
+  });
+
+  it('keeps a queued run younger than 60 minutes active', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'waiting', status: 'queued', outcome: null, finishedAt: null, queuedAt: at(-59 * 60 * 1000) }));
+    const { service } = setup({ runs });
+
+    await expect(service.request(WS, PID, { force: true, trigger: 'manual' }))
+      .resolves.toMatchObject({ enqueued: false, reason: 'active', run: { id: 'waiting' } });
+  });
+
+  it('does not count lost queued runs toward the 10-run cap', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    for (let i = 0; i < 10; i += 1) {
+      runs.runs.push(storedRun({
+        id: `q${i}`, productId: `other-${i}`, status: 'queued', outcome: null, finishedAt: null,
+        queuedAt: at(-61 * 60 * 1000),
+      }));
+    }
+    const { service } = setup({ runs });
+
+    await expect(service.request(WS, PID, { force: true, trigger: 'manual' }))
+      .resolves.toMatchObject({ enqueued: true, reason: 'enqueued' });
+  });
+
   it('keeps a running run with a live lease active', async () => {
     const runs = new InMemoryPriceResearchRunRepository();
     runs.runs.push(storedRun({ id: 'live', status: 'running', outcome: null, finishedAt: null, leaseUntil: at(60 * 1000) }));
@@ -163,7 +202,7 @@ describe('PriceResearchRuns.request', () => {
   it('refuses an 11th queued run in a workspace with 429', async () => {
     const runs = new InMemoryPriceResearchRunRepository();
     for (let i = 0; i < 10; i += 1) {
-      runs.runs.push(storedRun({ id: `q${i}`, productId: `other-${i}`, status: 'queued', outcome: null, finishedAt: null }));
+      runs.runs.push(storedRun({ id: `q${i}`, productId: `other-${i}`, status: 'queued', outcome: null, finishedAt: null, queuedAt: at(-60 * 1000) }));
     }
     const { service, queue } = setup({ runs });
 
@@ -197,7 +236,7 @@ describe('PriceResearchRuns.request', () => {
     expect(runs.runs).toHaveLength(0);
   });
 
-  it('finishes the run as failed when it could not be queued', async () => {
+  it('finishes the run as a counted failure with backoff when it could not be queued', async () => {
     const failingQueue: IJobQueue<PriceResearchJob> = {
       enqueue: async () => { throw new Error('redis down'); },
       enqueueAll: async () => undefined,
@@ -205,7 +244,9 @@ describe('PriceResearchRuns.request', () => {
     const { service, runs } = setup({ queue: failingQueue });
 
     await expect(service.request(WS, PID, { force: true, trigger: 'manual' })).rejects.toThrow('redis down');
-    expect(runs.runs[0]).toMatchObject({ status: 'finished', outcome: 'failed', errorCode: 'enqueue_failed', nextAutoAt: null });
+    expect(runs.runs[0]).toMatchObject({
+      status: 'finished', outcome: 'failed', errorCode: 'enqueue_failed', consecutiveFailures: 1, nextAutoAt: at(HOUR_MS),
+    });
   });
 });
 
@@ -213,7 +254,7 @@ describe('PriceResearchRuns.latest', () => {
   it('returns the active and the last finished run', async () => {
     const runs = new InMemoryPriceResearchRunRepository();
     runs.runs.push(storedRun({ id: 'done' }));
-    runs.runs.push(storedRun({ id: 'now', status: 'queued', outcome: null, finishedAt: null }));
+    runs.runs.push(storedRun({ id: 'now', status: 'queued', outcome: null, finishedAt: null, queuedAt: at(-60 * 1000) }));
     const { service } = setup({ runs });
 
     await expect(service.latest(WS, PID)).resolves.toMatchObject({ active: { id: 'now' }, last: { id: 'done' } });

@@ -6,6 +6,7 @@ import { ValidationError } from '../../../domain/shared/DomainError';
 import type { ResearchRun } from '../../../../shared/types';
 import type { GraphResult, ResearchRunInput } from '../../../application/services/PriceResearchGraph';
 import { PriceResearchHandler } from '../JobHandlers/PriceResearchHandler';
+import { SEARCH_NAME_TOO_SHORT } from '../../external/anchorLadderPrompt';
 
 const WS = 'w1';
 const PID = 'p1';
@@ -138,7 +139,7 @@ describe('PriceResearchHandler', () => {
     });
   });
 
-  it('records an unsafe toolset without counting a failure or scheduling a retry', async () => {
+  it('records an unsafe toolset as a counted failure with backoff', async () => {
     const runs = new InMemoryPriceResearchRunRepository();
     runs.runs.push(run({ id: 'prev', status: 'finished', outcome: 'failed', consecutiveFailures: 2, finishedAt: at(-2 * HOUR_MS) }));
     runs.runs.push(run({}));
@@ -149,7 +150,7 @@ describe('PriceResearchHandler', () => {
 
     await handler.handle(job);
 
-    expect(runs.runs[1]).toMatchObject({ outcome: 'failed', errorCode: 'unsafe_toolset', consecutiveFailures: 2, nextAutoAt: null });
+    expect(runs.runs[1]).toMatchObject({ outcome: 'failed', errorCode: 'unsafe_toolset', consecutiveFailures: 3, nextAutoAt: at(4 * HOUR_MS) });
   });
 
   it('calls afterRun with the result, then publishes price_research.completed', async () => {
@@ -185,6 +186,18 @@ describe('PriceResearchHandler', () => {
 
     expect(runs.runs[0]).toMatchObject({ status: 'finished', outcome: 'failed', errorCode: 'not_pln', nextAutoAt: null, consecutiveFailures: 0 });
     expect(events.published[0]).toMatchObject({ payload: { runId: 'run-1', outcome: 'failed' } });
+  });
+
+  it('records a name with nothing to search as a failure retried in 7 days', async () => {
+    const { handler, runs } = setup({
+      graph: async () => { throw new ValidationError(SEARCH_NAME_TOO_SHORT); },
+    });
+
+    await handler.handle(job);
+
+    expect(runs.runs[0]).toMatchObject({
+      status: 'finished', outcome: 'failed', errorCode: 'name_too_short', consecutiveFailures: 1, nextAutoAt: at(7 * 24 * HOUR_MS),
+    });
   });
 
   it('finishes the run as failed and logs an unexpected graph error', async () => {

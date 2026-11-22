@@ -19,6 +19,7 @@ import {
   InvalidStateError,
   NotFoundError,
   ServiceUnavailableError,
+  TooManyRequestsError,
 } from '../shared/DomainError';
 import { HermesEvent } from '../entities/HermesEvent';
 import { Product } from '../entities/Product';
@@ -510,6 +511,11 @@ export class HermesDecisionEngine {
       await this.researchRuns.request(product.workspaceId, product.id, { force: false, trigger: 'analyze' });
       return null;
     } catch (error) {
+      // A full workspace queue means the research was not started, not that it failed.
+      if (error instanceof TooManyRequestsError) {
+        this.logger?.warn({ productId: product.id }, 'Price research not started: the workspace queue is full');
+        return null;
+      }
       this.logger?.warn({ productId: product.id, err: error }, 'Requesting price research failed');
       return RESEARCH_UNAVAILABLE_NOTE;
     }

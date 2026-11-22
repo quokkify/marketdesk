@@ -1,6 +1,7 @@
 // Starts price research runs. A request checks the product and the setup, then records a queued run
 // and enqueues its ids; the graph runs only in the price-research job. A product has at most one
-// queued or running run: a running run whose lease ended is written as failed and frees it.
+// queued or running run: a running run whose lease ended, or a run queued longer than the queued TTL
+// (its job was lost), is written as a failed run and frees it.
 
 import type { ResearchRun, RunTrigger } from '../../../shared/types';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -13,6 +14,7 @@ import type { IJobQueue, PriceResearchJob } from '../ports/IJobQueue';
 import { SEARCH_CURRENCY } from './PriceResearchGraph';
 
 export const MAX_QUEUED_RUNS_PER_WORKSPACE = 10;
+export const QUEUED_TTL_MS = 60 * 60 * 1000;
 const TOO_MANY_QUEUED = 'Too many price research runs are queued in this workspace. Try again later.';
 
 // Structural, so the container can pass its logger.
@@ -54,7 +56,8 @@ export class PriceResearchRuns implements IPriceResearchRuns {
     if (!opts.force && last?.nextAutoAt && now.getTime() < Date.parse(last.nextAutoAt)) {
       return { run: last, enqueued: false, reason: 'not_due' };
     }
-    if (await this.deps.runs.countQueued(workspaceId) >= MAX_QUEUED_RUNS_PER_WORKSPACE) {
+    const queuedSince = new Date(now.getTime() - QUEUED_TTL_MS).toISOString();
+    if (await this.deps.runs.countQueued(workspaceId, queuedSince) >= MAX_QUEUED_RUNS_PER_WORKSPACE) {
       throw new TooManyRequestsError(TOO_MANY_QUEUED);
     }
 
@@ -82,14 +85,15 @@ export class PriceResearchRuns implements IPriceResearchRuns {
   ): Promise<{ active: ResearchRun | null; last: ResearchRun | null }> {
     const active = await this.deps.runs.findActive(workspaceId, productId);
     const last = await this.deps.runs.findLastFinished(workspaceId, productId);
-    if (!active || !isLeaseExpired(active, now)) return { active, last };
+    const expiredCode = active ? expiryCode(active, now) : null;
+    if (!active || !expiredCode) return { active, last };
 
     const consecutiveFailures = (last?.consecutiveFailures ?? 0) + 1;
     const expired = {
       outcome: 'failed' as const,
       nodes: active.nodes,
       failedTiers: [],
-      errorCode: 'lease_expired',
+      errorCode: expiredCode,
       consecutiveFailures,
       finishedAt: now.toISOString(),
       nextAutoAt: nextAutoAt('failed', consecutiveFailures, now).toISOString(),
@@ -107,20 +111,25 @@ export class PriceResearchRuns implements IPriceResearchRuns {
       await this.deps.queue.enqueue({ workspaceId: run.workspaceId, productId: run.productId, runId: run.id });
     } catch (error) {
       this.deps.logger?.error({ productId: run.productId, runId: run.id, err: error }, 'Price research run not queued');
+      const finishedAt = this.deps.now();
+      const consecutiveFailures = (last?.consecutiveFailures ?? 0) + 1;
       await this.deps.runs.finish(run.id, {
         outcome: 'failed',
         nodes: {},
         failedTiers: [],
         errorCode: 'enqueue_failed',
-        consecutiveFailures: last?.consecutiveFailures ?? 0,
-        finishedAt: this.deps.now().toISOString(),
-        nextAutoAt: null,
+        consecutiveFailures,
+        finishedAt: finishedAt.toISOString(),
+        nextAutoAt: nextAutoAt('failed', consecutiveFailures, finishedAt).toISOString(),
       });
       throw error;
     }
   }
 }
 
-function isLeaseExpired(run: ResearchRun, now: Date): boolean {
-  return run.status === 'running' && run.leaseUntil !== null && Date.parse(run.leaseUntil) < now.getTime();
+// Why an active run no longer holds its product, or null while it does.
+function expiryCode(run: ResearchRun, now: Date): 'lease_expired' | 'job_lost' | null {
+  if (run.status === 'running' && run.leaseUntil !== null && Date.parse(run.leaseUntil) < now.getTime()) return 'lease_expired';
+  if (run.status === 'queued' && Date.parse(run.queuedAt) < now.getTime() - QUEUED_TTL_MS) return 'job_lost';
+  return null;
 }

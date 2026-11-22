@@ -1066,10 +1066,23 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.researchNote).toBeNull();
     });
 
-    it('still estimates and notes it when the run could not be requested', async () => {
+    it('treats a full research queue as research not started: no failure note', async () => {
       const logger = new RecordingLogger();
       const runs: IPriceResearchRuns = {
         request: async () => { throw new TooManyRequestsError('Too many price research runs are queued'); },
+        latest: async () => ({ active: null, last: null }),
+      };
+      const { priceEvent, priceResearchRepo } = await analyse(estimate(), { runs, logger });
+
+      expect(priceEvent).toBeDefined();
+      expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.researchNote).toBeNull();
+      expect(logger.warnings.map((w) => w.message)).toContain('Price research not started: the workspace queue is full');
+    });
+
+    it('still estimates and notes it when the run could not be requested', async () => {
+      const logger = new RecordingLogger();
+      const runs: IPriceResearchRuns = {
+        request: async () => { throw new Error('database unavailable'); },
         latest: async () => ({ active: null, last: null }),
       };
       const { priceEvent, priceResearchRepo } = await analyse(estimate(), { runs, logger });
