@@ -63,8 +63,8 @@ public class SaleVerdictTest extends BaseTest {
   @Test
   public void nonPlnListingGetsPriceNeedsHuman() {
     AccountPojo account = accountWithSandbox();
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account,
-        ProductRequestPojo.sample().withPhoto().withCurrency("EUR"));
+    verdictSteps.setWorkspaceCurrency(account, "EUR");
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     verdictSteps.verify().checkIs(analyzeAndAwait(account, productListing.productId()), PRICE, NEEDS_HUMAN, "not_pln");
   }
 

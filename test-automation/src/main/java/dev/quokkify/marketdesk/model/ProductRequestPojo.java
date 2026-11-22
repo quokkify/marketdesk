@@ -4,50 +4,43 @@ import java.util.List;
 
 public record ProductRequestPojo(String name, String description, Double costPrice, Double sellingPrice,
     String condition, String category, List<String> images, Double minAcceptablePrice,
-    String missingAccessories, String currency) {
+    String missingAccessories) {
 
   // A placeholder URL: no stub-stack test fetches the photo, the revival only needs the product to have one.
   private static final String SAMPLE_PHOTO = "https://example.com/qa-camera.jpg";
 
-  private static final String DEFAULT_CURRENCY = "PLN";
-
   public static ProductRequestPojo sample() {
     return new ProductRequestPojo("QA reactivation camera", "A camera created by the reactivation API test.", 50.0,
-        120.0, "good", "electronics", List.of(), null, null, DEFAULT_CURRENCY);
+        120.0, "good", "electronics", List.of(), null, null);
   }
 
   public static ProductRequestPojo withPriceFloor(Double sellingPrice, Double minAcceptablePrice) {
     return new ProductRequestPojo("QA price floor camera", "A camera created by the price floor API test.", 50.0,
-        sellingPrice, "good", "electronics", List.of(), minAcceptablePrice, null, DEFAULT_CURRENCY);
+        sellingPrice, "good", "electronics", List.of(), minAcceptablePrice, null);
   }
 
   public static ProductRequestPojo conversationSample() {
     return new ProductRequestPojo("QA conversation camera", "A camera created by the conversation sync API test.",
-        50.0, 100.0, "good", "electronics", List.of(), null, null, DEFAULT_CURRENCY);
+        50.0, 100.0, "good", "electronics", List.of(), null, null);
   }
 
   public ProductRequestPojo withCondition(String newCondition) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, newCondition, category, images,
-        minAcceptablePrice, missingAccessories, currency);
+        minAcceptablePrice, missingAccessories);
   }
 
   public ProductRequestPojo withoutCostPrice() {
     return new ProductRequestPojo(name, description, null, sellingPrice, condition, category, images,
-        minAcceptablePrice, missingAccessories, currency);
+        minAcceptablePrice, missingAccessories);
   }
 
   public ProductRequestPojo withPhoto() {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, condition, category,
-        List.of(SAMPLE_PHOTO), minAcceptablePrice, missingAccessories, currency);
+        List.of(SAMPLE_PHOTO), minAcceptablePrice, missingAccessories);
   }
 
   public ProductRequestPojo withMissingAccessories(String newMissingAccessories) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, condition, category, images,
-        minAcceptablePrice, newMissingAccessories, currency);
-  }
-
-  public ProductRequestPojo withCurrency(String newCurrency) {
-    return new ProductRequestPojo(name, description, costPrice, sellingPrice, condition, category, images,
-        minAcceptablePrice, missingAccessories, newCurrency);
+        minAcceptablePrice, newMissingAccessories);
   }
 }

@@ -14,6 +14,7 @@ public class VerdictService extends MarketDeskApiService {
   private static final String IMPROVEMENTS = "/api/products/%s/improvements";
   private static final String RECHECK = "/api/products/%s/recheck";
   private static final String HERMES_SETTINGS = "/api/settings/hermes";
+  private static final String WORKSPACE = "/api/workspaces/%s";
   private static final String EMPTY_BODY = "{}";
   private static final String SEO_ENABLED_PATCH = "{\"agents\": {\"listingSeo\": {\"enabled\": true}}}";
 
@@ -47,5 +48,9 @@ public class VerdictService extends MarketDeskApiService {
 
   public ValidatableResponse enableListingSeo(String token) {
     return patch(authorized(token), HERMES_SETTINGS, SEO_ENABLED_PATCH);
+  }
+
+  public ValidatableResponse setWorkspaceCurrency(String token, String workspaceId, String currency) {
+    return patch(authorized(token), WORKSPACE.formatted(workspaceId), JsonConverter.toJson(Map.of("currency", currency)));
   }
 }

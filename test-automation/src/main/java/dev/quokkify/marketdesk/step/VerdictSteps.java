@@ -100,6 +100,12 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return service.improvements(account.token(), productId);
   }
 
+  // Products and listings take their currency from the workspace.
+  @Step("Set the workspace currency to {currency}")
+  public void setWorkspaceCurrency(AccountPojo account, String currency) {
+    service.setWorkspaceCurrency(account.token(), account.workspaceId(), currency).statusCode(HttpStatus.SC_OK);
+  }
+
   @Step("Turn the listing SEO agent on")
   public void enableListingSeo(AccountPojo account) {
     service.enableListingSeo(account.token()).statusCode(HttpStatus.SC_OK);
