@@ -14,7 +14,7 @@ const limitations = [
   'Synthetic fixtures only; no buyer PII, production credentials, database or marketplace access.',
   'The real product-assistance graph runs with a deterministic provider; no model inference is evaluated.',
   'Injection cases test routing, output validation and absence of domain mutations, not real-model resistance or response quality.',
-  'Only the improvement route is covered. Draft, publication, buyer conversations and durable checkpoints remain outside this dataset.',
+  'Only the revival route is covered. Draft, buyer conversations and durable checkpoints remain outside this dataset.',
   'Tool entries are injected provider method calls, not marketplace actions. No approval was granted or action applied.',
   'Timing measures local fixture execution, not production model latency.',
 ];
@@ -117,7 +117,7 @@ export async function writeAssistanceExperiment(
     version: 1,
     createdAt,
     hypothesis:
-      'The current assistance improvement graph preserves scoped, typed, review-only behavior for the versioned fixture dataset.',
+      'The current assistance revival graph preserves scoped, typed, review-only behavior for the versioned fixture dataset.',
     experiments: [experimentId],
     recipe: experimentRecipe.id,
     evidence: {
@@ -141,7 +141,7 @@ export async function writeAssistanceExperiment(
   const files: Record<string, string> = {
     'recipe.json': json(experimentRecipe),
     'graph.md':
-      '# Product assistance experiment\n\nActual LangGraph node lifecycle is recorded in state-transitions.jsonl. Full state is deliberately excluded.\n\n```text\nSTART -> route -> improve -> END\n```\n\nThe graph also supports draft and publication; this dataset exercises improve only.\n',
+      '# Product assistance experiment\n\nActual LangGraph node lifecycle is recorded in state-transitions.jsonl. Full state is deliberately excluded.\n\n```text\nSTART -> route -> revive -> END\n```\n\nThe graph also supports draft; this dataset exercises revive only.\n',
     'inputs.jsonl': jsonl(
       results.map(({ caseId, input, expected }) => ({ caseId, input, expected }))
     ),

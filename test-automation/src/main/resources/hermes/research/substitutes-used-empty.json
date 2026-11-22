@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-6b5a4f3e2d1c40b9a8f7e6d5c4b3a2f1",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"anchors\":[]}",
+        "reasoning_content": "**Comparing used substitutes**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 63345,
+    "completion_tokens": 389,
+    "total_tokens": 63734
+  }
+}

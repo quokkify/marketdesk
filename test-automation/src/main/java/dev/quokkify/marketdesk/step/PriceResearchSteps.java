@@ -1,5 +1,6 @@
 package dev.quokkify.marketdesk.step;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -11,6 +12,7 @@ import dev.quokkify.marketdesk.service.PriceResearchService;
 import dev.quokkify.marketdesk.service.ProductService;
 import dev.quokkify.marketdesk.verification.PriceResearchVerification;
 import dev.quokkify.step.ApiSteps;
+import dev.quokkify.util.Waiter;
 
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
@@ -21,6 +23,8 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
   private static final String DATA_ID = "data.id";
   private static final String ALLEGRO_OFFER = "https://allegro.pl/oferta/projektor-";
   private static final String SEEN_AT = "2026-11-20";
+  private static final Duration RUN_TIMEOUT = Duration.ofSeconds(60);
+  private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
 
   private final PriceResearchService service = new PriceResearchService();
   private final ProductService productService = new ProductService();
@@ -67,11 +71,6 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
         .path("data.updatedAt");
   }
 
-  @Step("Run the AI analysis of product {productId}")
-  public ValidatableResponse runProductAnalysis(AccountPojo account, String productId) {
-    return service.runProductAnalysis(account.token(), productId);
-  }
-
   @Step("Get price research without authentication")
   public ValidatableResponse getPriceResearchUnauthenticated(String productId) {
     return service.getPriceResearch(productId);
@@ -85,6 +84,14 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
   @Step("Refresh the price anchor ladder of product {productId}")
   public ValidatableResponse refreshPriceResearch(AccountPojo account, String productId) {
     return service.refreshPriceResearch(account.token(), productId);
+  }
+
+  // The refresh answers 202 and the research runs in a queue job; the run is over once none is active.
+  @Step("Wait until the price research run of product {productId} ends")
+  public ValidatableResponse awaitResearchRun(AccountPojo account, String productId) {
+    Waiter.awaitCondition(() -> hasRunEnded(service.getPriceResearch(account.token(), productId)),
+        "the price research run has ended", RUN_TIMEOUT, POLL_INTERVAL);
+    return service.getPriceResearch(account.token(), productId);
   }
 
   @Step("Refresh the price anchor ladder without authentication")
@@ -125,5 +132,11 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
         true);
     return service.putPriceResearch(account.token(), productId,
         new PriceResearchPojo(null, null, null, null, List.of(row)));
+  }
+
+  private static boolean hasRunEnded(ValidatableResponse view) {
+    return view.extract().path("data") != null
+        && view.extract().path("data.run") == null
+        && view.extract().path("data.lastRun") != null;
   }
 }

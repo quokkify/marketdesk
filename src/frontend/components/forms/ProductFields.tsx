@@ -18,6 +18,7 @@ import { CONDITION_LABELS, CONDITION_LIST } from '../../utils/labels.js';
 import { currencySymbol } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import type { ProductFormValues, ProductFieldErrors } from './productFormModel.js';
+import { numberInputProps } from './numberInput.js';
 
 export interface ProductFieldsProps {
   values: ProductFormValues;
@@ -170,7 +171,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
           onChange={(e) => onChange('costPrice', parseOptionalNumber(e.target.value))}
           error={Boolean(errors.costPrice)}
           helperText={errors.costPrice ?? 'Optional. Leave empty if the cost is unknown.'}
-          slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+          slotProps={{ htmlInput: numberInputProps({ min: 0, step: '0.01' }), input: { endAdornment: adornment } }}
         />
         <TextField
           label="Selling price"
@@ -180,7 +181,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
           onChange={(e) => onChange('sellingPrice', parseNumber(e.target.value))}
           error={Boolean(errors.sellingPrice)}
           helperText={errors.sellingPrice}
-          slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+          slotProps={{ htmlInput: numberInputProps({ min: 0, step: '0.01' }), input: { endAdornment: adornment } }}
         />
       </Stack>
       <TextField
@@ -195,7 +196,7 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
         onChange={(e) => onChange('minAcceptablePrice', parseOptionalNumber(e.target.value))}
         error={Boolean(errors.minAcceptablePrice)}
         helperText={errors.minAcceptablePrice ?? 'Hermes never offers less. Empty means no discount.'}
-        slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
+        slotProps={{ htmlInput: numberInputProps({ min: 0, step: '0.01' }), input: { endAdornment: adornment } }}
       />
       <TextField
         label="Missing accessories"

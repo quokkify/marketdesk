@@ -9,9 +9,13 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import io.qameta.allure.Step;
 import org.openqa.selenium.Keys;
+import org.openqa.selenium.interactions.WheelInput;
 
 public class ProductDetailPageSteps
     extends PageSteps<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
+
+  private static final int WHEEL_TICKS = 5;
+  private static final int WHEEL_TICK_PIXELS = 60;
 
   public ProductDetailPageSteps() {
     this.page = Selenide.page(new ProductDetailPage());
@@ -80,12 +84,46 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Review the price")
+  public ProductDetailPageSteps reviewPrice() {
+    page.reviewPriceButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Set the missing accessories to {accessories} in the edit form and save")
   public ProductDetailPageSteps saveMissingAccessories(String accessories) {
     page.editProductButton().shouldBe(Condition.enabled).click();
     page.missingAccessoriesInput().shouldBe(Condition.visible).setValue(accessories);
     page.saveChangesButton().shouldBe(Condition.enabled).click();
     page.missingAccessoriesInput().should(Condition.disappear);
+    return this;
+  }
+
+  @Step("Open the edit form")
+  public ProductDetailPageSteps openEditForm() {
+    page.editProductButton().shouldBe(Condition.enabled).click();
+    page.sellingPriceInput().shouldBe(Condition.visible);
+    return this;
+  }
+
+  @Step("Type the selling price {price} and scroll the mouse wheel over the focused field")
+  public ProductDetailPageSteps typeSellingPriceAndScrollOverIt(String price) {
+    // A controlled React number input ignores the WebDriver clear, so the old value is selected and typed over.
+    Selenide.executeJavaScript("arguments[0].focus(); arguments[0].select();",
+        page.sellingPriceInput().shouldBe(Condition.visible));
+    page.sellingPriceInput().sendKeys(price);
+    for (int tick = 0; tick < WHEEL_TICKS; tick++) {
+      Selenide.actions()
+          .scrollFromOrigin(WheelInput.ScrollOrigin.fromElement(page.sellingPriceInput()), 0, WHEEL_TICK_PIXELS)
+          .perform();
+    }
+    return this;
+  }
+
+  @Step("Save the product changes")
+  public ProductDetailPageSteps saveChanges() {
+    page.saveChangesButton().shouldBe(Condition.enabled).click();
+    page.sellingPriceInput().should(Condition.disappear);
     return this;
   }
 

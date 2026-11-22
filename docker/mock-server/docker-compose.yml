@@ -1,0 +1,19 @@
+# Overlay for the test stack: a MockServer in place of the Hermes research profile only. The main profile stays
+# unreachable, so everything else keeps the offline heuristics. scripts/ci-java-api-tests.sh adds it through
+# COMPOSE_FILE and points HERMES_RESEARCH_API_URL at http://mock-server:1080/p/marketdesk-research/v1.
+# The probe answers (/models, /toolsets with only "web" enabled) load at start; the tests add the chat answers
+# per product through the control API on the host port. The image has no shell, so the script waits for
+# PUT /mockserver/status instead of a healthcheck.
+services:
+  mock-server:
+    image: mockserver/mockserver:7.6.0@sha256:80b3b1a26f3553d0c81a3f3896b5b7274c17b2a2e52f0fd2b28e246bc9efa290
+    command: -serverPort 1080
+    environment:
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations/*.json
+    volumes:
+      # Compose resolves relative paths from the first file's directory, the repository root.
+      - ./docker/mock-server/expectations:/config/expectations:ro
+    ports:
+      - "127.0.0.1:${MOCK_SERVER_PORT:-1080}:1080"
+    networks:
+      - marketdesk-network

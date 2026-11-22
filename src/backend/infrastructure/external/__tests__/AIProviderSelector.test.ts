@@ -50,7 +50,6 @@ const hermesTimeout = async (): Promise<never> => {
   throw new Error('Hermes API request timed out after 120000ms');
 };
 const timingOutHermes: IAIProvider = {
-  suggestPrice: hermesTimeout,
   estimatePrice: hermesTimeout,
   generateTitle: hermesTimeout,
   analyzeListing: hermesTimeout,
@@ -157,9 +156,9 @@ describe('AIProviderSelector', () => {
       mode: 'hermes',
       probe: probe(true, true),
     });
-    const priceContext = { listing, recentViews: 0, conversionRate: 0 };
+    const estimateContext = { product, listing, daysLive: null, research: null };
 
-    await expect(selector.suggestPrice(priceContext)).rejects.toThrow('Hermes API request timed out');
+    await expect(selector.estimatePrice(estimateContext)).rejects.toThrow('Hermes API request timed out');
     await expect(selector.generateTitle(product, null)).rejects.toThrow('Hermes API request timed out');
     await expect(selector.analyzeListing(product)).rejects.toThrow('Hermes API request timed out');
     await expect(selector.analyzeListingSeo(seoInput, 'balanced')).rejects.toThrow(
@@ -169,7 +168,6 @@ describe('AIProviderSelector', () => {
 
   it('selector in hermes mode refuses every call when Hermes has tools enabled', async () => {
     const guardedHermes: IAIProvider = {
-      suggestPrice: jest.fn(),
       estimatePrice: jest.fn(),
       generateTitle: jest.fn(),
       analyzeListing: jest.fn(),
@@ -181,9 +179,9 @@ describe('AIProviderSelector', () => {
       mode: 'hermes',
       probe: probe(true, true, false, ['terminal', 'memory']),
     });
-    const priceContext = { listing, recentViews: 0, conversionRate: 0 };
+    const estimateContext = { product, listing, daysLive: null, research: null };
     const calls = [
-      () => selector.suggestPrice(priceContext),
+      () => selector.estimatePrice(estimateContext),
       () => selector.generateTitle(product, null),
       () => selector.analyzeListing(product),
       () => selector.analyzeListingSeo(seoInput, 'balanced'),

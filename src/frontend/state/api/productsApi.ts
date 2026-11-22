@@ -7,10 +7,9 @@ import type {
   ProductAIDraft,
   ProductAIDraftRequest,
   ProductRecheckResult,
-  ProductImprovementSuggestions,
   PriceResearch,
   PriceResearchView,
-  ResearchRun,
+  SaleVerdict,
   PriceSync,
   ProductStats,
 } from '@shared/types';
@@ -108,19 +107,10 @@ export const productsApi = baseApi.injectEndpoints({
     >({
       query: buildProductRecheckRequest,
       transformResponse: (res: ApiResponse<ProductRecheckResult>) => unwrap(res),
-    }),
-
-    proposeProductImprovements: builder.mutation<
-      ProductImprovementSuggestions,
-      { productId: string; listingId?: string }
-    >({
-      query: ({ productId, listingId }) => ({
-        url: `/products/${productId}/improvements`,
-        method: 'POST',
-        body: listingId ? { listingId } : {},
-      }),
-      transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
-      invalidatesTags: ['AiUsage'],
+      invalidatesTags: (_result, _error, { productId }) => [
+        { type: 'SaleVerdict', id: productId },
+        { type: 'Product', id: 'LIST' },
+      ],
     }),
 
     getPriceResearch: builder.query<PriceResearchView | null, string>({
@@ -144,10 +134,13 @@ export const productsApi = baseApi.injectEndpoints({
       ],
     }),
 
-    refreshPriceResearch: builder.mutation<{ run: ResearchRun }, string>({
+    refreshPriceResearch: builder.mutation<{ run: SaleVerdict }, string>({
       query: (productId) => ({ url: `/products/${productId}/price-research/refresh`, method: 'POST' }),
-      transformResponse: (res: ApiResponse<{ run: ResearchRun }>) => unwrap(res),
-      invalidatesTags: (_result, _error, productId) => [{ type: 'PriceResearch', id: productId }],
+      transformResponse: (res: ApiResponse<{ run: SaleVerdict }>) => unwrap(res),
+      invalidatesTags: (_result, _error, productId) => [
+        { type: 'PriceResearch', id: productId },
+        { type: 'SaleVerdict', id: productId },
+      ],
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
@@ -232,7 +225,6 @@ export const {
   useGetProductQuery,
   useLazyGetProductQuery,
   useRecheckProductMutation,
-  useProposeProductImprovementsMutation,
   useCreateProductMutation,
   useGenerateProductAIDraftMutation,
   useUploadProductImageMutation,

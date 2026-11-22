@@ -57,6 +57,7 @@ import type { OlxTrustedTaxonomyResolver } from '../../infrastructure/adapters/O
 import type { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
 import type { ListingReactivationService } from '../../application/services/ListingReactivationService';
 import type { ListingRevivalService } from '../../application/services/ListingRevivalService';
+import type { SaleVerdictRuns } from '../../application/services/verdict/SaleVerdictRuns';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
 import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
@@ -92,6 +93,9 @@ export interface AppDeps {
   productRepo: IProductRepository;
   priceResearchRepo?: IPriceResearchRepository;
   priceResearchRuns?: IPriceResearchRuns;
+  // Whether a research profile is configured (POST /api/products/:id/price-research/refresh).
+  researchConfigured?: boolean;
+  saleVerdictRuns?: SaleVerdictRuns;
   productStatsService?: ProductStatsService;
   listingRepo: IListingRepository;
   marketplaceRepo: IMarketplaceRepository;
@@ -240,6 +244,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.priceResearchRepo,
       deps.priceResearchRuns,
       deps.productStatsService,
+      deps.saleVerdictRuns,
+      deps.researchConfigured,
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,
@@ -271,7 +277,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.categoryCorrectionOperationService,
       deps.hermesStatus,
       deps.aiUsageReport,
-      deps.hermesLimits
+      deps.hermesLimits,
+      deps.saleVerdictRuns
     ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),

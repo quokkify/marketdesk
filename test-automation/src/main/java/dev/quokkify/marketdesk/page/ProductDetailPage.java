@@ -13,7 +13,7 @@ import org.openqa.selenium.support.FindBy;
 public class ProductDetailPage implements Page {
 
   private static final String BUTTON = "button";
-  private static final String AI_USAGE_LINE = "[data-testid=\"ai-usage-line\"]";
+  private static final String AI_USAGE_LINE = "[data-testid=\"revival-ai-usage\"]";
   private static final String CONVERSATION_THREAD = "[data-testid=\"conversation-thread\"]";
   private static final String REPLY_TEXT = "textarea[data-testid=\"reply-draft-text\"]";
   private static final String SEND = "Send";
@@ -30,8 +30,12 @@ public class ProductDetailPage implements Page {
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
   private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
   private static final String ANCHOR_CLASS_LINE = "[data-testid=\"anchor-class-line\"]";
+  private static final String REVIEW_PRICE = "[data-testid=\"review-price-button\"]";
+  private static final String VERDICT_SUMMARY = "[data-testid=\"verdict-summary\"]";
+  private static final String VERDICT_CHECK = "[data-testid=\"verdict-check-%s\"]";
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
-  private static final String ALERT = "[role=\"alert\"]";
+  private static final String SELLING_PRICE = "//label[text()='Selling price']/following::input[1]";
+  private static final String LAST_RESEARCH_RUN = "[data-testid=\"price-research-last-run\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
   private static final String PRODUCT_TITLE = "#product-detail-title";
   private static final String SUGGESTED_IMPROVEMENTS = "Suggested improvements";
@@ -189,6 +193,18 @@ public class ProductDetailPage implements Page {
     return Selenide.$(ANCHOR_CLASS_LINE);
   }
 
+  public SelenideElement reviewPriceButton() {
+    return Selenide.$(REVIEW_PRICE);
+  }
+
+  public SelenideElement verdictSummary() {
+    return Selenide.$(VERDICT_SUMMARY);
+  }
+
+  public SelenideElement verdictCheck(String check) {
+    return verdictSummary().$(String.format(VERDICT_CHECK, check));
+  }
+
   public SelenideElement editProductButton() {
     return editProductButton;
   }
@@ -197,12 +213,16 @@ public class ProductDetailPage implements Page {
     return Selenide.$x(MISSING_ACCESSORIES);
   }
 
+  public SelenideElement sellingPriceInput() {
+    return Selenide.$x(SELLING_PRICE);
+  }
+
   public SelenideElement saveChangesButton() {
     return saveChangesButton;
   }
 
-  public SelenideElement alertWithText(String text) {
-    return Selenide.$$(ALERT).findBy(Condition.text(text));
+  public SelenideElement lastResearchRunLine() {
+    return Selenide.$(LAST_RESEARCH_RUN);
   }
 
   public SelenideElement comparableOlxLink() {

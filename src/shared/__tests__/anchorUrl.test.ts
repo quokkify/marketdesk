@@ -1,4 +1,4 @@
-import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../anchorUrl';
+import { advertKey, normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../anchorUrl';
 import { normalizeOlxAdvertUrl } from '../olxAdvertUrl';
 
 describe('normalizeAnchorUrl', () => {
@@ -112,5 +112,32 @@ describe('normalizeAnchorUrlForTier', () => {
       expect(normalizeAnchorUrlForTier('https://tst.pl/kategoria/projektory', tier)).toBeNull();
     }
     expect(normalizeAnchorUrlForTier('https://tst.pl/produkty/projektor-x', 'substitute_new')).toBe('https://tst.pl/produkty/projektor-x');
+  });
+});
+
+describe('advertKey', () => {
+  const OWN = 'https://www.olx.pl/d/oferta/projektor-aopen-qh11-led-hd-720p-hdmi-stan-bardzo-dobry-CID99-ID1btQ36.html';
+  const RETITLED = 'https://www.olx.pl/d/oferta/projektor-led-aopen-qh11-m7p2001-hd-720p-hdmi-CID99-ID1btQ36.html';
+
+  it('gives a retitled OLX advert the same key', () => {
+    expect(advertKey(OWN)).toBe('olx:1btQ36');
+    expect(advertKey(RETITLED)).toBe(advertKey(OWN));
+  });
+
+  it('ignores query, hash, host spelling and the /d/ prefix', () => {
+    for (const spelling of [`${RETITLED}?reason=x#top`, RETITLED.replace('www.', ''), RETITLED.replace('/d/oferta', '/oferta')]) {
+      expect(advertKey(spelling)).toBe('olx:1btQ36');
+    }
+  });
+
+  it('keeps the id token case-sensitive and tells different ids apart', () => {
+    expect(advertKey(OWN.replace('ID1btQ36', 'ID1btq36'))).not.toBe(advertKey(OWN));
+    expect(advertKey(OWN.replace('ID1btQ36', 'ID1other0'))).not.toBe(advertKey(OWN));
+  });
+
+  it('keys a non-OLX link by its normalized URL and rejects a non-anchor link', () => {
+    expect(advertKey('https://www.allegro.pl/oferta/projektor-123?bi_s=x')).toBe('https://allegro.pl/oferta/projektor-123');
+    expect(advertKey('https://evil.example/d/oferta/x-CID1-ID9.html')).toBeNull();
+    expect(advertKey('not a url')).toBeNull();
   });
 });

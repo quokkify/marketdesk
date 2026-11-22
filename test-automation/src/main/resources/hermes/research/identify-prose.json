@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-0a1b2c3d4e5f46718293a4b5c6d7e8f9",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "I opened the manufacturer page of the AOPEN QH11 and two shop pages. It is a small portable LED projector with a native 720p panel. I still need to confirm the brightness in ANSI lumens before I can name models of the same class.",
+        "reasoning_content": "**Reading the product pages**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 30210,
+    "completion_tokens": 310,
+    "total_tokens": 30520
+  }
+}

@@ -11,8 +11,6 @@ import type {
   IAIProvider,
   ListingAnalysis,
   PriceEstimateContext,
-  PriceSuggestion,
-  PriceSuggestionContext,
 } from '../../domain/ports/IAIProvider';
 import type { Product } from '../../domain/entities/Product';
 import type { Marketplace } from '../../domain/entities/Marketplace';
@@ -37,10 +35,6 @@ export interface AIProviderSelectorDeps {
 
 export class AIProviderSelector implements IAIProvider, AIProviderSourceAware {
   constructor(private readonly deps: AIProviderSelectorDeps) {}
-
-  async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
-    return this.call('suggestPrice', (provider) => provider.suggestPrice(context));
-  }
 
   async estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate> {
     return this.call('estimatePrice', (provider) => provider.estimatePrice(context));

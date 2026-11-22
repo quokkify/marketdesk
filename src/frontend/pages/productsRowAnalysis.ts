@@ -1,5 +1,6 @@
 // Row-level Hermes analysis on the Products page: per-row state, its label, and the
 // one-at-a-time runner behind "Analyze selected".
+import type { ProductVerdictView } from '@shared/types';
 import { productHermesDisabledReason } from './ListingDetailsPage.js';
 
 export type RowAnalysisState =
@@ -99,4 +100,34 @@ export async function runSequentially(
     }
   }
   return { analyzed, notRun: [] };
+}
+
+export const VERDICT_RUN_POLL_MS = 3000;
+const VERDICT_RUN_MAX_POLLS = 200;
+
+export interface AwaitVerdictRunOptions {
+  intervalMs?: number;
+  /** Checked before each read; false stops waiting (the page was left). */
+  shouldContinue?: () => boolean;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+// A run ends in the background. Reads the product's verdict until no run is active, then says
+// whether the last run failed. `stopped` means the caller left before the run ended.
+export async function awaitVerdictRun(
+  readView: () => Promise<ProductVerdictView>,
+  options: AwaitVerdictRunOptions = {}
+): Promise<'completed' | 'failed' | 'stopped'> {
+  const { intervalMs = VERDICT_RUN_POLL_MS, shouldContinue, sleep = defaultSleep } = options;
+  for (let poll = 0; poll < VERDICT_RUN_MAX_POLLS; poll += 1) {
+    if (shouldContinue && !shouldContinue()) return 'stopped';
+    const view = await readView();
+    if (!view.active) return view.lastFailed ? 'failed' : 'completed';
+    await sleep(intervalMs);
+  }
+  throw new Error('The analysis is taking too long. Check the product again later.');
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

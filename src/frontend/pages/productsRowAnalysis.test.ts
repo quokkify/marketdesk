@@ -1,5 +1,6 @@
 import {
   analysisStateFor,
+  awaitVerdictRun,
   canStartRowAnalysis,
   rowAnalysisLabel,
   rowAnalyzeDisabledReason,
@@ -154,5 +155,33 @@ describe('pending count updates', () => {
   it('returns the same state object when the pending count did not change', () => {
     const prev = { status: 'done' as const, count: 2 };
     expect(stateAfterPendingChange(prev, 2)).toBe(prev);
+  });
+});
+
+describe('awaitVerdictRun', () => {
+  const view = (active: boolean, lastFailed = false) => ({
+    latest: null,
+    active: active ? ({ id: 'run' } as never) : null,
+    lastFailed,
+  });
+  const noSleep = () => Promise.resolve();
+
+  it('reads until no run is active', async () => {
+    const reads = [view(true), view(true), view(false)];
+    const readView = jest.fn(async () => reads.shift()!);
+    await expect(awaitVerdictRun(readView, { sleep: noSleep })).resolves.toBe('completed');
+    expect(readView).toHaveBeenCalledTimes(3);
+  });
+
+  it('reports a failed last run', async () => {
+    await expect(awaitVerdictRun(async () => view(false, true), { sleep: noSleep })).resolves.toBe('failed');
+  });
+
+  it('stops when the caller has left', async () => {
+    const readView = jest.fn(async () => view(true));
+    await expect(
+      awaitVerdictRun(readView, { sleep: noSleep, shouldContinue: () => false })
+    ).resolves.toBe('stopped');
+    expect(readView).not.toHaveBeenCalled();
   });
 });

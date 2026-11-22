@@ -40,6 +40,7 @@ import { requestErrorMessage } from './revivalView.js';
 const OLX_PLN_ONLY = 'OLX search needs a PLN listing';
 const OLX_CURRENCY = 'PLN';
 const POLL_INTERVAL_MS = 5000;
+const CONFLICT = 409;
 const NEW_PRICES_NOTICE = 'New prices found. Reload to see them.';
 const ESTIMATE_PENDING = 'Searching prices, about 2–4 min. The estimate appears when it finishes.';
 const SUBSTITUTE_TIERS = new Set(['substitute_new', 'substitute_used']);
@@ -197,6 +198,7 @@ interface PriceAnchorsProps {
 const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, currency, listingCurrency }) => {
   const dispatch = useAppDispatch();
   const [refresh, { isLoading: refreshing }] = useRefreshPriceResearchMutation();
+  const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const pln = listingCurrency === OLX_CURRENCY;
   const estimate = storedEstimateLines(research?.lastEstimate ?? null, currency);
   const run = view?.run ?? null;
@@ -206,9 +208,15 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, 
   const estimateStale = !research || research.lastEstimate?.researchUpdatedAt !== research.updatedAt;
 
   const handleFind = async () => {
+    setBusyMessage(null);
     try {
       await refresh(productId).unwrap();
     } catch (err) {
+      // An analysis already running is not a failure: say so next to the button.
+      if ((err as { status?: unknown } | null)?.status === CONFLICT) {
+        setBusyMessage(requestErrorMessage(err));
+        return;
+      }
       dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
     }
   };
@@ -237,6 +245,11 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, 
         </Tooltip>
         {!pln && <Typography variant="caption" color="text.secondary">{OLX_PLN_ONLY}</Typography>}
       </Stack>
+      {busyMessage && (
+        <Typography variant="caption" color="warning.main" data-testid="price-research-busy">
+          {busyMessage}
+        </Typography>
+      )}
       {progress && (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="price-research-progress">
           <CircularProgress size={14} />

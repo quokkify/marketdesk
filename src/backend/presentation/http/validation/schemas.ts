@@ -135,10 +135,6 @@ export const productRecheckSchema = z.object({
   listingId: z.string().trim().min(1, 'listingId is required'),
 }).strict();
 
-export const productImprovementSchema = z.object({
-  listingId: z.string().trim().min(1).optional(),
-}).strict();
-
 const MAX_COMPARABLES = 30;
 // Largest amount a NUMERIC(12,2) column holds.
 const MAX_RESEARCH_PRICE = 9_999_999_999.99;
@@ -380,7 +376,8 @@ export const registerSchema = z.object({
 });
 
 export const runProductHermesSchema = z.object({
-  trigger: z.enum(['scheduled', 'manual', 'event']).optional(),
+  trigger: z.literal('manual').optional(),
+  scope: z.array(z.enum(['info', 'price', 'photos'])).min(1).max(3).optional(),
 }).strict();
 
 export const dismissEventSchema = z.object({

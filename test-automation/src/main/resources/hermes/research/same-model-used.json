@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-7e6d5c4b3a2f41e0d9c8b7a6f5e4d3c2",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"anchors\":[{\"tier\":\"same_model_used\",\"price\":289,\"currency\":\"PLN\",\"title\":\"Projektor AOPEN QH11 LED HD 720p HDMI – zadbany, komplet\",\"url\":\"https://olx.pl/d/oferta/projektor-aopen-qh11-led-hd-720p-hdmi-zadbany-komplet-CID99-ID1qT7wZ.html?search_reason=search%7Corganic\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280×720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lumens\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]}]}",
+        "reasoning_content": "**Checking used adverts**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 41166,
+    "completion_tokens": 425,
+    "total_tokens": 41591
+  }
+}

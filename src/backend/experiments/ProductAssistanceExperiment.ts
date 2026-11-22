@@ -13,7 +13,7 @@ import { Money } from '../domain/valueObjects/Money';
 import { NotFoundError } from '../domain/shared/DomainError';
 import type { Result } from '../domain/shared/Result';
 import type { ListingSeoOutput } from '../domain/agents/MarketDeskAgentCatalog';
-import type { ProductImprovementSuggestions } from '../../shared/types';
+import type { PriceResearch, RevivalProposal } from '../../shared/types';
 
 export const experimentRecipe = {
   schemaVersion: 1,
@@ -30,22 +30,23 @@ export const experimentRecipe = {
 } as const;
 
 type ErrorCode = 'NOT_FOUND' | 'INVALID_OUTPUT' | 'EXECUTION_FAILED';
+// A failed or invalid SEO answer does not fail a revival proposal: it names the step in aiIssues.
 const cases = [
-  { id: 'copy-and-price', expected: 'review', calls: 2 },
-  { id: 'product-only', expected: 'review', calls: 1 },
+  { id: 'copy-and-price', expected: 'review', calls: 1 },
+  { id: 'no-stored-estimate', expected: 'review', calls: 1 },
   { id: 'foreign-workspace', expected: 'NOT_FOUND', calls: 0 },
   { id: 'foreign-listing', expected: 'NOT_FOUND', calls: 0 },
   { id: 'wrong-product', expected: 'NOT_FOUND', calls: 0 },
   { id: 'foreign-marketplace', expected: 'NOT_FOUND', calls: 0 },
-  { id: 'untrusted-instructions', expected: 'review', calls: 2 },
-  { id: 'tool-command-in-output', expected: 'INVALID_OUTPUT', calls: 1 },
-  { id: 'negative-price', expected: 'INVALID_OUTPUT', calls: 2 },
-  { id: 'provider-failure', expected: 'EXECUTION_FAILED', calls: 1 },
+  { id: 'untrusted-instructions', expected: 'review', calls: 1 },
+  { id: 'tool-command-in-output', expected: 'review', calls: 1 },
+  { id: 'live-listing', expected: 'EXECUTION_FAILED', calls: 0 },
+  { id: 'provider-failure', expected: 'review', calls: 1 },
 ] as const;
 
 export interface ExperimentCaseResult {
   caseId: string;
-  input: { workspaceId: string; productId: string; listingId?: string; description: string };
+  input: { workspaceId: string; listingId: string; description: string };
   expected: string;
   actual: string;
   passed: boolean;
@@ -57,13 +58,19 @@ export interface ExperimentCaseResult {
   };
   transitions: AssistanceTransition[];
   toolCalls: {
-    tool: 'analyzeListingSeo' | 'suggestPrice';
+    tool: 'analyzeListingSeo';
     policy: 'review-only';
     approval: 'required-before-apply';
   }[];
-  output?: ProductImprovementSuggestions;
+  output?: RevivalProposal;
   error?: ErrorCode;
   latencyMs: number;
+}
+
+function expectedIssues(caseId: string): string {
+  if (caseId === 'no-stored-estimate') return 'price';
+  if (caseId === 'tool-command-in-output' || caseId === 'provider-failure') return 'copy';
+  return '';
 }
 
 function unwrap<T>(result: Result<T>): T {
@@ -108,6 +115,8 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
         productId: scenario.id === 'wrong-product' ? 'other-product' : product.id,
         marketplaceId: 'synthetic-marketplace',
         price,
+        marketplaceListingId: 'synthetic-advert',
+        status: scenario.id === 'live-listing' ? 'live' : 'expired',
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -124,16 +133,17 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
     const before = JSON.stringify({ product, listing, marketplace });
     const transitions: AssistanceTransition[] = [];
     const toolCalls: ExperimentCaseResult['toolCalls'] = [];
-    const record = (tool: 'analyzeListingSeo' | 'suggestPrice') => {
+    const record = (tool: 'analyzeListingSeo') => {
       toolCalls.push({ tool, policy: 'review-only', approval: 'required-before-apply' });
     };
+    const storedResearch = {
+      lastEstimate: {
+        hiddenReason: null,
+        estimate: { startPrice: 95, reasoning: 'Synthetic fixture.', confidence: 'low' },
+      },
+    } as unknown as PriceResearch;
     const graph = new ProductAssistanceGraph(
       new ProductAIDraftService(),
-      {
-        recheck: async () => {
-          throw new Error('Publication is outside this experiment');
-        },
-      },
       {
         findByIdForWorkspace: async (id, workspaceId) =>
           id === product.id && workspaceId === product.workspaceId ? product : null,
@@ -152,6 +162,14 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
           workspaceId === product.workspaceId &&
           scenario.id !== 'foreign-marketplace'
             ? marketplace
+            : null,
+      },
+      {
+        findByProduct: async (workspaceId, productId) =>
+          scenario.id !== 'no-stored-estimate' &&
+          workspaceId === product.workspaceId &&
+          productId === product.id
+            ? storedResearch
             : null,
       },
       {
@@ -176,27 +194,18 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
           // Deliberately malformed provider replies must pass through real graph validation.
           return output as ListingSeoOutput;
         },
-        suggestPrice: async () => {
-          record('suggestPrice');
-          return {
-            suggestedPrice: scenario.id === 'negative-price' ? -1 : 95,
-            reasoning: 'Synthetic fixture.',
-            confidence: 'low',
-          };
-        },
       },
       (transition) => transitions.push(transition)
     );
     const input = {
       workspaceId: scenario.id === 'foreign-workspace' ? 'other-workspace' : product.workspaceId,
-      productId: product.id,
-      ...(scenario.id === 'product-only' ? {} : { listingId: listing.id }),
+      listingId: listing.id,
     };
     const start = performance.now();
-    let output: ProductImprovementSuggestions | undefined;
+    let output: RevivalProposal | undefined;
     let error: ErrorCode | undefined;
     try {
-      output = await graph.proposeImprovements(input);
+      output = await graph.proposeRevival(input);
     } catch (caught) {
       error = classifyExperimentError(caught);
     }
@@ -206,12 +215,10 @@ export async function runAssistanceExperiment(): Promise<ExperimentCaseResult[]>
       providerCalls: toolCalls.length === scenario.calls,
       reviewOnly:
         error !== undefined ||
-        (output?.reviewOnly === true &&
-          output.graphVersion === experimentRecipe.graph &&
-          output.productId === product.id &&
-          (scenario.id === 'product-only'
-            ? output.price === undefined
-            : output.price?.suggestedPrice === 95)),
+        (output?.productId === product.id &&
+          output.listingId === listing.id &&
+          output.price?.proposed === (scenario.id === 'no-stored-estimate' ? undefined : 95) &&
+          output.aiIssues.join() === expectedIssues(scenario.id)),
       domainUnchanged: before === JSON.stringify({ product, listing, marketplace }),
     };
     results.push({

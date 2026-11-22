@@ -2,7 +2,7 @@
 // web-enabled research profile. Every row the agent reports is checked here before the seller sees it.
 
 import type { AnchorTier, ClassAttribute, PriceComparable } from '../../../shared/types';
-import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../../../shared/anchorUrl';
+import { advertKey, normalizeAnchorUrlForTier } from '../../../shared/anchorUrl';
 import { MAX_ANCHORS_PER_TIER, MAX_AUTO_ROWS } from '../../domain/services/anchorLadder';
 
 export const RESEARCH_TOOLSET = 'web';
@@ -52,9 +52,18 @@ export function sanitizeSearchName(name: string): string {
     .trim();
 }
 
+// Keys of the adverts that must never be a comparable: the seller's own and the ones the seller removed.
+export function excludedAdvertKeys(ownUrls: Iterable<string>, dismissed: Iterable<string>): Set<string> {
+  const keys = new Set<string>();
+  for (const url of [...ownUrls, ...dismissed]) {
+    keys.add(advertKey(url) ?? url);
+  }
+  return keys;
+}
+
 export function filterAnchorRows(
   items: unknown[],
-  ctx: { currency: string; ownUrl: string | null; dismissed: ReadonlySet<string>; today: string },
+  ctx: { currency: string; ownUrls: readonly string[]; dismissed: ReadonlySet<string>; today: string },
 ): PriceComparable[] {
   return capAnchorRows(anchorRows(items, ctx));
 }
@@ -63,9 +72,9 @@ export function filterAnchorRows(
 // a caller that drops more rows afterwards applies capAnchorRows last.
 export function anchorRows(
   items: unknown[],
-  ctx: { currency: string; ownUrl: string | null; dismissed: ReadonlySet<string>; today: string },
+  ctx: { currency: string; ownUrls: readonly string[]; dismissed: ReadonlySet<string>; today: string },
 ): PriceComparable[] {
-  const ownUrl = ctx.ownUrl ? normalizeAnchorUrl(ctx.ownUrl) : null;
+  const excluded = excludedAdvertKeys(ctx.ownUrls, ctx.dismissed);
   const seen = new Set<string>();
   const rows: PriceComparable[] = [];
   for (const item of items) {
@@ -77,10 +86,11 @@ export function anchorRows(
     if (currency !== ctx.currency) continue;
     const anchorTier = tier as AnchorTier;
     const normalized = normalizeAnchorUrlForTier(url, anchorTier);
-    if (!normalized || normalized === ownUrl || seen.has(normalized) || ctx.dismissed.has(normalized)) continue;
+    const key = normalized ? advertKey(normalized) ?? normalized : null;
+    if (!normalized || !key || excluded.has(key) || seen.has(key)) continue;
     const note = title.trim().slice(0, MAX_TITLE_LENGTH).trim();
     if (note === '') continue;
-    seen.add(normalized);
+    seen.add(key);
     rows.push({
       price, note, url: normalized, source: 'auto', tier: anchorTier, seenAt: ctx.today,
       // Carried as given: the caller parses the attributes first; an empty list counts as none.

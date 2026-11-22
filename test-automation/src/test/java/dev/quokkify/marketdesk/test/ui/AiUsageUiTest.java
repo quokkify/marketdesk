@@ -10,6 +10,10 @@ import org.testng.annotations.Test;
 
 public class AiUsageUiTest extends BaseUiTest {
 
+  // The offline listing SEO call, and the identify attempts the research profile mock refuses for this product:
+  // two, from IDENTIFY_ATTEMPTS in PriceResearchGraph.ts.
+  private static final int ANALYSES_TODAY = 3;
+
   // Writes the one limits file the app container reads, so it runs alone.
   @Sequential
   @Test
@@ -17,8 +21,9 @@ public class AiUsageUiTest extends BaseUiTest {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    productSteps.proposeImprovements(account, productListing);
-    aiUsageSteps.getUsageOnceCounted(account, 1);
+    verdictSteps.enableListingSeo(account);
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
+    aiUsageSteps.getUsageOnceCounted(account, ANALYSES_TODAY);
     hermesLimitsSteps.writeLimitsFetchedAgo(Duration.ZERO);
     hermesLimitsSteps.getLimitsOnceReported(account, "fresh");
     loginPageSteps
@@ -30,14 +35,14 @@ public class AiUsageUiTest extends BaseUiTest {
         .openHermesActivityPage()
         .verify()
         .limitsCardShowsPlanAndWindows()
-        .usageCardCountsAnalysesToday(1);
+        .usageCardCountsAnalysesToday(ANALYSES_TODAY);
   }
 
   @Test
-  public void productPageShowsOfflineUsageLine() {
+  public void revivalDialogShowsOfflineUsageLine() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    ProductListingPojo productListing = listingSteps.createExpiredOlxProductListing(account);
     loginPageSteps
         .openLoginPage()
         .signIn(account.email(), account.password())
@@ -45,7 +50,7 @@ public class AiUsageUiTest extends BaseUiTest {
         .productsCatalogueIsShown();
     productDetailPageSteps
         .openProductPage(productListing)
-        .suggestImprovements()
+        .openRevivalDialog()
         .verify()
         .showsOfflineUsageLine();
   }

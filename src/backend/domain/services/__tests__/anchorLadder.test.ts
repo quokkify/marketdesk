@@ -1,4 +1,4 @@
-import { mergeLadder } from '../anchorLadder';
+import { dropExcludedAutoRows, mergeLadder } from '../anchorLadder';
 import type { PriceComparable } from '../../../../shared/types';
 
 const make = (source: PriceComparable['source'], n: number): PriceComparable => ({
@@ -21,5 +21,17 @@ describe('mergeLadder', () => {
     const merged = mergeLadder(existing, found);
     expect(merged).toHaveLength(30);
     expect(merged.slice(28).map((r) => r.note)).toEqual(['auto-100', 'auto-101']);
+  });
+});
+
+describe('dropExcludedAutoRows', () => {
+  const advert = (source: PriceComparable['source'], url: string): PriceComparable => ({ ...make(source, 1), url });
+
+  it('drops a stored auto row of a retitled own advert and keeps the rest', () => {
+    const own = advert('auto', 'https://www.olx.pl/d/oferta/projektor-led-aopen-qh11-m7p2001-hd-720p-hdmi-CID99-ID1btQ36.html');
+    const other = advert('auto', 'https://www.olx.pl/d/oferta/projektor-CID99-ID1other.html');
+    const manual = advert('manual', 'https://www.olx.pl/d/oferta/projektor-aopen-qh11-CID99-ID1btQ36.html');
+    const kept = dropExcludedAutoRows([own, other, manual], new Set(['olx:1btQ36']));
+    expect(kept).toEqual([other, manual]);
   });
 });

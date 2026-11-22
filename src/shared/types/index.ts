@@ -387,6 +387,10 @@ export interface Product {
   status: ProductStatus;
   tags: string[];
   images: string[];
+  // Latest completed sale verdict; only the product list fills it.
+  verdict?: SaleVerdict | null;
+  // The newest sale verdict run of the product failed; only the product list fills it.
+  verdictLastFailed?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -459,6 +463,53 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
+export type VerdictCheckName = 'info' | 'price' | 'photos';
+export type VerdictCheckStatus = 'ready' | 'fix' | 'needs_human' | 'pending';
+export type VerdictOverall = 'ready' | 'fix' | 'needs_human';
+
+export interface VerdictReason {
+  code: string;
+  message: string;
+  field?: ProductRecheckItem['editField'];
+}
+
+export interface VerdictCheck {
+  check: VerdictCheckName;
+  status: VerdictCheckStatus;
+  reasons: VerdictReason[];
+  checkedAt: string;
+  refs: {
+    eventIds: string[];
+    researchUpdatedAt?: string | null;
+    // Figures behind the check, shown in the row: the price check carries the prices, the photos check the count.
+    currentPrice?: number;
+    proposedPrice?: number | null;
+    currency?: string;
+    photoCount?: number;
+  };
+}
+
+export type VerdictRunStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface SaleVerdict {
+  id: string;
+  productId: string;
+  listingId: string | null;
+  graphVersion: string;
+  scope: VerdictCheckName[];
+  status: VerdictRunStatus;
+  overall: VerdictOverall | null;
+  checks: Partial<Record<VerdictCheckName, VerdictCheck>>;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ProductVerdictView {
+  latest: SaleVerdict | null;
+  active: SaleVerdict | null;
+  lastFailed: boolean;
+}
+
 export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';
 
 export type AiUsageReportCostStatus = AiCostStatus | 'mixed';
@@ -511,17 +562,6 @@ export interface AiUsageSummary {
   completionTokens: number | null;
   totalTokens: number | null;
   costStatus: AiCostStatus;
-}
-
-export interface ProductImprovementSuggestions {
-  graphVersion: 'product-assistance@1';
-  productId: string;
-  productUpdatedAt: string;
-  listingUpdatedAt?: string;
-  reviewOnly: true;
-  copy: Array<{ field: 'title' | 'description'; proposedValue: string; rationale: string }>;
-  price?: { suggestedPrice: number; reasoning: string; confidence: 'high' | 'medium' | 'low' };
-  aiUsage?: AiUsageSummary;
 }
 
 export interface RevivalMissingFact {

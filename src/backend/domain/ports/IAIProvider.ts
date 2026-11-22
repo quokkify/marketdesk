@@ -12,26 +12,11 @@ import type {
   ListingSeoOutput,
 } from '../agents/MarketDeskAgentCatalog';
 
-export interface PriceSuggestionContext {
-  listing: Listing;
-  recentViews: number;
-  conversionRate: number;
-  competitorPrice?: number;
-  // Product cost in the listing currency, when known.
-  costPrice?: number;
-}
-
 export interface PriceEstimateContext {
   product: Product;
   listing: Listing;
   daysLive: number | null;
   research: PriceResearch | null;
-}
-
-export interface PriceSuggestion {
-  suggestedPrice: number;
-  reasoning: string;
-  confidence: 'high' | 'medium' | 'low';
 }
 
 export interface ListingAnalysis {
@@ -42,9 +27,6 @@ export interface ListingAnalysis {
 export interface IAIProvider {
   // Estimate a start and a floor price from the product card, optional research and listing stats.
   estimatePrice(context: PriceEstimateContext): Promise<PriceEstimate>;
-
-  // Generate a pricing suggestion for a listing.
-  suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion>;
 
   // Generate an SEO-optimized title for a marketplace (marketplace may be null
   // until per-marketplace titles are implemented).
@@ -67,7 +49,7 @@ export const PRICE_ESTIMATE_UNUSABLE_MESSAGE = 'Hermes price estimate was not us
 export { OFFLINE_AI_NOTICE } from '../../../shared/constants';
 
 // Optional capability of a provider that may answer from built-in offline heuristics
-// instead of Hermes. HermesDecisionEngine keeps changes made while offline review-only.
+// instead of Hermes. Changes made while offline stay review-only.
 export interface AIProviderSourceAware {
   // The source that would answer the next call.
   activeProvider(): Promise<'hermes' | 'offline'>;

@@ -266,7 +266,7 @@ export class ProductAIDraftService {
   ): Promise<DraftEnrichment> {
     try {
       const product = this.toSyntheticProduct(workspaceId, fields);
-      // Asked before and after the calls, like HermesDecisionEngine: a switch to the
+      // Asked before and after the calls, as for the listing SEO call: a switch to the
       // offline heuristics at any point labels the whole draft offline.
       const offlineBefore = await answersOffline(provider);
       const [generatedTitle, analysis] = await Promise.all([

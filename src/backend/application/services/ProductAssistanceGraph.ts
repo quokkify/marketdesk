@@ -1,8 +1,7 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { z } from 'zod';
 import type {
-  ProductAIDraft, ProductAIDraftRequest, ProductRecheckResult, ProductImprovementSuggestions, RevivalAiStep,
-  RevivalProposal,
+  ProductAIDraft, ProductAIDraftRequest, RevivalAiStep, RevivalProposal,
 } from '../../../shared/types';
 import { OFFLINE_AI_NOTICE, type IAIProvider } from '../../domain/ports/IAIProvider';
 import { listingSeoOutputSchema, type ListingSeoOutput } from '../../domain/agents/MarketDeskAgentCatalog';
@@ -12,21 +11,19 @@ import type { Marketplace } from '../../domain/entities/Marketplace';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
+import type { IPriceResearchRepository } from '../../domain/repositories/interfaces/IPriceResearchRepository';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { fitsOlxTitle, missingFacts, priceGuard, REVIVAL_REFUSAL_MESSAGE } from '../../domain/services/revivalRules';
 import type { ProductAIDraftService, ProductDraftLogger } from './ProductAIDraftService';
-import type { ProductRecheckService, RecheckProductInput } from './ProductRecheckService';
 import { withAiUsageScope } from '../ai/aiUsageScope';
 
 export const PRODUCT_ASSISTANCE_GRAPH_VERSION = 'product-assistance@1';
 
-const priceSuggestionSchema = z.object({
-  suggestedPrice: z.number().finite().positive(),
-  reasoning: z.string().trim().min(1).max(500),
-  confidence: z.enum(['high', 'medium', 'low']),
-}).strict();
-
-type PriceSuggestionOutput = z.infer<typeof priceSuggestionSchema>;
+interface StoredPrice {
+  suggestedPrice: number;
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+}
 
 // Names the failure without Hermes text: a schema failure gives only the paths it failed at.
 function describeFailure(error: unknown): { name: string; message: string } {
@@ -40,11 +37,9 @@ function describeFailure(error: unknown): { name: string; message: string } {
 
 type AssistanceInput =
   | { kind: 'draft'; workspaceId: string; request: ProductAIDraftRequest }
-  | { kind: 'publication'; request: RecheckProductInput }
-  | { kind: 'improve'; workspaceId: string; productId: string; listingId?: string }
   | { kind: 'revive'; workspaceId: string; listingId: string };
 
-type AssistanceResult = ProductAIDraft | ProductRecheckResult | ProductImprovementSuggestions | RevivalProposal;
+type AssistanceResult = ProductAIDraft | RevivalProposal;
 
 const AssistanceState = Annotation.Root({
   input: Annotation<AssistanceInput>(),
@@ -54,7 +49,7 @@ const AssistanceState = Annotation.Root({
 type GraphState = typeof AssistanceState.State;
 
 export interface AssistanceTransition {
-  node: 'route' | 'draft' | 'publication' | 'improve' | 'revive';
+  node: 'route' | 'draft' | 'revive';
   phase: 'started' | 'completed' | 'failed';
 }
 
@@ -65,15 +60,14 @@ export class ProductAssistanceGraph {
 
   constructor(
     private readonly drafts: Pick<ProductAIDraftService, 'generateDraft'>,
-    private readonly recheckService: Pick<ProductRecheckService, 'recheck'>,
     private readonly products: Pick<IProductRepository, 'findByIdForWorkspace'>,
     private readonly listings: Pick<IListingRepository, 'findByIdForWorkspace'>,
     private readonly marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>,
-    private readonly ai: Pick<IAIProvider, 'analyzeListingSeo' | 'suggestPrice'>,
+    private readonly research: Pick<IPriceResearchRepository, 'findByProduct'>,
+    private readonly ai: Pick<IAIProvider, 'analyzeListingSeo'>,
     observe?: (transition: AssistanceTransition) => void,
-    // sandboxMode: true while the OLX adapter is not real.
     // logger: the container's, for the Hermes steps a revival proposal survives without.
-    private readonly options: { sandboxMode?: boolean; logger?: ProductDraftLogger } = {},
+    private readonly options: { logger?: ProductDraftLogger } = {},
   ) {
     // The observer receives node lifecycle only, never graph state or error text.
     const traced = (
@@ -99,47 +93,6 @@ export class ProductAssistanceGraph {
         });
         if (result.isErr()) throw result.error;
         return { result: result.value };
-      }))
-      .addNode('publication', traced('publication', async (state: GraphState) => {
-        if (state.input.kind !== 'publication') throw new Error('Invalid publication route');
-        return { result: await this.recheckService.recheck(state.input.request) };
-      }))
-      .addNode('improve', traced('improve', async (state: GraphState) => {
-        if (state.input.kind !== 'improve') throw new Error('Invalid improvement route');
-        const { workspaceId, productId, listingId } = state.input;
-        const product = await this.products.findByIdForWorkspace(productId, workspaceId);
-        if (!product) throw new NotFoundError(`Product not found: ${productId}`);
-        const listing = listingId
-          ? await this.listings.findByIdForWorkspace(listingId, workspaceId)
-          : null;
-        if (listingId && (!listing || listing.productId !== productId)) {
-          throw new NotFoundError(`Listing not found for product: ${listingId}`);
-        }
-        const marketplace = listing
-          ? await this.marketplaces.findByIdForWorkspace(listing.marketplaceId, workspaceId)
-          : null;
-        if (listing && !marketplace) {
-          throw new NotFoundError(`Marketplace not found: ${listing.marketplaceId}`);
-        }
-        // One improvement is one analysis: the SEO and price calls are counted together.
-        const { value: { seo, price }, usage } = await withAiUsageScope(
-          { workspaceId, feature: 'improve', productId },
-          async () => {
-            const seo = await this.listingSeo(product, listing && marketplace ? { listing, marketplace } : null);
-            const price = listing && marketplace
-              ? await this.priceSuggestion(product, listing, marketplace)
-              : undefined;
-            return { seo, price };
-          },
-        );
-        return { result: {
-          graphVersion: PRODUCT_ASSISTANCE_GRAPH_VERSION,
-          productId, productUpdatedAt: product.updatedAt.toISOString(),
-          ...(listing ? { listingUpdatedAt: listing.updatedAt.toISOString() } : {}),
-          reviewOnly: true as const, copy: seo.recommendations,
-          ...(price ? { price } : {}),
-          aiUsage: usage,
-        } };
       }))
       .addNode('revive', traced('revive', async (state: GraphState) => {
         if (state.input.kind !== 'revive') throw new Error('Invalid revival route');
@@ -169,13 +122,13 @@ export class ProductAssistanceGraph {
             return null;
           }
         };
-        const { value: { seo, price }, usage } = await withAiUsageScope(
+        const { value: seo, usage } = await withAiUsageScope(
           { workspaceId, feature: 'revive', productId: product.id },
-          async () => ({
-            seo: await attempt('copy', () => this.listingSeo(product, { listing, marketplace })),
-            price: await attempt('price', () => this.priceSuggestion(product, listing, marketplace)),
-          }),
+          () => attempt('copy', () => this.listingSeo(product, { listing, marketplace })),
         );
+        // The price is the stored research estimate; no research run is requested for a proposal.
+        const price = await attempt('price', () => this.storedPrice(product));
+        if (!price && !aiIssues.includes('price')) aiIssues.push('price');
         // Offline heuristics are no proposal to bring an advert back with: only Hermes output is offered.
         const hermesSeo = seo && !seo.disclaimer.includes(OFFLINE_AI_NOTICE) ? seo : null;
         const hermesPrice = price && !price.reasoning.includes(OFFLINE_AI_NOTICE) ? price : null;
@@ -212,11 +165,9 @@ export class ProductAssistanceGraph {
       }))
       .addEdge(START, 'route')
       .addConditionalEdges('route', (state: GraphState) => state.input.kind, {
-        draft: 'draft', publication: 'publication', improve: 'improve', revive: 'revive',
+        draft: 'draft', revive: 'revive',
       })
       .addEdge('draft', END)
-      .addEdge('publication', END)
-      .addEdge('improve', END)
       .addEdge('revive', END)
       .compile();
   }
@@ -238,37 +189,17 @@ export class ProductAssistanceGraph {
     }, 'balanced'));
   }
 
-  private async priceSuggestion(
-    product: Product, listing: Listing, marketplace: Marketplace,
-  ): Promise<PriceSuggestionOutput> {
-    // The OLX sandbox simulates views on every sync. They are no demand signal, so a
-    // sandbox listing gets none and the price reasoning cannot cite them. A listing published
-    // in the sandbox keeps those views after a switch to real mode; only the sandbox
-    // taxonomy marks its category, so the marker still names it.
-    const simulatedViews =
-      listing.marketplaceCategory?.sandbox === true ||
-      (this.options.sandboxMode === true && marketplace.key === 'olx');
-    return priceSuggestionSchema.parse(await this.ai.suggestPrice({
-      listing, recentViews: simulatedViews ? 0 : listing.views ?? 0, conversionRate: 0,
-      costPrice: product.costPrice?.amount,
-    }));
+  private async storedPrice(product: Product): Promise<StoredPrice | null> {
+    const stored = (await this.research.findByProduct(product.workspaceId, product.id))?.lastEstimate;
+    // An estimate the price check hides (low confidence, within the threshold) is no proposal either.
+    if (!stored || stored.hiddenReason !== null) return null;
+    const { startPrice, reasoning, confidence } = stored.estimate;
+    return { suggestedPrice: startPrice, reasoning, confidence };
   }
 
   async generateDraft(workspaceId: string, request: ProductAIDraftRequest): Promise<ProductAIDraft> {
     const state = await this.graph.invoke({ input: { kind: 'draft', workspaceId, request } });
     return state.result as ProductAIDraft;
-  }
-
-  async publicationReview(request: RecheckProductInput): Promise<ProductRecheckResult> {
-    const state = await this.graph.invoke({ input: { kind: 'publication', request } });
-    return state.result as ProductRecheckResult;
-  }
-
-  async proposeImprovements(input: {
-    workspaceId: string; productId: string; listingId?: string;
-  }): Promise<ProductImprovementSuggestions> {
-    const state = await this.graph.invoke({ input: { kind: 'improve', ...input } });
-    return state.result as ProductImprovementSuggestions;
   }
 
   async proposeRevival(input: { workspaceId: string; listingId: string }): Promise<RevivalProposal> {

@@ -141,7 +141,7 @@ function setup(options: {
     workspaceId: WS, productId: PID, signal,
     onNode: async (node, status) => { transitions.push([node, status]); },
   });
-  return { graph, research, client, run, transitions };
+  return { graph, research, client, listings, run, transitions };
 }
 
 function stored(research: InMemoryPriceResearchRepository): PriceResearch | undefined {
@@ -317,6 +317,43 @@ describe('PriceResearchGraph', () => {
     expect(saved.comparables[0]).toEqual(manual);
     expect(saved.comparables.map((row) => row.url)).not.toContain(EXTRALINK_URL);
     expect(saved.dismissedUrls).toEqual([EXTRALINK_URL]);
+  });
+
+  // Regression guard: an advert retitled after listing keeps its OLX id token, so it is still the seller's own.
+  it('drops a comparable that is a retitled advert of another product in the workspace, not of another workspace', async () => {
+    const s = setup();
+    const foreign = (id: string, url: string, workspace: string) => {
+      s.listings.items.set(id, unwrap(Listing.create({
+        id, productId: `${id}-product`, marketplaceId: 'm1', price: money(100), externalUrl: url,
+      })));
+      s.listings.listingWorkspaces.set(id, workspace);
+    };
+    foreign('l2', 'https://www.olx.pl/d/oferta/tytul-przed-zmiana-CID99-ID1same1.html', WS);
+    foreign('l3', 'https://www.olx.pl/d/oferta/magcubic-hy300-inny-CID99-ID1mag1.html', 'other-workspace');
+    await s.run();
+    const urls = stored(s.research)!.comparables.map((row) => row.url);
+    expect(urls).not.toContain(SAME_URL);
+    expect(urls).toContain(MAGCUBIC_URL);
+  });
+
+  it('removes stored auto rows of a retitled own advert and a retitled dismissed URL, and keeps a manual row (tier did not answer)', async () => {
+    const research = new InMemoryPriceResearchRepository();
+    const manual: PriceComparable = {
+      price: 199, note: 'seller manual row', source: 'manual',
+      url: 'https://www.olx.pl/d/oferta/stary-tytul-CID99-ID1own0.html',
+    };
+    const dismissedUrl = 'https://www.olx.pl/d/oferta/odrzucony-CID99-ID1dism9.html';
+    seed(research, [
+      manual,
+      autoRow('same_model_used', 'https://www.olx.pl/d/oferta/inny-tytul-CID99-ID1own0.html', 90),
+      autoRow('same_model_used', 'https://www.olx.pl/d/oferta/zmieniony-odrzucony-CID99-ID1dism9.html', 95),
+    ], [dismissedUrl]);
+    const s = setup({ research, client: new ScriptedResearchClient({ sameModelUsed: async () => { throw new Error('tier down'); } }) });
+    await s.run();
+    const urls = stored(research)!.comparables.map((row) => row.url);
+    expect(urls).toContain(manual.url);
+    expect(urls).not.toContain('https://www.olx.pl/d/oferta/inny-tytul-CID99-ID1own0.html');
+    expect(urls).not.toContain('https://www.olx.pl/d/oferta/zmieniony-odrzucony-CID99-ID1dism9.html');
   });
 
   it('applies the per-tier cap after the class filter and the dismissals', async () => {

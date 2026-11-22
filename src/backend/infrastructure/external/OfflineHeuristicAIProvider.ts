@@ -9,8 +9,6 @@ import {
   type IAIProvider,
   type ListingAnalysis,
   type PriceEstimateContext,
-  type PriceSuggestion,
-  type PriceSuggestionContext,
 } from '../../domain/ports/IAIProvider';
 import type { Product } from '../../domain/entities/Product';
 import type { PriceEstimate, ProductCondition } from '../../../shared/types';
@@ -55,60 +53,6 @@ export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSource
   // Reports itself, so callers label its results offline however it is wired.
   async activeProvider(): Promise<'offline'> {
     return 'offline';
-  }
-
-  // Prices are whole units of the listing currency (PLN), computed in minor units.
-  async suggestPrice(context: PriceSuggestionContext): Promise<PriceSuggestion> {
-    const { listing, recentViews, conversionRate, costPrice } = context;
-    const currency = listing.price.currency;
-    const priceMinor = listing.price.minorUnits;
-    const costMinor =
-      costPrice !== undefined && costPrice > 0 ? Math.round(costPrice * 100) : null;
-    // Why no cost-based floor applies: no cost at all, or a recorded cost of zero or less.
-    const missingCost =
-      costPrice === undefined ? 'the product cost is unknown' : 'no positive product cost is recorded';
-
-    if (priceMinor <= 0) {
-      if (costMinor === null) {
-        return lowConfidence(
-          1,
-          `The listing has no price and ${missingCost}, so the 1 ${currency} minimum is suggested.`
-        );
-      }
-      return lowConfidence(
-        Math.max(Math.round((costMinor * 13) / 1000), 1),
-        `The listing has no price, so cost plus 30%, rounded to whole ${currency}, is suggested.`
-      );
-    }
-
-    const currentPrice = listing.price.amount;
-    if (recentViews > 50 && conversionRate === 0) {
-      const floor = costMinor === null ? 1 : Math.ceil((costMinor * 105) / 10_000);
-      const floorLabel = costMinor === null ? `the 1 ${currency} minimum` : 'cost plus 5%';
-      const costNote =
-        costMinor === null
-          ? ` ${capitalizeFirstLetter(missingCost)}, so the floor is 1 ${currency} instead of cost plus 5%.`
-          : '';
-      const cut = Math.round((priceMinor * 9) / 1000);
-      const target = Math.max(cut, floor);
-      if (target >= currentPrice) {
-        return lowConfidence(
-          currentPrice,
-          `${recentViews} recent views and no recorded sale yet, but no whole-${currency} cut stays above ${floorLabel}, so the current price is kept.${costNote}`
-        );
-      }
-      return lowConfidence(
-        target,
-        target > cut
-          ? `${recentViews} recent views and no recorded sale yet, so a cut down to ${floorLabel} is suggested.${costNote}`
-          : `${recentViews} recent views and no recorded sale yet, so a 10% cut, rounded to whole ${currency}, is suggested.${costNote}`
-      );
-    }
-
-    return lowConfidence(
-      currentPrice,
-      'There is not enough sales signal to change the price, so the current price is kept.'
-    );
   }
 
   // Never surfaced: low confidence by design, so it only restates the stored figures.
@@ -179,10 +123,6 @@ export class OfflineHeuristicAIProvider implements IAIProvider, AIProviderSource
 
     return listingSeoOutputSchema.parse({ recommendations, disclaimer: OFFLINE_AI_NOTICE });
   }
-}
-
-function lowConfidence(suggestedPrice: number, reasoning: string): PriceSuggestion {
-  return { suggestedPrice, confidence: 'low', reasoning: `${reasoning} ${OFFLINE_AI_NOTICE}` };
 }
 
 function describeChanges(changes: string[]): string {

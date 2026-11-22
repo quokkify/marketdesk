@@ -96,19 +96,12 @@ export class PriceEstimateService {
    * and a research run active, nothing is estimated: the run's job produces the first estimate.
    * An estimate the store refuses (computed from older research than the stored one) is neither
    * kept nor proposed: the newer estimate and its suggestion stand.
-   * `researchNote` is kept on the stored estimate (Analyze notes a research run it could not request).
-   * `ignoreActiveRun` is for the research job itself: its own run is still active while it re-estimates.
    */
-  async estimate(
-    product: Product,
-    listing: Listing,
-    opts: { researchNote?: string | null; ignoreActiveRun?: boolean } = {},
-  ): Promise<PriceEstimateResult> {
+  async estimate(product: Product, listing: Listing): Promise<PriceEstimateResult> {
     const stored = await this.deps.research.findByProduct(product.workspaceId, product.id);
-    if (!opts.ignoreActiveRun && (await this.researchPending(product, stored))) {
+    if (await this.researchPending(product, stored)) {
       return { suggestion: null, stored: null, skipped: 'research_pending' };
     }
-    const researchNote = opts.researchNote ?? null;
     const researchUpdatedAt = stored?.updatedAt ?? null;
     // A retail anchor in another currency must not be compared against the listing price.
     const research =
@@ -144,7 +137,8 @@ export class PriceEstimateService {
     // Only used prices describe what the item itself sells for; new prices are not a used range.
     const usedRows = rows.filter((r) => r.tier == null || USED_TIERS.has(r.tier));
     const labelled = labelEstimateFigures(capped, researchAnchor, usedRows);
-    const currentPrice = product.sellingPrice.amount;
+    // The listing price is the one being judged: a marketplace import can move it away from the product's.
+    const currentPrice = listing.price.amount;
     // A drop never goes below the seller's lowest acceptable price, and a drop the floor cancels
     // is not turned into a raise. Without an explicit floor, the estimate stands as it was.
     const sellerFloor = product.minAcceptablePrice?.amount;
@@ -153,13 +147,13 @@ export class PriceEstimateService {
       const startPrice =
         labelled.startPrice < currentPrice ? Math.max(labelled.startPrice, sellerFloor) : labelled.startPrice;
       if (labelled.startPrice < currentPrice && startPrice >= currentPrice) {
-        const kept = await this.remember(product, labelled, 'floor_cancels', researchNote, researchUpdatedAt);
+        const kept = await this.remember(product, labelled, 'floor_cancels', researchUpdatedAt);
         return { suggestion: null, stored: kept, skipped: null };
       }
       estimate = { ...labelled, startPrice };
     }
     const hiddenReason = estimateHiddenReason(estimate, currentPrice);
-    const kept = await this.remember(product, estimate, hiddenReason, researchNote, researchUpdatedAt);
+    const kept = await this.remember(product, estimate, hiddenReason, researchUpdatedAt);
     if (kept === null || hiddenReason !== null) return { suggestion: null, stored: kept, skipped: null };
     const isLower = estimate.startPrice < currentPrice;
     return {
@@ -181,10 +175,6 @@ export class PriceEstimateService {
     };
   }
 
-  async hasStoredEstimate(workspaceId: string, productId: string): Promise<boolean> {
-    return Boolean((await this.deps.research.findByProduct(workspaceId, productId))?.lastEstimate);
-  }
-
   // A run state that cannot be read does not hold the estimate back: it is logged and the estimate goes on.
   private async researchPending(product: Product, research: PriceResearch | null): Promise<boolean> {
     if (!this.deps.runs || (research !== null && research.comparables.length > 0)) return false;
@@ -203,14 +193,13 @@ export class PriceEstimateService {
     product: Product,
     estimate: PriceEstimate,
     hiddenReason: EstimateHiddenReason | null,
-    researchNote: string | null,
     researchUpdatedAt: string | null,
   ): Promise<StoredPriceEstimate | null> {
     const stored: StoredPriceEstimate = {
       estimate,
       estimatedAt: new Date().toISOString(),
       hiddenReason,
-      researchNote,
+      researchNote: null,
       researchUpdatedAt,
     };
     try {

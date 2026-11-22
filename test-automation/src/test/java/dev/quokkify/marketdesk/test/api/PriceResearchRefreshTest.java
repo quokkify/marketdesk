@@ -7,31 +7,9 @@ import dev.quokkify.marketdesk.test.BaseTest;
 
 import org.testng.annotations.Test;
 
-// The API stack has no research profile; the real web research is checked by hand on production.
+// Who may refresh. The research runs themselves are in PriceResearchRunTest; the "not configured" refusal is
+// covered by the Jest tests, since the API stack now has a research profile.
 public class PriceResearchRefreshTest extends BaseTest {
-
-  @Test
-  public void refreshWithoutResearchProfileIsNotConfigured() {
-    AccountPojo account = authSteps.registerNewAccount();
-    String productId = priceResearchSteps.createProduct(account);
-    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
-  }
-
-  @Test
-  public void notConfiguredDoesNotTouchResearch() {
-    AccountPojo account = authSteps.registerNewAccount();
-    String productId = priceResearchSteps.createProduct(account);
-    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
-    priceResearchSteps.verify().hasNoResearch(priceResearchSteps.getPriceResearch(account, productId));
-  }
-
-  @Test
-  public void notConfiguredCreatesNoRun() {
-    AccountPojo account = authSteps.registerNewAccount();
-    String productId = priceResearchSteps.createProduct(account);
-    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
-    priceResearchSteps.verify().hasNoRun(priceResearchSteps.getPriceResearch(account, productId));
-  }
 
   @Test
   public void otherWorkspaceRefreshIs404() {

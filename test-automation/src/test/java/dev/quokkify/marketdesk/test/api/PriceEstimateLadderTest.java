@@ -1,6 +1,7 @@
 package dev.quokkify.marketdesk.test.api;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
+import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.test.BaseTest;
@@ -9,8 +10,9 @@ import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
 import org.testng.annotations.Test;
 
-// The API stack has no Hermes and no research profile: the offline heuristic provider keeps the
-// listing price as the start price with low confidence, and the market search reports not configured.
+// The API stack has no main Hermes profile: the offline heuristic provider keeps the listing price as the start
+// price with low confidence. Its research profile mock has no answers for these products, so the research the
+// verdict's price check runs fails, and the check estimates only from saved research, so each test saves some first.
 public class PriceEstimateLadderTest extends BaseTest {
 
   // Above the substitute ceiling, so the offline start price (the listing price) must be cut to it.
@@ -27,7 +29,8 @@ public class PriceEstimateLadderTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
-    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     priceResearchSteps.verify().hasLastEstimate(
         priceResearchSteps.getPriceResearch(account, productListing.productId()));
   }
@@ -40,7 +43,7 @@ public class PriceEstimateLadderTest extends BaseTest {
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
     priceResearchSteps.saveClassCheckedComparables(account, productListing.productId(), SUBSTITUTE_NEW,
         280.0, 300.0, 320.0);
-    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     priceResearchSteps.verify().lastEstimateStartsAt(
         priceResearchSteps.getPriceResearch(account, productListing.productId()), SUBSTITUTE_CEILING);
   }
@@ -53,7 +56,7 @@ public class PriceEstimateLadderTest extends BaseTest {
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
     priceResearchSteps.saveAutoComparables(account, productListing.productId(), SUBSTITUTE_NEW,
         280.0, 300.0, 320.0);
-    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     priceResearchSteps.verify().lastEstimateStartsAt(
         priceResearchSteps.getPriceResearch(account, productListing.productId()), PRODUCT_PRICE);
   }
@@ -64,7 +67,8 @@ public class PriceEstimateLadderTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
-    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     priceResearchSteps.verify().lastEstimateIsHidden(
         priceResearchSteps.getPriceResearch(account, productListing.productId()), LOW, LOW_CONFIDENCE);
   }
@@ -77,7 +81,8 @@ public class PriceEstimateLadderTest extends BaseTest {
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account,
         ProductRequestPojo.withPriceFloor(PRODUCT_PRICE, null).withMissingAccessories(ACCESSORIES));
-    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     priceResearchSteps.verify().hasLastEstimate(
         priceResearchSteps.getPriceResearch(account, productListing.productId()));
     ValidatableResponse product = productSteps.getProduct(account, productListing.productId());

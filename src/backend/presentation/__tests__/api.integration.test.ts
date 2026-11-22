@@ -63,8 +63,6 @@ import { OfflineHeuristicAIProvider } from '../../infrastructure/external/Offlin
 import { HermesAI } from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { StubOlxTaxonomyResolver } from '../../infrastructure/adapters/StubOlxTaxonomyResolver';
-import { ProductAssistanceGraph } from '../../application/services/ProductAssistanceGraph';
-import { ProductAIDraftService } from '../../application/services/ProductAIDraftService';
 
 const iso = new Date().toISOString();
 
@@ -141,9 +139,6 @@ function stubHermesService(): HermesApplicationService {
     },
     async dismissEvent() {
       return Ok(appliedEvent);
-    },
-    async runHermes() {
-      return Ok([]);
     },
   } as unknown as HermesApplicationService;
 }
@@ -431,53 +426,6 @@ function unconfiguredHermesStatus(): NonNullable<AppDeps['hermesStatus']> {
   return () => selector.status();
 }
 
-// The production assistance graph with HERMES_PROVIDER_MODE=hermes: no offline fallback,
-// so a Hermes outage reaches the HTTP layer.
-async function hermesModeAssistanceGraph(): Promise<ProductAssistanceGraph> {
-  const config = {
-    apiUrl: 'http://127.0.0.1:8642/v1',
-    apiKey: 'local-hermes-key',
-    model: 'hermes-agent',
-    maxTokens: 256,
-    timeoutMs: 1_000,
-  };
-  const ai = new AIProviderSelector({
-    hermes: new HermesAI(new HermesCompletionClient(config), config),
-    offline: new OfflineHeuristicAIProvider(),
-    mode: 'hermes',
-    probe: new HermesHealthProbe(config),
-  });
-  const products = new InMemoryProductRepository();
-  const cost = Money.of(10, 'PLN');
-  const price = Money.of(20, 'PLN');
-  if (cost.isErr() || price.isErr()) throw new Error('money fixture failed');
-  const product = Product.create({
-    id: 'p-real',
-    workspaceId: 'ws-1',
-    sku: 'S-REAL',
-    name: 'Real widget',
-    description: 'A real widget for listing and publish preview tests',
-    costPrice: cost.value,
-    sellingPrice: price.value,
-    condition: 'good',
-    category: 'misc',
-  });
-  if (product.isErr()) throw product.error;
-  await products.save(product.value);
-  return new ProductAssistanceGraph(
-    new ProductAIDraftService(ai),
-    {
-      recheck: async () => {
-        throw new Error('Publication recheck is not part of this test');
-      },
-    },
-    products,
-    new InMemoryListingRepository(),
-    new InMemoryMarketplaceRepository(),
-    ai
-  );
-}
-
 async function buildTestApp(
   options: {
     olxPublicationQuotaService?: OlxPublicationQuotaService;
@@ -487,6 +435,7 @@ async function buildTestApp(
     categoryCorrectionOperationService?: CategoryCorrectionOperationService;
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
+    saleVerdictRuns?: AppDeps['saleVerdictRuns'];
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
     marketplaceOAuthService?: (
       marketplaceRepo: InMemoryMarketplaceRepository
@@ -525,6 +474,7 @@ async function buildTestApp(
       )
     ),
     hermesService: options.hermesService ?? stubHermesService(),
+    saleVerdictRuns: options.saleVerdictRuns,
     hermesStatus: options.hermesStatus,
     productAssistanceGraph: options.productAssistanceGraph,
     analyticsService: stubAnalyticsService(),
@@ -1523,34 +1473,6 @@ describe('Presentation API', () => {
       expect(res.body.data.fields.images).toEqual(['https://example.test/camera.jpg']);
     });
 
-    describe('while Hermes is unreachable', () => {
-      const originalFetch = globalThis.fetch;
-
-      afterEach(() => {
-        globalThis.fetch = originalFetch;
-      });
-
-      it('improvements returns 503 with stable message', async () => {
-        globalThis.fetch = jest.fn(async () => {
-          throw new TypeError('fetch failed');
-        }) as typeof fetch;
-        const { app } = await buildTestApp({
-          productAssistanceGraph: await hermesModeAssistanceGraph(),
-        });
-
-        const res = await auth(request(app).post('/api/products/p-real/improvements')).send({});
-
-        expect(res.status).toBe(503);
-        expect(res.body).toEqual({
-          success: false,
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: 'Hermes AI is not reachable in this environment',
-          },
-        });
-      });
-    });
-
     it('creates a draft OLX listing for a product', async () => {
       const { app } = await buildTestApp();
       const res = await auth(request(app).post('/api/products/p-real/listings')).send({
@@ -2176,27 +2098,37 @@ describe('Presentation API', () => {
       expect(res.body.data[0]).toMatchObject({ productId: 'p1' });
     });
 
-    it('runs product-scoped Hermes from the explicit route product only', async () => {
-      const calls: Array<{ workspaceId: string; productId: string; trigger?: string }> = [];
-      const hermesService = {
-        ...stubHermesService(),
-        async runHermes(dto: { workspaceId: string; productId: string; trigger?: string }) {
-          calls.push(dto);
-          return Ok([{ ...appliedEvent, productId: dto.productId }]);
+    it('queues a sale verdict run from the explicit route product only', async () => {
+      const calls: unknown[][] = [];
+      const queued = { id: 'run-1', productId: 'p-real', status: 'queued' };
+      const saleVerdictRuns = {
+        async request(...args: unknown[]) {
+          calls.push(args);
+          return { run: queued, enqueued: true };
         },
-      } as unknown as HermesApplicationService;
-      const { app } = await buildTestApp({ hermesService });
+      } as unknown as AppDeps['saleVerdictRuns'];
+      const { app } = await buildTestApp({ saleVerdictRuns });
 
       const accepted = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
-        trigger: 'manual',
+        scope: ['price'],
       });
       const rejected = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
         productId: '0a0d3ba3-bc5b-4579-82e3-955d7968f5a4',
       });
+      const badScope = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
+        scope: ['seo'],
+      });
 
       expect(accepted.status).toBe(202);
+      expect(accepted.body.data).toEqual(queued);
+      const scheduled = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
+        trigger: 'scheduled',
+      });
+
       expect(rejected.status).toBe(400);
-      expect(calls).toEqual([{ workspaceId: 'ws-1', productId: 'p-real', trigger: 'manual' }]);
+      expect(badScope.status).toBe(400);
+      expect(scheduled.status).toBe(400);
+      expect(calls).toEqual([['ws-1', 'p-real', ['price'], 'manual']]);
     });
 
     it('approves a pending event (happy path)', async () => {

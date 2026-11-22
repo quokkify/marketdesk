@@ -21,7 +21,7 @@ public class ProductDetailPageVerification
     super(steps, page);
   }
 
-  @Step("The suggestions say they used offline heuristics and no AI usage")
+  @Step("The revival proposal says it used offline heuristics and no AI usage")
   public ProductDetailPageVerification showsOfflineUsageLine() {
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
     return this;
@@ -125,9 +125,21 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The page says {message}")
-  public ProductDetailPageVerification showsAlert(String message) {
-    page.alertWithText(message).shouldBe(Condition.visible, getTimeout());
+  @Step("The last price search says {text}")
+  public ProductDetailPageVerification showsLastResearchRun(String text) {
+    page.lastResearchRunLine().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The sale verdict says {text}")
+  public ProductDetailPageVerification showsVerdictText(String text) {
+    page.verdictSummary().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The {check} check of the sale verdict reads {text}")
+  public ProductDetailPageVerification showsVerdictCheck(String check, String text) {
+    page.verdictCheck(check).shouldHave(Condition.text(text), getTimeout());
     return this;
   }
 
@@ -148,6 +160,12 @@ public class ProductDetailPageVerification
   @Step("The substitute shows the class line {text}")
   public ProductDetailPageVerification showsClassLine(String text) {
     page.anchorClassLine().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The selling price field holds exactly {price}")
+  public ProductDetailPageVerification sellingPriceIs(String price) {
+    page.sellingPriceInput().shouldHave(Condition.exactValue(price), getTimeout());
     return this;
   }
 }

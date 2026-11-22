@@ -110,6 +110,12 @@ public class ProductsPageVerification
     return this;
   }
 
+  @Step("The row of {productName} shows the {check} check as {text}")
+  public ProductsPageVerification rowShowsVerdictCheck(String productName, String check, String text) {
+    page.rowVerdictCheck(productName, check).shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
   @Step("Suggestions are expanded under {productName}")
   public ProductsPageVerification reviewExpandedUnder(String productName) {
     page.reviewToggle(productName).shouldHave(Condition.attribute(EXPANDED, "true"), getTimeout());
