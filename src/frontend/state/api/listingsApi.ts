@@ -1,5 +1,5 @@
 // Listings endpoints, injected into the shared baseApi (Group 8).
-import type { Listing, PriceHistory, ApiResponse, ProductCondition, RevivalProposal } from '@shared/types';
+import type { Listing, PriceHistory, ApiResponse, ProductCondition, RevivalProposal, PriceSync } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
 import { unwrap } from './envelope.js';
@@ -110,9 +110,9 @@ export const listingsApi = baseApi.injectEndpoints({
     }),
 
     // PATCH /listings/:id — update price (with optional reason).
-    updateListing: builder.mutation<Listing, UpdateListingArg>({
+    updateListing: builder.mutation<Listing & { priceSync?: PriceSync }, UpdateListingArg>({
       query: ({ id, patch }) => ({ url: `/listings/${id}`, method: 'PATCH', body: patch }),
-      transformResponse: (res: ApiResponse<Listing>) => unwrap(res),
+      transformResponse: (res: ApiResponse<Listing & { priceSync?: PriceSync }>) => unwrap(res),
       invalidatesTags: (result, _error, { id }) => [
         { type: 'Listing', id },
         { type: 'Listing', id: 'LIST' },

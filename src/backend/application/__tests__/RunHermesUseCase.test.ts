@@ -1,5 +1,7 @@
 import { RunHermesUseCase } from '../usecases/RunHermesUseCase';
 import { HermesApplicationService } from '../services/HermesApplicationService';
+import { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import { PriceChangeService } from '../services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../usecases/DismissHermesEventUseCase';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
@@ -67,16 +69,32 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
   );
 
   const runHermes = new RunHermesUseCase(engine, workspaceRepo);
+  const priceHistory = new RecordingPriceHistoryRecorder();
+  const publishQueue = new RecordingJobQueue();
+  const marketplaceUpdateEnqueuer = new MarketplaceUpdateEnqueuer(
+    listingRepo,
+    marketplaceRepo,
+    publishQueue,
+    idFactory('rec')
+  );
   const approve = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
     listingRepo,
     marketplaceRepo,
     new InMemoryActivityLogRepository(),
-    new RecordingPriceHistoryRecorder(),
-    new RecordingJobQueue(),
+    priceHistory,
+    publishQueue,
     publisher,
-    idFactory('rec')
+    idFactory('rec'),
+    new PriceChangeService(
+      productRepo,
+      listingRepo,
+      priceHistory,
+      marketplaceUpdateEnqueuer,
+      idFactory('rec')
+    ),
+    marketplaceUpdateEnqueuer
   );
   const dismiss = new DismissHermesEventUseCase(
     eventRepo,

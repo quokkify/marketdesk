@@ -1,11 +1,17 @@
 import { UpdateProductUseCase } from '../usecases/UpdateProductUseCase';
 import {
   InMemoryProductRepository,
+  InMemoryListingRepository,
+  InMemoryMarketplaceRepository,
   RecordingEventPublisher,
   money,
   unwrap,
 } from '../../domain/testkit/support';
 import { Product } from '../../domain/entities/Product';
+import { PriceChangeService } from '../services/PriceChangeService';
+import { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import { RecordingPriceHistoryRecorder, RecordingJobQueue, idFactory } from '../testkit/support';
+import type { PublishListingJob } from '../ports/IJobQueue';
 
 function setup() {
   const productRepo = new InMemoryProductRepository();
@@ -27,6 +33,16 @@ function setup() {
   productRepo.items.set(product.id, product);
   return { useCase, productRepo, publisher, product };
 }
+
+const noAccountRepo = {
+  findByMarketplaceId: async () => null,
+  upsert: async () => {
+    throw new Error('not used');
+  },
+  updateConnectedIfUnchanged: async () => {
+    throw new Error('not used');
+  },
+};
 
 describe('UpdateProductUseCase', () => {
   it('requires and audits confirmation for an intentional below-cost update', async () => {
@@ -185,4 +201,131 @@ describe('UpdateProductUseCase', () => {
     expect(locked).toHaveBeenCalledWith(product.id, product.workspaceId);
   });
 
+  describe('with the price change service', () => {
+    function setupWithService() {
+      const base = setup();
+      const listingRepo = new InMemoryListingRepository();
+      const priceHistory = new RecordingPriceHistoryRecorder();
+      const enqueuer = new MarketplaceUpdateEnqueuer(
+        listingRepo,
+        new InMemoryMarketplaceRepository(),
+        new RecordingJobQueue<PublishListingJob>(),
+        idFactory('op'),
+        noAccountRepo,
+      );
+      const service = new PriceChangeService(base.productRepo, listingRepo, priceHistory, enqueuer, idFactory('h'));
+      const useCase = new UpdateProductUseCase(base.productRepo, base.publisher, undefined, undefined, service);
+      return { ...base, useCase, priceHistory };
+    }
+
+    it('applies the selling price through the service and returns the price sync', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 repriced',
+        sellingPrice: 700,
+      });
+
+      const updated = unwrap(result);
+      expect(updated.priceSync).toMatchObject({ unchanged: false, marketplaceUpdates: [] });
+      expect(productRepo.items.get(product.id)).toMatchObject({ name: 'AirPods 4 repriced' });
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(700);
+    });
+
+    it('reports no price sync when the sent selling price equals the current one', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 renamed',
+        sellingPrice: 799,
+      });
+
+      const updated = unwrap(result);
+      expect(updated.priceSync).toBeUndefined();
+      expect(productRepo.items.get(product.id)?.name).toBe('AirPods 4 renamed');
+    });
+
+    it('saves nothing when the price is below the lowest acceptable price', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+      product.updateMinAcceptablePrice(money(750));
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        name: 'AirPods 4 refused',
+        sellingPrice: 700,
+        allowBelowCost: true,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+    });
+
+    it('still refuses a below-cost price without confirmation', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        sellingPrice: 399,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+    });
+
+    it('applies a lowered floor and a lowered price saved together', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+      product.updateMinAcceptablePrice(money(700));
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        sellingPrice: 650,
+        minAcceptablePrice: 600,
+        allowBelowCost: true,
+      });
+
+      expect(unwrap(result).priceSync?.unchanged).toBe(false);
+      expect(unwrap(result).product.sellingPrice.amount).toBe(650);
+      expect(productRepo.items.get(product.id)?.minAcceptablePrice?.amount).toBe(600);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(650);
+    });
+
+    it('saves nothing and queues no update when a later field is refused', async () => {
+      const { useCase, productRepo, product, priceHistory } = setupWithService();
+      unwrap(product.transitionTo('active'));
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        sellingPrice: 700,
+        status: 'draft',
+        allowBelowCost: true,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+      expect(priceHistory.records).toHaveLength(0);
+    });
+
+    it('refuses clearing the cost with a price below the stored cost without confirmation', async () => {
+      const { useCase, productRepo, product } = setupWithService();
+
+      const result = await useCase.executeWithPriceSync({
+        productId: product.id,
+        workspaceId: product.workspaceId,
+        costPrice: null,
+        sellingPrice: 399,
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(productRepo.items.get(product.id)?.costPrice?.amount).toBe(649);
+      expect(productRepo.items.get(product.id)?.sellingPrice.amount).toBe(799);
+    });
+  });
 });

@@ -91,7 +91,8 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     database.markListingExpired(listingId, "qa-olx-" + UUID.randomUUID());
   }
 
-  private ProductListingPojo createOlxProductListing(AccountPojo account, ProductRequestPojo product) {
+  @Step("Create the given product with an OLX listing and keep both ids")
+  public ProductListingPojo createOlxProductListing(AccountPojo account, ProductRequestPojo product) {
     String productId = productService.createProduct(account.token(), product)
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
@@ -121,6 +122,16 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
         () -> LIVE.equals(service.getListing(account.token(), listingId).extract().path(DATA_STATUS)),
         "the sandbox OLX listing is live", PUBLISH_TIMEOUT, POLL_INTERVAL);
     return new ProductListingPojo(productId, listingId);
+  }
+
+  @Step("Set the price of listing {listingId} to {price}")
+  public ValidatableResponse updatePrice(AccountPojo account, String listingId, double price) {
+    return service.updatePrice(account.token(), listingId, price);
+  }
+
+  @Step("Get listing {listingId}")
+  public ValidatableResponse getListing(AccountPojo account, String listingId) {
+    return service.getListing(account.token(), listingId);
   }
 
   @Step("Reactivate listing {listingId} on OLX")

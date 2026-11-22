@@ -12,9 +12,17 @@ import type { IProductRepository } from '../../domain/repositories/interfaces/IP
 import type { IEventPublisher, DomainEvent } from '../../domain/ports/IEventPublisher';
 import type { UpdateProductDTO } from '../dto/UpdateProductDTO';
 import { ProductValidator } from '../validators/ProductValidator';
+import type { PriceChangeService } from '../services/PriceChangeService';
+import type { PriceSync } from '../../../shared/types';
+
+export interface UpdatedProduct {
+  product: Product;
+  priceSync?: PriceSync;
+}
 
 interface PersistedProductUpdate {
   product: Product;
+  deferredSellingPrice?: number;
   pricing: {
     pricesChanged: boolean;
     belowCostConfirmed: boolean;
@@ -30,25 +38,56 @@ export class UpdateProductUseCase {
     private readonly runInTransaction?: <T>(
       work: (productRepo: IProductRepository) => Promise<T>,
     ) => Promise<T>,
-    private readonly validator: ProductValidator = new ProductValidator()
+    private readonly validator: ProductValidator = new ProductValidator(),
+    private readonly priceChange?: PriceChangeService
   ) {}
 
   async execute(input: UpdateProductDTO): Promise<Result<Product>> {
+    const result = await this.executeWithPriceSync(input);
+    return result.isErr() ? result : Ok(result.value.product);
+  }
+
+  async executeWithPriceSync(input: UpdateProductDTO): Promise<Result<UpdatedProduct>> {
     const validated = this.validator.validateUpdate(input);
     if (validated.isErr()) return validated;
     const dto = validated.value;
 
+    // The other fields (cost, floor, status, ...) are saved first and validated against the
+    // TARGET selling price; the price itself then goes through PriceChangeService, whose
+    // checks see the saved fields. A refusal before the commit saves nothing, and after it
+    // only the service's own pre-checked refusals remain, so a refused edit never leaves a
+    // price live on OLX.
+    // The deferred selling price is committed only by priceChange.apply below (commitSellingPrice=false
+    // in updatePrices): if apply throws after this commit, floor/cost may briefly exceed the stored price.
     const persisted = this.runInTransaction
       ? await this.runInTransaction((productRepo) => this.executeValidated(dto, productRepo, true))
       : await this.executeValidated(dto, this.productRepo, false);
     if (persisted.isErr()) return persisted;
+    let { product } = persisted.value;
+
+    let priceSync: PriceSync | undefined;
+    const deferredPrice = persisted.value.deferredSellingPrice;
+    if (this.priceChange && deferredPrice !== undefined) {
+      const applied = await this.priceChange.apply({
+        workspaceId: dto.workspaceId,
+        productId: dto.productId,
+        price: deferredPrice,
+        changedBy: 'user',
+        allowBelowCost: dto.allowBelowCost === true,
+      });
+      if (applied.isErr()) return applied;
+      // An unchanged price reports no sync, so a plain edit keeps its "Product updated" message.
+      if (!applied.value.unchanged) priceSync = applied.value;
+      const reloaded = await this.productRepo.findByIdForWorkspace(dto.productId, dto.workspaceId);
+      if (reloaded) product = reloaded;
+    }
 
     try {
-      await this.eventPublisher.publish(this.updatedEvent(persisted.value.product, persisted.value.pricing));
+      await this.eventPublisher.publish(this.updatedEvent(product, persisted.value.pricing));
     } catch {
       // Product already committed; don't fail the request over best-effort delivery.
     }
-    return Ok(persisted.value.product);
+    return Ok({ product, ...(priceSync ? { priceSync } : {}) });
   }
 
   private async executeValidated(
@@ -112,11 +151,15 @@ export class UpdateProductUseCase {
       nextMinAcceptable = price.value;
     }
 
+    // The service applies a same-currency price after this save; the entity only validates it here.
+    const deferSellingPrice = this.priceChange !== undefined && nextSellingPrice !== null
+      && nextSellingPrice.currency === product.sellingPrice.currency;
     const priceUpdate = product.updatePrices(
       nextCostPrice,
       nextSellingPrice,
       dto.allowBelowCost ?? false,
-      nextMinAcceptable
+      nextMinAcceptable,
+      !deferSellingPrice
     );
     if (priceUpdate.isErr()) return priceUpdate;
     if (clearCostPrice) product.clearCostPrice();
@@ -157,6 +200,7 @@ export class UpdateProductUseCase {
 
     return Ok({
       product,
+      ...(deferSellingPrice && nextSellingPrice ? { deferredSellingPrice: nextSellingPrice.amount } : {}),
       pricing: {
         pricesChanged: dto.costPrice !== undefined || dto.sellingPrice !== undefined,
         belowCostConfirmed: dto.allowBelowCost === true,

@@ -710,3 +710,15 @@ export interface PaginatedResponse<T> {
 }
 
 export * from './settings';
+
+export interface MarketplaceUpdateOperation {
+  operationId: string;
+  listingId: string;
+  marketplaceId: string;
+}
+
+export interface PriceSync {
+  unchanged: boolean;
+  marketplaceUpdates: MarketplaceUpdateOperation[];
+  skippedLiveListings: Array<{ listingId: string; reason: string }>;
+}

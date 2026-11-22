@@ -1,10 +1,9 @@
 // Thin HTTP adapter for listing resources. Reads/publish/sync delegate to the
-// application service. `update` (price) and `relist` are localized state transitions
-// on the Listing aggregate performed via the injected repository, because the
-// application layer exposes no dedicated use case for them yet (a future
-// UpdateListingUseCase should absorb this). Price history is served through the
-// IPriceHistoryReader read port; when Group 6 has not wired a reader it degrades to
-// an empty list.
+// application service. `update` (price) delegates to PriceChangeService; `relist` is a
+// localized state transition on the Listing aggregate performed via the injected
+// repository, because the application layer exposes no dedicated use case for it yet.
+// Price history is served through the IPriceHistoryReader read port; when Group 6 has
+// not wired a reader it degrades to an empty list.
 
 import type { Request, Response, NextFunction } from 'express';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
@@ -12,9 +11,7 @@ import type { IListingRepository } from '../../../domain/repositories/interfaces
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IMarketplaceRepository } from '../../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { IPriceHistoryReader } from '../../../application/ports/IPriceHistoryReader';
-import type { IPriceHistoryRecorder } from '../../../application/ports/IPriceHistoryRecorder';
-import type { IdGenerator } from '../../../application/ports/IdGenerator';
-import { Money } from '../../../domain/valueObjects/Money';
+import type { PriceChangeService } from '../../../application/services/PriceChangeService';
 import { NotFoundError, ValidationError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { presentListing } from '../../../application/dto/presenters';
 import { evaluatePublishEligibility } from '../../../application/usecases/PublishListingUseCase';
@@ -43,8 +40,7 @@ const OVERRIDEABLE_OLX_QUOTA_REASONS = new Set([
 
 export interface ListingControllerDeps {
   priceHistoryReader?: IPriceHistoryReader;
-  priceHistoryRecorder?: IPriceHistoryRecorder;
-  idGenerator?: IdGenerator;
+  priceChangeService?: PriceChangeService;
   productRepo?: IProductRepository;
   marketplaceRepo?: IMarketplaceRepository;
   olxQuotaService?: OlxPublicationQuotaService;
@@ -271,27 +267,25 @@ export class ListingController {
     );
     if (!listing) return next(new NotFoundError(`Listing not found: ${listingId}`));
 
-    if (typeof req.body?.price === 'number') {
-      const oldPrice = listing.price.amount;
-      const money = Money.of(req.body.price, listing.price.currency);
-      if (money.isErr()) return next(money.error);
-      const updated = listing.updatePrice(money.value);
-      if (updated.isErr()) return next(updated.error);
-      await this.listingRepo.save(listing);
-
-      if (this.deps.priceHistoryRecorder && this.deps.idGenerator) {
-        await this.deps.priceHistoryRecorder.record({
-          id: this.deps.idGenerator(),
-          listingId: listing.id,
-          oldPrice,
-          newPrice: listing.price.amount,
-          changedBy: 'user',
-          reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
-          createdAt: new Date(),
-        });
-      }
+    if (typeof req.body?.price !== 'number') {
+      ok(res, presentListing(listing));
+      return;
     }
-    ok(res, presentListing(listing));
+    const priceChange = this.deps.priceChangeService;
+    if (!priceChange) return next(new ServiceUnavailableError('Price changes are unavailable'));
+    // The listing dialog never had a cost check, so a below-cost price stays allowed here.
+    const applied = await priceChange.apply({
+      workspaceId: req.user!.workspaceId!,
+      productId: listing.productId,
+      price: req.body.price,
+      changedBy: 'user',
+      allowBelowCost: true,
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+    });
+    if (applied.isErr()) return next(applied.error);
+    const reloaded = await this.listingRepo.findByIdForWorkspace(listingId, req.user!.workspaceId!);
+    if (!reloaded) return next(new NotFoundError(`Listing not found: ${listingId}`));
+    ok(res, { ...presentListing(reloaded), priceSync: applied.value });
   };
 
   reactivate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
