@@ -1,9 +1,11 @@
 package dev.quokkify.marketdesk.step;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.MarketplaceImportRequestPojo;
+import dev.quokkify.marketdesk.model.OlxQuotaRequestPojo;
 import dev.quokkify.marketdesk.service.MarketplaceService;
 import dev.quokkify.marketdesk.verification.MarketplaceVerification;
 import dev.quokkify.step.ApiSteps;
@@ -40,6 +42,12 @@ public class MarketplaceSteps extends ApiSteps<MarketplaceVerification> {
   @Step("Connect the sandbox OLX account")
   public void connectSandboxOlx(AccountPojo account) {
     service.connect(account.token(), getOlxMarketplaceId(account)).statusCode(HttpStatus.SC_OK);
+  }
+
+  @Step("Use up the free OLX publications of subcategory {subcategoryId}")
+  public void exhaustOlxQuota(AccountPojo account, String subcategoryId) {
+    service.setQuota(account.token(), getOlxMarketplaceId(account),
+        OlxQuotaRequestPojo.exhausted(subcategoryId, Instant.now())).statusCode(HttpStatus.SC_OK);
   }
 
   @Step("Start a sync of the OLX marketplace")

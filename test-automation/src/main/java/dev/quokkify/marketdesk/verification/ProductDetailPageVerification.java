@@ -15,6 +15,7 @@ public class ProductDetailPageVerification
   private static final String CONDITION_PLACEHOLDER = "Choose condition";
   private static final String UNKNOWN_CONDITION_LABEL = "Requires confirmation";
   private static final String CONFIRM_PUBLICATION = "Confirm publication request";
+  private static final String OLX_FEE = "Confirm possible OLX fee";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
     super(steps, page);
@@ -45,6 +46,14 @@ public class ProductDetailPageVerification
   public ProductDetailPageVerification showsPublicationQueued() {
     page.publicationQueuedNotice().shouldBe(Condition.visible, getTimeout());
     page.publicationDialog().shouldNot(Condition.exist, getTimeout());
+    return this;
+  }
+
+  @Step("The publication review asks to confirm a possible OLX fee")
+  public ProductDetailPageVerification showsOlxFeeConfirmation() {
+    page.publicationDialog()
+        .shouldBe(Condition.visible, getTimeout())
+        .shouldHave(Condition.text(OLX_FEE), getTimeout());
     return this;
   }
 

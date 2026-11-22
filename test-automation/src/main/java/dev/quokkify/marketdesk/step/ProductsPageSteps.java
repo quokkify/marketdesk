@@ -74,6 +74,14 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Fill the New product wizard for {name} in the sandbox Cameras category")
+  public ProductsPageSteps fillWizardForSandboxCameras(String name) {
+    return uploadProductPhoto()
+        .continueToReview()
+        .fillReview(name)
+        .chooseSandboxCamerasCategory();
+  }
+
   @Step("Publish to OLX")
   public ProductsPageSteps publishToOlx() {
     page.publishToOlxButton().shouldBe(Condition.enabled).click();

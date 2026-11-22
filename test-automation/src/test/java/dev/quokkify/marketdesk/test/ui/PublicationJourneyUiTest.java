@@ -12,6 +12,7 @@ public class PublicationJourneyUiTest extends BaseUiTest {
 
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final String SANDBOX_CAMERAS_ID = "1001";
+  private static final String DRAFT = "draft";
 
   @Test
   public void creationEntryAndReviewOnlyAssistanceAreVisible() {
@@ -72,15 +73,41 @@ public class PublicationJourneyUiTest extends BaseUiTest {
     listingSteps.verify().hasOlxCategory(listingSteps.getListing(account, created.listingId()), SANDBOX_CAMERAS_ID);
   }
 
+  @Test
+  public void exhaustedQuotaAsksToConfirmTheOlxFee() {
+    String name = uniqueName();
+    AccountPojo account = registerWithSandboxOlx();
+    marketplaceSteps.exhaustOlxQuota(account, SANDBOX_CAMERAS_ID);
+    signIn(account);
+    productsPageSteps
+        .openNewProductDialog()
+        .fillWizardForSandboxCameras(name)
+        .publishToOlx();
+    productDetailPageSteps
+        .verify()
+        .showsOlxFeeConfirmation();
+    ProductListingPojo created = productSteps.findProductListing(account, name);
+    listingSteps.verify().hasStatus(listingSteps.getListing(account, created.listingId()), DRAFT);
+  }
+
   private AccountPojo signInWithSandboxOlx() {
+    AccountPojo account = registerWithSandboxOlx();
+    signIn(account);
+    return account;
+  }
+
+  private AccountPojo registerWithSandboxOlx() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
+    return account;
+  }
+
+  private void signIn(AccountPojo account) {
     loginPageSteps
         .openLoginPage()
         .signIn(account.email(), account.password())
         .verify()
         .productsCatalogueIsShown();
-    return account;
   }
 
   private static String uniqueName() {
