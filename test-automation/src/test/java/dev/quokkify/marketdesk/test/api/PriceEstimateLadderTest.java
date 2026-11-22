@@ -20,6 +20,7 @@ public class PriceEstimateLadderTest extends BaseTest {
   private static final String LOW = "low";
   private static final String LOW_CONFIDENCE = "low_confidence";
   private static final String ACCESSORIES = "pilot";
+  private static final String SUBSTITUTE_NEW = "substitute_new";
 
   @Test
   public void runStoresLastEstimate() {
@@ -37,11 +38,24 @@ public class PriceEstimateLadderTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
-    priceResearchSteps.saveAutoComparables(account, productListing.productId(), "substitute_new",
+    priceResearchSteps.saveClassCheckedComparables(account, productListing.productId(), SUBSTITUTE_NEW,
         280.0, 300.0, 320.0);
     priceResearchSteps.runProductAnalysis(account, productListing.productId());
     priceResearchSteps.verify().lastEstimateStartsAt(
         priceResearchSteps.getPriceResearch(account, productListing.productId()), SUBSTITUTE_CEILING);
+  }
+
+  // Auto substitutes saved before the class check have no classChecked flag: they set no ceiling.
+  @Test
+  public void legacyUncheckedSubstitutesDoNotCapStartPrice() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
+    priceResearchSteps.saveAutoComparables(account, productListing.productId(), SUBSTITUTE_NEW,
+        280.0, 300.0, 320.0);
+    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.verify().lastEstimateStartsAt(
+        priceResearchSteps.getPriceResearch(account, productListing.productId()), PRODUCT_PRICE);
   }
 
   // No tier evidence caps the confidence at low, and a low estimate is kept but never proposed.
