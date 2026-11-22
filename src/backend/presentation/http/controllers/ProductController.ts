@@ -11,8 +11,8 @@ import type { ProductRecheckService } from '../../../application/services/Produc
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import {
   SEARCH_NOT_CONFIGURED,
-  type ComparableSearchService,
-} from '../../../application/services/ComparableSearchService';
+  type AnchorLadderService,
+} from '../../../application/services/AnchorLadderService';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -90,7 +90,7 @@ export class ProductController {
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
     private readonly priceResearchRepo?: IPriceResearchRepository,
-    private readonly comparableSearch?: ComparableSearchService,
+    private readonly anchorLadder?: AnchorLadderService,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -209,10 +209,10 @@ export class ProductController {
     } catch (error) { next(error); }
   };
 
-  searchComparables = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  refreshPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!this.comparableSearch) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-      ok(res, await this.comparableSearch.search(req.user!.workspaceId!, routeParam(req.params.id)));
+      if (!this.anchorLadder) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      ok(res, await this.anchorLadder.refresh(req.user!.workspaceId!, routeParam(req.params.id)));
     } catch (error) { next(error); }
   };
 

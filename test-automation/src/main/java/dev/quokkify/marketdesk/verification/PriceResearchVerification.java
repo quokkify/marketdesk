@@ -43,6 +43,13 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("Product has no price research")
+  public PriceResearchVerification hasNoResearch(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data", Matchers.nullValue());
+    return self();
+  }
+
   @Step("Price research keeps the link and source of the comparable")
   public PriceResearchVerification keepsComparableLink(ValidatableResponse response, PriceResearchPojo.Comparable expected) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
@@ -90,7 +97,7 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
 
   // The API stack has no research profile, so the market search cannot run.
   @Step("Market search answers that it is not configured")
-  public PriceResearchVerification isSearchNotConfigured(ValidatableResponse response) {
+  public PriceResearchVerification isRefreshNotConfigured(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_SERVICE_UNAVAILABLE, SERVICE_UNAVAILABLE);
     response.body("error.message", Matchers.equalTo(SEARCH_NOT_CONFIGURED));
     return self();

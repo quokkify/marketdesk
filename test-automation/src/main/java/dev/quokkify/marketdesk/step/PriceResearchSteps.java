@@ -64,13 +64,13 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.putPriceResearch(productId, research);
   }
 
-  @Step("Search OLX for comparables of product {productId}")
-  public ValidatableResponse searchComparables(AccountPojo account, String productId) {
-    return service.searchComparables(account.token(), productId);
+  @Step("Refresh the price anchor ladder of product {productId}")
+  public ValidatableResponse refreshPriceResearch(AccountPojo account, String productId) {
+    return service.refreshPriceResearch(account.token(), productId);
   }
 
-  @Step("Search OLX for comparables without authentication")
-  public ValidatableResponse searchComparablesUnauthenticated(String productId) {
-    return service.searchComparables(productId);
+  @Step("Refresh the price anchor ladder without authentication")
+  public ValidatableResponse refreshPriceResearchUnauthenticated(String productId) {
+    return service.refreshPriceResearch(productId);
   }
 }
