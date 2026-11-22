@@ -40,7 +40,24 @@ public class RunHistoryTest extends BaseTest {
     AccountPojo account = authSteps.registerNewAccount();
     String productId = productWithTwoAnalyses(account);
     verdictSteps.verify().historyHasSize(verdictSteps.getVerdictHistory(account, productId, "1"), 1);
+  }
+
+  // A plain analysis starts no market search on the stand, so two forced searches make the research runs: without
+  // a limit both are listed, so the limit is what cuts the list to one.
+  @Test
+  public void limitOneReturnsOneResearchRun() {
+    AccountPojo account = accountWithSandbox();
+    String productId = listingSteps.createOlxProductListing(account).productId();
+    forceSearchAndAwait(account, productId);
+    forceSearchAndAwait(account, productId);
+    priceResearchSteps.verify().historyHasAtLeast(priceResearchSteps.getRunHistory(account, productId), 2);
     priceResearchSteps.verify().historyHasSize(priceResearchSteps.getRunHistory(account, productId, "1"), 1);
+  }
+
+  private void forceSearchAndAwait(AccountPojo account, String productId) {
+    priceResearchSteps.verify().isRefreshAccepted(priceResearchSteps.refreshPriceResearch(account, productId));
+    verdictSteps.awaitVerdict(account, productId);
+    priceResearchSteps.awaitResearchRun(account, productId);
   }
 
   @Test
@@ -69,9 +86,7 @@ public class RunHistoryTest extends BaseTest {
     AccountPojo account = accountWithSandbox();
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     String productId = productListing.productId();
-    priceResearchSteps.verify().isRefreshAccepted(priceResearchSteps.refreshPriceResearch(account, productId));
-    verdictSteps.awaitVerdict(account, productId);
-    priceResearchSteps.awaitResearchRun(account, productId);
+    forceSearchAndAwait(account, productId);
 
     ValidatableResponse research = priceResearchSteps.getRunHistory(account, productId);
     priceResearchSteps.verify().newestRunHasTrigger(research, MANUAL);

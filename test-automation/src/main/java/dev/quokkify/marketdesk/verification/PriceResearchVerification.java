@@ -195,6 +195,13 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  @Step("The run history lists at least {count} runs")
+  public PriceResearchVerification historyHasAtLeast(ValidatableResponse history, int count) {
+    verifyResponseStatusCode(history, HttpStatus.SC_OK);
+    history.body("data.size()", Matchers.greaterThanOrEqualTo(count));
+    return self();
+  }
+
   @Step("The newest run was started by the trigger {trigger}")
   public PriceResearchVerification newestRunHasTrigger(ValidatableResponse history, String trigger) {
     verifyResponseStatusCode(history, HttpStatus.SC_OK);
