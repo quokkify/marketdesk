@@ -1,5 +1,5 @@
 import type { PriceComparable } from '../../../../shared/types';
-import { dismissedAfterEdit, researchChangedSince } from '../priceResearchEdit';
+import { dismissedAfterEdit, researchChangedSince, withNormalizedAutoUrls } from '../priceResearchEdit';
 
 const URL_A = 'https://allegro.pl/oferta/projektor-123';
 const auto = (url: string): PriceComparable => ({ price: 100, note: 'a', url, source: 'auto', tier: 'substitute_new' });
@@ -62,5 +62,16 @@ describe('researchChangedSince', () => {
 
   it('refuses a form built from research that is gone', () => {
     expect(researchChangedSince(null, STORED)).toBe(true);
+  });
+});
+
+describe('withNormalizedAutoUrls', () => {
+  it('stores auto links in their normalized form, as the ladder does', () => {
+    expect(withNormalizedAutoUrls([auto(`https://www.allegro.pl/oferta/projektor-123/?bi_s=x`)])).toEqual([auto(URL_A)]);
+  });
+
+  it('leaves manual and web links as the seller typed them', () => {
+    const rows = [manual(`${URL_A}?utm=1`), web('https://www.olx.pl/d/oferta/x-CID1-ID9.html?r=1')];
+    expect(withNormalizedAutoUrls(rows)).toEqual(rows);
   });
 });

@@ -3,7 +3,7 @@
 // service, and translates the Result via ResponseFormatter. No business logic here.
 
 import type { Request, Response, NextFunction } from 'express';
-import { dismissedAfterEdit, researchChangedSince } from '../../../domain/services/priceResearchEdit';
+import { dismissedAfterEdit, researchChangedSince, withNormalizedAutoUrls } from '../../../domain/services/priceResearchEdit';
 import type { ProductApplicationService } from '../../../application/services/ProductApplicationService';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
@@ -213,8 +213,9 @@ export class ProductController {
       const { baseUpdatedAt, ...body } = req.body as PriceResearchPutBody;
       const stored = await repo.findByProduct(workspaceId, productId);
       if (researchChangedSince(stored?.updatedAt ?? null, baseUpdatedAt)) throw new ConflictError(RESEARCH_CHANGED);
-      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], body.comparables, stored?.dismissedUrls ?? []);
-      const saved = await repo.upsert(workspaceId, { ...body, productId, dismissedUrls }, baseUpdatedAt);
+      const comparables = withNormalizedAutoUrls(body.comparables);
+      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], comparables, stored?.dismissedUrls ?? []);
+      const saved = await repo.upsert(workspaceId, { ...body, comparables, productId, dismissedUrls }, baseUpdatedAt);
       if (!saved) throw new ConflictError(RESEARCH_CHANGED);
       ok(res, saved);
     } catch (error) { next(error); }

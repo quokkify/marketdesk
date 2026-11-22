@@ -11,6 +11,15 @@ function autoUrls(rows: PriceComparable[]): Set<string> {
   return urls;
 }
 
+// Auto rows are stored with the normalized link, as the ladder stores them; manual and web rows stay as typed.
+export function withNormalizedAutoUrls(rows: PriceComparable[]): PriceComparable[] {
+  return rows.map((row) => {
+    if (row.source !== 'auto' || !row.url) return row;
+    const url = normalizeAnchorUrl(row.url);
+    return url === null ? row : { ...row, url };
+  });
+}
+
 // An auto row the seller removed must not come back on the next search: its URL joins the dismissed list.
 // Only auto rows count; manual and web rows are the seller's own and never dismiss anything.
 export function dismissedAfterEdit(
