@@ -371,9 +371,9 @@ export class HermesDecisionEngine {
 
   /**
    * The research job's re-estimate: estimates from the stored research without requesting a run or
-   * running SEO (the job's own run may still be active), and replaces the product's pending price event (an "unavailable" result replaces
-   * only earlier notices). A stored estimate not worth surfacing still closes the pending ones: they
-   * predate the research the job just stored. An estimate refused as stale closes nothing. Null when
+   * running SEO (the job's own run may still be active), and replaces the product's pending price
+   * event (an "unavailable" result replaces only earlier notices). A stored estimate not worth
+   * surfacing still closes the pending ones: they predate the research the job just stored. An estimate refused as stale closes nothing. Null when
    * the product or its listing is gone, or nothing is surfaced.
    */
   async reestimatePrice(workspaceId: string, productId: string): Promise<HermesEvent | null> {
