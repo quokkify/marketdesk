@@ -1,7 +1,7 @@
 # Product detail — UX audit and implementation brief
 
 **Route:** `/products/:productId` · **Main files:** `src/frontend/pages/ListingDetailsPage.tsx`, `src/frontend/components/product-detail/ProductDetailSections.tsx`
-**Date:** 2026-11-22 · **Status:** research complete, ready for implementation
+**Date:** 2026-11-22 · **Status:** research complete, ready for implementation · **Issue:** [#496](https://github.com/quokkify/marketdesk/issues/496)
 **Scope:** the product detail screen shown after opening a product, at desktop, tablet and mobile widths, in light and dark themes.
 
 ---
