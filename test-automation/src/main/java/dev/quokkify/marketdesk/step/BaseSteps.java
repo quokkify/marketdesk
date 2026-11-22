@@ -16,4 +16,5 @@ public abstract class BaseSteps {
   protected final HermesActivityPageSteps hermesActivityPageSteps = new HermesActivityPageSteps();
   protected final ProductDetailPageSteps productDetailPageSteps = new ProductDetailPageSteps();
   protected final ProductsPageSteps productsPageSteps = new ProductsPageSteps();
+  protected final VerdictSteps verdictSteps = new VerdictSteps();
 }
