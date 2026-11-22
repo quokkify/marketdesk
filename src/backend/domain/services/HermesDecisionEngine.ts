@@ -14,12 +14,7 @@
 // Every AI-made event records its source, and offline ones say so in their detail.
 
 import { Result, Ok, Err } from '../shared/Result';
-import {
-  ValidationError,
-  InvalidStateError,
-  NotFoundError,
-  TooManyRequestsError,
-} from '../shared/DomainError';
+import { ValidationError, InvalidStateError, NotFoundError } from '../shared/DomainError';
 import { HermesEvent } from '../entities/HermesEvent';
 import { Product } from '../entities/Product';
 import { Money } from '../valueObjects/Money';
@@ -40,20 +35,20 @@ import type { IEventRepository } from '../repositories/interfaces/IEventReposito
 import type { Listing } from '../entities/Listing';
 import type { IPriceResearchRuns } from '../ports/IPriceResearchRuns';
 import type { PriceEstimateService } from './PriceEstimateService';
+import { ListingSeoProposals } from '../../application/services/verdict/ListingSeoProposals';
+import { PriceProposals } from '../../application/services/verdict/PriceProposals';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
+import type { IAIProvider } from '../ports/IAIProvider';
 import {
-  isAIProviderSourceAware,
-  OFFLINE_AI_NOTICE,
-  type IAIProvider,
-} from '../ports/IAIProvider';
-import {
-  listingSeoProfile,
-  listingSeoInputSchema,
-  recommendationFingerprint,
-  rawSeoSourceFingerprint,
-  seoSourceFingerprint,
-  type AgentRecommendationRecord,
-} from '../agents/MarketDeskAgentCatalog';
+  aiAnswersOffline,
+  withOfflineNotice,
+  PRICE_ESTIMATE_PENDING,
+  PRICE_EVENT_TYPES,
+  type HermesEngineLogger,
+  type IdFactory,
+} from './proposalSupport';
+
+export type { HermesEngineLogger, IdFactory };
 
 interface Suggestion {
   type: HermesEventType;
@@ -63,43 +58,12 @@ interface Suggestion {
   change: ProposedChange;
 }
 
-export type IdFactory = () => string;
-
-const RESEARCH_UNAVAILABLE_NOTE = 'Market research failed; the estimate uses saved data.';
-const PRICE_ESTIMATE_PENDING: Suggestion = {
-  type: 'price_estimate_unavailable',
-  severity: 'info',
-  title: 'Price estimate pending',
-  detail: 'Searching prices, about 2–4 min. The estimate appears when it finishes.',
-  change: null,
-};
-
-// One pending price event per product: a new one closes the earlier pending ones (applied or
-// otherwise resolved events are never touched). The job's "unavailable" notice closes only earlier
-// notices, so a background failure never takes away a priced suggestion the seller can still act on.
-const PRICE_EVENT_TYPES: readonly HermesEventType[] = [
-  'suggested_lower_price',
-  'suggested_higher_price',
-  'price_estimate_unavailable',
-];
-const PRICE_NOTICE_TYPES: readonly HermesEventType[] = ['price_estimate_unavailable'];
-
 const AI_MADE_CHANGE_KINDS: ReadonlySet<string> = new Set(['title', 'price', 'description']);
 
-// Adds the offline notice unless the provider already wrote it into the detail.
-function withOfflineNotice(detail: string): string {
-  if (detail.includes(OFFLINE_AI_NOTICE)) return detail;
-  const text = detail.trim();
-  if (text === '') return OFFLINE_AI_NOTICE;
-  return /[.!?]$/.test(text) ? `${text} ${OFFLINE_AI_NOTICE}` : `${text}. ${OFFLINE_AI_NOTICE}`;
-}
-
-// Structural, so the container can pass its logger.
-export interface HermesEngineLogger {
-  warn(context: Record<string, unknown>, message: string): void;
-}
-
 export class HermesDecisionEngine {
+  private readonly seoProposals: ListingSeoProposals;
+  private readonly priceProposals: PriceProposals;
+
   constructor(
     private readonly productRepo: IProductRepository,
     private readonly listingRepo: IListingRepository,
@@ -110,7 +74,26 @@ export class HermesDecisionEngine {
     private readonly researchRuns: IPriceResearchRuns | null,
     private readonly idFactory: IdFactory,
     private readonly logger?: HermesEngineLogger
-  ) {}
+  ) {
+    this.seoProposals = new ListingSeoProposals({
+      products: productRepo,
+      listings: listingRepo,
+      events: eventRepo,
+      ai: aiProvider,
+      idFactory,
+      logger,
+    });
+    this.priceProposals = new PriceProposals({
+      products: productRepo,
+      listings: listingRepo,
+      events: eventRepo,
+      estimates: priceEstimates,
+      runs: researchRuns,
+      ai: aiProvider,
+      idFactory,
+      logger,
+    });
+  }
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
     const events: HermesEvent[] = [];
@@ -121,9 +104,9 @@ export class HermesDecisionEngine {
     for (const product of products) {
       // Asked before and after the AI calls, so a switch to the offline heuristics at
       // any point during the check keeps this product's AI-made changes review-only.
-      const offlineBefore = await this.aiAnswersOffline();
+      const offlineBefore = await aiAnswersOffline(this.aiProvider);
       const suggestions = await this.checkConditions(product);
-      const answeredOffline = offlineBefore || (await this.aiAnswersOffline());
+      const answeredOffline = offlineBefore || (await aiAnswersOffline(this.aiProvider));
 
       for (const suggestion of suggestions) {
         // Suggestions no AI produced (relist, more photos) carry no source.
@@ -202,275 +185,42 @@ export class HermesDecisionEngine {
     return events;
   }
 
-  /** Product-scoped safe slice: listing SEO only, always review-only and never auto-applied. */
+  /** Product-scoped safe slice: listing SEO, then the price estimate; SEO is always review-only and never auto-applied. */
   async runProductSeo(workspace: Workspace, productId: string): Promise<HermesEvent[]> {
     const product = await this.productRepo.findByIdForWorkspace(productId, workspace.id);
     if (!product) throw new NotFoundError(`Product not found: ${productId}`);
     if (!workspace.listingSeoEnabled) return [];
 
     const listings = await this.listingRepo.findByProduct(product.id);
-    const primary = listings[0];
-    const rawInput = {
-      product: {
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        category: product.category,
-        condition: product.condition,
-        tags: [...product.tags],
-        imageCount: product.imageCount,
-      },
-      listing: primary
-        ? {
-            id: primary.id,
-            title: product.name,
-            description: product.description,
-            marketplace: primary.marketplaceId,
-          }
-        : null,
-    };
-    let source = rawSeoSourceFingerprint(rawInput);
-    let input: ReturnType<typeof listingSeoInputSchema.parse>;
-    let output: Awaited<ReturnType<IAIProvider['analyzeListingSeo']>>;
-    let aiSource: AIProviderSource;
-    try {
-      input = listingSeoInputSchema.parse(rawInput);
-      source = seoSourceFingerprint(input);
-      // Asked before and after the call, as in run(): any offline answer labels the events.
-      const offlineBefore = await this.aiAnswersOffline();
-      output = await this.aiProvider.analyzeListingSeo(input, workspace.creativityPreset);
-      aiSource = offlineBefore || (await this.aiAnswersOffline()) ? 'offline' : 'hermes';
-    } catch (error) {
-      await this.eventRepo.recordAgentRecommendationOutcome({
-        id: this.idFactory(),
-        workspaceId: workspace.id,
-        productId: product.id,
-        eventId: null,
-        agentId: listingSeoProfile.id,
-        agentVersion: listingSeoProfile.version,
-        creativityPreset: workspace.creativityPreset,
-        sourceFingerprint: source,
-        recommendationFingerprint: recommendationFingerprint(
-          listingSeoProfile.id,
-          listingSeoProfile.version,
-          source,
-          'analysis_failed',
-        ),
-        outcome: 'failed',
-        suggestedAt: new Date(),
-      });
-      throw error;
-    }
-    const events: HermesEvent[] = [];
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const windowStart = Math.floor(Date.now() / (30 * 24 * 60 * 60 * 1000));
+    const primary = listings[0] ?? null;
+    const events = await this.seoProposals.propose(workspace, product, primary);
 
-    for (const recommendation of output.recommendations) {
-      const fingerprint = recommendationFingerprint(
-        listingSeoProfile.id,
-        listingSeoProfile.version,
-        source,
-        recommendation.proposedValue
-      );
-      const duplicate = await this.eventRepo.hasRecentAgentRecommendation(
-        workspace.id,
-        product.id,
-        listingSeoProfile.id,
-        listingSeoProfile.version,
-        source,
-        fingerprint,
-        new Date(cutoff),
-      );
-      if (duplicate) {
-        await this.eventRepo.recordAgentRecommendationOutcome(this.agentRecommendationRecord({
-          id: this.idFactory(),
-          workspace,
-          productId: product.id,
-          eventId: null,
-          source,
-          fingerprint,
-          outcome: 'suppressed',
-        }));
-        continue;
-      }
-      const proposedChange =
-        recommendation.field === 'description'
-          ? {
-              kind: 'description' as const,
-              field: 'description' as const,
-              from: product.description,
-              to: recommendation.proposedValue,
-            }
-          : {
-              kind: 'title' as const,
-              field: 'title' as const,
-              from: product.name,
-              to: recommendation.proposedValue,
-            };
-      const type: HermesEventType =
-        recommendation.field === 'description'
-          ? 'update_description'
-          : 'suggested_better_title';
-      // Fingerprints, source and ids stay in the agent recommendation record, not in seller copy.
-      const detail = `${recommendation.rationale} Review-only suggestion from listing-seo@${listingSeoProfile.version} (${workspace.creativityPreset}). This may improve discoverability but does not guarantee a sale.`;
-      const created = HermesEvent.create({
-        id: this.idFactory(),
-        workspaceId: workspace.id,
-        productId: product.id,
-        type,
-        severity: 'info',
-        title: `Listing SEO suggestion: ${recommendation.field}`,
-        detail: aiSource === 'offline' ? withOfflineNotice(detail) : detail,
-        proposedChange,
-        status: 'pending_review',
-        autonomyDecision: 'pending_review',
-        source: aiSource,
-      });
-      if (created.isErr()) continue;
-      const event = created.value;
-      const inserted = await this.eventRepo.saveAgentRecommendationIfAbsent(
-        event,
-        `listing-seo:${listingSeoProfile.version}:${product.id}:${source}:${fingerprint}:w${windowStart}`,
-        this.agentRecommendationRecord({
-          id: this.idFactory(),
-          workspace,
-          productId: product.id,
-          eventId: event.id,
-          source,
-          fingerprint,
-          outcome: 'suggested',
-        }),
-      );
-      if (inserted) {
-        events.push(event);
-      } else {
-        await this.eventRepo.recordAgentRecommendationOutcome(this.agentRecommendationRecord({
-          id: this.idFactory(),
-          workspace,
-          productId: product.id,
-          eventId: null,
-          source,
-          fingerprint,
-          outcome: 'suppressed',
-        }));
-      }
-    }
-
-    // Asked after the SEO events are saved, so a failing estimate never discards them. The source
-    // is asked before and after the estimate call, as for the SEO call.
-    const priceOfflineBefore = primary ? await this.aiAnswersOffline() : false;
-    const priceSuggestion = primary ? await this.priceEstimateSuggestion(product, primary) : null;
-    if (priceSuggestion) {
-      const priceEvent = await this.savePriceEvent(product, priceSuggestion, priceOfflineBefore);
-      if (priceEvent) events.push(priceEvent);
+    // Asked after the SEO events are saved, so a failing estimate never discards them.
+    if (primary) {
+      const researchNote = await this.priceProposals.requestResearch(product);
+      const { event } = await this.priceProposals.proposeWithEvent(product, primary, { researchNote });
+      if (event) events.push(event);
     }
 
     await this.eventPublisher.publish(this.runCompletedEvent(workspace.id, events.length));
     return events;
   }
 
-  /**
-   * The research job's re-estimate: estimates from the stored research without requesting a run or
-   * running SEO (the job's own run may still be active), and replaces the product's pending price
-   * event (an "unavailable" result replaces only earlier notices). A stored estimate not worth
-   * surfacing still closes the pending ones: they predate the research the job just stored. An estimate refused as stale closes nothing. Null when
-   * the product or its listing is gone, or nothing is surfaced.
-   */
   async reestimatePrice(workspaceId: string, productId: string): Promise<HermesEvent | null> {
-    const product = await this.productRepo.findByIdForWorkspace(productId, workspaceId);
-    if (!product) return null;
-    const [primary] = await this.listingRepo.findByProduct(product.id);
-    if (!primary) return null;
-    const offlineBefore = await this.aiAnswersOffline();
-    const { suggestion, stored } = await this.priceEstimates.estimate(product, primary, { ignoreActiveRun: true });
-    if (suggestion) {
-      const supersedes = suggestion.type === 'price_estimate_unavailable' ? PRICE_NOTICE_TYPES : PRICE_EVENT_TYPES;
-      return this.savePriceEvent(product, suggestion, offlineBefore, supersedes);
-    }
-    if (stored === null) return null;
-    await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
-    return null;
+    return this.priceProposals.reestimatePrice(workspaceId, productId);
   }
 
-  /**
-   * Re-estimates after a finished research run when the estimate may be out of date or a notice is
-   * waiting for it: the run threw, timed out or expired (no run result), failed, changed the ladder,
-   * left a pending "unavailable" notice, or no estimate is stored yet. Null when nothing is surfaced.
-   */
   async reestimateAfterResearch(
     workspaceId: string,
     productId: string,
     run: { outcome: RunOutcome; rowsChanged: boolean } | null,
   ): Promise<HermesEvent | null> {
-    const due =
-      run === null ||
-      run.outcome === 'failed' ||
-      run.rowsChanged ||
-      (await this.eventRepo.findPendingByProduct(workspaceId, productId, PRICE_NOTICE_TYPES)).length > 0 ||
-      !(await this.priceEstimates.hasStoredEstimate(workspaceId, productId));
-    return due ? this.reestimatePrice(workspaceId, productId) : null;
-  }
-
-  // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change. The product's
-  // earlier pending events of the superseded types are closed in the same save.
-  private async savePriceEvent(
-    product: Product,
-    suggestion: Suggestion,
-    offlineBefore: boolean,
-    supersedes: readonly HermesEventType[] = PRICE_EVENT_TYPES,
-  ): Promise<HermesEvent | null> {
-    const source =
-      suggestion.change === null
-        ? null
-        : offlineBefore || (await this.aiAnswersOffline())
-          ? 'offline'
-          : 'hermes';
-    const created = HermesEvent.create({
-      id: this.idFactory(),
-      workspaceId: product.workspaceId,
-      productId: product.id,
-      type: suggestion.type,
-      severity: suggestion.severity,
-      title: suggestion.title,
-      detail: source === 'offline' ? withOfflineNotice(suggestion.detail) : suggestion.detail,
-      proposedChange: suggestion.change,
-      status: 'pending_review',
-      autonomyDecision: 'pending_review',
-      source,
-    });
-    if (created.isErr()) return null;
-    await this.closePendingPriceEvents(product, supersedes);
-    await this.eventRepo.saveAll([created.value]);
-    return created.value;
+    return this.priceProposals.reestimateAfterResearch(workspaceId, productId, run);
   }
 
   // Dismisses the product's events of the given types that are still pending when the write runs.
   private async closePendingPriceEvents(product: Product, types: readonly HermesEventType[]): Promise<void> {
     await this.eventRepo.dismissPendingByProduct(product.workspaceId, product.id, types, new Date());
-  }
-
-  private agentRecommendationRecord(params: {
-    id: string;
-    workspace: Workspace;
-    productId: string;
-    eventId: string | null;
-    source: string;
-    fingerprint: string;
-    outcome: AgentRecommendationRecord['outcome'];
-  }): AgentRecommendationRecord {
-    return {
-      id: params.id,
-      workspaceId: params.workspace.id,
-      productId: params.productId,
-      eventId: params.eventId,
-      agentId: listingSeoProfile.id,
-      agentVersion: listingSeoProfile.version,
-      creativityPreset: params.workspace.creativityPreset,
-      sourceFingerprint: params.source,
-      recommendationFingerprint: params.fingerprint,
-      outcome: params.outcome,
-      suggestedAt: new Date(),
-    };
   }
 
   determineAutonomy(
@@ -537,24 +287,6 @@ export class HermesDecisionEngine {
     }
   }
 
-  // Asks for a background research run when one is due and never waits for it: the estimate uses
-  // the stored research. A run that could not even be requested is noted on the estimate.
-  private async requestResearch(product: Product): Promise<string | null> {
-    if (!this.researchRuns) return null;
-    try {
-      await this.researchRuns.request(product.workspaceId, product.id, { force: false, trigger: 'analyze' });
-      return null;
-    } catch (error) {
-      // A full workspace queue means the research was not started, not that it failed.
-      if (error instanceof TooManyRequestsError) {
-        this.logger?.warn({ productId: product.id }, 'Price research not started: the workspace queue is full');
-        return null;
-      }
-      this.logger?.warn({ productId: product.id, err: error }, 'Requesting price research failed');
-      return RESEARCH_UNAVAILABLE_NOTE;
-    }
-  }
-
   /**
    * Requests a research run (never waits for it), then estimates from the stored research. With no
    * ladder stored and a run active, the seller gets the pending notice; the job estimates later.
@@ -563,7 +295,7 @@ export class HermesDecisionEngine {
     product: Product,
     primary: Listing
   ): Promise<Suggestion | null> {
-    const researchNote = await this.requestResearch(product);
+    const researchNote = await this.priceProposals.requestResearch(product);
     const { suggestion, skipped } = await this.priceEstimates.estimate(product, primary, { researchNote });
     return skipped === 'research_pending' ? PRICE_ESTIMATE_PENDING : suggestion;
   }
@@ -664,13 +396,6 @@ export class HermesDecisionEngine {
       default:
         return Err(new ValidationError('Unknown proposed change'));
     }
-  }
-
-  private async aiAnswersOffline(): Promise<boolean> {
-    return (
-      isAIProviderSourceAware(this.aiProvider) &&
-      (await this.aiProvider.activeProvider()) === 'offline'
-    );
   }
 
   private runCompletedEvent(workspaceId: string, count: number): DomainEvent {

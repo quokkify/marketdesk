@@ -111,6 +111,7 @@ import { PriceResearchHandler } from '../../infrastructure/jobQueue/JobHandlers/
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
+import { PriceProposals } from '../../application/services/verdict/PriceProposals';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
 import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
@@ -512,10 +513,26 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     configured: researchConfig !== null,
     newId: idGenerator,
     now: () => new Date(),
-    // hermesEngine is created below; the hook runs only once the container is built.
+    // priceProposals is created below; the hook runs only once the container is built.
     onExpired: async (workspaceId: string, productId: string): Promise<void> => {
-      await hermesEngine.reestimateAfterResearch(workspaceId, productId, null);
+      await priceProposals.reestimateAfterResearch(workspaceId, productId, null);
     },
+    logger: overrides.logger,
+  });
+  const priceEstimateService = new PriceEstimateService({
+    ai: aiProvider,
+    research: priceResearchRepo,
+    runs: priceResearchRuns,
+    logger: overrides.logger,
+  });
+  const priceProposals = new PriceProposals({
+    products: productRepo,
+    listings: listingRepo,
+    events: eventRepo,
+    estimates: priceEstimateService,
+    runs: priceResearchRuns,
+    ai: aiProvider,
+    idFactory: idGenerator,
     logger: overrides.logger,
   });
   const hermesEngine = new HermesDecisionEngine(
@@ -524,12 +541,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     eventRepo,
     eventPublisher,
     aiProvider,
-    new PriceEstimateService({
-      ai: aiProvider,
-      research: priceResearchRepo,
-      runs: priceResearchRuns,
-      logger: overrides.logger,
-    }),
+    priceEstimateService,
     priceResearchRuns,
     idGenerator,
     overrides.logger
@@ -951,7 +963,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     runs: priceResearchRunRepo,
     graph: priceResearchGraph,
     afterRun: async (workspaceId, productId, result) => {
-      await hermesEngine.reestimateAfterResearch(
+      await priceProposals.reestimateAfterResearch(
         workspaceId,
         productId,
         result && { outcome: result.outcome, rowsChanged: result.rowsChanged },
