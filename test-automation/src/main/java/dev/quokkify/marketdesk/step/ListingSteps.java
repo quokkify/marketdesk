@@ -104,6 +104,12 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     return new ProductListingPojo(productId, listingId);
   }
 
+  @Step("Set the sandbox OLX category on listing {listingId}")
+  public void setSandboxOlxCategory(AccountPojo account, String listingId) {
+    service.setMarketplaceCategory(account.token(), listingId, MarketplaceCategoryRequestPojo.sandboxCameras())
+        .statusCode(HttpStatus.SC_OK);
+  }
+
   // The stub adapter publishes to the sandbox advert store; its adverts carry the sandbox buyer threads.
   @Step("Publish a product to the sandbox OLX and wait until its listing is live")
   public ProductListingPojo publishSandboxOlxListing(AccountPojo account, ProductRequestPojo product) {
@@ -115,13 +121,17 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
         .path(DATA_ID);
-    service.setMarketplaceCategory(account.token(), listingId, MarketplaceCategoryRequestPojo.sandboxCameras())
-        .statusCode(HttpStatus.SC_OK);
+    setSandboxOlxCategory(account, listingId);
     service.publish(account.token(), listingId).statusCode(HttpStatus.SC_OK);
+    awaitListingLive(account, listingId);
+    return new ProductListingPojo(productId, listingId);
+  }
+
+  @Step("Wait until listing {listingId} is live on the sandbox OLX")
+  public void awaitListingLive(AccountPojo account, String listingId) {
     Waiter.awaitCondition(
         () -> LIVE.equals(service.getListing(account.token(), listingId).extract().path(DATA_STATUS)),
         "the sandbox OLX listing is live", PUBLISH_TIMEOUT, POLL_INTERVAL);
-    return new ProductListingPojo(productId, listingId);
   }
 
   @Step("Set the price of listing {listingId} to {price}")

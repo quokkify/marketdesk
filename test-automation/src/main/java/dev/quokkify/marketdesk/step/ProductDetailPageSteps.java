@@ -18,13 +18,19 @@ public class ProductDetailPageSteps
   private static final int WHEEL_TICK_PIXELS = 60;
 
   public ProductDetailPageSteps() {
-    this.page = new ProductDetailPage();
+    this.page = Selenide.page(new ProductDetailPage());
     this.verification = new ProductDetailPageVerification(this, page);
   }
 
   @Step("Open the product page")
   public ProductDetailPageSteps openProductPage(ProductListingPojo productListing) {
     page.open(productListing.productId());
+    return this;
+  }
+
+  @Step("Open the publication dialog")
+  public ProductDetailPageSteps openPublicationDialog() {
+    page.publishButton().shouldBe(Condition.enabled).click();
     return this;
   }
 

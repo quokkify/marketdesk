@@ -28,6 +28,10 @@ public class ProductService extends MarketDeskApiService {
     return get(authorized(token), PRODUCT.formatted(productId));
   }
 
+  public ValidatableResponse getListings(String token, String productId) {
+    return get(authorized(token), PRODUCT_LISTINGS.formatted(productId));
+  }
+
   public ValidatableResponse getProducts() {
     return get(anonymous(), PRODUCTS);
   }

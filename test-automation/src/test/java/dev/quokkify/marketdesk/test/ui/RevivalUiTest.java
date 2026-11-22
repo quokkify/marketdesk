@@ -25,12 +25,12 @@ public class RevivalUiTest extends BaseUiTest {
         .openProductPage(productListing)
         .openRevivalDialog()
         .verify()
-        .revivalNeedsACondition();
-    productDetailPageSteps
+        .revivalNeedsACondition()
+        .backToSteps()
         .openRevivalConditions()
         .verify()
-        .revivalConditionsOmitUnknown();
-    productDetailPageSteps
+        .revivalConditionsOmitUnknown()
+        .backToSteps()
         .chooseRevivalCondition("Good")
         .verify()
         .revivalCanBeApplied();

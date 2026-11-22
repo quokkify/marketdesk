@@ -79,8 +79,8 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
         .verify()
         .reviewExpandedUnder(PRODUCT_NAME)
         .isOnProductsPage()
-        .tabSelected(CURRENT_TAB);
-    productsPageSteps
+        .tabSelected(CURRENT_TAB)
+        .backToSteps()
         .approveFirstSuggestion(PRODUCT_NAME)
         .verify()
         .rowShowsAllReviewed(PRODUCT_NAME)
@@ -94,8 +94,8 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
     productsPageSteps
         .analyzeRow(PRODUCT_NAME)
         .verify()
-        .reviewExpandedUnder(PRODUCT_NAME);
-    productsPageSteps
+        .reviewExpandedUnder(PRODUCT_NAME)
+        .backToSteps()
         .dismissFirstSuggestion(PRODUCT_NAME)
         .verify()
         .rowShowsAllReviewed(PRODUCT_NAME)

@@ -37,7 +37,6 @@ coverage/
 *.lcov
 .jest/
 test-results/
-playwright-report/
 
 # Allure reporting outputs
 allure-results/

@@ -1,5 +1,8 @@
 package dev.quokkify.marketdesk.verification;
 
+import java.util.Collections;
+import java.util.List;
+
 import dev.quokkify.verification.BaseApiVerification;
 
 import io.qameta.allure.Step;
@@ -28,6 +31,14 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
     response.body("data.condition", Matchers.equalTo(condition));
     response.body("data.costPrice", Matchers.equalTo(costPrice));
+    return self();
+  }
+
+  @Step("Exactly one product is named {name}")
+  public ProductVerification hasExactlyOneProductNamed(ValidatableResponse response, String name) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    List<String> names = response.extract().jsonPath().getList("data.name", String.class);
+    MatcherAssert.assertThat(Collections.frequency(names, name), Matchers.equalTo(1));
     return self();
   }
 
