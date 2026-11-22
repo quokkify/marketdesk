@@ -105,17 +105,19 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
-  @Step("Last estimate starts at {maxStartPrice} or lower")
-  public PriceResearchVerification lastEstimateStartsAtMost(ValidatableResponse response, double maxStartPrice) {
+  @Step("Last estimate starts at exactly {startPrice}")
+  public PriceResearchVerification lastEstimateStartsAt(ValidatableResponse response, double startPrice) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data.lastEstimate.estimate.startPrice", Matchers.lessThanOrEqualTo((float) maxStartPrice));
+    response.body("data.lastEstimate.estimate.startPrice", Matchers.equalTo((float) startPrice));
     return self();
   }
 
-  @Step("Last estimate says why it was not proposed")
-  public PriceResearchVerification lastEstimateHasHiddenReason(ValidatableResponse response) {
+  @Step("Last estimate has {confidence} confidence and was not proposed because of {hiddenReason}")
+  public PriceResearchVerification lastEstimateIsHidden(ValidatableResponse response, String confidence,
+      String hiddenReason) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data.lastEstimate.hiddenReason", Matchers.notNullValue());
+    response.body("data.lastEstimate.estimate.confidence", Matchers.equalTo(confidence));
+    response.body("data.lastEstimate.hiddenReason", Matchers.equalTo(hiddenReason));
     return self();
   }
 

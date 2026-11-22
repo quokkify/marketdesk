@@ -12,7 +12,7 @@ import { HermesDecisionEngine } from '../../../domain/services/HermesDecisionEng
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
 import { Workspace } from '../../../domain/entities/Workspace';
-import type { HermesGuardrails } from '../../../../shared/types';
+import type { HermesGuardrails, PriceComparable } from '../../../../shared/types';
 import {
   InMemoryEventRepository,
   InMemoryListingRepository,
@@ -149,5 +149,52 @@ describe('auto mode with Hermes unreachable (real selector, probe and offline pr
       '  classic film camera.   Lightly used, with the original strap.  ',
     );
     expect(requestedUrls(fetchMock)).toEqual(['http://127.0.0.1:8642/v1/models']);
+  });
+});
+
+// The q4j API stand has no Hermes: what PriceEstimateLadderTest sees is this offline estimate,
+// the listing price with low confidence, cut by the substitute ceiling before it is stored.
+describe('offline price estimate on an Analyze run', () => {
+  async function analyse(comparables: PriceComparable[]) {
+    const productRepo = new InMemoryProductRepository();
+    const listingRepo = new InMemoryListingRepository();
+    const researchRepo = new InMemoryPriceResearchRepository();
+    const product = unwrap(Product.create({
+      id: 'p1', workspaceId: 'w1', sku: 'SKU-1', name: 'QA price floor camera',
+      description: 'A camera created by the price floor API test.', costPrice: money(50),
+      sellingPrice: money(299), condition: 'good', category: 'electronics', images: [],
+    }));
+    productRepo.items.set(product.id, product);
+    const listing = unwrap(Listing.create({ id: 'l1', productId: 'p1', marketplaceId: 'm1', price: money(299), status: 'live' }));
+    listingRepo.items.set(listing.id, listing);
+    if (comparables.length > 0) {
+      await researchRepo.upsert('w1', {
+        productId: 'p1', retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null,
+        comparables, dismissedUrls: [],
+      });
+    }
+    const engine = new HermesDecisionEngine(productRepo, listingRepo, new InMemoryEventRepository(),
+      new RecordingEventPublisher(), new OfflineHeuristicAIProvider(), researchRepo, null, sequentialIdFactory('offline-price'));
+    const workspace = unwrap(Workspace.create({ id: 'w1', name: 'WS', autonomyLevel: 'full_auto', guardrails: OPEN_GUARDRAILS }));
+    await engine.runProductSeo(workspace, 'p1');
+    return (await researchRepo.findByProduct('w1', 'p1'))?.lastEstimate;
+  }
+
+  const substitute = (price: number): PriceComparable => ({
+    price, note: 'Projector', url: `https://allegro.pl/oferta/projektor-${price}`, source: 'auto', tier: 'substitute_new',
+  });
+
+  it('stores the listing price as a hidden low-confidence start price without tier evidence', async () => {
+    expect(await analyse([])).toMatchObject({
+      estimate: { startPrice: 299, confidence: 'low' },
+      hiddenReason: 'low_confidence',
+    });
+  });
+
+  it('caps the stored start price at 70 % of the new substitutes median', async () => {
+    expect(await analyse([substitute(280), substitute(300), substitute(320)])).toMatchObject({
+      estimate: { startPrice: 210, floorPrice: 210, confidence: 'low' },
+      hiddenReason: 'low_confidence',
+    });
   });
 });
