@@ -62,13 +62,16 @@ const attributeSchema = z.object({
   match: z.enum(['equal', 'ratio']),
 });
 
+// Web-derived model names reach every tier prompt: capped like successors.
+const MAX_MODEL_NAME_LENGTH = 120;
+
 const sameClassModelSchema = z.object({
-  model: z.string().trim().min(1),
+  model: z.string().trim().min(1).transform((model) => model.slice(0, MAX_MODEL_NAME_LENGTH).trim()),
   classAttributes: z.array(z.unknown()),
   url: z.string().min(1),
 });
 
-const MAX_SUCCESSOR_LENGTH = 120;
+const MAX_SUCCESSOR_LENGTH = MAX_MODEL_NAME_LENGTH;
 
 // Valid attributes only, at most eight; an entry of another shape (flat fields, garbage) is dropped.
 export function parseClassAttributes(value: unknown[]): ClassAttribute[] {

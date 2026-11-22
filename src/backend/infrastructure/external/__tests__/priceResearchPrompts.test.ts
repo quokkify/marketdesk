@@ -199,6 +199,13 @@ describe('parseIdentification', () => {
     expect(many?.sameClassModels).toHaveLength(5);
   });
 
+  it('caps a same-class model name at 120 characters', () => {
+    const parsed = parseIdentification(
+      JSON.stringify({ ...valid, sameClassModels: [{ ...valid.sameClassModels[0], model: `  ${'m'.repeat(200)}  ` }] })
+    );
+    expect(parsed?.sameClassModels[0]?.model).toBe('m'.repeat(120));
+  });
+
   it('drops invalid attributes and same-class models instead of failing the parse', () => {
     const parsed = parseIdentification(
       JSON.stringify({
