@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Pagination, Typography } from '@mui/material';
 import { MemoryRouter } from 'react-router-dom';
-import type { Product } from '@shared/types';
+import type { Product, ProductStats } from '@shared/types';
 import {
   CatalogueFooter,
   ProductRowActions,
@@ -72,7 +72,7 @@ describe('ProductsTable catalogue hierarchy', () => {
       'product',
       'status',
       'price',
-      'updated',
+      'views',
       'ai',
       'actions',
     ]);
@@ -131,17 +131,13 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(rowClickIntent(event)).toBe(intent);
   });
 
-  it('formats money in PLN style and shows when each product was last updated', () => {
+  it('formats money in PLN style; cards still show when each product was last updated', () => {
     const updatedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const html = markup(
-      <ProductsTable
-        products={[{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }]}
-        currency="PLN"
-      />
-    );
+    const items = [{ ...product, costPrice: 800, sellingPrice: 1050, updatedAt }];
+    const html = markup(<ProductsTable products={items} currency="PLN" />);
     expect(html).toContain('1 050 zł');
     expect(html).not.toContain('800 zł');
-    expect(html).toContain('2h ago');
+    expect(markup(<ProductsCards products={items} currency="PLN" />)).toContain('2h ago');
   });
 
   it('offers a row actions menu instead of navigating from the overflow control', () => {
@@ -183,6 +179,80 @@ describe('ProductsTable catalogue hierarchy', () => {
     for (const gone of ['Cost', 'Profit', 'Markets', 'featured', 'margin']) {
       expect(html).not.toContain(gone);
     }
+  });
+});
+
+describe('views, reasons and the listing link', () => {
+  const stats = (over: Partial<ProductStats> = {}): ProductStats => ({
+    views: 10,
+    watchers: 3,
+    messages: 1,
+    viewsDelta7d: 2,
+    viewsByDay: [0, 1, 2, 3, 1, 0, 2, 4, 1, 0, 0, 3, 2, 1],
+    lastSyncAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    stale: false,
+    externalUrl: null,
+    listingStatus: 'live',
+    needsAction: [],
+    ...over,
+  });
+  const other = { ...product, id: 'p-2', name: 'Other' };
+
+  it('shows views, growth, trend and freshness', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        statsByProductId={{ 'p-1': stats({ views: 128, viewsDelta7d: 14 }) }}
+      />
+    );
+    expect(html).toContain('Views · 7 days');
+    expect(html).toContain('128');
+    expect(html).toContain('▲ +14');
+    expect(html).toContain('<polyline');
+    expect(html).toContain('watching');
+    expect(html).not.toContain('>Updated<');
+  });
+
+  it('shows stale without a trend and a dash without stats', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product, other]}
+        statsByProductId={{ 'p-1': stats({ views: 203, viewsDelta7d: null, stale: true }) }}
+      />
+    );
+    expect(html).toContain('stale');
+    expect(html).not.toContain('<polyline');
+    expect(html).toContain('—');
+  });
+
+  it('lists needs-action reasons and the condition hint under the status', () => {
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, condition: 'unknown' }]}
+        statsByProductId={{ 'p-1': stats({ needsAction: ['buyer_waiting', 'no_view_growth'] }) }}
+      />
+    );
+    expect(html).toContain('Buyer waiting');
+    expect(html).toContain('No view growth for 7 days');
+    expect(html).toContain('Condition not confirmed');
+  });
+
+  it('links the short listing id to the OLX advert in a new tab', () => {
+    const imported = { ...product, sku: 'OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120' };
+    const html = markup(
+      <ProductsTable
+        products={[imported]}
+        statsByProductId={{ 'p-1': stats({ externalUrl: 'https://www.olx.pl/d/oferta/x.html' }) }}
+      />
+    );
+    expect(html).toContain('href="https://www.olx.pl/d/oferta/x.html"');
+    expect(html).toContain('target="_blank"');
+  });
+
+  it('labels the AI column for screen readers only', () => {
+    const html = markup(<ProductsTable products={[product]} />);
+    expect(html).not.toMatch(/<th[^>]*>AI<\/th>/);
+    expect(html).toContain('AI analysis');
   });
 });
 

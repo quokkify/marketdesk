@@ -15,6 +15,7 @@ import type {
 import {
   PRODUCT_DESCRIPTION_MIN_LENGTH,
   PRODUCT_DESCRIPTION_MAX_LENGTH,
+  PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH,
 } from '../../../shared/constants';
 
 const STATUS_ORDER: ProductStatus[] = ['draft', 'active', 'attention', 'sold'];
@@ -29,6 +30,8 @@ export interface CreateProductProps {
   sellingPrice: Money;
   // Lowest price the seller accepts in negotiation; null means no discount.
   minAcceptablePrice?: Money | null;
+  // Accessories the item lacks; reaches only the price estimate prompt.
+  missingAccessories?: string | null;
   condition: ProductCondition;
   category: string;
   status?: ProductStatus;
@@ -50,6 +53,7 @@ export class Product {
     private _costPrice: Money | null,
     private _sellingPrice: Money,
     private _minAcceptablePrice: Money | null,
+    private _missingAccessories: string | null,
     private _condition: ProductCondition,
     private _category: string,
     private _categoryProvenance: ProductCategoryProvenance | null,
@@ -95,6 +99,8 @@ export class Product {
     }
     const floorCheck = Product.validateFloor(props.minAcceptablePrice ?? null, props.sellingPrice);
     if (floorCheck.isErr()) return floorCheck;
+    const accessories = Product.normalizeMissingAccessories(props.missingAccessories);
+    if (accessories.isErr()) return accessories;
     const now = new Date();
     return Ok(
       new Product(
@@ -106,6 +112,7 @@ export class Product {
         props.costPrice,
         props.sellingPrice,
         props.minAcceptablePrice ?? null,
+        accessories.value,
         props.condition,
         props.category,
         null,
@@ -121,8 +128,8 @@ export class Product {
 
   // Rehydrate from persistence without re-running invariants (data is trusted).
   static reconstitute(
-    props: Required<Omit<CreateProductProps, 'allowBelowCost' | 'minAcceptablePrice'>>
-      & { minAcceptablePrice?: Money | null; categoryProvenance?: ProductCategoryProvenance | null }
+    props: Required<Omit<CreateProductProps, 'allowBelowCost' | 'minAcceptablePrice' | 'missingAccessories'>>
+      & { minAcceptablePrice?: Money | null; missingAccessories?: string | null; categoryProvenance?: ProductCategoryProvenance | null }
   ): Product {
     return new Product(
       props.id,
@@ -133,6 +140,7 @@ export class Product {
       props.costPrice,
       props.sellingPrice,
       props.minAcceptablePrice ?? null,
+      props.missingAccessories ?? null,
       props.condition,
       props.category,
       props.categoryProvenance ?? null,
@@ -157,6 +165,19 @@ export class Product {
       return Err(new InvalidStateError('minAcceptablePrice must not exceed sellingPrice'));
     }
     return Ok(true);
+  }
+
+  // Trims the text; a blank value is stored as null.
+  private static normalizeMissingAccessories(value: string | null | undefined): Result<string | null> {
+    const text = value?.trim() ?? '';
+    if (text.length > PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH) {
+      return Err(
+        new ValidationError(
+          `missingAccessories must be at most ${PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH} characters`
+        )
+      );
+    }
+    return Ok(text === '' ? null : text);
   }
 
   private static validateDescription(description: string): Result<true> {
@@ -186,6 +207,9 @@ export class Product {
   }
   get minAcceptablePrice(): Money | null {
     return this._minAcceptablePrice;
+  }
+  get missingAccessories(): string | null {
+    return this._missingAccessories;
   }
   // The price Hermes never goes below: the floor, or the selling price when no floor is set.
   priceFloor(): Money {
@@ -316,6 +340,14 @@ export class Product {
     const check = Product.validateFloor(price, this._sellingPrice);
     if (check.isErr()) return check;
     this._minAcceptablePrice = price;
+    this.touch();
+    return Ok(undefined);
+  }
+
+  updateMissingAccessories(value: string | null): Result<void> {
+    const normalized = Product.normalizeMissingAccessories(value);
+    if (normalized.isErr()) return normalized;
+    this._missingAccessories = normalized.value;
     this.touch();
     return Ok(undefined);
   }

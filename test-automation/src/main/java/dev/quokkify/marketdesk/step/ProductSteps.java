@@ -49,6 +49,51 @@ public class ProductSteps extends ApiSteps<ProductVerification> {
     return new ProductListingPojo(productId, listingId);
   }
 
+  @Step("Get product statistics")
+  public ValidatableResponse getProductStats(AccountPojo account) {
+    return service.getProductStats(account.token());
+  }
+
+  @Step("Get product statistics without authentication")
+  public ValidatableResponse getProductStatsUnauthenticated() {
+    return service.getProductStats();
+  }
+
+  @Step("List products that need action")
+  public ValidatableResponse getNeedsActionProducts(AccountPojo account) {
+    return service.getNeedsActionProducts(account.token());
+  }
+
+  @Step("Set the status of product {productId} to {status}")
+  public ValidatableResponse updateStatus(AccountPojo account, String productId, String status) {
+    return service.updateStatus(account.token(), productId, status);
+  }
+
+  @Step("Analyze product {productId} with AI")
+  public List<String> runHermes(AccountPojo account, String productId) {
+    // The run answers synchronously but with 202 Accepted, carrying the created suggestions.
+    return service.runHermes(account.token(), productId)
+        .statusCode(HttpStatus.SC_ACCEPTED)
+        .extract()
+        .jsonPath()
+        .getList("data.id", String.class);
+  }
+
+  @Step("Get pending AI suggestion counts")
+  public ValidatableResponse getPendingCounts(AccountPojo account) {
+    return service.getPendingCounts(account.token());
+  }
+
+  @Step("Get pending AI suggestion counts without authentication")
+  public ValidatableResponse getPendingCountsUnauthenticated() {
+    return service.getPendingCounts();
+  }
+
+  @Step("Dismiss AI suggestion {eventId}")
+  public ValidatableResponse dismissEvent(AccountPojo account, String eventId) {
+    return service.dismissEvent(account.token(), eventId);
+  }
+
   @Step("Create a product")
   public ValidatableResponse createProduct(AccountPojo account, ProductRequestPojo product) {
     return service.createProduct(account.token(), product);

@@ -164,6 +164,11 @@ export class UpdateProductUseCase {
     if (priceUpdate.isErr()) return priceUpdate;
     if (clearCostPrice) product.clearCostPrice();
 
+    if (dto.missingAccessories !== undefined) {
+      const r = product.updateMissingAccessories(dto.missingAccessories);
+      if (r.isErr()) return r;
+    }
+
     if (dto.condition !== undefined) {
       const r = product.updateCondition(dto.condition);
       if (r.isErr()) return r;

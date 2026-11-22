@@ -42,4 +42,19 @@ describe('PriceFields', () => {
     expect(html).toContain('Leave empty if the cost is unknown.');
     expect(html).toContain('zł');
   });
+
+  it('labels the missing accessories field with its hint and shows the typed text', () => {
+    const html = render(
+      <PriceFields
+        values={{ ...emptyProductValues(), missingAccessories: 'remote' }}
+        errors={{}}
+        onChange={() => undefined}
+        currency="PLN"
+      />
+    );
+
+    expect(html).toContain('Missing accessories');
+    expect(html).toContain('For example: remote, charger. Used only to price the item.');
+    expect(html).toContain('value="remote"');
+  });
 });

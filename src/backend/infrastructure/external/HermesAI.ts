@@ -47,7 +47,14 @@ export interface HermesAIConfig {
   billingMode?: string;
 }
 
-export const DEFAULT_HERMES_RESEARCH_TIMEOUT_MS = 120_000;
+export const DEFAULT_HERMES_RESEARCH_TIMEOUT_MS = 180_000;
+export const DEFAULT_HERMES_RESEARCH_MAX_CONCURRENCY = 3;
+
+// How many research calls may run at once in this process (HERMES_RESEARCH_MAX_CONCURRENCY).
+export function loadHermesResearchMaxConcurrency(): number {
+  const value = Number.parseInt(process.env.HERMES_RESEARCH_MAX_CONCURRENCY ?? '', 10);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_HERMES_RESEARCH_MAX_CONCURRENCY;
+}
 
 // The web-enabled research profile, used only by the market search. null when its URL or key is
 // empty or the key is a your_-prefixed placeholder; it shares the model and billing mode.
@@ -88,6 +95,8 @@ export interface AICompletionRequest {
   jsonSchema?: Record<string, unknown>;
   // Optional stable scope for Hermes conversation/session affinity. Leave unset for stateless calls.
   sessionKey?: string;
+  // Aborts the call, together with the client's own timeout.
+  signal?: AbortSignal;
 }
 
 export interface AITextCompletionClient {

@@ -144,4 +144,10 @@ public class ProductDetailPageVerification
     page.anchorTier(tier).shouldHave(Condition.text(text), getTimeout());
     return this;
   }
+
+  @Step("The substitute shows the class line {text}")
+  public ProductDetailPageVerification showsClassLine(String text) {
+    page.anchorClassLine().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
 }

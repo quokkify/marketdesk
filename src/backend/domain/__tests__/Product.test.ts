@@ -1,5 +1,6 @@
 import { Product, CreateProductProps } from '../entities/Product';
 import { unwrap, money } from '../testkit/support';
+import { ValidationError } from '../shared/DomainError';
 import type { ProductCategorySource } from '../../../shared/types';
 
 function baseProps(overrides: Partial<CreateProductProps> = {}): CreateProductProps {
@@ -262,5 +263,38 @@ describe('Product category provenance', () => {
 
     unwrap(product.synchronizeCategory('Audio', [source()]));
     expect(product.hasCategoryStateChanges).toBe(true);
+  });
+});
+
+describe('Product missing accessories', () => {
+  it('defaults to null', () => {
+    expect(unwrap(Product.create(baseProps())).missingAccessories).toBeNull();
+  });
+
+  it('trims the text on creation', () => {
+    const product = unwrap(Product.create(baseProps({ missingAccessories: '  remote, charger ' })));
+    expect(product.missingAccessories).toBe('remote, charger');
+  });
+
+  it('stores a blank text as null', () => {
+    const product = unwrap(Product.create(baseProps({ missingAccessories: '   ' })));
+    expect(product.missingAccessories).toBeNull();
+  });
+
+  it('accepts exactly 200 characters and refuses 201', () => {
+    expect(unwrap(Product.create(baseProps({ missingAccessories: 'x'.repeat(200) }))).missingAccessories)
+      .toHaveLength(200);
+    const tooLong = Product.create(baseProps({ missingAccessories: 'x'.repeat(201) }));
+    expect(tooLong.isErr()).toBe(true);
+    if (tooLong.isErr()) expect(tooLong.error).toBeInstanceOf(ValidationError);
+  });
+
+  it('updates, trims and clears the text', () => {
+    const product = unwrap(Product.create(baseProps()));
+    unwrap(product.updateMissingAccessories(' pilot '));
+    expect(product.missingAccessories).toBe('pilot');
+    unwrap(product.updateMissingAccessories(null));
+    expect(product.missingAccessories).toBeNull();
+    expect(product.updateMissingAccessories('x'.repeat(201)).isErr()).toBe(true);
   });
 });

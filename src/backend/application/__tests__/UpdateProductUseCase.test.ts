@@ -45,6 +45,22 @@ const noAccountRepo = {
 };
 
 describe('UpdateProductUseCase', () => {
+  it('sets, keeps and clears the missing accessories text', async () => {
+    const { useCase, productRepo, product } = setup();
+    const ids = { productId: product.id, workspaceId: product.workspaceId };
+
+    unwrap(await useCase.execute({ ...ids, missingAccessories: 'remote, charger' }));
+    expect(productRepo.items.get(product.id)?.missingAccessories).toBe('remote, charger');
+
+    unwrap(await useCase.execute({ ...ids, name: 'AirPods 4 ANC' }));
+    expect(productRepo.items.get(product.id)?.missingAccessories).toBe('remote, charger');
+
+    unwrap(await useCase.execute({ ...ids, missingAccessories: null }));
+    expect(productRepo.items.get(product.id)?.missingAccessories).toBeNull();
+
+    expect((await useCase.execute({ ...ids, missingAccessories: 'x'.repeat(201) })).isErr()).toBe(true);
+  });
+
   it('requires and audits confirmation for an intentional below-cost update', async () => {
     const { useCase, productRepo, publisher, product } = setup();
 

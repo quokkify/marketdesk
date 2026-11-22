@@ -34,6 +34,10 @@ public class ProductDetailPage implements Page {
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
   private static final String FIND_PRICES = "[data-testid=\"find-prices-button\"]";
   private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
+  private static final String ANCHOR_CLASS_LINE = "[data-testid=\"anchor-class-line\"]";
+  private static final String EDIT_PRODUCT = "Edit product";
+  private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
+  private static final String SAVE_CHANGES = "Save changes";
   private static final String ALERT = "[role=\"alert\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
   private static final String PUBLICATION_READINESS = "Publication readiness check";
@@ -165,6 +169,22 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement anchorTier(String tier) {
     return Selenide.$(String.format(ANCHOR_TIER, tier));
+  }
+
+  public SelenideElement anchorClassLine() {
+    return Selenide.$(ANCHOR_CLASS_LINE);
+  }
+
+  public SelenideElement editProductButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.text(EDIT_PRODUCT));
+  }
+
+  public SelenideElement missingAccessoriesInput() {
+    return Selenide.$x(MISSING_ACCESSORIES);
+  }
+
+  public SelenideElement saveChangesButton() {
+    return Selenide.$$(BUTTON).findBy(Condition.text(SAVE_CHANGES));
   }
 
   public SelenideElement alertWithText(String text) {

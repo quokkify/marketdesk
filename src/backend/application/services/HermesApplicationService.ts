@@ -74,6 +74,16 @@ export class HermesApplicationService {
     return events.map(presentHermesEvent);
   }
 
+  // Pending suggestions per product, for the catalogue's "N to review" (products without any are absent).
+  async pendingCountsByProduct(workspaceId: string): Promise<Record<string, number>> {
+    const events = await this.eventRepo.findPendingReview(workspaceId);
+    const counts: Record<string, number> = {};
+    for (const event of events) {
+      if (event.productId) counts[event.productId] = (counts[event.productId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   async getEvent(id: string, workspaceId: string): Promise<HermesEventView | null> {
     // Tenant-scoped so a cross-workspace id reads as not-found (S2).
     const event = await this.eventRepo.findByIdForWorkspace(id, workspaceId);

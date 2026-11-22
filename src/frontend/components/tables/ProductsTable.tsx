@@ -35,7 +35,9 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { Link as RouterLink } from 'react-router-dom';
-import type { Product } from '@shared/types';
+import type { Product, ProductStats } from '@shared/types';
+import { visuallyHidden } from '@mui/utils';
+import { Sparkline } from '../common/Sparkline.js';
 import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { awaitingReplyLabel } from '../product-detail/conversationsState.js';
@@ -44,8 +46,10 @@ import { EmptyState } from '../common/EmptyState.js';
 import {
   catalogueFooterLabel,
   productInitials,
+  needsActionLabel,
   productTileTone,
   shortListingSku,
+  viewsSummary,
 } from '../../pages/productsCatalogueState.js';
 import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAnalysis.js';
 import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
@@ -102,7 +106,13 @@ function AwaitingReplyBadge({ count }: { count: number | undefined }) {
   return label ? <Chip size="small" color="warning" label={label} sx={{ ml: 1 }} /> : null;
 }
 
-function ProductIdentity({ product }: { product: Product }) {
+function ProductIdentity({
+  product,
+  externalUrl,
+}: {
+  product: Product;
+  externalUrl?: string | null;
+}) {
   return (
     <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
       <ProductThumbnail product={product} />
@@ -125,17 +135,84 @@ function ProductIdentity({ product }: { product: Product }) {
         >
           {product.name}
         </Link>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          title={product.sku}
-          sx={{ display: 'block', fontFamily: SKU_FONT }}
-        >
-          {shortListingSku(product.sku)}
-        </Typography>
+        {externalUrl ? (
+          <Link
+            href={externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="caption"
+            color="text.secondary"
+            underline="hover"
+            noWrap
+            title={product.sku}
+            data-row-stop
+            sx={{ display: 'block', fontFamily: SKU_FONT }}
+          >
+            {`${shortListingSku(product.sku)} ↗`}
+          </Link>
+        ) : (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            title={product.sku}
+            sx={{ display: 'block', fontFamily: SKU_FONT }}
+          >
+            {shortListingSku(product.sku)}
+          </Typography>
+        )}
       </Box>
     </Stack>
+  );
+}
+
+const DELTA_COLORS = { up: 'success.main', flat: 'text.secondary', stale: 'warning.main' } as const;
+
+function ProductViews({ stats }: { stats: ProductStats | undefined }) {
+  const summary = viewsSummary(stats);
+  return (
+    <Box>
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'baseline', whiteSpace: 'nowrap' }}>
+        <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+          {summary.primary}
+        </Typography>
+        {summary.delta && (
+          <Typography variant="caption" color={DELTA_COLORS[summary.delta.kind]}>
+            {summary.delta.text}
+          </Typography>
+        )}
+      </Stack>
+      {stats && !stats.stale && stats.viewsByDay.length > 0 && (
+        <Sparkline values={stats.viewsByDay} />
+      )}
+      {summary.secondary && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {summary.secondary}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+function ProductSignals({ product, stats }: { product: Product; stats: ProductStats | undefined }) {
+  return (
+    <>
+      {stats?.needsAction.map((reason) => (
+        <Typography
+          key={reason}
+          variant="caption"
+          color="primary.main"
+          sx={{ display: 'block', mt: 0.5 }}
+        >
+          {needsActionLabel(reason)}
+        </Typography>
+      ))}
+      {product.condition === 'unknown' && (
+        <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+          Condition not confirmed
+        </Typography>
+      )}
+    </>
   );
 }
 
@@ -148,7 +225,7 @@ function UpdatedAt({ value }: { value: string }) {
 }
 
 export type ProductTableColumnKey =
-  'select' | 'product' | 'status' | 'price' | 'updated' | 'ai' | 'actions';
+  'select' | 'product' | 'status' | 'price' | 'views' | 'ai' | 'actions';
 
 export const PRODUCT_TABLE_COLUMNS: ReadonlyArray<{
   key: ProductTableColumnKey;
@@ -160,8 +237,8 @@ export const PRODUCT_TABLE_COLUMNS: ReadonlyArray<{
   { key: 'product', label: 'Product', sortField: 'name' },
   { key: 'status', label: 'Status', sortField: 'status' },
   { key: 'price', label: 'Price', sortField: 'sellingPrice', align: 'right' },
-  { key: 'updated', label: 'Updated', sortField: 'updatedAt', align: 'right' },
-  { key: 'ai', label: 'AI' },
+  { key: 'views', label: 'Views · 7 days', sortField: 'viewsDelta7d' },
+  { key: 'ai', label: 'AI analysis' },
   { key: 'actions', label: '' },
 ];
 
@@ -354,6 +431,7 @@ export interface ProductsCollectionProps {
   expandedProductId?: string | null;
   onToggleReview?: (product: Product) => void;
   renderReview?: (product: Product) => React.ReactNode;
+  statsByProductId?: Record<string, ProductStats>;
 }
 
 const reviewRegionId = (product: Product) => `product-review-${product.id}`;
@@ -525,6 +603,16 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
               if (column.key === 'actions') {
                 return <TableCell key={column.key} align="right" aria-label="Actions" />;
               }
+              if (column.key === 'ai') {
+                // The ✦ buttons speak for themselves; the label stays for screen readers only.
+                return (
+                  <TableCell key={column.key}>
+                    <Box component="span" sx={visuallyHidden}>
+                      {column.label}
+                    </Box>
+                  </TableCell>
+                );
+              }
               return (
                 <TableCell
                   key={column.key}
@@ -567,11 +655,18 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                       />
                     </TableCell>
                     <TableCell>
-                      <ProductIdentity product={product} />
+                      <ProductIdentity
+                        product={product}
+                        externalUrl={props.statsByProductId?.[product.id]?.externalUrl}
+                      />
                     </TableCell>
                     <TableCell>
                       <ProductStatusBadge status={product.status} />
                       <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
+                      <ProductSignals
+                        product={product}
+                        stats={props.statsByProductId?.[product.id]}
+                      />
                     </TableCell>
                     <TableCell
                       align="right"
@@ -583,8 +678,8 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                     >
                       {formatMoney(product.sellingPrice, props.currency)}
                     </TableCell>
-                    <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                      <UpdatedAt value={product.updatedAt} />
+                    <TableCell>
+                      <ProductViews stats={props.statsByProductId?.[product.id]} />
                     </TableCell>
                     <TableCell data-row-stop>
                       <RowAnalysisControl product={product} props={props} />
@@ -655,7 +750,10 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 }
               />
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <ProductIdentity product={product} />
+                <ProductIdentity
+                  product={product}
+                  externalUrl={props.statsByProductId?.[product.id]?.externalUrl}
+                />
               </Box>
               <ProductStatusBadge status={product.status} />
               <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
@@ -688,7 +786,14 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                   <UpdatedAt value={product.updatedAt} />
                 </Typography>
               </Box>
+              <Box sx={{ gridColumn: '1 / -1' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Views · 7 days
+                </Typography>
+                <ProductViews stats={props.statsByProductId?.[product.id]} />
+              </Box>
             </Box>
+            <ProductSignals product={product} stats={props.statsByProductId?.[product.id]} />
             {(props.onAnalyze || props.analysisByProductId?.[product.id]) && (
               <Box sx={{ mt: 1.5 }}>
                 <RowAnalysisControl product={product} props={props} />

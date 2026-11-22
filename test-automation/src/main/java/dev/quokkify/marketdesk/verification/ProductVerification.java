@@ -16,6 +16,8 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
   private static final String OFFLINE_PROVIDER = "offline";
   private static final String COST_NOT_APPLICABLE = "not_applicable";
   private static final double PRICE_TOLERANCE = 0.001;
+  private static final String BY_PRODUCT = "data.byProductId.'%s'";
+  private static final int STATS_DAYS = 14;
 
   @Override
   protected ProductVerification self() {
@@ -37,6 +39,49 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
     List<String> names = response.extract().jsonPath().getList("data.name", String.class);
     MatcherAssert.assertThat(Collections.frequency(names, name), Matchers.equalTo(1));
+    return self();
+  }
+
+  @Step("Statistics cover product {productId} with a 14-day trend")
+  public ProductVerification statsCoverProduct(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body(BY_PRODUCT.formatted(productId) + ".viewsByDay", Matchers.hasSize(STATS_DAYS));
+    response.body(BY_PRODUCT.formatted(productId) + ".listingStatus", Matchers.notNullValue());
+    return self();
+  }
+
+  @Step("Statistics of product {productId} list the needs-action reason {reason}")
+  public ProductVerification statsNeedAction(ValidatableResponse response, String productId, String reason) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body(BY_PRODUCT.formatted(productId) + ".needsAction", Matchers.hasItem(reason));
+    return self();
+  }
+
+  @Step("Product {productId} has at least one pending AI suggestion")
+  public ProductVerification hasPendingSuggestions(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body(BY_PRODUCT.formatted(productId), Matchers.greaterThanOrEqualTo(1));
+    return self();
+  }
+
+  @Step("Product {productId} has no pending AI suggestions")
+  public ProductVerification hasNoPendingSuggestions(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body(BY_PRODUCT.formatted(productId), Matchers.nullValue());
+    return self();
+  }
+
+  @Step("The product list contains product {productId}")
+  public ProductVerification listsProduct(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.id", Matchers.hasItem(productId));
+    return self();
+  }
+
+  @Step("The product list does not contain product {productId}")
+  public ProductVerification doesNotListProduct(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.id", Matchers.not(Matchers.hasItem(productId)));
     return self();
   }
 
@@ -74,6 +119,12 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
   @Step("Product has no lowest acceptable price")
   public ProductVerification hasNoMinAcceptablePrice(ValidatableResponse response) {
     response.body("data.minAcceptablePrice", Matchers.nullValue());
+    return self();
+  }
+
+  @Step("Product has the missing accessories {expected}")
+  public ProductVerification hasMissingAccessories(ValidatableResponse response, String expected) {
+    response.body("data.missingAccessories", Matchers.equalTo(expected));
     return self();
   }
 

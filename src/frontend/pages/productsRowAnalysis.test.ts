@@ -1,4 +1,5 @@
 import {
+  analysisStateFor,
   canStartRowAnalysis,
   rowAnalysisLabel,
   rowAnalyzeDisabledReason,
@@ -131,5 +132,27 @@ describe('sequential analysis guards', () => {
     );
     expect(ran).toEqual(['a']);
     expect(result).toEqual({ analyzed: 1, notRun: ['b', 'c'] });
+  });
+});
+
+describe('persistent pending counts', () => {
+  it('shows server counts unless the session has something more recent', () => {
+    expect(analysisStateFor(undefined, 2)).toEqual({ status: 'done', count: 2 });
+    expect(analysisStateFor(undefined, undefined)).toBeUndefined();
+    expect(analysisStateFor({ status: 'running' }, 2)).toEqual({ status: 'running' });
+    expect(analysisStateFor({ status: 'error', message: 'x' }, 2)).toEqual({
+      status: 'error',
+      message: 'x',
+    });
+    expect(analysisStateFor({ status: 'reviewed' }, 0)).toEqual({ status: 'reviewed' });
+    expect(analysisStateFor({ status: 'done', count: 0 }, 1)).toEqual({ status: 'done', count: 1 });
+  });
+});
+
+describe('pending count updates', () => {
+  // Regression guard: a fresh object for an unchanged count re-rendered the page in a loop.
+  it('returns the same state object when the pending count did not change', () => {
+    const prev = { status: 'done' as const, count: 2 };
+    expect(stateAfterPendingChange(prev, 2)).toBe(prev);
   });
 });

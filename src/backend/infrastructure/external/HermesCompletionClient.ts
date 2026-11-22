@@ -63,7 +63,9 @@ export class HermesCompletionClient implements AITextCompletionClient {
     try {
       response = await fetch(`${this.apiUrl}/chat/completions`, {
         method: 'POST',
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: request.signal
+          ? AbortSignal.any([AbortSignal.timeout(this.timeoutMs), request.signal])
+          : AbortSignal.timeout(this.timeoutMs),
         headers: {
           'Content-Type': 'application/json',
           ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
@@ -84,9 +86,11 @@ export class HermesCompletionClient implements AITextCompletionClient {
       this.record(startedAt, 'unavailable', response?.status ?? null, null);
       throw new ServiceUnavailableError(
         HERMES_UNREACHABLE,
-        this.isTimeoutError(error)
-          ? new Error(`Hermes API request timed out after ${this.timeoutMs}ms`)
-          : error,
+        request.signal?.aborted
+          ? new Error('Hermes API request aborted by the caller')
+          : this.isTimeoutError(error)
+            ? new Error(`Hermes API request timed out after ${this.timeoutMs}ms`)
+            : error,
       );
     }
 

@@ -197,6 +197,14 @@ export const PriceFields: React.FC<ProductFieldsProps> = ({
         helperText={errors.minAcceptablePrice ?? 'Hermes never offers less. Empty means no discount.'}
         slotProps={{ htmlInput: { min: 0, step: '0.01' }, input: { endAdornment: adornment } }}
       />
+      <TextField
+        label="Missing accessories"
+        fullWidth
+        value={values.missingAccessories}
+        onChange={(e) => onChange('missingAccessories', e.target.value)}
+        error={Boolean(errors.missingAccessories)}
+        helperText={errors.missingAccessories ?? 'For example: remote, charger. Used only to price the item.'}
+      />
     </Stack>
   );
 };

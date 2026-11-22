@@ -125,7 +125,7 @@ public class ProductsPageSteps
 
   @Step("Click the row of {productName}")
   public ProductsPageSteps clickRow(String productName) {
-    page.updatedCell(productName).click();
+    page.priceCell(productName).click();
     return this;
   }
 

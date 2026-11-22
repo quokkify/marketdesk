@@ -14,6 +14,8 @@ export interface CreateProductDTO {
   sellingPrice: number;
   // Lowest price accepted in negotiation (major units); null or omitted means none.
   minAcceptablePrice?: number | null;
+  // Accessories the item lacks (max 200 chars); null, blank or omitted means none.
+  missingAccessories?: string | null;
   // ISO-4217 currency. When omitted, the workspace currency is used.
   currency?: string;
   condition: ProductCondition;

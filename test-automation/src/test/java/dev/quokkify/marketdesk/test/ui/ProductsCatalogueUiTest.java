@@ -6,6 +6,7 @@ import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 
+import org.apache.http.HttpStatus;
 import org.testng.annotations.Test;
 
 // The stand answers with offline heuristics; for the sample product ("good" condition, no condition
@@ -14,6 +15,9 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
 
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final int FILTERS_GAP_PX = 16;
+  private static final String ACTIVE = "active";
+  private static final String NEEDS_ACTION_TAB = "Needs action";
+  private static final String LISTING_PROBLEM_REASON = "Listing expired or failing on OLX";
   // A product created through the API starts as a draft, so it is listed on All, not on Active.
   private static final String CURRENT_TAB = "All";
 
@@ -22,8 +26,8 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
     signInWithOneListedProduct();
     productsPageSteps
         .verify()
-        .hasColumns(List.of("Product", "Status", "Price", "Updated", "AI"))
-        .lacksColumns(List.of("Markets", "Cost", "Profit", "Tags"));
+        .hasColumns(List.of("Product", "Status", "Price", "Views · 7 days"))
+        .lacksColumns(List.of("Markets", "Cost", "Profit", "Tags", "Updated", "AI"));
   }
 
   // Regression guard: the panel used to sit flush against the table (Card height:100% inside Collapse).
@@ -96,6 +100,25 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
         .verify()
         .rowShowsAllReviewed(PRODUCT_NAME)
         .isOnProductsPage();
+  }
+
+  @Test
+  public void needsActionTabListsExpiredListing() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createExpiredOlxProductListing(account);
+    productSteps.verify().verifyResponseStatusCode(
+        productSteps.updateStatus(account, productListing.productId(), ACTIVE), HttpStatus.SC_OK);
+    loginPageSteps
+        .openLoginPage()
+        .signIn(account.email(), account.password())
+        .verify()
+        .productsCatalogueIsShown();
+    productsPageSteps
+        .openTab(NEEDS_ACTION_TAB)
+        .verify()
+        .tabSelected(NEEDS_ACTION_TAB)
+        .rowShowsText(PRODUCT_NAME, LISTING_PROBLEM_REASON);
   }
 
   private ProductListingPojo signInWithOneListedProduct() {

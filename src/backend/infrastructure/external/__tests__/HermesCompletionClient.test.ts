@@ -213,4 +213,16 @@ describe('HermesCompletionClient', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(ServiceUnavailableError);
   });
+
+  it('aborts the request when the caller signal aborts', async () => {
+    globalThis.fetch = jest.fn((_url: string | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+    })) as typeof fetch;
+    const controller = new AbortController();
+    const pending = testClient(60_000).complete({ system: 's', prompt: 'p', signal: controller.signal });
+    controller.abort();
+    const error = await pending.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ServiceUnavailableError);
+    expect((error as ServiceUnavailableError).cause).toEqual(new Error('Hermes API request aborted by the caller'));
+  });
 });

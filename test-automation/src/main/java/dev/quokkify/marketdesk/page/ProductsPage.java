@@ -21,8 +21,9 @@ public class ProductsPage implements Page {
 
   private static final String CATALOGUE_TABLE = "table[aria-label=\"Products catalogue\"]";
   private static final String PRODUCT_COLUMN = "Product";
-  private static final String UPDATED_COLUMN = "Updated";
-  private static final String AI_COLUMN = "AI";
+  // Price is a plain cell: a click there reaches the row, unlike the cells marked data-row-stop.
+  private static final String PRICE_COLUMN = "Price";
+  private static final String AI_COLUMN = "AI analysis";
   // The q4j table snapshot accepts only XPath and CSS item locators.
   private static final By PRODUCT_LINK = By.cssSelector("a");
   private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
@@ -80,8 +81,8 @@ public class ProductsPage implements Page {
     return catalogue.row(catalogue.column(PRODUCT_COLUMN).findBy(Condition.text(productName)).closest("tr"));
   }
 
-  public SelenideElement updatedCell(String productName) {
-    return row(productName).cell(UPDATED_COLUMN);
+  public SelenideElement priceCell(String productName) {
+    return row(productName).cell(PRICE_COLUMN);
   }
 
   public SelenideElement aiCell(String productName) {

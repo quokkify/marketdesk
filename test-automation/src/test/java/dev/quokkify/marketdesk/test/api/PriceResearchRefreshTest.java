@@ -26,6 +26,14 @@ public class PriceResearchRefreshTest extends BaseTest {
   }
 
   @Test
+  public void notConfiguredCreatesNoRun() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = priceResearchSteps.createProduct(account);
+    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
+    priceResearchSteps.verify().hasNoRun(priceResearchSteps.getPriceResearch(account, productId));
+  }
+
+  @Test
   public void otherWorkspaceRefreshIs404() {
     AccountPojo owner = authSteps.registerNewAccount();
     String productId = priceResearchSteps.createProduct(owner);

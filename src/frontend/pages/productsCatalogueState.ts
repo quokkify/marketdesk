@@ -1,9 +1,10 @@
-import type { Product, ProductStatus } from '@shared/types';
+import type { NeedsActionReason, Product, ProductStats, ProductStatus } from '@shared/types';
+import { formatRelative } from '../utils/formatters.js';
 
 export const PRODUCTS_PAGE_SIZE = 25;
 export const PRODUCT_SEARCH_DEBOUNCE_MS = 200;
 export type ProductsView = 'list' | 'card';
-export type ProductsTab = 'all' | 'active' | 'attention' | 'draft' | 'sold';
+export type ProductsTab = 'all' | 'active' | 'needs-action' | 'draft' | 'sold';
 
 export interface ProductsCatalogueState {
   tab: ProductsTab;
@@ -27,8 +28,14 @@ const SORTS = new Set([
   '-status',
   'updatedAt',
   '-updatedAt',
+  'views',
+  '-views',
+  'viewsDelta7d',
+  '-viewsDelta7d',
 ]);
-const TABS = new Set<ProductsTab>(['all', 'active', 'attention', 'draft', 'sold']);
+const TABS = new Set<ProductsTab>(['all', 'active', 'needs-action', 'draft', 'sold']);
+// The stored Attention status was replaced by the computed Needs action tab.
+const LEGACY_TABS: Record<string, ProductsTab> = { attention: 'needs-action' };
 
 // Sort orders offered by the toolbar menu; each one is accepted by the API.
 export const PRODUCT_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -38,11 +45,15 @@ export const PRODUCT_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string 
   { value: '-name', label: 'Name Z–A' },
   { value: 'sellingPrice', label: 'Price: low to high' },
   { value: '-sellingPrice', label: 'Price: high to low' },
+  { value: '-viewsDelta7d', label: 'Most growth' },
+  { value: 'viewsDelta7d', label: 'Least growth' },
+  { value: '-views', label: 'Most views' },
 ];
 
 export function parseProductsCatalogueState(search: string): ProductsCatalogueState {
   const query = new URLSearchParams(search);
-  const tabValue = query.get('tab') as ProductsTab | null;
+  const rawTab = query.get('tab');
+  const tabValue = (rawTab && (LEGACY_TABS[rawTab] ?? rawTab)) as ProductsTab | null;
   const pageValue = Number.parseInt(query.get('page') ?? '1', 10);
   const sortValue = query.get('sort') ?? '-updatedAt';
   return {
@@ -106,10 +117,55 @@ export function shortListingSku(sku: string): string {
 }
 
 // Attention is set by nothing automatic yet, so the tab only shows when something is in it.
-export function visibleProductTabs(attentionCount: number | undefined): ProductsTab[] {
-  return attentionCount
-    ? ['all', 'active', 'attention', 'draft', 'sold']
-    : ['all', 'active', 'draft', 'sold'];
+export function visibleProductTabs(): ProductsTab[] {
+  return ['all', 'active', 'needs-action', 'draft', 'sold'];
+}
+
+export function tabNeedsAction(tab: ProductsTab): boolean {
+  return tab === 'needs-action';
+}
+
+const NEEDS_ACTION_LABELS: Record<NeedsActionReason, string> = {
+  buyer_waiting: 'Buyer waiting',
+  listing_problem: 'Listing expired or failing on OLX',
+  no_view_growth: 'No view growth for 7 days',
+};
+
+export function needsActionLabel(reason: NeedsActionReason): string {
+  return NEEDS_ACTION_LABELS[reason];
+}
+
+export interface ViewsSummary {
+  primary: string;
+  delta: { kind: 'up' | 'flat' | 'stale'; text: string } | null;
+  secondary: string | null;
+}
+
+export function viewsSummary(stats: ProductStats | undefined): ViewsSummary {
+  if (!stats || stats.views === null) return { primary: '—', delta: null, secondary: null };
+  const delta: ViewsSummary['delta'] =
+    stats.stale || stats.viewsDelta7d === null
+      ? { kind: 'stale', text: 'stale' }
+      : stats.viewsDelta7d > 0
+        ? { kind: 'up', text: `▲ +${stats.viewsDelta7d}` }
+        : { kind: 'flat', text: 'no growth' };
+  const synced = stats.lastSyncAt ? ` · synced ${formatRelative(stats.lastSyncAt)}` : '';
+  return {
+    primary: String(stats.views),
+    delta,
+    secondary: `${stats.watchers ?? 0} watching · ${stats.messages ?? 0} msgs${synced}`,
+  };
+}
+
+export function sparklinePoints(values: readonly number[], width: number, height: number): string {
+  if (values.length === 0) return '';
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const step = values.length > 1 ? width / (values.length - 1) : 0;
+  const y = (value: number) =>
+    max === min ? height / 2 : height - ((value - min) / (max - min)) * height;
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return values.map((value, index) => `${round(index * step)},${round(y(value))}`).join(' ');
 }
 
 // Skeletons only before the first page arrives (or while an out-of-range page is corrected);
@@ -123,7 +179,7 @@ export function catalogueShowsSkeleton(input: {
 }
 
 export function tabStatus(tab: ProductsTab): ProductStatus[] | undefined {
-  return tab === 'all' ? undefined : [tab];
+  return tab === 'all' || tab === 'needs-action' ? undefined : [tab];
 }
 
 export function hasCatalogueFilters(state: ProductsCatalogueState): boolean {

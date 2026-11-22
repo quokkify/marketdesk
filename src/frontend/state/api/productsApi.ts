@@ -9,7 +9,10 @@ import type {
   ProductRecheckResult,
   ProductImprovementSuggestions,
   PriceResearch,
+  PriceResearchView,
+  ResearchRun,
   PriceSync,
+  ProductStats,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
@@ -59,18 +62,38 @@ export function buildProductsListUrl(params?: ProductListParams): string {
   })}`;
 }
 
+// The needs-action list depends on listings (sync) and waiting buyers (sent replies) too.
+export function productListTags(
+  result: PaginatedResponse<Product> | undefined,
+  arg: ProductListParams | undefined
+): Array<{ type: 'Product' | 'Listing'; id: string } | { type: 'Awaiting' }> {
+  const tags: Array<{ type: 'Product' | 'Listing'; id: string } | { type: 'Awaiting' }> = [
+    ...(result?.items ?? []).map((p) => ({ type: 'Product' as const, id: p.id })),
+    { type: 'Product', id: 'LIST' },
+  ];
+  if (arg?.needsAction) tags.push({ type: 'Listing', id: 'LIST' }, { type: 'Awaiting' });
+  return tags;
+}
+
 export const productsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    // Views, growth, trend and needs-action reasons per product. Sync refreshes listings,
+    // approving a suggestion refreshes products, so both tags refresh the stats.
+    getProductStats: builder.query<Record<string, ProductStats>, void>({
+      query: () => '/products/stats',
+      transformResponse: (res: ApiResponse<{ byProductId: Record<string, ProductStats> }>) =>
+        unwrap(res).byProductId,
+      providesTags: [
+        { type: 'Product', id: 'LIST' },
+        { type: 'Listing', id: 'LIST' },
+        { type: 'Awaiting' },
+      ],
+    }),
+
     getProducts: builder.query<PaginatedResponse<Product>, ProductListParams | void>({
       query: (params) => buildProductsListUrl(params ?? undefined),
       transformResponse: (res: PaginatedApiResponse<Product>) => unwrapPaginated(res),
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.items.map((p) => ({ type: 'Product' as const, id: p.id })),
-              { type: 'Product' as const, id: 'LIST' },
-            ]
-          : [{ type: 'Product' as const, id: 'LIST' }],
+      providesTags: (result, _error, arg) => productListTags(result, arg ?? undefined),
     }),
 
     getProduct: builder.query<Product, string>({
@@ -79,35 +102,51 @@ export const productsApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'Product', id }],
     }),
 
-    recheckProduct: builder.mutation<ProductRecheckResult, { productId: string; listingId: string }>({
+    recheckProduct: builder.mutation<
+      ProductRecheckResult,
+      { productId: string; listingId: string }
+    >({
       query: buildProductRecheckRequest,
       transformResponse: (res: ApiResponse<ProductRecheckResult>) => unwrap(res),
     }),
 
-    proposeProductImprovements: builder.mutation<ProductImprovementSuggestions, { productId: string; listingId?: string }>({
+    proposeProductImprovements: builder.mutation<
+      ProductImprovementSuggestions,
+      { productId: string; listingId?: string }
+    >({
       query: ({ productId, listingId }) => ({
-        url: `/products/${productId}/improvements`, method: 'POST',
+        url: `/products/${productId}/improvements`,
+        method: 'POST',
         body: listingId ? { listingId } : {},
       }),
       transformResponse: (res: ApiResponse<ProductImprovementSuggestions>) => unwrap(res),
       invalidatesTags: ['AiUsage'],
     }),
 
-    getPriceResearch: builder.query<PriceResearch | null, string>({
+    getPriceResearch: builder.query<PriceResearchView | null, string>({
       query: (id) => `/products/${id}/price-research`,
-      transformResponse: (res: ApiResponse<PriceResearch | null>) => unwrap(res),
+      transformResponse: (res: ApiResponse<PriceResearchView | null>) => unwrap(res),
       providesTags: (_result, _error, id) => [{ type: 'PriceResearch', id }],
     }),
 
-    savePriceResearch: builder.mutation<PriceResearch, { productId: string; body: PriceResearchBody }>({
-      query: ({ productId, body }) => ({ url: `/products/${productId}/price-research`, method: 'PUT', body }),
+    savePriceResearch: builder.mutation<
+      PriceResearch,
+      { productId: string; body: PriceResearchBody }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/products/${productId}/price-research`,
+        method: 'PUT',
+        body,
+      }),
       transformResponse: (res: ApiResponse<PriceResearch>) => unwrap(res),
-      invalidatesTags: (_result, _error, { productId }) => [{ type: 'PriceResearch', id: productId }],
+      invalidatesTags: (_result, _error, { productId }) => [
+        { type: 'PriceResearch', id: productId },
+      ],
     }),
 
-    refreshPriceResearch: builder.mutation<PriceResearch, string>({
+    refreshPriceResearch: builder.mutation<{ run: ResearchRun }, string>({
       query: (productId) => ({ url: `/products/${productId}/price-research/refresh`, method: 'POST' }),
-      transformResponse: (res: ApiResponse<PriceResearch>) => unwrap(res),
+      transformResponse: (res: ApiResponse<{ run: ResearchRun }>) => unwrap(res),
       invalidatesTags: (_result, _error, productId) => [{ type: 'PriceResearch', id: productId }],
     }),
 
@@ -202,6 +241,7 @@ export const {
   useDeleteProductMutation,
   useCreateProductListingMutation,
   useGetProductListingsQuery,
+  useGetProductStatsQuery,
   useGetPriceResearchQuery,
   useSavePriceResearchMutation,
   useRefreshPriceResearchMutation,
