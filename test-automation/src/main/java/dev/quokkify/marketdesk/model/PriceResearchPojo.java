@@ -9,14 +9,22 @@ import java.util.stream.IntStream;
 public record PriceResearchPojo(Double retailPrice, String retailCurrency, String retailSource,
     String retailCheckedAt, List<Comparable> comparables) {
 
-  public record Comparable(Double price, String note, String url, String source, String tier, String seenAt) {
+  public record ClassAttribute(String name, Object value, String unit, String match) {
+  }
+
+  public record Comparable(Double price, String note, String url, String source, String tier, String seenAt,
+      List<ClassAttribute> classAttributes, Boolean classChecked) {
+
+    public Comparable(Double price, String note, String url, String source, String tier, String seenAt) {
+      this(price, note, url, source, tier, seenAt, null, null);
+    }
 
     public Comparable(Double price, String note) {
-      this(price, note, null, null, null, null);
+      this(price, note, null, null, null, null, null, null);
     }
 
     public Comparable(Double price, String note, String url, String source) {
-      this(price, note, url, source, null, null);
+      this(price, note, url, source, null, null, null, null);
     }
   }
 

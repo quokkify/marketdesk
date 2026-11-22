@@ -1,7 +1,6 @@
-import type { PriceResearch, ResearchRun, StoredPriceEstimate } from '../../../shared/types';
+import type { PriceReadiness, PriceResearch, ResearchRun, StoredPriceEstimate } from '../../../shared/types';
 
-// Whether a price may be set unattended: only on `ready`; otherwise it is held for the seller's review.
-export type PriceReadiness = 'ready' | 'degraded' | 'blocked';
+export type { PriceReadiness };
 
 const hasCheckedSubstitute = (research: PriceResearch): boolean =>
   research.comparables.some(

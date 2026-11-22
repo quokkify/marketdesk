@@ -1,4 +1,4 @@
-import type { PriceComparable, PriceEstimate, PriceResearch, StoredPriceEstimate } from '@shared/types';
+import type { PriceComparable, PriceEstimate, PriceResearch, ResearchRun, StoredPriceEstimate } from '@shared/types';
 import {
   discountLine,
   MAX_COMPARABLES,
@@ -10,7 +10,12 @@ import {
   usedRangeSourceNote,
   toPriceResearchBody,
   toPriceResearchForm,
+  runProgressText,
+  lastRunText,
+  classLine,
+  shouldRekeyEditor,
 } from './priceResearchModel';
+import { formatDateTime } from '../../utils/formatters';
 
 const research: PriceResearch = {
   productId: 'p-1',
@@ -255,5 +260,122 @@ describe('automatic comparables through the form', () => {
 
   it('keepsAutoRowWhenPriceIsUnchanged', () => {
     expect(editComparablePrice([auto], 0, '280')).toEqual([auto]);
+  });
+});
+
+const NOW = new Date('2026-11-22T12:00:00.000Z');
+
+function run(patch: Partial<ResearchRun>): ResearchRun {
+  return {
+    id: 'r-1', workspaceId: 'w-1', productId: 'p-1', trigger: 'manual', status: 'running', nodes: {},
+    outcome: null, failedTiers: [], errorCode: null, consecutiveFailures: 0,
+    queuedAt: '2026-11-22T11:50:00.000Z', startedAt: '2026-11-22T11:50:05.000Z', finishedAt: null,
+    leaseUntil: null, nextAutoAt: null, ...patch,
+  };
+}
+
+describe('runProgressText', () => {
+  it('is null without a run or once it finished', () => {
+    expect(runProgressText(null)).toBeNull();
+    expect(runProgressText(run({ status: 'finished', outcome: 'ok' }))).toBeNull();
+  });
+
+  it('says it is identifying the model while queued or before identify is done', () => {
+    expect(runProgressText(run({ status: 'queued' }))).toBe('Identifying the model…');
+    expect(runProgressText(run({ nodes: { identify: 'running' } }))).toBe('Identifying the model…');
+  });
+
+  it('counts the finished tier searches out of four, failures included', () => {
+    expect(runProgressText(run({ nodes: { identify: 'done', sameModelUsed: 'done', lastNewPrice: 'failed' } })))
+      .toBe('Searching prices: 2 of 4');
+    expect(runProgressText(run({ nodes: { identify: 'done' } }))).toBe('Searching prices: 0 of 4');
+  });
+
+  it('says it is saving once all four tier searches are over', () => {
+    expect(runProgressText(run({ nodes: {
+      identify: 'done', sameModelUsed: 'done', lastNewPrice: 'done', substitutesNew: 'timeout', substitutesUsed: 'done',
+    } }))).toBe('Saving…');
+  });
+});
+
+describe('lastRunText', () => {
+  const finishedAt = '2026-11-22T10:00:00.000Z';
+  const nextAutoAt = '2026-11-23T10:00:00.000Z';
+
+  it('is null without a finished run', () => {
+    expect(lastRunText(null, null, NOW)).toBeNull();
+    expect(lastRunText(run({}), null, NOW)).toBeNull();
+  });
+
+  it('words an ok run', () => {
+    expect(lastRunText(run({ status: 'finished', outcome: 'ok', finishedAt }), nextAutoAt, NOW))
+      .toBe('Prices searched 2h ago');
+  });
+
+  it('names the failed tiers and the retry time of a partial run', () => {
+    const text = lastRunText(
+      run({ status: 'finished', outcome: 'partial', finishedAt, failedTiers: ['substitute_used', 'last_new_price'] }),
+      nextAutoAt, NOW,
+    );
+    expect(text).toBe(`Prices searched 2h ago; used substitutes, last new price search failed, will retry ${formatDateTime(nextAutoAt)}`);
+  });
+
+  it('gives a plain-words reason for a failed run and never the raw code', () => {
+    const failed = (errorCode: string | null) =>
+      lastRunText(run({ status: 'finished', outcome: 'failed', finishedAt, errorCode }), nextAutoAt, NOW);
+    const retry = formatDateTime(nextAutoAt);
+    expect(failed('job_lost')).toBe(`Price search failed: the search was interrupted. Will retry ${retry}`);
+    expect(failed('unsafe_toolset')).toBe(`Price search failed: market search is unavailable. Will retry ${retry}`);
+    expect(failed('not_configured')).toBe(`Price search failed: market search is unavailable. Will retry ${retry}`);
+    expect(failed('timeout')).toBe(`Price search failed: the search took too long. Will retry ${retry}`);
+    expect(failed('unusable_answer')).toBe(`Price search failed: the model could not be identified. Will retry ${retry}`);
+    expect(failed('weird_code')).toBe(`Price search failed: something went wrong. Will retry ${retry}`);
+    expect(failed(null)).toBe(`Price search failed: something went wrong. Will retry ${retry}`);
+  });
+
+  it('leaves the retry clause out when no retry is scheduled', () => {
+    expect(lastRunText(run({ status: 'finished', outcome: 'failed', finishedAt, errorCode: 'timeout' }), null, NOW))
+      .toBe('Price search failed: the search took too long.');
+    expect(lastRunText(run({ status: 'finished', outcome: 'partial', finishedAt, failedTiers: ['same_model_used'] }), null, NOW))
+      .toBe('Prices searched 2h ago; same model, used search failed');
+  });
+});
+
+describe('classLine', () => {
+  const row = (patch: Partial<PriceComparable>): PriceComparable => ({ price: 300, note: '', ...patch });
+
+  it('joins the class attributes with their units', () => {
+    expect(classLine(row({
+      classChecked: true,
+      classAttributes: [
+        { name: 'resolution', value: '720p', match: 'equal' },
+        { name: 'brightness', value: 200, unit: 'ANSI lm', match: 'ratio' },
+      ],
+    }))).toBe('720p · 200 ANSI lm');
+  });
+
+  it('says the class is unchecked when it was not checked', () => {
+    expect(classLine(row({ classChecked: false, classAttributes: [] }))).toBe('class unchecked');
+  });
+
+  it('is null for a row with nothing to show', () => {
+    expect(classLine(row({}))).toBeNull();
+    expect(classLine(row({ classChecked: true, classAttributes: [] }))).toBeNull();
+  });
+});
+
+describe('shouldRekeyEditor', () => {
+  it('keeps the editor while nothing changed', () => {
+    expect(shouldRekeyEditor(true, 'a', 'a')).toBe('keep');
+    expect(shouldRekeyEditor(false, 'a', 'a')).toBe('keep');
+  });
+
+  it('rekeys a clean editor when the research changed', () => {
+    expect(shouldRekeyEditor(false, 'a', 'b')).toBe('rekey');
+    expect(shouldRekeyEditor(false, null, 'b')).toBe('rekey');
+  });
+
+  it('shows a notice instead when the editor has unsaved edits', () => {
+    expect(shouldRekeyEditor(true, 'a', 'b')).toBe('notice');
   });
 });

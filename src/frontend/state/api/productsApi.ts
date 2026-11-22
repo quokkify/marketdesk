@@ -9,6 +9,8 @@ import type {
   ProductRecheckResult,
   ProductImprovementSuggestions,
   PriceResearch,
+  PriceResearchView,
+  ResearchRun,
   PriceSync,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
@@ -93,9 +95,9 @@ export const productsApi = baseApi.injectEndpoints({
       invalidatesTags: ['AiUsage'],
     }),
 
-    getPriceResearch: builder.query<PriceResearch | null, string>({
+    getPriceResearch: builder.query<PriceResearchView | null, string>({
       query: (id) => `/products/${id}/price-research`,
-      transformResponse: (res: ApiResponse<PriceResearch | null>) => unwrap(res),
+      transformResponse: (res: ApiResponse<PriceResearchView | null>) => unwrap(res),
       providesTags: (_result, _error, id) => [{ type: 'PriceResearch', id }],
     }),
 
@@ -105,9 +107,9 @@ export const productsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { productId }) => [{ type: 'PriceResearch', id: productId }],
     }),
 
-    refreshPriceResearch: builder.mutation<PriceResearch, string>({
+    refreshPriceResearch: builder.mutation<{ run: ResearchRun }, string>({
       query: (productId) => ({ url: `/products/${productId}/price-research/refresh`, method: 'POST' }),
-      transformResponse: (res: ApiResponse<PriceResearch>) => unwrap(res),
+      transformResponse: (res: ApiResponse<{ run: ResearchRun }>) => unwrap(res),
       invalidatesTags: (_result, _error, productId) => [{ type: 'PriceResearch', id: productId }],
     }),
 

@@ -8,10 +8,12 @@ import type {
   PriceComparableSource,
   PriceEstimate,
   PriceResearch,
+  PriceResearchView,
+  ResearchRun,
   StoredPriceEstimate,
 } from '@shared/types';
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
-import { currencySymbol, formatMoney } from '../../utils/formatters.js';
+import { currencySymbol, formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 
 export const MAX_COMPARABLES = 30;
 export const MAX_SOURCE_LENGTH = 200;
@@ -190,7 +192,7 @@ export function editComparablePrice(
   });
 }
 
-export function usedRangeSourceNote(research: PriceResearch | null): string | null {
+export function usedRangeSourceNote(research: Pick<PriceResearch, 'comparables'> | null): string | null {
   const fromWeb = research?.comparables.filter((c) => c.source === 'web').length ?? 0;
   return fromWeb > 0 ? `${fromWeb} from OLX` : null;
 }
@@ -268,4 +270,66 @@ export function storedEstimateLines(s: StoredPriceEstimate | null, currency: str
   if (s.hiddenReason) lines.push(HIDDEN_REASON_TEXT[s.hiddenReason]);
   if (s.researchNote) lines.push(s.researchNote);
   return lines;
+}
+
+const TIER_NODES = ['sameModelUsed', 'lastNewPrice', 'substitutesNew', 'substitutesUsed'] as const;
+const NODE_OVER = new Set(['done', 'failed', 'timeout']);
+
+// What an active run is doing, or null when no run is active.
+export function runProgressText(run: ResearchRun | null): string | null {
+  if (!run || run.status === 'finished') return null;
+  if (run.status === 'queued' || !run.nodes.identify || !NODE_OVER.has(run.nodes.identify)) return 'Identifying the model…';
+  const done = TIER_NODES.filter((node) => NODE_OVER.has(run.nodes[node] ?? '')).length;
+  return done === TIER_NODES.length ? 'Saving…' : `Searching prices: ${done} of ${TIER_NODES.length}`;
+}
+
+const ERROR_REASONS: Record<string, string> = {
+  job_lost: 'the search was interrupted',
+  lease_expired: 'the search was interrupted',
+  enqueue_failed: 'the search was interrupted',
+  unsafe_toolset: 'market search is unavailable',
+  not_configured: 'market search is unavailable',
+  research_unreachable: 'market search is unavailable',
+  hermes_unavailable: 'market search is unavailable',
+  unusable_answer: 'the model could not be identified',
+  timeout: 'the search took too long',
+};
+const FALLBACK_REASON = 'something went wrong';
+
+// The last finished run in words; never the raw error code.
+export function lastRunText(last: ResearchRun | null, nextAutoAt: string | null, now: Date): string | null {
+  if (!last || last.status !== 'finished' || !last.outcome) return null;
+  const when = formatRelative(last.finishedAt, now);
+  const retry = nextAutoAt ? formatDateTime(nextAutoAt) : null;
+  if (last.outcome === 'ok') return `Prices searched ${when}`;
+  if (last.outcome === 'partial') {
+    const labels = last.failedTiers.map((tier) => TIER_LABELS.find(([t]) => t === tier)?.[1].toLowerCase() ?? tier);
+    const failed = labels.length > 0 ? `; ${labels.join(', ')} search failed` : '';
+    return `Prices searched ${when}${failed}${retry ? `, will retry ${retry}` : ''}`;
+  }
+  const reason = (last.errorCode && ERROR_REASONS[last.errorCode]) || FALLBACK_REASON;
+  return `Price search failed: ${reason}.${retry ? ` Will retry ${retry}` : ''}`;
+}
+
+// What a substitute row was matched on, for the line under its price.
+export function classLine(row: PriceComparable): string | null {
+  if (row.classChecked === false) return 'class unchecked';
+  const parts = (row.classAttributes ?? []).map((a) => `${a.value}${a.unit ? ` ${a.unit}` : ''}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+// New research arrived under an open editor: a clean editor takes it, a dirty one is never overwritten.
+export function shouldRekeyEditor(
+  dirty: boolean,
+  prevUpdatedAt: string | null,
+  nextUpdatedAt: string | null,
+): 'rekey' | 'notice' | 'keep' {
+  if (prevUpdatedAt === nextUpdatedAt) return 'keep';
+  return dirty ? 'notice' : 'rekey';
+}
+
+// The stored research of a view, or null while the view only carries a run that has stored nothing yet.
+export function storedResearch(view: PriceResearchView | null | undefined): PriceResearch | null {
+  if (!view || view.updatedAt === null) return null;
+  return { ...view, updatedAt: view.updatedAt };
 }

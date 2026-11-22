@@ -18,12 +18,19 @@ import type { IMarketplaceRepository } from '../../../domain/repositories/interf
 import type { CreateProductDTO } from '../../../application/dto/CreateProductDTO';
 import type { UpdateProductDTO } from '../../../application/dto/UpdateProductDTO';
 import type { ListProductsQueryDTO, SortKey } from '../../../application/dto/ListProductsQueryDTO';
-import type { PriceResearch, ProductStatus } from '../../../../shared/types';
+import { priceReadiness } from '../../../domain/services/priceReadiness';
+import type { PriceResearch, PriceResearchView, ProductStatus } from '../../../../shared/types';
 import { ConflictError, InvalidStateError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
 import { presentListing } from '../../../application/dto/presenters';
+
+// A product with a run but no stored research yet.
+const EMPTY_RESEARCH = (productId: string): Omit<PriceResearch, 'updatedAt'> => ({
+  productId, retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null,
+  comparables: [], specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
+});
 
 const RESEARCH_CHANGED = 'Price research changed since you opened it. Reload and try again.';
 
@@ -198,7 +205,23 @@ export class ProductController {
       const productId = routeParam(req.params.id);
       const workspaceId = req.user!.workspaceId!;
       await this.requireProduct(productId, workspaceId);
-      ok(res, await this.requirePriceResearchRepo().findByProduct(workspaceId, productId));
+      const research = await this.requirePriceResearchRepo().findByProduct(workspaceId, productId);
+      const { active, last } = this.researchRuns
+        ? await this.researchRuns.latest(workspaceId, productId)
+        : { active: null, last: null };
+      if (!research && !active && !last) {
+        ok(res, null);
+        return;
+      }
+      const view: PriceResearchView = {
+        ...(research ?? EMPTY_RESEARCH(productId)),
+        updatedAt: research?.updatedAt ?? null,
+        run: active,
+        lastRun: last,
+        nextAutoAt: last?.nextAutoAt ?? null,
+        readiness: priceReadiness({ lastRun: last, research, estimate: research?.lastEstimate ?? null }),
+      };
+      ok(res, view);
     } catch (error) { next(error); }
   };
 

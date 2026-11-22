@@ -187,6 +187,19 @@ export interface PriceResearch {
   updatedAt: string;
 }
 
+// Whether a price may be set unattended: only on `ready`; otherwise it is held for the seller's review.
+export type PriceReadiness = 'ready' | 'degraded' | 'blocked';
+
+// GET /products/:id/price-research: the stored research with the state of its background runs.
+// Before any research is stored (a first run is still going) the research fields are empty and updatedAt is null.
+export type PriceResearchView = Omit<PriceResearch, 'updatedAt'> & {
+  updatedAt: string | null;
+  run: ResearchRun | null;
+  lastRun: ResearchRun | null;
+  nextAutoAt: string | null;
+  readiness: PriceReadiness;
+};
+
 export interface PriceChangePayload {
   kind: 'price';
   field: 'price';
