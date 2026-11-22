@@ -7,8 +7,10 @@ import {
   productInitials,
   productsToCsv,
   productTileTone,
+  shortListingSku,
   tabStatus,
   updateProductsCatalogueSearch,
+  visibleProductTabs,
 } from './productsCatalogueState';
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -120,5 +122,37 @@ describe('products catalogue presentation helpers', () => {
     for (const option of PRODUCT_SORT_OPTIONS) {
       expect(parseProductsCatalogueState(`?sort=${option.value}`).sort).toBe(option.value);
     }
+  });
+});
+
+describe('stage 1 catalogue helpers', () => {
+  it('shortens an imported marketplace SKU to the marketplace and advert id', () => {
+    expect(shortListingSku('OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120')).toBe(
+      'OLX · 1085784120'
+    );
+  });
+  it.each(['SKU-100', 'OLX-1085784120', 'olx-5e881fca-2811-4a73-aaaf-da9b23f485a1-1', ''])(
+    'leaves a SKU that is not an imported marketplace SKU unchanged: %s',
+    (sku) => expect(shortListingSku(sku)).toBe(sku)
+  );
+  it('keeps dashes inside the advert id', () => {
+    expect(shortListingSku('OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-ab-12')).toBe('OLX · ab-12');
+  });
+  it('parses the sold tab and maps it to the sold status', () => {
+    expect(parseProductsCatalogueState('?tab=sold').tab).toBe('sold');
+    expect(tabStatus('sold')).toEqual(['sold']);
+  });
+  it('still parses old attention links', () => {
+    expect(parseProductsCatalogueState('?tab=attention').tab).toBe('attention');
+  });
+  it('hides the attention tab while it is empty or unknown', () => {
+    expect(visibleProductTabs(0)).toEqual(['all', 'active', 'draft', 'sold']);
+    expect(visibleProductTabs(undefined)).toEqual(['all', 'active', 'draft', 'sold']);
+    expect(visibleProductTabs(2)).toEqual(['all', 'active', 'attention', 'draft', 'sold']);
+  });
+  it('no longer offers cost sorting in the menu but accepts it from old URLs', () => {
+    expect(PRODUCT_SORT_OPTIONS.map((o) => o.value)).not.toContain('costPrice');
+    expect(PRODUCT_SORT_OPTIONS.map((o) => o.value)).not.toContain('-costPrice');
+    expect(parseProductsCatalogueState('?sort=-costPrice').sort).toBe('-costPrice');
   });
 });

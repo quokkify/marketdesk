@@ -3,7 +3,7 @@ import type { Product, ProductStatus } from '@shared/types';
 export const PRODUCTS_PAGE_SIZE = 25;
 export const PRODUCT_SEARCH_DEBOUNCE_MS = 200;
 export type ProductsView = 'list' | 'card';
-export type ProductsTab = 'all' | 'active' | 'attention' | 'draft';
+export type ProductsTab = 'all' | 'active' | 'attention' | 'draft' | 'sold';
 
 export interface ProductsCatalogueState {
   tab: ProductsTab;
@@ -28,7 +28,7 @@ const SORTS = new Set([
   'updatedAt',
   '-updatedAt',
 ]);
-const TABS = new Set<ProductsTab>(['all', 'active', 'attention', 'draft']);
+const TABS = new Set<ProductsTab>(['all', 'active', 'attention', 'draft', 'sold']);
 
 // Sort orders offered by the toolbar menu; each one is accepted by the API.
 export const PRODUCT_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -38,8 +38,6 @@ export const PRODUCT_SORT_OPTIONS: ReadonlyArray<{ value: string; label: string 
   { value: '-name', label: 'Name Z–A' },
   { value: 'sellingPrice', label: 'Price: low to high' },
   { value: '-sellingPrice', label: 'Price: high to low' },
-  { value: 'costPrice', label: 'Cost: low to high' },
-  { value: '-costPrice', label: 'Cost: high to low' },
 ];
 
 export function parseProductsCatalogueState(search: string): ProductsCatalogueState {
@@ -97,6 +95,22 @@ export function updateProductsCatalogueSearch(
   if (next.view === 'card') query.set('view', 'card');
   const result = query.toString();
   return result ? `?${result}` : '';
+}
+
+// Imported SKUs read `<MARKETPLACE>-<workspace uuid>-<advert id>`; the uuid repeats on every row.
+const IMPORTED_SKU =
+  /^([A-Z]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(.+)$/;
+
+export function shortListingSku(sku: string): string {
+  const match = IMPORTED_SKU.exec(sku);
+  return match ? `${match[1]} · ${match[2]}` : sku;
+}
+
+// Attention is set by nothing automatic yet, so the tab only shows when something is in it.
+export function visibleProductTabs(attentionCount: number | undefined): ProductsTab[] {
+  return attentionCount
+    ? ['all', 'active', 'attention', 'draft', 'sold']
+    : ['all', 'active', 'draft', 'sold'];
 }
 
 export function tabStatus(tab: ProductsTab): ProductStatus[] | undefined {
