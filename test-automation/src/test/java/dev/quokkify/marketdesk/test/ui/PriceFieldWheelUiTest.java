@@ -24,7 +24,11 @@ public class PriceFieldWheelUiTest extends BaseUiTest {
     productDetailPageSteps
         .openProductPage(productListing)
         .openEditForm()
-        .typeSellingPriceAndScrollOverIt(TYPED_PRICE)
+        .typeSellingPriceAndScrollOverIt(TYPED_PRICE);
+    productDetailPageSteps
+        .verify()
+        .sellingPriceIs(TYPED_PRICE);
+    productDetailPageSteps
         .saveChanges()
         .openEditForm()
         .verify()

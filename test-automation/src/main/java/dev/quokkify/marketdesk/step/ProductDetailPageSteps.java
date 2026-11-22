@@ -96,7 +96,10 @@ public class ProductDetailPageSteps
 
   @Step("Type the selling price {price} and scroll the mouse wheel over the focused field")
   public ProductDetailPageSteps typeSellingPriceAndScrollOverIt(String price) {
-    page.sellingPriceInput().shouldBe(Condition.visible).setValue(price);
+    // A controlled React number input ignores the WebDriver clear, so the old value is selected and typed over.
+    Selenide.executeJavaScript("arguments[0].focus(); arguments[0].select();",
+        page.sellingPriceInput().shouldBe(Condition.visible));
+    page.sellingPriceInput().sendKeys(price);
     for (int tick = 0; tick < WHEEL_TICKS; tick++) {
       Selenide.actions()
           .scrollFromOrigin(WheelInput.ScrollOrigin.fromElement(page.sellingPriceInput()), 0, WHEEL_TICK_PIXELS)
