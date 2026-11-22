@@ -88,6 +88,18 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Press Publish to OLX twice at once")
+  public ProductsPageSteps publishToOlxTwiceAtOnce() {
+    page.clickTwiceAtOnce(page.publishToOlxButton().shouldBe(Condition.enabled));
+    return this;
+  }
+
+  @Step("Resize the browser window to {width}x{height}")
+  public ProductsPageSteps useWindowSize(int width, int height) {
+    page.resizeWindow(width, height);
+    return this;
+  }
+
   @Step("Open the filters panel")
   public ProductsPageSteps openFilters() {
     page.filtersButton().shouldBe(Condition.visible).click();

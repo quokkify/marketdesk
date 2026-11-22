@@ -49,6 +49,13 @@ public class ProductsPageVerification
     return this;
   }
 
+  @Step("Publish to OLX is fully inside the viewport without scrolling")
+  public ProductsPageVerification publishToOlxIsFullyInViewport() {
+    page.publishToOlxButton().shouldHave(
+        Condition.match("fully inside the viewport", page::isFullyInViewport), getTimeout());
+    return this;
+  }
+
   @Step("The New product dialog is closed")
   public ProductsPageVerification newProductDialogIsClosed() {
     page.newProductDialog().shouldNot(Condition.exist, getTimeout());

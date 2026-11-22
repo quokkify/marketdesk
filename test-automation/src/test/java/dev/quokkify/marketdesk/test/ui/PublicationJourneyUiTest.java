@@ -13,6 +13,8 @@ public class PublicationJourneyUiTest extends BaseUiTest {
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final String SANDBOX_CAMERAS_ID = "1001";
   private static final String DRAFT = "draft";
+  private static final int PHONE_WIDTH = 390;
+  private static final int PHONE_HEIGHT = 844;
 
   @Test
   public void creationEntryAndReviewOnlyAssistanceAreVisible() {
@@ -88,6 +90,39 @@ public class PublicationJourneyUiTest extends BaseUiTest {
         .showsOlxFeeConfirmation();
     ProductListingPojo created = productSteps.findProductListing(account, name);
     listingSteps.verify().hasStatus(listingSteps.getListing(account, created.listingId()), DRAFT);
+  }
+
+  @Test
+  public void doubleClickOnPublishCreatesOneProduct() {
+    String name = uniqueName();
+    AccountPojo account = signInWithSandboxOlx();
+    productsPageSteps
+        .openNewProductDialog()
+        .fillWizardForSandboxCameras(name)
+        .verify()
+        .publishToOlxIsEnabled()
+        .backToSteps()
+        .publishToOlxTwiceAtOnce();
+    productDetailPageSteps
+        .verify()
+        .showsPublicationQueued();
+    productsPageSteps
+        .openProductsPage()
+        .verify()
+        .listsProductOnce(name);
+    productSteps.verify().hasExactlyOneProductNamed(productSteps.getProducts(account), name);
+  }
+
+  @Test
+  public void publishToOlxFitsAPhoneScreen() {
+    signInWithSandboxOlx();
+    productsPageSteps
+        .useWindowSize(PHONE_WIDTH, PHONE_HEIGHT)
+        .openProductsPage()
+        .openNewProductDialog()
+        .fillWizardForSandboxCameras(uniqueName())
+        .verify()
+        .publishToOlxIsFullyInViewport();
   }
 
   private AccountPojo signInWithSandboxOlx() {

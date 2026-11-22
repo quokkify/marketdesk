@@ -11,7 +11,10 @@ import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.TextMatchOptions;
+import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.WebElement;
 
 @PageUrl("/products")
 public class ProductsPage implements Page {
@@ -37,6 +40,11 @@ public class ProductsPage implements Page {
   private static final String NEW_PRODUCT = "New product";
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String CLOSE = "Close";
+  private static final String ARIA_LABEL = "aria-label";
+  private static final String CLICK_TWICE_SCRIPT = "arguments[0].click(); arguments[0].click();";
+  private static final String FULLY_IN_VIEWPORT_SCRIPT =
+      "const r = arguments[0].getBoundingClientRect();"
+          + "return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;";
   private static final String PHOTO_INPUT = "input[type=\"file\"]";
   private static final String CONTINUE = "Continue";
   private static final String REVIEW_AND_PUBLISH = "Review and publish";
@@ -84,8 +92,10 @@ public class ProductsPage implements Page {
     return Selenide.$(FILTERS_BUTTON);
   }
 
+  // Wide screens show a text button, phones an icon button with the same accessible name.
   public SelenideElement newProductButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(NEW_PRODUCT));
+    return Selenide.$$(BUTTON).filterBy(Condition.visible).findBy(Condition.or(NEW_PRODUCT,
+        Condition.text(NEW_PRODUCT), Condition.attribute(ARIA_LABEL, NEW_PRODUCT)));
   }
 
   public SelenideElement newProductDialog() {
@@ -93,7 +103,7 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement closeDialogButton() {
-    return newProductDialog().$$(BUTTON).findBy(Condition.attribute("aria-label", CLOSE));
+    return newProductDialog().$$(BUTTON).findBy(Condition.attribute(ARIA_LABEL, CLOSE));
   }
 
   public SelenideElement photoInput() {
@@ -131,6 +141,19 @@ public class ProductsPage implements Page {
 
   public SelenideElement publishToOlxButton() {
     return newProductDialog().$$(BUTTON).findBy(Condition.exactText(PUBLISH_TO_OLX));
+  }
+
+  // Both clicks run in one script, so React cannot re-render the button as disabled between them.
+  public void clickTwiceAtOnce(SelenideElement element) {
+    Selenide.executeJavaScript(CLICK_TWICE_SCRIPT, element);
+  }
+
+  public boolean isFullyInViewport(WebElement element) {
+    return Boolean.TRUE.equals(Selenide.executeJavaScript(FULLY_IN_VIEWPORT_SCRIPT, element));
+  }
+
+  public void resizeWindow(int width, int height) {
+    WebDriverRunner.getWebDriver().manage().window().setSize(new Dimension(width, height));
   }
 
   public SelenideElement filtersFullyOpen() {
