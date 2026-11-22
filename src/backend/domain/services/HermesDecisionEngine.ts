@@ -30,6 +30,7 @@ import type {
   HermesEventType,
   HermesSeverity,
   ProposedChange,
+  RunOutcome,
 } from '../../../shared/types';
 import { BALANCED_SAFE_EVENT_TYPES } from '../../../shared/constants';
 import type { Workspace } from '../entities/Workspace';
@@ -389,6 +390,25 @@ export class HermesDecisionEngine {
     const closed = await this.closePendingPriceEvents(product, PRICE_EVENT_TYPES);
     if (closed.length > 0) await this.eventRepo.saveAll(closed);
     return null;
+  }
+
+  /**
+   * Re-estimates after a finished research run when the estimate may be out of date or a notice is
+   * waiting for it: the run threw, timed out or expired (no run result), failed, changed the ladder,
+   * left a pending "unavailable" notice, or no estimate is stored yet. Null when nothing is surfaced.
+   */
+  async reestimateAfterResearch(
+    workspaceId: string,
+    productId: string,
+    run: { outcome: RunOutcome; rowsChanged: boolean } | null,
+  ): Promise<HermesEvent | null> {
+    const due =
+      run === null ||
+      run.outcome === 'failed' ||
+      run.rowsChanged ||
+      (await this.eventRepo.findPendingByProduct(workspaceId, productId, PRICE_NOTICE_TYPES)).length > 0 ||
+      !(await this.priceEstimates.hasStoredEstimate(workspaceId, productId));
+    return due ? this.reestimatePrice(workspaceId, productId) : null;
   }
 
   // Review-only like the SEO suggestions; an "unavailable" notice is no AI-made change. The product's

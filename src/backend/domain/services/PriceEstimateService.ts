@@ -181,6 +181,10 @@ export class PriceEstimateService {
     };
   }
 
+  async hasStoredEstimate(workspaceId: string, productId: string): Promise<boolean> {
+    return Boolean((await this.deps.research.findByProduct(workspaceId, productId))?.lastEstimate);
+  }
+
   // A run state that cannot be read does not hold the estimate back: it is logged and the estimate goes on.
   private async researchPending(product: Product, research: PriceResearch | null): Promise<boolean> {
     if (!this.deps.runs || (research !== null && research.comparables.length > 0)) return false;

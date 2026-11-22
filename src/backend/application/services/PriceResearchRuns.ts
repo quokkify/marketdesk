@@ -1,7 +1,8 @@
 // Starts price research runs. A request checks the product and the setup, then records a queued run
 // and enqueues its ids; the graph runs only in the price-research job. A product has at most one
 // queued or running run: a running run whose lease ended, or a run queued longer than the queued TTL
-// (its job was lost), is written as a failed run and frees it.
+// (its job was lost), is written as a failed run and frees it. Such a run never reaches the job's
+// re-estimate, so the reader that wrote the expiry starts onExpired without waiting for it.
 
 import type { ResearchRun, RunTrigger } from '../../../shared/types';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -31,6 +32,8 @@ export interface PriceResearchRunsDeps {
   configured: boolean;
   newId: () => string;
   now: () => Date;
+  // The re-estimate after a run finished by its expiry; a failure is logged.
+  onExpired?: (workspaceId: string, productId: string) => Promise<unknown>;
   logger?: PriceResearchRunsLogger;
 }
 
@@ -98,11 +101,21 @@ export class PriceResearchRuns implements IPriceResearchRuns {
       finishedAt: now.toISOString(),
       nextAutoAt: nextAutoAt('failed', consecutiveFailures, now).toISOString(),
     };
-    await this.deps.runs.finish(active.id, expired);
+    if (await this.deps.runs.finish(active.id, expired)) this.afterExpiry(active);
     return {
       active: null,
       last: (await this.deps.runs.findLastFinished(workspaceId, productId)) ?? { ...active, ...expired, status: 'finished', leaseUntil: null },
     };
+  }
+
+  private afterExpiry(run: ResearchRun): void {
+    if (!this.deps.onExpired) return;
+    this.deps.onExpired(run.workspaceId, run.productId).catch((error: unknown) => {
+      this.deps.logger?.error(
+        { productId: run.productId, runId: run.id, err: error },
+        'Re-estimating after an expired price research run failed',
+      );
+    });
   }
 
   // A run that never reached the queue would block the product: finish it before reporting the error.

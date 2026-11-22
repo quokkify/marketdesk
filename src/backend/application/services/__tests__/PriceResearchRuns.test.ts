@@ -51,14 +51,23 @@ function storedRun(fields: Partial<ResearchRun>): ResearchRun {
   };
 }
 
+class Logger {
+  readonly errors: Array<{ context: Record<string, unknown>; message: string }> = [];
+  error(context: Record<string, unknown>, message: string): void {
+    this.errors.push({ context, message });
+  }
+}
+
 function setup(options: {
   configured?: boolean;
   currency?: string;
   runs?: InMemoryPriceResearchRunRepository;
   queue?: IJobQueue<PriceResearchJob>;
+  onExpired?: (workspaceId: string, productId: string) => Promise<unknown>;
 } = {}) {
   const products = new InMemoryProductRepository();
   const listings = new InMemoryListingRepository();
+  const logger = new Logger();
   addProduct(products, listings, { currency: options.currency });
   const runs = options.runs ?? new InMemoryPriceResearchRunRepository();
   const queue = new RecordingJobQueue<PriceResearchJob>();
@@ -69,8 +78,10 @@ function setup(options: {
     configured: options.configured ?? true,
     newId: () => `run-${++n}`,
     now: () => NOW,
+    onExpired: options.onExpired,
+    logger,
   });
-  return { service, runs, queue, products, listings };
+  return { service, runs, queue, products, listings, logger };
 }
 
 describe('PriceResearchRuns.request', () => {
@@ -269,5 +280,55 @@ describe('PriceResearchRuns.latest', () => {
 
     expect(latest.active).toBeNull();
     expect(latest.last).toMatchObject({ id: 'stuck', status: 'finished', outcome: 'failed', errorCode: 'lease_expired', consecutiveFailures: 1 });
+  });
+
+  it('hands an expired run to the re-estimate hook, so its pending notice does not stay', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'stuck', status: 'running', outcome: null, finishedAt: null, leaseUntil: at(-1) }));
+    const expired: string[] = [];
+    const { service } = setup({ runs, onExpired: async (workspaceId, productId) => { expired.push(`${workspaceId}:${productId}`); } });
+
+    await service.latest(WS, PID);
+    await service.latest(WS, PID);
+
+    expect(expired).toEqual([`${WS}:${PID}`]);
+  });
+
+  it('hands a lost queued run found by a request to the re-estimate hook', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'lost', status: 'queued', outcome: null, startedAt: null, finishedAt: null, queuedAt: at(-61 * 60 * 1000) }));
+    const expired: string[] = [];
+    const { service } = setup({ runs, onExpired: async (workspaceId, productId) => { expired.push(`${workspaceId}:${productId}`); } });
+
+    await service.request(WS, PID, { force: true, trigger: 'manual' });
+
+    expect(expired).toEqual([`${WS}:${PID}`]);
+  });
+
+  it('does not call the hook when another reader already wrote the expiry', async () => {
+    class AlreadyFinished extends InMemoryPriceResearchRunRepository {
+      async finish(): Promise<boolean> {
+        return false;
+      }
+    }
+    const runs = new AlreadyFinished();
+    runs.runs.push(storedRun({ id: 'stuck', status: 'running', outcome: null, finishedAt: null, leaseUntil: at(-1) }));
+    let calls = 0;
+    const { service } = setup({ runs, onExpired: async () => { calls += 1; } });
+
+    await service.latest(WS, PID);
+
+    expect(calls).toBe(0);
+  });
+
+  it('logs a failing hook and still answers', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'stuck', status: 'running', outcome: null, finishedAt: null, leaseUntil: at(-1) }));
+    const { service, logger } = setup({ runs, onExpired: async () => { throw new Error('estimate failed'); } });
+
+    await expect(service.latest(WS, PID)).resolves.toMatchObject({ active: null });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(logger.errors.map((e) => e.message)).toEqual(['Re-estimating after an expired price research run failed']);
   });
 });

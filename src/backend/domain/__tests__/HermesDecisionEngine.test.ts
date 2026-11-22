@@ -1350,6 +1350,87 @@ describe('HermesDecisionEngine pending price events', () => {
     expect(pendingPrice().map((e) => e.id)).toEqual([notice!.id]);
   });
 
+  describe('after a research run', () => {
+    // An estimate from the earlier flow is stored, so "no estimate yet" never triggers the re-estimate here.
+    async function withStoredEstimate(answers: Array<PriceEstimate | Error>, runs: IPriceResearchRuns | null = null) {
+      const ctx = setup(answers, runs);
+      await ctx.priceResearchRepo.saveEstimate('w1', 'p1', {
+        estimate: priceAnswer(95), estimatedAt: '2026-11-01T00:00:00.000Z', hiddenReason: null, researchNote: null,
+        researchUpdatedAt: null,
+      });
+      let calls = 0;
+      const estimatePrice = ctx.ai.estimatePrice.bind(ctx.ai);
+      ctx.ai.estimatePrice = async (...args) => { calls += 1; return estimatePrice(...args); };
+      return { ...ctx, calls: () => calls };
+    }
+
+    it('closes the searching notice after a failed run even when an estimate is stored', async () => {
+      const { runs, state } = activeRunsUntilDone();
+      const { engine, workspace, pendingPrice, priceResearchRepo } = await withStoredEstimate([priceAnswer(98)], runs);
+      const stored = priceResearchRepo.findByProduct.bind(priceResearchRepo);
+      priceResearchRepo.findByProduct = async (workspaceId, productId) => {
+        const research = await stored(workspaceId, productId);
+        return state.running && research ? { ...research, comparables: [] } : research;
+      };
+      await engine.runProductSeo(workspace, 'p1');
+      expect(pendingPrice().map((e) => e.title)).toEqual(['Price estimate pending']);
+
+      await engine.reestimateAfterResearch('w1', 'p1', { outcome: 'failed', rowsChanged: false });
+
+      expect(pendingPrice()).toEqual([]);
+    });
+
+    it('re-estimates after an unchanged ok run while a notice is pending', async () => {
+      const { engine, eventRepo, pendingPrice, calls } = await withStoredEstimate([priceAnswer(70)]);
+      const notice = unwrap(HermesEvent.create({
+        id: 'notice', workspaceId: 'w1', productId: 'p1', type: 'price_estimate_unavailable', severity: 'info',
+        title: 'Price estimate pending', proposedChange: null,
+      }));
+      await eventRepo.saveAll([notice]);
+
+      const event = await engine.reestimateAfterResearch('w1', 'p1', { outcome: 'ok', rowsChanged: false });
+
+      expect(calls()).toBe(1);
+      expect(notice.status).toBe('dismissed');
+      expect(pendingPrice().map((e) => e.id)).toEqual([event!.id]);
+    });
+
+    it('re-estimates after every failed run', async () => {
+      const { engine, calls } = await withStoredEstimate([priceAnswer(70)]);
+
+      await engine.reestimateAfterResearch('w1', 'p1', { outcome: 'failed', rowsChanged: false });
+
+      expect(calls()).toBe(1);
+    });
+
+    it('re-estimates when the run threw or expired (no result)', async () => {
+      const { engine, calls } = await withStoredEstimate([priceAnswer(70)]);
+
+      await engine.reestimateAfterResearch('w1', 'p1', null);
+
+      expect(calls()).toBe(1);
+    });
+
+    it('does not re-estimate after an unchanged ok run with an estimate stored and nothing pending', async () => {
+      const { engine, calls } = await withStoredEstimate([priceAnswer(70)]);
+
+      await expect(engine.reestimateAfterResearch('w1', 'p1', { outcome: 'partial', rowsChanged: false })).resolves.toBeNull();
+
+      expect(calls()).toBe(0);
+    });
+
+    it('re-estimates after an unchanged run when no estimate is stored', async () => {
+      const { engine, ai } = setup([priceAnswer(70)]);
+      let calls = 0;
+      const estimatePrice = ai.estimatePrice.bind(ai);
+      ai.estimatePrice = async (...args) => { calls += 1; return estimatePrice(...args); };
+
+      await engine.reestimateAfterResearch('w1', 'p1', { outcome: 'ok', rowsChanged: false });
+
+      expect(calls).toBe(1);
+    });
+  });
+
   it('leaves approved price events, other products and other event types untouched', async () => {
     const { engine, workspace, eventRepo, productRepo, listingRepo, pendingPrice } = setup([priceAnswer(90), priceAnswer(80)]);
     addProduct(productRepo, listingRepo, 'p2');

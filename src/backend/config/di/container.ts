@@ -511,6 +511,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     configured: researchConfig !== null,
     newId: idGenerator,
     now: () => new Date(),
+    // hermesEngine is created below; the hook runs only once the container is built.
+    onExpired: async (workspaceId: string, productId: string): Promise<void> => {
+      await hermesEngine.reestimateAfterResearch(workspaceId, productId, null);
+    },
     logger: overrides.logger,
   });
   const hermesEngine = new HermesDecisionEngine(
@@ -945,14 +949,12 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const priceResearchHandler = new PriceResearchHandler({
     runs: priceResearchRunRepo,
     graph: priceResearchGraph,
-    // Re-estimates from the stored research when the run changed the ladder, threw or timed out (no
-    // result), or when no estimate exists yet (an Analyze skipped it while the run was pending).
     afterRun: async (workspaceId, productId, result) => {
-      const reestimate =
-        result === null ||
-        result.rowsChanged ||
-        !(await priceResearchRepo.findByProduct(workspaceId, productId))?.lastEstimate;
-      if (reestimate) await hermesEngine.reestimatePrice(workspaceId, productId);
+      await hermesEngine.reestimateAfterResearch(
+        workspaceId,
+        productId,
+        result && { outcome: result.outcome, rowsChanged: result.rowsChanged },
+      );
     },
     events: eventPublisher,
     now: () => new Date(),
