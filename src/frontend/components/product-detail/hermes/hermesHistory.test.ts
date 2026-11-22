@@ -342,8 +342,8 @@ describe('historyQueryState', () => {
 });
 
 describe('defaultExpandedId', () => {
-  const entry = (id: string, title: HistoryEntry['title']) =>
-    ({ id, at: T0, title, startedBy: 'you', durationMs: null, outcome: { label: 'x', tone: 'default' }, steps: [] }) as const;
+  const entry = (id: string, title: HistoryEntry['title']): HistoryEntry =>
+    ({ id, at: T0, title, startedBy: 'you', durationMs: null, outcome: { label: 'x', tone: 'default' }, steps: [] });
 
   it('opens the newest run, skipping suggestions above it', () => {
     expect(defaultExpandedId([entry('s', 'Suggestion'), entry('a', 'Analysis'), entry('p', 'Price search')])).toBe('a');

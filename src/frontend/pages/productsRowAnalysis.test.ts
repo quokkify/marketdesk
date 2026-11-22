@@ -163,6 +163,7 @@ describe('awaitVerdictRun', () => {
     latest: null,
     active: active ? ({ id: 'run' } as never) : null,
     lastFailed,
+    lastFailedCode: null,
   });
   const noSleep = () => Promise.resolve();
 

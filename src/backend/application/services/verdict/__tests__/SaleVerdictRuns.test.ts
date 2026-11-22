@@ -159,7 +159,7 @@ describe('SaleVerdictRuns', () => {
 
   it('refuses a forced refresh while a research run is active and fails the new verdict run', async () => {
     const { runs, verdicts, researchRuns, jobs } = setup();
-    await researchRuns.insertQueued({ id: 'research-0', workspaceId: WS, productId: PID, trigger: 'auto', queuedAt: NOW.toISOString() });
+    await researchRuns.insertQueued({ id: 'research-0', workspaceId: WS, productId: PID, trigger: 'autopilot', queuedAt: NOW.toISOString() });
 
     await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toMatchObject({
       message: ANALYSIS_RUNNING,

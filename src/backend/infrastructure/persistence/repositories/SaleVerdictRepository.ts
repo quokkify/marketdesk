@@ -164,7 +164,7 @@ export class SaleVerdictRepository implements ISaleVerdictRepository {
     const { rows } = await query<VerdictRow>(
       `SELECT ${COLUMNS} FROM product_sale_verdicts
        WHERE workspace_id = $1 AND product_id = $2
-       ORDER BY product_sale_verdicts.queued_at DESC
+       ORDER BY product_sale_verdicts.queued_at DESC, product_sale_verdicts.id DESC
        LIMIT $3`,
       [workspaceId, productId, limit],
       this.queryClient,
