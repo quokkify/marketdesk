@@ -64,7 +64,8 @@ public class ProductDetailPage implements Page {
   private SelenideElement reviveButton;
   @FindBy(xpath = "//button[contains(normalize-space(.), 'Apply and bring back on OLX')]")
   private SelenideElement applyRevivalButton;
-  @FindBy(xpath = "//button[contains(normalize-space(.), 'Edit product')]")
+  // The Checks tab of the Hermes drawer has its own Edit product button.
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Edit product') and not(ancestor::*[@data-testid='hermes-drawer'])]")
   private SelenideElement editProductButton;
   @FindBy(xpath = "//button[contains(normalize-space(.), 'Save changes')]")
   private SelenideElement saveChangesButton;

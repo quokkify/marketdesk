@@ -110,7 +110,7 @@ What to check:
 
 - A sandbox advert has no page on olx.pl, so the listing shows a **Sandbox advert** label where a real advert would have its **Open on OLX** link. No real advert was created.
 - No publication quota, fee warning or OLX credentials come into play. The sandbox has no quota.
-- **Check again** in the publication readiness check validates the saved product without publishing it.
+- The publication readiness check is in the Hermes drawer: on the product page choose the **Price** row of the Hermes card (or any row that opens the **Checks** tab). **Check again** there validates the saved product without publishing it.
 
 ### 4. Review Hermes suggestions
 

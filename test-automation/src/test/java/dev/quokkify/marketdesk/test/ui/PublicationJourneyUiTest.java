@@ -11,6 +11,8 @@ public class PublicationJourneyUiTest extends BaseUiTest {
 
   private static final String SANDBOX_CAMERAS_ID = "1001";
   private static final String DRAFT = "draft";
+  private static final String PRICE_ROW = "price";
+  private static final String CHECKS_TAB = "checks";
   private static final int PHONE_WIDTH = 390;
   private static final int PHONE_HEIGHT = 844;
 
@@ -35,9 +37,12 @@ public class PublicationJourneyUiTest extends BaseUiTest {
         .newProductDialogIsClosed();
     productDetailPageSteps
         .openProductPage(productListing)
+        .openHermesRow(PRICE_ROW)
         .verify()
+        .hermesDrawerIsOnTab(CHECKS_TAB)
         .showsPublicationReadinessCheck()
         .backToSteps()
+        .closeHermesDrawerWithEscape()
         .openPublicationDialog()
         .verify()
         .showsPublicationConfirmation();
