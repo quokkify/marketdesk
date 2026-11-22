@@ -1,0 +1,1 @@
+{"id":"88a87cf1cb1c0e2ab9dd696b3ff270f5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/sanitize.test.ts#sanitize truncates a long string with a count suffix","name":"truncates a long string with a count suffix","status":"passed","testResultsByEnv":{"default":"ee303a2ce4b34a0ec79ebd7bd16a5fa2"}}
