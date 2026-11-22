@@ -7,12 +7,12 @@ import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import org.openqa.selenium.support.FindBy;
 
 @PageUrl("/products")
 public class ProductDetailPage implements Page {
 
   private static final String BUTTON = "button";
-  private static final String SUGGEST_IMPROVEMENTS = "Suggest improvements";
   private static final String AI_USAGE_LINE = "[data-testid=\"ai-usage-line\"]";
   private static final String CONVERSATION_THREAD = "[data-testid=\"conversation-thread\"]";
   private static final String REPLY_TEXT = "textarea[data-testid=\"reply-draft-text\"]";
@@ -20,50 +20,63 @@ public class ProductDetailPage implements Page {
   private static final String REPLACE_VALUE_SCRIPT =
       "Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(arguments[0], arguments[1]);"
           + "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));";
-  private static final String RELIST_ON_OLX = "Relist on OLX";
-  private static final String REVIVE_ON_OLX = "Revive on OLX";
-  private static final String APPLY_REVIVAL = "Apply and bring back on OLX";
   private static final String REVIVAL_DIALOG = "[data-testid=\"revival-dialog\"]";
   private static final String REVIVAL_CONDITION = "[data-testid=\"revival-condition\"] [role=\"combobox\"]";
   private static final String OPTION = "[role=\"option\"]";
   private static final String RETAIL_PRICE = "[data-testid=\"price-research-retail-price\"] input";
   private static final String RETAIL_CURRENCY = "[data-testid=\"price-research-currency\"] input";
   private static final String RETAIL_SOURCE = "[data-testid=\"price-research-source\"] input";
-  private static final String SAVE_PRICE_RESEARCH = "[data-testid=\"price-research-save\"]";
   private static final String PRICE_RESEARCH_SAVED = "[data-testid=\"price-research-saved\"]";
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
-  private static final String FIND_PRICES = "[data-testid=\"find-prices-button\"]";
   private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
   private static final String ANCHOR_CLASS_LINE = "[data-testid=\"anchor-class-line\"]";
-  private static final String EDIT_PRODUCT = "Edit product";
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
-  private static final String SAVE_CHANGES = "Save changes";
   private static final String ALERT = "[role=\"alert\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
-  private static final String PUBLICATION_READINESS = "Publication readiness check";
-  private static final String PUBLISH = "Publish";
   private static final String PRODUCT_TITLE = "#product-detail-title";
   private static final String SUGGESTED_IMPROVEMENTS = "Suggested improvements";
   private static final String SUGGESTED_PRICE = "Suggested price:";
   private static final String REVIEW_ONLY = "Suggestions are for review only.";
   private static final String DIALOG = "[role=\"dialog\"]";
-  private static final String CONFIRM_AND_QUEUE = "Confirm category and queue publish";
   private static final String PUBLICATION_QUEUED = "Publication was accepted and queued.";
+
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Suggest improvements')]")
+  private SelenideElement suggestImprovementsButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Publication readiness check')]")
+  private SelenideElement publicationReadinessButton;
+  @FindBy(xpath = "//button[@aria-label='Publish']")
+  private SelenideElement publishButton;
+  @FindBy(xpath = "//*[@role='dialog']//button[contains(normalize-space(.), 'Confirm category and queue publish')]")
+  private SelenideElement confirmPublicationButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Relist on OLX')]")
+  private SelenideElement relistButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Revive on OLX')]")
+  private SelenideElement reviveButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Apply and bring back on OLX')]")
+  private SelenideElement applyRevivalButton;
+  @FindBy(css = "[data-testid=\"price-research-save\"]")
+  private SelenideElement savePriceResearchButton;
+  @FindBy(css = "[data-testid=\"find-prices-button\"]")
+  private SelenideElement findPricesButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Edit product')]")
+  private SelenideElement editProductButton;
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Save changes')]")
+  private SelenideElement saveChangesButton;
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
   }
 
   public SelenideElement suggestImprovementsButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(SUGGEST_IMPROVEMENTS));
+    return suggestImprovementsButton;
   }
 
   public SelenideElement publicationReadinessButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(PUBLICATION_READINESS));
+    return publicationReadinessButton;
   }
 
   public SelenideElement publishButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.attribute("aria-label", PUBLISH));
+    return publishButton;
   }
 
   public SelenideElement productTitle() {
@@ -91,7 +104,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement confirmPublicationButton() {
-    return publicationDialog().$$(BUTTON).findBy(Condition.text(CONFIRM_AND_QUEUE));
+    return confirmPublicationButton;
   }
 
   public SelenideElement aiUsageLine() {
@@ -116,11 +129,11 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement relistButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(RELIST_ON_OLX));
+    return relistButton;
   }
 
   public SelenideElement reviveButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(REVIVE_ON_OLX));
+    return reviveButton;
   }
 
   public SelenideElement revivalDialog() {
@@ -136,7 +149,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement applyRevivalButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(APPLY_REVIVAL));
+    return applyRevivalButton;
   }
 
   public SelenideElement retailPriceInput() {
@@ -152,7 +165,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement savePriceResearchButton() {
-    return Selenide.$(SAVE_PRICE_RESEARCH);
+    return savePriceResearchButton;
   }
 
   public SelenideElement discountLine() {
@@ -164,7 +177,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement findPricesButton() {
-    return Selenide.$(FIND_PRICES);
+    return findPricesButton;
   }
 
   public SelenideElement anchorTier(String tier) {
@@ -176,7 +189,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement editProductButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(EDIT_PRODUCT));
+    return editProductButton;
   }
 
   public SelenideElement missingAccessoriesInput() {
@@ -184,7 +197,7 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement saveChangesButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(SAVE_CHANGES));
+    return saveChangesButton;
   }
 
   public SelenideElement alertWithText(String text) {

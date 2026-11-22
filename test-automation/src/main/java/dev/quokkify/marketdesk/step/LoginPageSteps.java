@@ -4,12 +4,13 @@ import dev.quokkify.marketdesk.page.LoginPage;
 import dev.quokkify.marketdesk.verification.LoginVerification;
 import dev.quokkify.model.PageSteps;
 
+import com.codeborne.selenide.Selenide;
 import io.qameta.allure.Step;
 
 public class LoginPageSteps extends PageSteps<LoginPageSteps, LoginVerification, LoginPage> {
 
   public LoginPageSteps() {
-    this.page = new LoginPage();
+    this.page = Selenide.page(new LoginPage());
     this.verification = new LoginVerification(this, page);
   }
 

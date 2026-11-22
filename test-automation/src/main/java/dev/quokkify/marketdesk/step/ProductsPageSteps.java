@@ -5,6 +5,7 @@ import dev.quokkify.marketdesk.verification.ProductsPageVerification;
 import dev.quokkify.model.PageSteps;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selenide;
 import io.qameta.allure.Step;
 
 public class ProductsPageSteps
@@ -19,7 +20,7 @@ public class ProductsPageSteps
   private static final String SANDBOX_CAMERAS_PATH = "Electronics > Cameras";
 
   public ProductsPageSteps() {
-    this.page = new ProductsPage();
+    this.page = Selenide.page(new ProductsPage());
     this.verification = new ProductsPageVerification(this, page);
   }
 

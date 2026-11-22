@@ -7,6 +7,7 @@ import dev.quokkify.elements.table.TableRow;
 import dev.quokkify.impl.Page;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -15,6 +16,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.support.FindBy;
 
 @PageUrl("/products")
 public class ProductsPage implements Page {
@@ -26,7 +28,6 @@ public class ProductsPage implements Page {
   private static final String AI_COLUMN = "AI analysis";
   // The q4j table snapshot accepts only XPath and CSS item locators.
   private static final By PRODUCT_LINK = By.cssSelector("a");
-  private static final String FILTERS_BUTTON = "button[aria-controls=\"products-filters\"]";
   private static final String FILTERS_PANEL = "#products-filters .MuiCard-root";
   private static final String FILTERS_ENTERED = "#products-filters.MuiCollapse-entered";
   private static final String ANALYZE_BUTTON = "button[aria-label=\"Analyze with AI: %s\"]";
@@ -36,13 +37,7 @@ public class ProductsPage implements Page {
   private static final String ROW_ACTIONS = "button[aria-label=\"Actions for %s\"]";
   private static final String MENU_ITEM = "[role=\"menuitem\"]";
   private static final String ANALYZE_WITH_AI = "Analyze with AI";
-  private static final String BUTTON = "button";
-  private static final String APPROVE = "Approve";
-  private static final String DISMISS = "Dismiss";
-  private static final String NEW_PRODUCT = "New product";
   private static final String DIALOG = "[role=\"dialog\"]";
-  private static final String CLOSE = "Close";
-  private static final String ARIA_LABEL = "aria-label";
   private static final String INNER_WIDTH_SCRIPT = "return window.innerWidth;";
   private static final String INNER_HEIGHT_SCRIPT = "return window.innerHeight;";
   private static final String CLICK_TWICE_SCRIPT = "arguments[0].click(); arguments[0].click();";
@@ -55,17 +50,31 @@ public class ProductsPage implements Page {
           + "const r = arguments[0].getBoundingClientRect();"
           + "return r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth;";
   private static final String PHOTO_INPUT = "input[type=\"file\"]";
-  private static final String CONTINUE = "Continue";
   private static final String REVIEW_AND_PUBLISH = "Review and publish";
   private static final String NAME = "Name";
   private static final String DESCRIPTION = "Description";
   private static final String SELLING_PRICE = "Selling price";
   private static final String OLX_CATEGORY = "OLX category";
-  private static final String PUBLISH_TO_OLX = "Publish to OLX";
   private static final String GAP_SCRIPT =
       "const panel = document.querySelector(arguments[0]);"
           + "const table = document.querySelector(arguments[1]).closest('.MuiCard-root');"
           + "return Math.round(table.getBoundingClientRect().top - panel.getBoundingClientRect().bottom);";
+
+  @FindBy(css = "button[aria-controls=\"products-filters\"]")
+  private SelenideElement filtersButton;
+  // Wide screens show a text button, phones an icon button with the same accessible name.
+  @FindBy(xpath = "//button[normalize-space(.)='New product' or @aria-label='New product']")
+  private ElementsCollection newProductButtons;
+  @FindBy(xpath = "//*[@role='dialog']//button[@aria-label='Close']")
+  private SelenideElement closeDialogButton;
+  @FindBy(xpath = "//*[@role='dialog']//button[normalize-space(.)='Continue']")
+  private SelenideElement continueButton;
+  @FindBy(xpath = "//*[@role='dialog']//button[normalize-space(.)='Publish to OLX']")
+  private SelenideElement publishToOlxButton;
+  @FindBy(xpath = "//*[starts-with(@id, 'product-review-')]//button[contains(normalize-space(.), 'Approve')]")
+  private SelenideElement approveButton;
+  @FindBy(xpath = "//*[starts-with(@id, 'product-review-')]//button[contains(normalize-space(.), 'Dismiss')]")
+  private SelenideElement dismissButton;
 
   public void open() {
     Selenide.open(getUrl());
@@ -98,13 +107,11 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement filtersButton() {
-    return Selenide.$(FILTERS_BUTTON);
+    return filtersButton;
   }
 
-  // Wide screens show a text button, phones an icon button with the same accessible name.
   public SelenideElement newProductButton() {
-    return Selenide.$$(BUTTON).filterBy(Condition.visible).findBy(Condition.or(NEW_PRODUCT,
-        Condition.text(NEW_PRODUCT), Condition.attribute(ARIA_LABEL, NEW_PRODUCT)));
+    return newProductButtons.filterBy(Condition.visible).first();
   }
 
   public SelenideElement newProductDialog() {
@@ -112,7 +119,7 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement closeDialogButton() {
-    return newProductDialog().$$(BUTTON).findBy(Condition.attribute(ARIA_LABEL, CLOSE));
+    return closeDialogButton;
   }
 
   public SelenideElement photoInput() {
@@ -120,7 +127,7 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement continueButton() {
-    return newProductDialog().$$(BUTTON).findBy(Condition.exactText(CONTINUE));
+    return continueButton;
   }
 
   public SelenideElement reviewHeading() {
@@ -149,7 +156,7 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement publishToOlxButton() {
-    return newProductDialog().$$(BUTTON).findBy(Condition.exactText(PUBLISH_TO_OLX));
+    return publishToOlxButton;
   }
 
   // Both clicks run in one script, so React cannot re-render the button as disabled between them.
@@ -204,11 +211,11 @@ public class ProductsPage implements Page {
   }
 
   public SelenideElement approveButton() {
-    return reviewRegion().$$(BUTTON).findBy(Condition.text(APPROVE));
+    return approveButton;
   }
 
   public SelenideElement dismissButton() {
-    return reviewRegion().$$(BUTTON).findBy(Condition.text(DISMISS));
+    return dismissButton;
   }
 
   public SelenideElement rowActionsButton(String productName) {

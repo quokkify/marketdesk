@@ -14,7 +14,7 @@ public class ProductDetailPageSteps
     extends PageSteps<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
 
   public ProductDetailPageSteps() {
-    this.page = new ProductDetailPage();
+    this.page = Selenide.page(new ProductDetailPage());
     this.verification = new ProductDetailPageVerification(this, page);
   }
 
