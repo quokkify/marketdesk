@@ -1,11 +1,15 @@
 import type { PriceComparable } from '../../../shared/types';
-import { normalizeAnchorUrl } from '../../../shared/anchorUrl';
+import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../../../shared/anchorUrl';
+
+function normalizeAutoUrl(row: PriceComparable & { url: string }): string | null {
+  return row.tier ? normalizeAnchorUrlForTier(row.url, row.tier) : normalizeAnchorUrl(row.url);
+}
 
 function autoUrls(rows: PriceComparable[]): Set<string> {
   const urls = new Set<string>();
   for (const row of rows) {
     if (row.source !== 'auto' || !row.url) continue;
-    const normalized = normalizeAnchorUrl(row.url);
+    const normalized = normalizeAutoUrl({ ...row, url: row.url });
     if (normalized !== null) urls.add(normalized);
   }
   return urls;
@@ -15,7 +19,7 @@ function autoUrls(rows: PriceComparable[]): Set<string> {
 export function withNormalizedAutoUrls(rows: PriceComparable[]): PriceComparable[] {
   return rows.map((row) => {
     if (row.source !== 'auto' || !row.url) return row;
-    const url = normalizeAnchorUrl(row.url);
+    const url = normalizeAutoUrl({ ...row, url: row.url });
     return url === null ? row : { ...row, url };
   });
 }

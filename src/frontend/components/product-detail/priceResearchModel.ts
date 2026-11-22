@@ -2,6 +2,7 @@
 // lines that show an estimate. The limits mirror the server's rules.
 import type {
   AnchorTier,
+  ClassAttribute,
   EstimateHiddenReason,
   PriceComparable,
   PriceComparableSource,
@@ -27,7 +28,11 @@ export interface PriceResearchForm {
   retailCurrency: string;
   retailSource: string;
   retailCheckedAt: string;
-  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource; tier?: AnchorTier; seenAt?: string }[];
+  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource; tier?: AnchorTier;
+    seenAt?: string;
+    classAttributes?: ClassAttribute[];
+    classChecked?: boolean;
+  }[];
   // The updatedAt of the research this form was built from; the server refuses the save if it moved on.
   baseUpdatedAt: string | null;
 }
@@ -61,6 +66,8 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
       ...(c.source ? { source: c.source } : {}),
       ...(c.tier ? { tier: c.tier } : {}),
       ...(c.seenAt ? { seenAt: c.seenAt } : {}),
+      ...(c.classAttributes ? { classAttributes: c.classAttributes } : {}),
+      ...(typeof c.classChecked === 'boolean' ? { classChecked: c.classChecked } : {}),
     })),
     baseUpdatedAt: r.updatedAt,
   };
@@ -124,6 +131,8 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
         ...(row.source ? { source: row.source } : {}),
         ...(row.tier ? { tier: row.tier } : {}),
         ...(row.seenAt ? { seenAt: row.seenAt } : {}),
+        ...(row.classAttributes ? { classAttributes: row.classAttributes } : {}),
+        ...(typeof row.classChecked === 'boolean' ? { classChecked: row.classChecked } : {}),
       });
     }
   }

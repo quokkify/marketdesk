@@ -3,7 +3,7 @@
 // seller free text never do. Every row the agent reports is checked here before the seller sees it.
 
 import type { AnchorTier, PriceComparable } from '../../../shared/types';
-import { normalizeAnchorUrl } from '../../../shared/anchorUrl';
+import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../../../shared/anchorUrl';
 import { MAX_ANCHORS_PER_TIER, MAX_AUTO_ROWS } from '../../domain/services/anchorLadder';
 import { parseJsonObject } from './jsonText';
 import { sellerDataBlock } from './sellerData';
@@ -135,9 +135,9 @@ export function filterAnchorRows(
     if (!TIERS.includes(tier as AnchorTier)) continue;
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0 || price > MAX_PRICE) continue;
     if (currency !== ctx.currency) continue;
-    const normalized = normalizeAnchorUrl(url);
-    if (!normalized || normalized === ownUrl || seen.has(normalized) || ctx.dismissed.has(normalized)) continue;
     const anchorTier = tier as AnchorTier;
+    const normalized = normalizeAnchorUrlForTier(url, anchorTier);
+    if (!normalized || normalized === ownUrl || seen.has(normalized) || ctx.dismissed.has(normalized)) continue;
     if ((perTier.get(anchorTier) ?? 0) >= MAX_ANCHORS_PER_TIER) continue;
     const note = title.trim().slice(0, MAX_TITLE_LENGTH).trim();
     if (note === '') continue;

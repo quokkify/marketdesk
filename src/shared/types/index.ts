@@ -119,6 +119,13 @@ export type AnchorTier = 'same_model_used' | 'last_new_price' | 'substitute_new'
 
 export type PriceComparableSource = 'manual' | 'web' | 'auto';
 
+export interface ClassAttribute {
+  name: string;
+  value: string | number;
+  unit?: string | null;
+  match: 'equal' | 'ratio';
+}
+
 export interface PriceComparable {
   price: number;
   note: string;
@@ -126,6 +133,8 @@ export interface PriceComparable {
   source?: PriceComparableSource | null;
   tier?: AnchorTier | null;
   seenAt?: string | null; // ISO date
+  classAttributes?: ClassAttribute[] | null;
+  classChecked?: boolean | null;
 }
 
 export type EstimateHiddenReason = 'low_confidence' | 'within_threshold' | 'floor_cancels';

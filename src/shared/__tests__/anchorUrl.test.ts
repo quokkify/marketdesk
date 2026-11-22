@@ -1,4 +1,4 @@
-import { normalizeAnchorUrl } from '../anchorUrl';
+import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../anchorUrl';
 import { normalizeOlxAdvertUrl } from '../olxAdvertUrl';
 
 describe('normalizeAnchorUrl', () => {
@@ -69,5 +69,37 @@ describe('normalizeAnchorUrl', () => {
 
   it('rejects text that is not a URL', () => {
     expect(normalizeAnchorUrl('not a url')).toBeNull();
+  });
+});
+
+describe('normalizeAnchorUrlForTier', () => {
+  const tiers = ['same_model_used', 'last_new_price', 'substitute_new', 'substitute_used'] as const;
+
+  it('accepts any .pl shop for the new tiers only', () => {
+    expect(normalizeAnchorUrlForTier('https://tst.pl/produkty/x/', 'substitute_new')).toBe('https://tst.pl/produkty/x');
+    expect(normalizeAnchorUrlForTier('https://www.tst.pl/produkty/x?a=1', 'last_new_price')).toBe('https://tst.pl/produkty/x');
+    expect(normalizeAnchorUrlForTier('https://tst.pl/produkty/x', 'substitute_used')).toBeNull();
+    expect(normalizeAnchorUrlForTier('https://tst.pl/produkty/x', 'same_model_used')).toBeNull();
+  });
+
+  it('refuses non-shop hosts and non-https links on every tier', () => {
+    for (const tier of tiers) {
+      expect(normalizeAnchorUrlForTier('https://e-katalog.pl/x', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('https://www.google.com/search?q=x', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('http://tst.pl/x', tier)).toBeNull();
+      expect(normalizeAnchorUrlForTier('https://tst.example.com/x', tier)).toBeNull();
+    }
+  });
+
+  it('refuses an OLX search page on every tier', () => {
+    for (const tier of tiers) expect(normalizeAnchorUrlForTier('https://www.olx.pl/oferty/q-aopen-qh11/', tier)).toBeNull();
+  });
+
+  it('accepts OLX adverts and Allegro Lokalnie offers for the used tiers', () => {
+    const advert = 'https://www.olx.pl/d/oferta/x-CID1-ID9.html?r=1';
+    expect(normalizeAnchorUrlForTier(advert, 'same_model_used')).toBe('https://www.olx.pl/d/oferta/x-CID1-ID9.html');
+    expect(normalizeAnchorUrlForTier(advert, 'substitute_used')).toBe(normalizeAnchorUrl(advert));
+    expect(normalizeAnchorUrlForTier('https://allegrolokalnie.pl/oferta/projektor-1', 'substitute_used')).toBe('https://allegrolokalnie.pl/oferta/projektor-1');
+    expect(normalizeAnchorUrlForTier('https://allegrolokalnie.pl/oferty/projektor', 'substitute_used')).toBeNull();
   });
 });

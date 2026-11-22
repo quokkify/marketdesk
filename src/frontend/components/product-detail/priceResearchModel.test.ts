@@ -232,6 +232,18 @@ describe('automatic comparables through the form', () => {
     expect(result).toEqual({ ok: true, body: expect.objectContaining({ comparables: [auto] }) });
   });
 
+  it('round-trips classAttributes and classChecked and keeps them when the row turns manual', () => {
+    const row: PriceComparable = {
+      price: 280, note: 'Phone', url: 'https://tst.pl/produkty/x', source: 'auto', tier: 'substitute_new', seenAt: '2026-11-22',
+      classAttributes: [{ name: 'lumens', value: 140, unit: 'lm', match: 'ratio' }], classChecked: true,
+    };
+    const form = toPriceResearchForm({ ...research, comparables: [row] });
+    expect(toPriceResearchBody(form)).toEqual({ ok: true, body: expect.objectContaining({ comparables: [row] }) });
+    expect(editComparablePrice(form.comparables, 0, '260')[0]).toMatchObject({
+      source: 'manual', classAttributes: row.classAttributes, classChecked: true,
+    });
+  });
+
   const auto = {
     price: '280', note: 'Phone', url: 'https://www.olx.pl/d/oferta/a-CID99-ID1a.html',
     source: 'auto' as const, tier: 'substitute_used' as const, seenAt: '2026-11-22',

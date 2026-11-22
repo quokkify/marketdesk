@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { requireBelowCostConfirmation } from '../../../../shared/validation/pricing';
 import { normalizeOlxAdvertUrl } from '../../../../shared/olxAdvertUrl';
-import { normalizeAnchorUrl } from '../../../../shared/anchorUrl';
+import { normalizeAnchorUrl, normalizeAnchorUrlForTier } from '../../../../shared/anchorUrl';
 import {
   PRODUCT_STATUS_LIST,
   AUTONOMY_LEVEL_LIST,
@@ -149,6 +149,15 @@ const isoDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'retailCheckedAt must be an ISO date (YYYY-MM-DD)')
   .refine(isRealIsoDate, 'retailCheckedAt is not a real date');
 
+const classAttributeSchema = z
+  .object({
+    name: z.string().max(60),
+    value: z.union([z.string().max(60), z.number().finite()]),
+    unit: z.string().max(20).nullish(),
+    match: z.enum(['equal', 'ratio']),
+  })
+  .strict();
+
 const priceComparableSchema = z
   .object({
     price: researchPriceSchema,
@@ -157,13 +166,20 @@ const priceComparableSchema = z
     source: z.enum(['manual', 'web', 'auto']).nullish(),
     tier: z.enum(['same_model_used', 'last_new_price', 'substitute_new', 'substitute_used']).nullish(),
     seenAt: isoDateSchema.nullish(),
+    classAttributes: z.array(classAttributeSchema).max(8).nullish(),
+    classChecked: z.boolean().nullish(),
   })
   .strict()
   .superRefine((comparable, ctx) => {
     if (comparable.source === 'web' && (!comparable.url || normalizeOlxAdvertUrl(comparable.url) === null)) {
       ctx.addIssue({ code: 'custom', path: ['url'], message: 'A web comparable needs an OLX advert link' });
     }
-    if (comparable.source === 'auto' && (!comparable.url || normalizeAnchorUrl(comparable.url) === null)) {
+    const autoUrl = comparable.url
+      ? comparable.tier
+        ? normalizeAnchorUrlForTier(comparable.url, comparable.tier)
+        : normalizeAnchorUrl(comparable.url)
+      : null;
+    if (comparable.source === 'auto' && autoUrl === null) {
       ctx.addIssue({ code: 'custom', path: ['url'], message: 'An auto comparable needs a link on a known shop or marketplace' });
     }
   });
