@@ -3,8 +3,10 @@
 // workspace slice; detail queries and mutations are re-exported verbatim with
 // friendlier names. Import these from feature components (Group 9) rather than
 // reaching into state/api directly.
+import { useEffect, useRef, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query/react';
-import { useAppSelector } from '../../state/hooks.js';
+import { useAppDispatch, useAppSelector } from '../../state/hooks.js';
+import { baseApi } from '../../state/api/baseApi.js';
 import {
   useGetProductsQuery,
   useGetProductQuery,
@@ -50,6 +52,7 @@ import {
   useDismissHermesEventMutation,
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
+  useGetProductVerdictQuery,
   useGetAnalyticsOverviewQuery,
   useGetPriceHistoryQuery,
   useGetWorkspaceQuery,
@@ -158,6 +161,32 @@ export const useApproveHermesEvent = useApproveHermesEventMutation;
 export const useDismissHermesEvent = useDismissHermesEventMutation;
 export const useExecuteCategoryRecreationOperation = useExecuteCategoryRecreationOperationMutation;
 export const useRunHermes = useRunHermesMutation;
+
+export const VERDICT_POLL_MS = 3000;
+
+// The sale verdict of one product. It polls only while a run is active; when the run ends, what
+// the run changed (suggestions, price research, the catalogue row) is read again.
+export function useProductVerdict(productId: string | undefined) {
+  const dispatch = useAppDispatch();
+  const [pollingInterval, setPollingInterval] = useState(0);
+  const result = useGetProductVerdictQuery(productId ?? skipToken, { pollingInterval });
+  const running = Boolean(result.currentData?.active);
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    setPollingInterval(running ? VERDICT_POLL_MS : 0);
+    if (wasRunning.current && !running) {
+      dispatch(
+        baseApi.util.invalidateTags([
+          { type: 'Product', id: 'LIST' },
+          { type: 'HermesEvent', id: 'LIST' },
+          ...(productId ? [{ type: 'PriceResearch' as const, id: productId }] : []),
+        ])
+      );
+    }
+    wasRunning.current = running;
+  }, [running, productId, dispatch]);
+  return result;
+}
 
 // ---- Analytics ----
 export function useAnalyticsOverview(

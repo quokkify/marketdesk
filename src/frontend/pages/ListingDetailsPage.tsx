@@ -57,6 +57,7 @@ import {
   useHermesEvents,
   useHermesStatus,
   useRunHermes,
+  useProductVerdict,
 } from '../services/hooks/index.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
@@ -75,6 +76,8 @@ import { usePendingPublicationPolling } from './usePendingPublicationPolling.js'
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
+import VerdictSummary from '../components/products/VerdictSummary.js';
+import { isVerdictStale } from '../components/products/verdictDisplay.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { ErrorRetry } from '../components/common/ErrorRetry.js';
@@ -724,7 +727,9 @@ const ListingDetailsPage: React.FC = () => {
   const [setMarketplaceCategory, { isLoading: verifyingCategory }] = useSetListingMarketplaceCategory();
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
-  const [runHermes, { isLoading: analyzing }] = useRunHermes();
+  const [runHermes, { isLoading: startingRun }] = useRunHermes();
+  const verdictView = useProductVerdict(productId).currentData;
+  const analyzing = startingRun || Boolean(verdictView?.active);
   const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
@@ -905,28 +910,20 @@ const ListingDetailsPage: React.FC = () => {
     }
     setAnalysisState({ status: 'idle' });
     try {
-      // The status is read again beside the run, so a page left open while Hermes went offline
-      // never credits Hermes for an answer the offline heuristics gave.
-      const [events, status] = await Promise.all([
-        runHermes(productScopedHermesRunInput(productId)).unwrap(),
-        hermesStatus.refetch(),
-      ]);
-      await hermesEvents.refetch();
-      const message = productHermesSuccessMessage(
-        events.length,
-        productAnalysisProvider(events, status.isSuccess ? status.data?.activeProvider : undefined)
-      );
-      setAnalysisState({ status: 'success', message });
-      dispatch(
-        enqueueToast({
-          message,
-          severity: 'success',
-        })
-      );
+      // The run ends in the background; the verdict query follows it.
+      await runHermes(productScopedHermesRunInput(productId)).unwrap();
     } catch (err) {
       const message = errorMessage(err);
       setAnalysisState({ status: 'error', message });
       dispatch(enqueueToast({ message, severity: 'error' }));
+    }
+  };
+
+  const handleReviewPrice = async () => {
+    try {
+      await runHermes({ ...productScopedHermesRunInput(productId), scope: ['price'] }).unwrap();
+    } catch (err) {
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
 
@@ -1398,6 +1395,36 @@ const ListingDetailsPage: React.FC = () => {
             currency={currency}
             listingCurrency={primaryListing?.currency ?? null}
           />
+          <Card title="Sale verdict" subtitle="Is this product ready to sell?">
+            <Stack spacing={1.5}>
+              <VerdictSummary
+                verdict={verdictView?.latest ?? null}
+                running={analyzing}
+                lastFailed={verdictView?.lastFailed ?? false}
+                stale={
+                  verdictView?.latest
+                    ? isVerdictStale(verdictView.latest, p.updatedAt, primaryListing?.updatedAt)
+                    : false
+                }
+              />
+              {!verdictView?.latest && !analyzing && (
+                <Typography variant="body2" color="text.secondary">
+                  Not checked yet. Run Analyze to get a verdict.
+                </Typography>
+              )}
+              <Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={analyzing || Boolean(analyzeDisabledReason)}
+                  onClick={() => void handleReviewPrice()}
+                  data-testid="review-price-button"
+                >
+                  Review price
+                </Button>
+              </Box>
+            </Stack>
+          </Card>
           <ProductHermesCard
             analyzing={analyzing}
             activeProvider={activeProvider}

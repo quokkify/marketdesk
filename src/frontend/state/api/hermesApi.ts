@@ -6,6 +6,8 @@ import type {
   HermesStatusView,
   PaginatedResponse,
   ApiResponse,
+  ProductVerdictView,
+  SaleVerdict,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
 import { buildQueryString } from './queryString.js';
@@ -38,11 +40,11 @@ export function hermesFeedNextOffset(
 }
 
 export function buildProductHermesRunRequest(input: HermesRunInput) {
-  const { productId, trigger = 'manual' } = input;
+  const { productId, trigger = 'manual', scope } = input;
   return {
     url: `/hermes/products/${encodeURIComponent(productId)}/run`,
     method: 'POST' as const,
-    body: { trigger },
+    body: scope ? { trigger, scope } : { trigger },
   };
 }
 
@@ -156,14 +158,19 @@ export const hermesApi = baseApi.injectEndpoints({
       providesTags: [{ type: 'HermesEvent', id: 'LIST' }],
     }),
 
-    runHermes: builder.mutation<HermesEvent[], HermesRunInput>({
+    // The run is queued and ends in the background; getProductVerdict reports its progress.
+    runHermes: builder.mutation<SaleVerdict, HermesRunInput>({
       query: buildProductHermesRunRequest,
-      transformResponse: (res: ApiResponse<HermesEvent[]>) => unwrap(res),
-      // The run refreshes the price anchors and stores the last estimate of the product.
+      transformResponse: (res: ApiResponse<SaleVerdict>) => unwrap(res),
       invalidatesTags: (_result, _error, { productId }) => [
-        { type: 'HermesEvent', id: 'LIST' },
-        { type: 'PriceResearch', id: productId },
+        { type: 'SaleVerdict', id: productId },
       ],
+    }),
+
+    getProductVerdict: builder.query<ProductVerdictView, string>({
+      query: (productId) => `/hermes/products/${encodeURIComponent(productId)}/verdict`,
+      transformResponse: (res: ApiResponse<ProductVerdictView>) => unwrap(res),
+      providesTags: (_result, _error, productId) => [{ type: 'SaleVerdict', id: productId }],
     }),
   }),
 });
@@ -179,5 +186,6 @@ export const {
   useDismissHermesEventMutation,
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
+  useGetProductVerdictQuery,
   useGetHermesPendingCountsQuery,
 } = hermesApi;

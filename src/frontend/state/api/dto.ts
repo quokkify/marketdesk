@@ -6,6 +6,7 @@ import type {
   Product,
   Marketplace,
   HermesEvent,
+  VerdictCheckName,
   ProductStatus,
   ListingStatus,
   HermesEventStatus,
@@ -238,9 +239,11 @@ export type HermesEventFeedParams = Omit<HermesEventListParams, 'limit' | 'offse
 export interface HermesRunInput {
   trigger?: 'scheduled' | 'manual' | 'event';
   productId: string;
+  // Checks to run; omitted means all three.
+  scope?: VerdictCheckName[];
 }
 
-// POST /hermes/products/:productId/run responds with the array of generated events (HermesEventView[]).
+// POST /hermes/products/:productId/run answers 202 with the queued (or already active) SaleVerdict run.
 
 export type HermesEventResolution = HermesEvent;
 

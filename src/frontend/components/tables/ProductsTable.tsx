@@ -53,6 +53,8 @@ import {
 } from '../../pages/productsCatalogueState.js';
 import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAnalysis.js';
 import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
+import VerdictSummary from '../products/VerdictSummary.js';
+import { isVerdictStale } from '../products/verdictDisplay.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
@@ -449,6 +451,24 @@ function rowHandlers(props: ProductsCollectionProps, product: Product): ProductR
   };
 }
 
+function RowVerdict({ product, props }: { product: Product; props: ProductsCollectionProps }) {
+  const verdict = product.verdict ?? null;
+  const running =
+    props.analysisByProductId?.[product.id]?.status === 'running' ||
+    verdict?.status === 'queued' ||
+    verdict?.status === 'running';
+  return (
+    <VerdictSummary
+      compact
+      verdict={verdict?.status === 'completed' ? verdict : null}
+      running={running}
+      stale={
+        verdict?.status === 'completed' && isVerdictStale(verdict, product.updatedAt, null)
+      }
+    />
+  );
+}
+
 function ReviewToggle({
   product,
   count,
@@ -659,6 +679,7 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                         product={product}
                         externalUrl={props.statsByProductId?.[product.id]?.externalUrl}
                       />
+                      <RowVerdict product={product} props={props} />
                     </TableCell>
                     <TableCell>
                       <ProductStatusBadge status={product.status} />
@@ -794,6 +815,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
               </Box>
             </Box>
             <ProductSignals product={product} stats={props.statsByProductId?.[product.id]} />
+            <RowVerdict product={product} props={props} />
             {(props.onAnalyze || props.analysisByProductId?.[product.id]) && (
               <Box sx={{ mt: 1.5 }}>
                 <RowAnalysisControl product={product} props={props} />

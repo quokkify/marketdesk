@@ -8,7 +8,6 @@ import {
   hermesApi,
   hermesFeedNextOffset,
 } from './hermesApi';
-import { productsApi } from './productsApi';
 
 describe('Hermes frontend API contract', () => {
   it('builds only product-scoped analysis requests for an explicit product', () => {
@@ -16,6 +15,13 @@ describe('Hermes frontend API contract', () => {
       url: '/hermes/products/product-1/run',
       method: 'POST',
       body: { trigger: 'manual' },
+    });
+  });
+
+  it('sends the checks to run when a scope is given', () => {
+    expect(buildProductHermesRunRequest({ productId: 'product-1', scope: ['price'] }).body).toEqual({
+      trigger: 'manual',
+      scope: ['price'],
     });
   });
 
@@ -208,23 +214,27 @@ describe('Hermes endpoints against the wire format', () => {
     expect(requested.map((url) => url.searchParams.get('offset'))).toEqual(['0', '2']);
   });
 
-  // Regression guard: Analyze stores new anchors and an estimate; a stale research form must reload.
-  it('refetches the price research of the analysed product after a run', async () => {
-    respond = (url) => ({ success: true, data: url.pathname.endsWith('/run') ? [] : null });
+  // The run now ends in the background: starting one must make the verdict view reload, which
+  // starts the polling that follows the run (research and suggestions reload when it ends).
+  it('refetches the sale verdict of the product after a run is started', async () => {
+    respond = (url) => ({
+      success: true,
+      data: url.pathname.endsWith('/run') ? { id: 'run-1' } : { latest: null, active: null, lastFailed: false },
+    });
     const store = newStore();
-    const research = store.dispatch(productsApi.endpoints.getPriceResearch.initiate('product-1'));
+    const verdict = store.dispatch(hermesApi.endpoints.getProductVerdict.initiate('product-1'));
     try {
-      await research;
+      await verdict;
       requested.length = 0;
 
-      await store.dispatch(hermesApi.endpoints.runHermes.initiate({ productId: 'product-1' }));
+      await store.dispatch(hermesApi.endpoints.runHermes.initiate({ productId: 'product-1', scope: ['price'] }));
 
-      await waitUntil(() => requested.some((url) => url.pathname === '/api/products/product-1/price-research'));
+      await waitUntil(() => requested.some((url) => url.pathname === '/api/hermes/products/product-1/verdict'));
       expect(requested.map((url) => url.pathname)).toEqual(
-        expect.arrayContaining(['/api/hermes/products/product-1/run', '/api/products/product-1/price-research']),
+        expect.arrayContaining(['/api/hermes/products/product-1/run', '/api/hermes/products/product-1/verdict']),
       );
     } finally {
-      research.unsubscribe();
+      verdict.unsubscribe();
     }
   });
 });

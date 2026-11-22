@@ -65,9 +65,12 @@ import {
   ProductsTable,
 } from '../components/tables/index.js';
 import { productScopedHermesRunInput } from './ListingDetailsPage.js';
+import { hermesApi } from '../state/api/hermesApi.js';
+import { baseApi } from '../state/api/baseApi.js';
 import {
   rowAnalyzeDisabledReason,
   analysisStateFor,
+  awaitVerdictRun,
   runSequentially,
   stateAfterPendingChange,
 } from './productsRowAnalysis.js';
@@ -214,12 +217,41 @@ const ProductsPage: React.FC = () => {
     async (productId: string) => {
       inFlightRef.current.add(productId);
       try {
-        return (await runHermes(productScopedHermesRunInput(productId)).unwrap()).length;
+        await runHermes(productScopedHermesRunInput(productId)).unwrap();
+        const outcome = await awaitVerdictRun(
+          async () => {
+            const read = dispatch(
+              hermesApi.endpoints.getProductVerdict.initiate(productId, { forceRefetch: true })
+            );
+            try {
+              return await read.unwrap();
+            } finally {
+              read.unsubscribe();
+            }
+          },
+          { shouldContinue: () => mountedRef.current }
+        );
+        dispatch(
+          baseApi.util.invalidateTags([
+            { type: 'Product', id: 'LIST' },
+            { type: 'HermesEvent', id: 'LIST' },
+            { type: 'PriceResearch', id: productId },
+          ])
+        );
+        if (outcome === 'failed') throw new Error('The analysis failed. Try again.');
+        const counts = dispatch(
+          hermesApi.endpoints.getHermesPendingCounts.initiate(undefined, { forceRefetch: true })
+        );
+        try {
+          return (await counts.unwrap())[productId] ?? 0;
+        } finally {
+          counts.unsubscribe();
+        }
       } finally {
         inFlightRef.current.delete(productId);
       }
     },
-    [runHermes]
+    [runHermes, dispatch]
   );
   const runOptions = {
     skip: (id: string) => inFlightRef.current.has(id),

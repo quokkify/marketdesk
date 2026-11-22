@@ -9,7 +9,7 @@ import type {
   ProductRecheckResult,
   PriceResearch,
   PriceResearchView,
-  ResearchRun,
+  SaleVerdict,
   PriceSync,
   ProductStats,
 } from '@shared/types';
@@ -130,10 +130,13 @@ export const productsApi = baseApi.injectEndpoints({
       ],
     }),
 
-    refreshPriceResearch: builder.mutation<{ run: ResearchRun }, string>({
+    refreshPriceResearch: builder.mutation<{ run: SaleVerdict }, string>({
       query: (productId) => ({ url: `/products/${productId}/price-research/refresh`, method: 'POST' }),
-      transformResponse: (res: ApiResponse<{ run: ResearchRun }>) => unwrap(res),
-      invalidatesTags: (_result, _error, productId) => [{ type: 'PriceResearch', id: productId }],
+      transformResponse: (res: ApiResponse<{ run: SaleVerdict }>) => unwrap(res),
+      invalidatesTags: (_result, _error, productId) => [
+        { type: 'PriceResearch', id: productId },
+        { type: 'SaleVerdict', id: productId },
+      ],
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
