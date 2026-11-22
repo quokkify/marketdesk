@@ -182,7 +182,7 @@ describe('offline price estimate on an Analyze run', () => {
   }
 
   const substitute = (price: number): PriceComparable => ({
-    price, note: 'Projector', url: `https://allegro.pl/oferta/projektor-${price}`, source: 'auto', tier: 'substitute_new',
+    price, note: 'Projector', url: `https://allegro.pl/oferta/projektor-${price}`, source: 'auto', tier: 'substitute_new', classChecked: true,
   });
 
   it('stores the listing price as a hidden low-confidence start price without tier evidence', async () => {

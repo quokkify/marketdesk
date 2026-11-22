@@ -1103,6 +1103,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       note: 'new substitute',
       source: 'auto',
       tier: 'substitute_new',
+      classChecked: true,
     }));
 
     it('caps the start price at 70 % of the new substitutes and keeps the estimate it made', async () => {

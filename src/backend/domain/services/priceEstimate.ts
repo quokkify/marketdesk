@@ -81,8 +81,10 @@ function pricesOf(rows: readonly PriceComparable[], tier: PriceComparable['tier'
 }
 
 // A substitute whose class could not be checked (the item's class is unknown) is shown to the
-// seller but sets neither the substitute ceiling nor the tier confidence.
-const classUnchecked = (r: PriceComparable): boolean => r.classChecked === false;
+// seller but sets neither the substitute ceiling nor the tier confidence. An auto row counts only
+// when its class check passed (rows saved before the check have no flag); manual rows always count.
+const classUnchecked = (r: PriceComparable): boolean =>
+  r.source === 'auto' ? r.classChecked !== true : r.classChecked === false;
 
 // Median of the three cheapest new substitutes: one cheap outlier does not set the ceiling.
 export function substituteNewReference(rows: readonly PriceComparable[]): number | null {

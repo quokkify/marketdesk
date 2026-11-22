@@ -100,7 +100,7 @@ describe('shouldSurfacePriceEstimate', () => {
 });
 
 function row(price: number, tier?: AnchorTier): PriceComparable {
-  return { price, note: 'advert', source: 'auto', tier };
+  return { price, note: 'advert', source: 'auto', tier, classChecked: true };
 }
 
 const NEW_SUBSTITUTES = [row(280, 'substitute_new'), row(300, 'substitute_new'), row(320, 'substitute_new')];
@@ -221,6 +221,21 @@ describe('unchecked substitutes do not feed the ceiling', () => {
   it('leaves tier confidence low when only unchecked substitutes exist', () => {
     expect(tierConfidence([unchecked(300, 'substitute_new'), unchecked(200, 'substitute_used')])).toBe('low');
     expect(tierConfidence([checked(300, 'substitute_new'), checked(200, 'substitute_used')])).toBe('medium');
+  });
+
+  it('treats a legacy auto substitute without a class check as unchecked: it does not cap the start price', () => {
+    const legacy: PriceComparable = { price: 300, note: 'BenQ W600, new', source: 'auto', tier: 'substitute_new' };
+    const e = estimate({ startPrice: 299, floorPrice: 250, confidence: 'high' });
+
+    expect(startPriceCeiling([legacy], null)).toBeNull();
+    expect(applyLadderRules(e, [legacy], null).startPrice).toBe(299);
+    expect(tierConfidence([legacy, { ...legacy, tier: 'substitute_used', price: 200 }])).toBe('low');
+  });
+
+  it('keeps counting manual substitutes without a class check', () => {
+    const manual: PriceComparable = { price: 300, note: 'seller found it', source: 'manual', tier: 'substitute_new' };
+    expect(startPriceCeiling([manual], null)).toBe(210);
+    expect(tierConfidence([manual, { ...manual, tier: 'substitute_used', price: 200 }])).toBe('medium');
   });
 
   it('keeps the estimate low confidence with its own prices instead of dropping it', () => {
