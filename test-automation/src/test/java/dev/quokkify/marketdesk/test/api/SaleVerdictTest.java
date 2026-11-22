@@ -83,7 +83,14 @@ public class SaleVerdictTest extends BaseTest {
     String productId = verdictSteps.createProduct(account, ProductRequestPojo.sample().withPhoto());
     ValidatableResponse first = verdictSteps.runAnalyze(account, productId);
     ValidatableResponse second = verdictSteps.runAnalyze(account, productId);
-    verdictSteps.verify().isSameRun(verdictSteps.runId(first), verdictSteps.runId(second));
+    String firstId = verdictSteps.runId(first);
+    String secondId = verdictSteps.runId(second);
+    // On a fast stack the first run can finish before the second POST, which then rightly starts a new
+    // run. The invariant is never two active runs: the same run, or the first one had completed by then.
+    if (!firstId.equals(secondId)) {
+      verdictSteps.verify().firstRunEndedBeforeSecond(verdictSteps.getVerdict(account, productId), firstId, secondId,
+          verdictSteps.createdAt(second));
+    }
     verdictSteps.awaitVerdict(account, productId);
   }
 

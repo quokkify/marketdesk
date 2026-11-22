@@ -71,6 +71,23 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
     return self();
   }
 
+  // The latest completed run is the first one (it must have ended before the second was created) or the
+  // second one (so the first had ended, or the second could not have been inserted).
+  @Step("The first run {firstId} had ended when the second run {secondId} was created")
+  public VerdictVerification firstRunEndedBeforeSecond(ValidatableResponse view, String firstId, String secondId,
+      String secondCreatedAt) {
+    verifyResponseStatusCode(view, HttpStatus.SC_OK);
+    String latestId = view.extract().path(LATEST + ".id");
+    if (firstId.equals(latestId)) {
+      String completedAt = view.extract().path(LATEST + ".completedAt");
+      MatcherAssert.assertThat(completedAt, Matchers.notNullValue());
+      MatcherAssert.assertThat(Instant.parse(completedAt), Matchers.lessThanOrEqualTo(Instant.parse(secondCreatedAt)));
+    } else {
+      MatcherAssert.assertThat(latestId, Matchers.equalTo(secondId));
+    }
+    return self();
+  }
+
   @Step("The check time did not change")
   public VerdictVerification isUnchanged(String before, String after) {
     MatcherAssert.assertThat(after, Matchers.equalTo(before));

@@ -2201,8 +2201,13 @@ describe('Presentation API', () => {
 
       expect(accepted.status).toBe(202);
       expect(accepted.body.data).toEqual(queued);
+      const scheduled = await auth(request(app).post('/api/hermes/products/p-real/run')).send({
+        trigger: 'scheduled',
+      });
+
       expect(rejected.status).toBe(400);
       expect(badScope.status).toBe(400);
+      expect(scheduled.status).toBe(400);
       expect(calls).toEqual([['ws-1', 'p-real', ['price'], 'manual']]);
     });
 

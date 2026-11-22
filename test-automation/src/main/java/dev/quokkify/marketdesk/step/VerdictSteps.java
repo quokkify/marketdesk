@@ -89,6 +89,11 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return response.extract().path("data.id");
   }
 
+  @Step("Read when the run was created")
+  public String createdAt(ValidatableResponse response) {
+    return response.extract().path("data.createdAt");
+  }
+
   @Step("Read when the {check} check was made")
   public String checkedAt(ValidatableResponse view, String check) {
     return view.extract().path("data.latest.checks." + check + ".checkedAt");
