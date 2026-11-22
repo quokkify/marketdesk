@@ -105,10 +105,10 @@ describe('buildPriceEstimatePrompt', () => {
     expect(prompt).not.toContain('views: 0');
   });
 
-  it('statesTheProductPriceTheEstimateIsComparedWith', () => {
+  it('statesTheListingPriceTheEstimateIsComparedWith', () => {
     const prompt = buildPriceEstimatePrompt(ctx());
-    expect(prompt).toContain('current price: 400 PLN');
-    expect(prompt).not.toContain('current price: 399');
+    expect(prompt).toContain('current price: 399 PLN');
+    expect(prompt).not.toContain('current price: 400');
   });
 
   it('groupsComparablesByTierAndStatesTheCeilingRules', () => {
