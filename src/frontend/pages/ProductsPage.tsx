@@ -45,6 +45,8 @@ import {
 } from '../services/hooks/index.js';
 import {
   useGetAwaitingCountsQuery,
+  useGetHermesPendingCountsQuery,
+  useGetProductStatsQuery,
   useLazyGetProductQuery,
   useLazySearchMarketplaceCategoriesQuery,
 } from '../state/api/index.js';
@@ -65,6 +67,7 @@ import {
 import { productScopedHermesRunInput } from './ListingDetailsPage.js';
 import {
   rowAnalyzeDisabledReason,
+  analysisStateFor,
   runSequentially,
   stateAfterPendingChange,
 } from './productsRowAnalysis.js';
@@ -268,12 +271,17 @@ const ProductsPage: React.FC = () => {
   };
   const toggleReview = (product: Product) =>
     setExpandedProductId((current) => (current === product.id ? null : product.id));
+  const { currentData: statsByProductId } = useGetProductStatsQuery();
+  const { currentData: pendingCounts } = useGetHermesPendingCountsQuery();
   const renderReview = (product: Product) => (
     <ProductRowSuggestions
       productId={product.id}
       onPendingCountChange={(pending) => {
         setAnalysisByProductId((current) => {
-          const next = stateAfterPendingChange(current[product.id], pending);
+          const next = stateAfterPendingChange(
+            analysisStateFor(current[product.id], pendingCounts?.[product.id]),
+            pending
+          );
           if (next === current[product.id]) return current;
           const updated = { ...current };
           if (next) updated[product.id] = next;
@@ -588,6 +596,15 @@ const ProductsPage: React.FC = () => {
   );
 
   const items = useMemo<Product[]>(() => currentData?.items ?? [], [currentData?.items]);
+  // What each row's AI cell shows: this session's run or review state, else the server's pending count.
+  const rowAnalysis = useMemo(() => {
+    const result: Record<string, RowAnalysisState> = {};
+    for (const product of items) {
+      const state = analysisStateFor(analysisByProductId[product.id], pendingCounts?.[product.id]);
+      if (state) result[product.id] = state;
+    }
+    return result;
+  }, [items, analysisByProductId, pendingCounts]);
   useEffect(() => {
     const visible = new Set(items.map((product) => product.id));
     setSelectedIds((current) => {
@@ -1029,7 +1046,8 @@ const ProductsPage: React.FC = () => {
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             awaitingByProductId={awaitingByProductId}
-            analysisByProductId={analysisByProductId}
+            analysisByProductId={rowAnalysis}
+            statsByProductId={statsByProductId}
             onAnalyze={analyzeProduct}
             analyzeDisabledReason={analyzeDisabledReason}
             expandedProductId={expandedProductId}
@@ -1060,7 +1078,8 @@ const ProductsPage: React.FC = () => {
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             awaitingByProductId={awaitingByProductId}
-            analysisByProductId={analysisByProductId}
+            analysisByProductId={rowAnalysis}
+            statsByProductId={statsByProductId}
             onAnalyze={analyzeProduct}
             analyzeDisabledReason={analyzeDisabledReason}
             expandedProductId={expandedProductId}
