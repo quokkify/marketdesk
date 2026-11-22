@@ -1,0 +1,1 @@
+{"id":"f212ac948d8e06675081b1d0302ce34a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#applyLadderRules keeps the lower of the model and tier confidence","name":"keeps the lower of the model and tier confidence","status":"passed","testResultsByEnv":{"default":"3a384f6e8f221c3aac025574a182f6d4"}}

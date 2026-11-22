@@ -1,0 +1,1 @@
+{"id":"0064d918a9a9b990df873a50f891ba11.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/di/__tests__/recordedQueue.test.ts#recordedProcessor a throwing recorder does not fail the job","name":"a throwing recorder does not fail the job","status":"passed","testResultsByEnv":{"default":"b987ba430601f9ff105e9f64e8c4595e"}}

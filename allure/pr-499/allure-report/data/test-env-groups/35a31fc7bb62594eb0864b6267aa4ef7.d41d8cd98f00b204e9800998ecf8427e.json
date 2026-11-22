@@ -1,0 +1,1 @@
+{"id":"35a31fc7bb62594eb0864b6267aa4ef7.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ConversationRetentionService.test.ts#ConversationRetentionService keepsTextBeforeThirtyDays","name":"keepsTextBeforeThirtyDays","status":"passed","testResultsByEnv":{"default":"4b41297e2b4e55a69001fd6c72e43213"}}
