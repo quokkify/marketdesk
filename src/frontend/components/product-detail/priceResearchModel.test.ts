@@ -12,6 +12,7 @@ import {
   toPriceResearchForm,
   runProgressText,
   lastRunText,
+  anchorsUpdatedAt,
   classLine,
   shouldRekeyEditor,
 } from './priceResearchModel';
@@ -295,6 +296,23 @@ describe('runProgressText', () => {
     expect(runProgressText(run({ nodes: {
       identify: 'done', sameModelUsed: 'done', lastNewPrice: 'done', substitutesNew: 'timeout', substitutesUsed: 'done',
     } }))).toBe('Saving…');
+  });
+});
+
+describe('anchorsUpdatedAt', () => {
+  it('is the finish time of the last run, not the attempt time nothing writes any more', () => {
+    const last = run({ status: 'finished', outcome: 'ok', finishedAt: '2026-11-22T10:00:00.000Z' });
+    expect(anchorsUpdatedAt(last, { ...research, lastAttemptAt: '2026-10-01T00:00:00.000Z' }))
+      .toBe('2026-11-22T10:00:00.000Z');
+  });
+
+  it('falls back to the research version without a finished run', () => {
+    expect(anchorsUpdatedAt(null, { ...research, lastAttemptAt: '2026-10-01T00:00:00.000Z' })).toBe(research.updatedAt);
+    expect(anchorsUpdatedAt(run({}), research)).toBe(research.updatedAt);
+  });
+
+  it('is null with no run and no research', () => {
+    expect(anchorsUpdatedAt(null, null)).toBeNull();
   });
 });
 

@@ -25,6 +25,7 @@ import {
   classLine,
   editComparablePrice,
   lastRunText,
+  anchorsUpdatedAt,
   runProgressText,
   shouldRekeyEditor,
   storedResearch,
@@ -201,6 +202,7 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, 
   const run = view?.run ?? null;
   const progress = runProgressText(run);
   const lastRun = lastRunText(view?.lastRun ?? null, view?.nextAutoAt ?? null, new Date());
+  const updatedAt = anchorsUpdatedAt(view?.lastRun ?? null, research);
   const estimateStale = !research || research.lastEstimate?.researchUpdatedAt !== research.updatedAt;
 
   const handleFind = async () => {
@@ -215,9 +217,9 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, 
     <Stack spacing={1} data-testid="price-anchors">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="subtitle2">Price anchors</Typography>
-        {research?.lastAttemptAt && (
+        {updatedAt && (
           <Typography variant="caption" color="text.secondary" data-testid="price-anchors-updated">
-            {`updated ${formatDate(research.lastAttemptAt)}`}
+            {`updated ${formatDate(updatedAt)}`}
           </Typography>
         )}
         <Tooltip title={pln ? '' : OLX_PLN_ONLY}>

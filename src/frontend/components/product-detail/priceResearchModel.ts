@@ -301,6 +301,12 @@ const ERROR_REASONS: Record<string, string> = {
 };
 const FALLBACK_REASON = 'something went wrong';
 
+// When the anchors were last updated: the last finished run, else the research's own version.
+export function anchorsUpdatedAt(last: ResearchRun | null, research: PriceResearch | null): string | null {
+  if (last?.status === 'finished' && last.finishedAt) return last.finishedAt;
+  return research?.updatedAt ?? null;
+}
+
 // The last finished run in words; never the raw error code.
 export function lastRunText(last: ResearchRun | null, nextAutoAt: string | null, now: Date): string | null {
   if (!last || last.status !== 'finished' || !last.outcome) return null;
