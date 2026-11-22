@@ -130,6 +130,17 @@ describe('SaleVerdictRuns', () => {
     await expect(researchRuns.findActive(WS, PID)).resolves.toBeNull();
   });
 
+  it('fails the verdict run when the forced research row cannot be recorded', async () => {
+    const { runs, verdicts, researchRuns, jobs } = setup();
+    researchRuns.insertQueued = async () => { throw new Error('db down'); };
+
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toThrow('db down');
+
+    expect(verdicts.errorCodes.get('run-1')).toBe('enqueue_failed');
+    expect(jobs).toHaveLength(0);
+    await expect(verdicts.findActive()).resolves.toBeNull();
+  });
+
   it('joins an active run that already forces the price research', async () => {
     const { runs, jobs } = setup();
     await runs.request(WS, PID, ['info', 'price'], 'manual', { forceResearch: true });

@@ -88,8 +88,7 @@ export class SaleVerdictRuns {
       if (opts.forceResearch && !(await this.forcesPriceResearch(workspaceId, productId, active))) throw new ConflictError(ANALYSIS_RUNNING);
       return { run: active, enqueued: false };
     }
-    const researchRunId = opts.forceResearch ? await this.queueResearch(workspaceId, productId, now) : undefined;
-    await this.enqueue(workspaceId, run, trigger, opts.forceResearch ?? false, researchRunId);
+    await this.enqueue(workspaceId, run, trigger, opts.forceResearch ?? false, now);
     return { run, enqueued: true };
   }
 
@@ -155,15 +154,18 @@ export class SaleVerdictRuns {
     );
   }
 
-  // A run that never reached the queue would block the product: failed before the error is reported.
+  // A run that never reached the queue (or whose research row could not be recorded) would block the
+  // product: failed before the error is reported.
   private async enqueue(
     workspaceId: string,
     run: SaleVerdict,
     trigger: VerdictTrigger,
     forceResearch: boolean,
-    researchRunId?: string,
+    now: Date,
   ): Promise<void> {
+    let researchRunId: string | undefined;
     try {
+      researchRunId = forceResearch ? await this.queueResearch(workspaceId, run.productId, now) : undefined;
       await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch, researchRunId });
     } catch (error) {
       if (researchRunId) await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
