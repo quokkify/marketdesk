@@ -12,7 +12,9 @@ import type { PriceComparable, PriceResearch, StoredPriceEstimate } from '../../
 // updated_at is cut to milliseconds, the precision a client echoes back as baseUpdatedAt.
 const ISO_INSTANT = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 const UPDATED_AT_ISO = `to_char(date_trunc('milliseconds', product_price_research.updated_at), ${ISO_INSTANT})`;
-const NOW_UTC = `(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')`;
+// The statement's own time, not the transaction start: a save that waited on the row lock still
+// writes an updated_at later than the save that held it.
+const NOW_UTC = `(clock_timestamp() AT TIME ZONE 'UTC')`;
 const COLUMNS = `product_id, retail_price, retail_currency, retail_source,
   to_char(retail_checked_at, 'YYYY-MM-DD') AS retail_checked_at, comparables, specs, dismissed_urls,
   to_char(last_attempt_at, ${ISO_INSTANT}) AS last_attempt_at, last_estimate, ${UPDATED_AT_ISO} AS updated_at`;
