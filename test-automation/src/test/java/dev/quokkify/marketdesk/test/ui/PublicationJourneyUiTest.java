@@ -24,17 +24,18 @@ public class PublicationJourneyUiTest extends BaseUiTest {
     productsPageSteps
         .openNewProductDialog()
         .verify()
-        .newProductDialogIsShown();
-    productsPageSteps.closeNewProductDialog();
+        .newProductDialogIsShown()
+        .backToSteps()
+        .closeNewProductDialog();
     productDetailPageSteps
         .openProductPage(productListing)
         .verify()
-        .showsPublicationReadinessCheck();
-    productDetailPageSteps
+        .showsPublicationReadinessCheck()
+        .backToSteps()
         .suggestImprovements()
         .verify()
-        .showsSuggestionsForReviewOnly(PRODUCT_NAME);
-    productDetailPageSteps
+        .showsSuggestionsForReviewOnly(PRODUCT_NAME)
+        .backToSteps()
         .openPublicationDialog()
         .verify()
         .showsPublicationConfirmation();
