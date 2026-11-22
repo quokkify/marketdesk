@@ -4,6 +4,7 @@ import dev.quokkify.annotation.PageUrl;
 import dev.quokkify.impl.Page;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 
@@ -65,15 +66,15 @@ public class ProductDetailPage implements Page {
   }
 
   public SelenideElement suggestedImprovementsHeading() {
-    return Selenide.$$("h6").findBy(Condition.text(SUGGESTED_IMPROVEMENTS));
+    return Selenide.$(Selectors.byText(SUGGESTED_IMPROVEMENTS));
   }
 
   public SelenideElement suggestedPriceHeading() {
-    return Selenide.$$("h6").findBy(Condition.text(SUGGESTED_PRICE));
+    return Selenide.$(Selectors.withText(SUGGESTED_PRICE));
   }
 
   public SelenideElement reviewOnlyNote() {
-    return Selenide.$$("span").findBy(Condition.text(REVIEW_ONLY));
+    return Selenide.$(Selectors.withText(REVIEW_ONLY));
   }
 
   public SelenideElement publicationDialog() {

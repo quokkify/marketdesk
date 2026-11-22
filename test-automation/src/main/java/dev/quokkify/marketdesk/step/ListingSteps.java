@@ -121,8 +121,7 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
         .statusCode(HttpStatus.SC_CREATED)
         .extract()
         .path(DATA_ID);
-    service.setMarketplaceCategory(account.token(), listingId, MarketplaceCategoryRequestPojo.sandboxCameras())
-        .statusCode(HttpStatus.SC_OK);
+    setSandboxOlxCategory(account, listingId);
     service.publish(account.token(), listingId).statusCode(HttpStatus.SC_OK);
     Waiter.awaitCondition(
         () -> LIVE.equals(service.getListing(account.token(), listingId).extract().path(DATA_STATUS)),

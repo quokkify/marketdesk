@@ -26,7 +26,9 @@ public class PublicationJourneyUiTest extends BaseUiTest {
         .verify()
         .newProductDialogIsShown()
         .backToSteps()
-        .closeNewProductDialog();
+        .closeNewProductDialog()
+        .verify()
+        .newProductDialogIsClosed();
     productDetailPageSteps
         .openProductPage(productListing)
         .verify()

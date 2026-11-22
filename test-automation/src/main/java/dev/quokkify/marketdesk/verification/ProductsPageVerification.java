@@ -38,6 +38,12 @@ public class ProductsPageVerification
     return this;
   }
 
+  @Step("The New product dialog is closed")
+  public ProductsPageVerification newProductDialogIsClosed() {
+    page.newProductDialog().shouldNot(Condition.exist, getTimeout());
+    return this;
+  }
+
   @Step("The catalogue shows the columns {columns}")
   public ProductsPageVerification hasColumns(List<String> columns) {
     page.headerCells().shouldHave(CollectionCondition.sizeGreaterThan(0), getTimeout());
