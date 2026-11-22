@@ -1,0 +1,1 @@
+{"id":"478d3022ba828a6cf40388d5e1298000.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ReplySendService.test.ts#ReplySendService.regenerate refuses when the daily cap is reached","name":"refuses when the daily cap is reached","status":"passed","testResultsByEnv":{"default":"d96f50b67c99e8749d5b22513d353aaf"}}

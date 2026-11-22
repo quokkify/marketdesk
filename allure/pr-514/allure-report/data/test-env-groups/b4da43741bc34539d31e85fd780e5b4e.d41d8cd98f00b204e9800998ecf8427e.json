@@ -1,0 +1,1 @@
+{"id":"b4da43741bc34539d31e85fd780e5b4e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/productSaleStatus.test.ts#activateDraftWithLiveListing ignores live listings of other products","name":"ignores live listings of other products","status":"passed","testResultsByEnv":{"default":"60db9c36fb56816e6406332fe58b64a8"}}
