@@ -8,6 +8,7 @@ import type { ProductApplicationService } from '../../../application/services/Pr
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
+import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import { SEARCH_NEEDS_PLN, SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
 import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
@@ -105,6 +106,7 @@ export class ProductController {
     private readonly priceResearchRepo?: IPriceResearchRepository,
     private readonly researchRuns?: IPriceResearchRuns,
     private readonly productStats?: ProductStatsService,
+    private readonly saleVerdictRuns?: SaleVerdictRuns,
   ) {}
 
   stats = async (req: Request, res: Response): Promise<void> => {
@@ -194,8 +196,8 @@ export class ProductController {
         workspaceId: req.user!.workspaceId!,
         actorId: req.user!.userId,
       };
-      const result = this.assistance
-        ? await this.assistance.publicationReview(request)
+      const result = this.saleVerdictRuns
+        ? await this.saleVerdictRuns.recheckInfo(request.workspaceId, request.productId, request.listingId, request.actorId)
         : await this.productRecheck.recheck(request);
       ok(res, result);
     } catch (error) {

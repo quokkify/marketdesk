@@ -1,0 +1,154 @@
+import type { ProductRecheckResult, SaleVerdict } from '../../../../../shared/types';
+import type { CompletedVerdictFields, ISaleVerdictRepository, NewVerdictRun } from '../../../../domain/repositories/interfaces/ISaleVerdictRepository';
+import type { SaleVerdictJob } from '../../../ports/IJobQueue';
+import { SaleVerdictRuns, VERDICT_RUN_TTL_MS } from '../SaleVerdictRuns';
+
+const NOW = new Date('2026-11-22T12:00:00.000Z');
+const WS = 'w1';
+const PID = 'p1';
+
+class Verdicts implements Partial<ISaleVerdictRepository> {
+  rows: SaleVerdict[] = [];
+  errorCodes = new Map<string, string>();
+  async insertQueued(run: NewVerdictRun): Promise<SaleVerdict | null> {
+    if (this.rows.some((r) => r.status === 'queued' || r.status === 'running')) return null;
+    const row: SaleVerdict = {
+      id: run.id, productId: run.productId, listingId: null, graphVersion: run.graphVersion, scope: run.scope,
+      status: 'queued', overall: null, checks: {}, createdAt: run.queuedAt, completedAt: null,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async findActive(): Promise<SaleVerdict | null> {
+    return this.rows.find((r) => r.status === 'queued' || r.status === 'running') ?? null;
+  }
+  async fail(runId: string, completedAt: string, errorCode: string): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === runId);
+    if (!row) return false;
+    Object.assign(row, { status: 'failed', completedAt });
+    this.errorCodes.set(runId, errorCode);
+    return true;
+  }
+  async complete(runId: string, fields: CompletedVerdictFields): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === runId);
+    if (!row) return false;
+    Object.assign(row, { status: 'completed', ...fields });
+    return true;
+  }
+  async setListing(): Promise<void> {}
+  async findLatestCompleted(): Promise<SaleVerdict | null> {
+    return this.rows.filter((r) => r.status === 'completed').pop() ?? null;
+  }
+  async lastRunFailed(): Promise<boolean> {
+    return false;
+  }
+}
+
+function setup(options: { enqueue?: () => Promise<void>; recheck?: () => Promise<ProductRecheckResult> } = {}) {
+  const verdicts = new Verdicts();
+  const jobs: SaleVerdictJob[] = [];
+  const errors: string[] = [];
+  const result = { productId: PID, listingId: 'l1', status: 'ready', items: [] } as unknown as ProductRecheckResult;
+  let n = 0;
+  const runs = new SaleVerdictRuns({
+    products: { findByIdForWorkspace: async (id: string) => (id === PID ? ({ id: PID } as never) : null) },
+    listings: { findByIdForWorkspace: async () => ({ id: 'l1', marketplaceId: 'm1' } as never) },
+    marketplaces: { findByIdForWorkspace: async () => null },
+    workspaces: { findById: async () => ({ id: WS } as never) },
+    verdicts: verdicts as unknown as ISaleVerdictRepository,
+    queue: {
+      enqueue: async (job) => {
+        if (options.enqueue) await options.enqueue();
+        jobs.push(job);
+      },
+      enqueueAll: async () => {},
+    },
+    recheck: { recheck: options.recheck ?? (async () => result) },
+    infoCheckFor: () => async (ctx) => ({ check: 'info', status: 'ready', reasons: [], checkedAt: ctx.now().toISOString(), refs: { eventIds: [] } }),
+    newId: () => `run-${++n}`,
+    now: () => NOW,
+    logger: { error: (_context, message) => errors.push(message) },
+  });
+  return { runs, verdicts, jobs, errors, result };
+}
+
+describe('SaleVerdictRuns', () => {
+  it('queues a run and enqueues its ids with forceResearch', async () => {
+    const { runs, jobs } = setup();
+
+    const out = await runs.request(WS, PID, ['price'], 'manual', { forceResearch: true });
+
+    expect(out.enqueued).toBe(true);
+    expect(out.run).toMatchObject({ status: 'queued', scope: ['price'] });
+    expect(jobs).toEqual([{ workspaceId: WS, productId: PID, runId: 'run-1', forceResearch: true }]);
+  });
+
+  it('rejects a missing product with not found', async () => {
+    const { runs } = setup();
+
+    await expect(runs.request(WS, 'other', ['info'], 'manual')).rejects.toThrow('Product not found');
+  });
+
+  it('returns the active run without enqueueing', async () => {
+    const { runs, jobs } = setup();
+    await runs.request(WS, PID, ['info'], 'manual');
+
+    const out = await runs.request(WS, PID, ['price'], 'research');
+
+    expect(out).toMatchObject({ enqueued: false, run: { id: 'run-1' } });
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('expires a run stuck past the TTL before queueing a new one', async () => {
+    const { runs, verdicts, jobs } = setup();
+    verdicts.rows.push({
+      id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status: 'running',
+      overall: null, checks: {}, createdAt: new Date(NOW.getTime() - VERDICT_RUN_TTL_MS - 1000).toISOString(), completedAt: null,
+    });
+
+    const out = await runs.request(WS, PID, ['info'], 'manual');
+
+    expect(verdicts.errorCodes.get('old')).toBe('expired');
+    expect(out.enqueued).toBe(true);
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('fails a run that could not be enqueued and rethrows', async () => {
+    const { runs, verdicts, errors } = setup({ enqueue: async () => { throw new Error('redis down'); } });
+
+    await expect(runs.request(WS, PID, ['info'], 'manual')).rejects.toThrow('redis down');
+
+    expect(verdicts.errorCodes.get('run-1')).toBe('enqueue_failed');
+    expect(errors).toEqual(['Sale verdict run not queued']);
+  });
+
+  it('view expires a stuck active run before answering', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push({
+      id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status: 'queued',
+      overall: null, checks: {}, createdAt: new Date(NOW.getTime() - VERDICT_RUN_TTL_MS - 1000).toISOString(), completedAt: null,
+    });
+
+    const view = await runs.view(WS, PID);
+
+    expect(view.active).toBeNull();
+  });
+
+  it('recheckInfo returns the Recheck result and stores a completed info verdict', async () => {
+    const { runs, verdicts, result } = setup();
+
+    const out = await runs.recheckInfo(WS, PID, 'l1');
+
+    expect(out).toBe(result);
+    expect(verdicts.rows[0]).toMatchObject({ status: 'completed', scope: ['info'], graphVersion: 'sale-verdict@1', overall: 'ready' });
+  });
+
+  it('recheckInfo still returns the Recheck result when storing the verdict fails', async () => {
+    const { runs, verdicts, errors, result } = setup();
+    verdicts.complete = async () => { throw new Error('db down'); };
+
+    await expect(runs.recheckInfo(WS, PID, 'l1')).resolves.toBe(result);
+
+    expect(errors).toEqual(['Storing the sale verdict of a recheck failed']);
+  });
+});

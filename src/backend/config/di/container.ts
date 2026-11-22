@@ -112,6 +112,15 @@ import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { PriceProposals } from '../../application/services/verdict/PriceProposals';
+import { ListingSeoProposals } from '../../application/services/verdict/ListingSeoProposals';
+import { SaleVerdictGraph } from '../../application/services/verdict/SaleVerdictGraph';
+import { SaleVerdictRuns } from '../../application/services/verdict/SaleVerdictRuns';
+import { buildInfoCheck } from '../../application/services/verdict/infoCheckGraph';
+import { buildPriceCheck } from '../../application/services/verdict/priceCheckGraph';
+import { buildPhotosCheck } from '../../application/services/verdict/photosCheckGraph';
+import { RecordedResearchRun } from '../../application/services/recordedResearchRun';
+import { SaleVerdictRepository } from '../../infrastructure/persistence/repositories/SaleVerdictRepository';
+import { SaleVerdictHandler } from '../../infrastructure/jobQueue/JobHandlers/SaleVerdictHandler';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
 import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
@@ -165,6 +174,7 @@ import type {
   IJobQueue,
   JobEnqueueOptions,
   PriceResearchJob,
+  SaleVerdictJob,
   PublishListingJob,
   SyncMarketplaceJob,
 } from '../../application/ports/IJobQueue';
@@ -215,10 +225,11 @@ const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
 const PRICE_RESEARCH_QUEUE = 'price-research';
+const SALE_VERDICT_QUEUE = 'sale-verdict';
 
 export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
-  // A failed research run is recorded on the run and retried by its schedule, never by the queue.
-  if (name === PRICE_RESEARCH_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
+  // A failed run is recorded on the run and retried by its schedule or a new request, never by the queue.
+  if (name === PRICE_RESEARCH_QUEUE || name === SALE_VERDICT_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -468,6 +479,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
   const priceResearchQueue = createQueue<PriceResearchJob>(PRICE_RESEARCH_QUEUE);
+  const saleVerdictQueue = createQueue<SaleVerdictJob>(SALE_VERDICT_QUEUE);
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -646,6 +658,55 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     undefined,
     { sandboxMode: env.marketplaces.olx.adapterMode !== 'real', logger: overrides.logger }
   );
+  const saleVerdictRepo = new SaleVerdictRepository(pool);
+  const listingSeoProposals = new ListingSeoProposals({
+    products: productRepo,
+    listings: listingRepo,
+    events: eventRepo,
+    ai: aiProvider,
+    idFactory: idGenerator,
+    logger: overrides.logger,
+  });
+  const saleVerdictGraph = new SaleVerdictGraph({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    workspaces: workspaceRepo,
+    verdicts: saleVerdictRepo,
+    checks: {
+      info: buildInfoCheck({ recheck: productRecheckService, seo: listingSeoProposals, logger: overrides.logger }),
+      price: buildPriceCheck({
+        proposals: priceProposals,
+        research: priceResearchRepo,
+        runs: priceResearchRuns,
+        recorded: new RecordedResearchRun({
+          runs: priceResearchRunRepo,
+          graph: priceResearchGraph,
+          events: eventPublisher,
+          now: () => new Date(),
+          logger: overrides.logger,
+        }),
+        configured: researchConfig !== null,
+        newId: idGenerator,
+      }),
+      photos: buildPhotosCheck(),
+    },
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  const saleVerdictRuns = new SaleVerdictRuns({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    workspaces: workspaceRepo,
+    verdicts: saleVerdictRepo,
+    queue: saleVerdictQueue,
+    recheck: productRecheckService,
+    infoCheckFor: (recheck) => buildInfoCheck({ recheck, seo: listingSeoProposals, logger: overrides.logger }),
+    newId: idGenerator,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
   const listingService = new ListingApplicationService(
     listingRepo,
     publishListingUC,
@@ -975,6 +1036,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   priceResearchQueue.registerHandler((data) => priceResearchHandler.handle(data));
 
+  const saleVerdictHandler = new SaleVerdictHandler({
+    verdicts: saleVerdictRepo,
+    graph: saleVerdictGraph,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  saleVerdictQueue.registerHandler((data) => saleVerdictHandler.handle(data));
+
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
   void conversationRetentionQueue
@@ -1050,6 +1119,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     productRepo,
     priceResearchRepo,
     priceResearchRuns,
+    saleVerdictRuns,
     productStatsService,
     listingRepo,
     marketplaceRepo,
@@ -1081,6 +1151,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
     priceResearchQueue as ManagedQueue<unknown>,
+    saleVerdictQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

@@ -121,6 +121,11 @@ describe('buildContainer (composition root)', () => {
     expect(buildBullAddOptions('price-research')).not.toHaveProperty('backoff');
   });
 
+  it('runs a sale verdict job once: a failed run is recorded on the run, not retried', () => {
+    expect(buildBullAddOptions('sale-verdict')).toMatchObject({ attempts: 1 });
+    expect(buildBullAddOptions('sale-verdict')).not.toHaveProperty('backoff');
+  });
+
   it('populates every required AppDeps field', () => {
     const { deps } = build();
     expect(deps.productService).toBeDefined();
@@ -227,7 +232,7 @@ describe('buildContainer (composition root)', () => {
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'price-research']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'price-research', 'sale-verdict']);
     expect(scheduled).toEqual([
       {
         name: 'conversation-retention',
@@ -241,7 +246,7 @@ describe('buildContainer (composition root)', () => {
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
     expect('cache' in container).toBe(false);
-    expect(container.queues).toHaveLength(5);
+    expect(container.queues).toHaveLength(6);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

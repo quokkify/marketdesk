@@ -95,3 +95,12 @@ export interface PriceResearchJob {
   productId: string;
   runId: string;
 }
+
+// One sale verdict run. Ids only: the run row holds its scope and state.
+export interface SaleVerdictJob {
+  workspaceId: string;
+  productId: string;
+  runId: string;
+  // Research even when the schedule says it is not due.
+  forceResearch: boolean;
+}
