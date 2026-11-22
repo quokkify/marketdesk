@@ -9,6 +9,7 @@ import {
   Collapse,
   Divider,
   IconButton,
+  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -17,15 +18,13 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import type { Theme } from '@mui/material/styles';
-import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { HermesEvent, HermesStatusView, Listing, PriceHistory, Product } from '@shared/types';
+import type { HermesEvent, Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
@@ -271,7 +270,9 @@ export const PricingSummaryCard: React.FC<{
   // Plain reactivation, kept beside the revival for an expired advert.
   onReactivate?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect }) => {
+  // What Hermes found to fix, opening its checks.
+  hermesHint?: { text: string; onClick: () => void };
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect, hermesHint }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
   const primaryHandler = { publish: onPublish, relist: onRelist, revive: onRevive, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
@@ -324,6 +325,18 @@ export const PricingSummaryCard: React.FC<{
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Publishing needs a connected OLX account.
         </Typography>
+      )}
+      {hermesHint && (
+        <Link
+          component="button"
+          type="button"
+          variant="body2"
+          onClick={hermesHint.onClick}
+          data-testid="pricing-hermes-hint"
+          sx={{ display: 'block', mt: 1.5, textAlign: 'left' }}
+        >
+          {hermesHint.text}
+        </Link>
       )}
     </Card>
   );
@@ -535,48 +548,6 @@ export const ProductActivityCard: React.FC<{
         ))}
       </Stack>
     )}
-  </Card>
-);
-
-const ANALYZE_LABELS: Record<
-  HermesStatusView['activeProvider'] | 'unknown',
-  { idle: string; running: string }
-> = {
-  hermes: { idle: 'Analyze with Hermes', running: 'Analyzing with Hermes…' },
-  offline: { idle: 'Analyze (offline heuristics)', running: 'Analyzing with offline heuristics…' },
-  unknown: { idle: 'Analyze', running: 'Analyzing…' },
-};
-
-// Hermes actions for one product. Everything Hermes produces stays review-only.
-// The analyze button names the provider that answers; it stays neutral while the status is unknown.
-export const ProductHermesCard: React.FC<{
-  analyzing: boolean;
-  analyzeDisabled: boolean;
-  note: string;
-  noteIsError?: boolean;
-  activeProvider?: HermesStatusView['activeProvider'];
-  onAnalyze: () => void;
-  children?: React.ReactNode;
-}> = ({ analyzing, analyzeDisabled, note, noteIsError = false, activeProvider, onAnalyze, children }) => (
-  <Card
-    title="Hermes"
-    subtitle="Review-only suggestions for this product"
-    sx={{
-      borderColor: (theme: Theme) => alpha(theme.palette.primary.main, 0.32),
-      bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.03),
-    }}
-  >
-    <Stack spacing={2}>
-      <Stack spacing={1}>
-        <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
-          {ANALYZE_LABELS[activeProvider ?? 'unknown'][analyzing ? 'running' : 'idle']}
-        </Button>
-        <Typography variant="caption" color={noteIsError ? 'error.main' : 'text.secondary'} role={noteIsError ? 'alert' : undefined}>
-          {note}
-        </Typography>
-      </Stack>
-      {children}
-    </Stack>
   </Card>
 );
 

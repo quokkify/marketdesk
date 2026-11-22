@@ -11,7 +11,6 @@ import {
   PricingSummaryCard,
   ProductActivityCard,
   productActivityItems,
-  ProductHermesCard,
   productHeroMenuItems,
   PublicationReadinessSection,
   ProductCategoryEvidence,
@@ -208,6 +207,17 @@ describe('product detail pricing card actions', () => {
     expect(onPublish).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the Hermes hint only when Hermes found something to fix', () => {
+    const onClick = () => undefined;
+    const withHint = render(
+      <PricingSummaryCard product={product} currency="PLN" primaryAction="edit" onEdit={() => undefined} hermesHint={{ text: 'Hermes: 1 thing to fix', onClick }} />
+    );
+    const without = render(<PricingSummaryCard product={product} currency="PLN" primaryAction="edit" onEdit={() => undefined} />);
+
+    expect(withHint).toMatch(/<button[^>]*data-testid="pricing-hermes-hint"[^>]*>Hermes: 1 thing to fix</);
+    expect(without).not.toContain('pricing-hermes-hint');
+  });
+
   it('offers Edit product and Open on OLX for a live listing', () => {
     const html = render(<PricingSummaryCard product={product} currency="PLN" primaryAction="edit" externalUrl={listing.externalUrl} onEdit={() => undefined} />);
 
@@ -333,77 +343,8 @@ describe('product detail activity', () => {
   });
 });
 
-describe('product detail Hermes card', () => {
-  it('offers Analyze with Hermes and routes it to its handler', () => {
-    const onAnalyze = jest.fn();
-    const tree = ProductHermesCard({
-      analyzing: false,
-      analyzeDisabled: false,
-      note: 'Runs only the enabled listing SEO agent for this product.',
-      activeProvider: 'hermes',
-      onAnalyze,
-      children: <p>Pending recommendations</p>,
-    }) as ElementLike;
-    const buttons = findByType(tree, Button);
-    const html = render(tree);
-
-    expect(buttons.map((button) => textContent(button))).toEqual(['Analyze with Hermes']);
-    (buttons[0]!.props.onClick as () => void)();
-    expect(onAnalyze).toHaveBeenCalledTimes(1);
-    expect(html).toContain('Runs only the enabled listing SEO agent for this product.');
-    expect(html).toContain('Pending recommendations');
-  });
-
-  const analyzeButtonLabel = (analyzing: boolean, activeProvider?: 'hermes' | 'offline') => {
-    const tree = ProductHermesCard({
-      analyzing,
-      analyzeDisabled: false,
-      note: 'Analyzing this product only.',
-      activeProvider,
-      onAnalyze: () => undefined,
-    }) as ElementLike;
-    return textContent(findByType(tree, Button)[0]);
-  };
-
-  it('names the provider that will answer before the analysis starts and stays neutral while it is unknown', () => {
-    expect(analyzeButtonLabel(false, 'hermes')).toBe('Analyze with Hermes');
-    expect(analyzeButtonLabel(false, 'offline')).toBe('Analyze (offline heuristics)');
-    expect(analyzeButtonLabel(false, undefined)).toBe('Analyze');
-  });
-
-  it('names the active provider while the analysis runs and stays neutral while it is unknown', () => {
-    expect(analyzeButtonLabel(true, 'hermes')).toBe('Analyzing with Hermes…');
-    expect(analyzeButtonLabel(true, 'offline')).toBe('Analyzing with offline heuristics…');
-    expect(analyzeButtonLabel(true, undefined)).toBe('Analyzing…');
-  });
-
-  it('disables analysis with its reason and reports a failed run as an alert', () => {
-    const blocked = ProductHermesCard({
-      analyzing: false,
-      analyzeDisabled: true,
-      note: 'The listing SEO agent is switched off for this workspace.',
-      onAnalyze: () => undefined,
-    }) as ElementLike;
-    const [analyze] = findByType(blocked, Button);
-    const failed = render(
-      <ProductHermesCard
-        analyzing={false}
-        analyzeDisabled={false}
-        note="Hermes is unavailable"
-        noteIsError
-        onAnalyze={() => undefined}
-      />
-    );
-
-    expect(analyze!.props.disabled).toBe(true);
-    expect(render(blocked)).toContain('The listing SEO agent is switched off for this workspace.');
-    expect(failed).toContain('role="alert"');
-    expect(failed).toContain('Hermes is unavailable');
-  });
-});
-
 describe('publication readiness section', () => {
-  it('starts collapsed inside the Hermes card', () => {
+  it('starts collapsed in the Hermes checks', () => {
     const html = render(
       <PublicationReadinessSection action={<button type="button">Check again</button>}>
         <p>Readiness result</p>
