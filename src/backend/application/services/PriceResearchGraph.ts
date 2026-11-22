@@ -14,7 +14,7 @@ import type { IPriceResearchRepository } from '../../domain/repositories/interfa
 import type { AITextCompletionClient } from '../../infrastructure/external/HermesAI';
 import type { HermesReachability } from '../../infrastructure/external/HermesHealthProbe';
 import { NotFoundError, ServiceUnavailableError, ValidationError } from '../../domain/shared/DomainError';
-import { anchorRows, capAnchorRows, isResearchToolsetSafe } from '../../infrastructure/external/anchorLadderPrompt';
+import { anchorRows, capAnchorRows, excludedAdvertKeys, isResearchToolsetSafe } from '../../infrastructure/external/anchorLadderPrompt';
 import {
   buildIdentifyPrompt,
   buildTierPrompt,
@@ -26,7 +26,7 @@ import {
   type ResearchItem,
   type ResearchNode,
 } from '../../infrastructure/external/priceResearchPrompts';
-import { mergeLadder } from '../../domain/services/anchorLadder';
+import { dropExcludedAutoRows, mergeLadder } from '../../domain/services/anchorLadder';
 import { applyClassFilter } from '../../domain/services/classMatch';
 import { applyPriceSanity } from '../../domain/services/priceSanity';
 import { withAiOperation, withAiUsageScope } from '../ai/aiUsageScope';
@@ -86,7 +86,7 @@ export interface ResearchGraphLogger {
 
 export interface PriceResearchGraphDeps {
   products: Pick<IProductRepository, 'findByIdForWorkspace'>;
-  listings: Pick<IListingRepository, 'findByProduct'>;
+  listings: Pick<IListingRepository, 'findByProduct' | 'findByWorkspace'>;
   research: Pick<IPriceResearchRepository, 'saveLadderLocked'>;
   profile: ComparableResearchProfile | null;
   limiter: ResearchCallLimiter;
@@ -128,6 +128,8 @@ interface RunContext {
   workspaceId: string;
   product: Product;
   listing: Listing;
+  // External links of every listing in the workspace, any status: none of them is a comparable.
+  ownUrls: string[];
   item: ResearchItem;
   identifyPrompt: { system: string; prompt: string };
   profile: ComparableResearchProfile;
@@ -165,11 +167,15 @@ export class PriceResearchGraph {
     const listing = (await this.deps.listings.findByProduct(product.id))[0];
     if (!listing || listing.price.currency !== SEARCH_CURRENCY) throw new ValidationError(SEARCH_NEEDS_PLN);
     const item = researchItemFromProduct(product, listing);
+    const ownUrls = (await this.deps.listings.findByWorkspace(workspaceId))
+      .map((own) => own.externalUrl)
+      .filter((url): url is string => !!url);
 
     const ctx: RunContext = {
       workspaceId,
       product,
       listing,
+      ownUrls,
       item,
       identifyPrompt: buildIdentifyPrompt(item),
       profile,
@@ -274,7 +280,7 @@ export class PriceResearchGraph {
     const items = answered.flatMap((node) => (state.found[node] ?? []).map((item) => asTierItem(item, TIER_OF[node])));
     const filtered = anchorRows(items, {
       currency: SEARCH_CURRENCY,
-      ownUrl: ctx.listing.externalUrl,
+      ownUrls: ctx.ownUrls,
       dismissed: new Set(),
       today: this.deps.now().toISOString().slice(0, 10),
     });
@@ -293,8 +299,12 @@ export class PriceResearchGraph {
     const research = await this.deps.research.saveLadderLocked(ctx.workspaceId, ctx.product.id, (current) => {
       const existing = current?.comparables ?? [];
       const dismissed = new Set(current?.dismissedUrls ?? []);
-      const found = capAnchorRows(state.rows.filter((row) => !row.url || !dismissed.has(row.url)));
-      const kept = existing.filter((row) => row.source === 'auto' && row.tier && keepTiers.has(row.tier));
+      const excluded = excludedAdvertKeys(ctx.ownUrls, dismissed);
+      const found = capAnchorRows(dropExcludedAutoRows(state.rows, excluded));
+      const kept = dropExcludedAutoRows(
+        existing.filter((row) => row.source === 'auto' && row.tier && keepTiers.has(row.tier)),
+        excluded,
+      );
       const comparables = mergeLadder(existing, [...kept, ...found]);
       rowsChanged = JSON.stringify(comparables) !== JSON.stringify(existing);
       if (!rowsChanged && specs === (current?.specs ?? null)) return null;

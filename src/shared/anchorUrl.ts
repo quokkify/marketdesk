@@ -52,6 +52,25 @@ export function normalizeAnchorUrl(url: string): string | null {
   return `https://${host}${path || '/'}`;
 }
 
+const OLX_OFFER_PATH = /^\/(?:d\/)?oferta\/.*-ID([0-9A-Za-z]+)\.html$/;
+
+// The identity of one advert, however it is titled or spelled: `olx:<id token>` for an OLX offer (a retitled
+// advert keeps its id token), the normalized link for any other page, null for a link that is not an anchor.
+export function advertKey(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.replace(HOST_ALIAS_PREFIX, '');
+  if (parsed.protocol === 'https:' && host === OLX_HOST) {
+    const token = OLX_OFFER_PATH.exec(parsed.pathname)?.[1];
+    if (token) return `olx:${token}`;
+  }
+  return normalizeAnchorUrl(url);
+}
+
 function matchesHost(host: string, listed: readonly string[]): boolean {
   return listed.some((name) => host === name || host.endsWith(`.${name}`));
 }
