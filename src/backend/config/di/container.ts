@@ -478,6 +478,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
           checkProfile: () => new HermesHealthProbe(researchConfig).reachability(),
         }
       : null,
+    undefined,
+    overrides.logger,
   );
   const hermesEngine = new HermesDecisionEngine(
     productRepo,

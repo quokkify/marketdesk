@@ -41,6 +41,12 @@ export interface ComparableResearchProfile {
   checkProfile(): Promise<Pick<HermesReachability, 'reachable' | 'enabledToolsets'>>;
 }
 
+// Structural, so the container can pass its logger.
+export interface AnchorLadderLogger {
+  warn(context: Record<string, unknown>, message: string): void;
+  error(context: Record<string, unknown>, message: string): void;
+}
+
 export class AnchorLadderService implements IPriceResearchRefresher {
   constructor(
     private readonly productRepo: IProductRepository,
@@ -48,6 +54,7 @@ export class AnchorLadderService implements IPriceResearchRefresher {
     private readonly priceResearchRepo: IPriceResearchRepository,
     private readonly research: ComparableResearchProfile | null,
     private readonly now: () => Date = () => new Date(),
+    private readonly logger?: AnchorLadderLogger,
   ) {}
 
   async refreshIfStale(workspaceId: string, productId: string): Promise<LadderOutcome> {
@@ -59,6 +66,7 @@ export class AnchorLadderService implements IPriceResearchRefresher {
     } catch (error) {
       if (error instanceof ServiceUnavailableError && error.message === SEARCH_NOT_CONFIGURED) return 'not_configured';
       if (error instanceof ValidationError && error.message === SEARCH_NEEDS_PLN) return 'not_pln';
+      this.logger?.error({ productId, err: error }, 'Price anchor ladder refresh failed');
       return 'unavailable';
     }
   }
@@ -79,7 +87,11 @@ export class AnchorLadderService implements IPriceResearchRefresher {
       return await this.runResearch(workspaceId, product, listing, this.research, attemptedAt);
     } catch (error) {
       // The original failure matters more than a second one while recording the attempt.
-      await this.priceResearchRepo.markAttempt(workspaceId, product.id, attemptedAt).catch(() => undefined);
+      try {
+        await this.priceResearchRepo.markAttempt(workspaceId, product.id, attemptedAt);
+      } catch (markError) {
+        this.logger?.warn({ productId: product.id, err: markError }, 'Recording the failed research attempt failed');
+      }
       throw error;
     }
   }
