@@ -161,7 +161,7 @@ describe('SaleVerdictRuns', () => {
     const { runs, verdicts, researchRuns } = setup({ enqueue: async () => { throw new Error('redis down'); } });
     researchRuns.finish = async () => { throw new Error('db down'); };
 
-    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toThrow('db down');
+    await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toThrow('redis down');
 
     expect(verdicts.errorCodes.get('run-1')).toBe('enqueue_failed');
     await expect(verdicts.findActive()).resolves.toBeNull();

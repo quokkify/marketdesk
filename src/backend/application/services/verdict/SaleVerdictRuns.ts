@@ -37,6 +37,7 @@ export type VerdictTrigger = 'manual' | 'research';
 // Structural, so the container can pass its logger.
 export interface SaleVerdictRunsLogger {
   error(context: Record<string, unknown>, message: string): void;
+  warn?(context: Record<string, unknown>, message: string): void;
 }
 
 export interface SaleVerdictRunsDeps {
@@ -180,6 +181,7 @@ export class SaleVerdictRuns {
       }
       // A forced refresh with no research to run would be accepted for nothing.
       if (!researchRunId) {
+        this.deps.logger?.warn?.({ productId: run.productId, runId: run.id, trigger }, 'Forced refresh refused: a research run is active');
         await this.deps.verdicts.fail(run.id, this.deps.now().toISOString(), 'research_active');
         throw new ConflictError(ANALYSIS_RUNNING);
       }
@@ -187,11 +189,14 @@ export class SaleVerdictRuns {
     try {
       await this.deps.queue.enqueue({ workspaceId, productId: run.productId, runId: run.id, forceResearch, researchRunId });
     } catch (error) {
-      try {
-        if (researchRunId) await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
-      } finally {
-        await this.failEnqueued(run, trigger, error, 'enqueue_failed');
+      if (researchRunId) {
+        try {
+          await this.failQueuedResearch(workspaceId, run.productId, researchRunId);
+        } catch (cleanupError) {
+          this.deps.logger?.error({ productId: run.productId, runId: run.id, err: cleanupError }, 'Finishing the queued research run failed');
+        }
       }
+      await this.failEnqueued(run, trigger, error, 'enqueue_failed');
       throw error;
     }
   }

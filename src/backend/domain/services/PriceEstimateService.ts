@@ -137,7 +137,8 @@ export class PriceEstimateService {
     // Only used prices describe what the item itself sells for; new prices are not a used range.
     const usedRows = rows.filter((r) => r.tier == null || USED_TIERS.has(r.tier));
     const labelled = labelEstimateFigures(capped, researchAnchor, usedRows);
-    const currentPrice = product.sellingPrice.amount;
+    // The listing price is the one being judged: a marketplace import can move it away from the product's.
+    const currentPrice = listing.price.amount;
     // A drop never goes below the seller's lowest acceptable price, and a drop the floor cancels
     // is not turned into a raise. Without an explicit floor, the estimate stands as it was.
     const sellerFloor = product.minAcceptablePrice?.amount;
