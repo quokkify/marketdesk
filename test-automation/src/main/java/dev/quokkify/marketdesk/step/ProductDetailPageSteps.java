@@ -68,6 +68,12 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Review the price")
+  public ProductDetailPageSteps reviewPrice() {
+    page.reviewPriceButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Set the missing accessories to {accessories} in the edit form and save")
   public ProductDetailPageSteps saveMissingAccessories(String accessories) {
     page.editProductButton().shouldBe(Condition.enabled).click();

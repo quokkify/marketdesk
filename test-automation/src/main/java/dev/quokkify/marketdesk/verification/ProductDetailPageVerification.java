@@ -90,6 +90,18 @@ public class ProductDetailPageVerification
     return this;
   }
 
+  @Step("The sale verdict says {text}")
+  public ProductDetailPageVerification showsVerdictText(String text) {
+    page.verdictSummary().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The {check} check of the sale verdict reads {text}")
+  public ProductDetailPageVerification showsVerdictCheck(String check, String text) {
+    page.verdictCheck(check).shouldHave(Condition.exactText(text), getTimeout());
+    return this;
+  }
+
   @Step("The saved comparable shows an OLX link to {href}")
   public ProductDetailPageVerification showsOlxLink(String href) {
     page.comparableOlxLink().shouldHave(Condition.text("OLX"), getTimeout());

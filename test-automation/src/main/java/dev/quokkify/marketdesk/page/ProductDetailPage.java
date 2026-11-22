@@ -33,6 +33,9 @@ public class ProductDetailPage implements Page {
   private static final String FIND_PRICES = "[data-testid=\"find-prices-button\"]";
   private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
   private static final String ANCHOR_CLASS_LINE = "[data-testid=\"anchor-class-line\"]";
+  private static final String REVIEW_PRICE = "[data-testid=\"review-price-button\"]";
+  private static final String VERDICT_SUMMARY = "[data-testid=\"verdict-summary\"]";
+  private static final String VERDICT_CHECK = "[data-testid=\"verdict-check-%s\"]";
   private static final String EDIT_PRODUCT = "Edit product";
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
   private static final String SAVE_CHANGES = "Save changes";
@@ -122,6 +125,18 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement anchorClassLine() {
     return Selenide.$(ANCHOR_CLASS_LINE);
+  }
+
+  public SelenideElement reviewPriceButton() {
+    return Selenide.$(REVIEW_PRICE);
+  }
+
+  public SelenideElement verdictSummary() {
+    return Selenide.$(VERDICT_SUMMARY);
+  }
+
+  public SelenideElement verdictCheck(String check) {
+    return verdictSummary().$(String.format(VERDICT_CHECK, check));
   }
 
   public SelenideElement editProductButton() {

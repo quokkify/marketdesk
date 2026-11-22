@@ -81,6 +81,15 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return service.getVerdict(account.token(), productId);
   }
 
+  @Step("Wait until the {check} check of product {productId} is newer than {before}")
+  public ValidatableResponse awaitCheckLater(AccountPojo account, String productId, String check, String before) {
+    Waiter.awaitCondition(() -> {
+      String now = checkedAt(service.getVerdict(account.token(), productId), check);
+      return now != null && java.time.Instant.parse(now).isAfter(java.time.Instant.parse(before));
+    }, "the " + check + " check is newer", VERDICT_TIMEOUT, POLL_INTERVAL);
+    return awaitVerdict(account, productId);
+  }
+
   @Step("Recheck listing {listingId} of product {productId}")
   public ValidatableResponse recheck(AccountPojo account, String productId, String listingId) {
     return service.recheck(account.token(), productId, listingId);
