@@ -43,6 +43,7 @@ public class ProductDetailPage implements Page {
   private static final String MY_PRICES_LIST = "[data-testid=\"my-prices-list\"]";
   private static final String MY_PRICE_INPUT = "[data-testid=\"my-price-price\"]";
   private static final String MY_PRICE_ADD = "[data-testid=\"my-price-add\"]";
+  private static final String MY_PRICE_ERROR = "[data-testid=\"my-price-error\"]";
   private static final String HISTORY_ENTRY = "[data-testid=\"history-entry\"]";
   private static final String HISTORY_STEP = "[data-testid=\"history-step\"]";
   private static final String REMOVED_REVIEW_PRICE = "[data-testid=\"review-price-button\"]";
@@ -167,6 +168,14 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement addMyPriceButton() {
     return hermesDrawer().$(MY_PRICE_ADD);
+  }
+
+  public SelenideElement myPriceError() {
+    return hermesDrawer().$(MY_PRICE_ERROR);
+  }
+
+  public SelenideElement myPriceReloadButton() {
+    return myPriceError().$("button");
   }
 
   public ElementsCollection historyEntries() {

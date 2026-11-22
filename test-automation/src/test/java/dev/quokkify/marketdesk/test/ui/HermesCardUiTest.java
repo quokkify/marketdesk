@@ -24,6 +24,9 @@ public class HermesCardUiTest extends BaseUiTest {
   private static final String FOUND_PRICE = "289";
   private static final String MY_PRICE = "301";
   private static final double SEEDED_PRICE_AMOUNT = 290.0;
+  private static final double CHANGED_PRICE_AMOUNT = 270.0;
+  private static final String SEEDED_PRICE = "290";
+  private static final String PRICES_CHANGED = "Prices changed. Reload and add it again.";
 
   @Test
   public void newProductOffersAnalyze() {
@@ -96,6 +99,30 @@ public class HermesCardUiTest extends BaseUiTest {
         .verify()
         .foundPricesInclude(SAME_MODEL_USED, FOUND_PRICE)
         .myPricesInclude(MY_PRICE);
+  }
+
+  // The drawer built its form from the research it read; the research changes behind it, so adding a price is a
+  // conflict, and the form keeps what the seller typed.
+  @Test
+  public void staleAddAsksToReloadAndKeepsTheTypedPrice() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    String productId = productListing.productId();
+    priceResearchSteps.verify().isSaved(
+        priceResearchSteps.saveAutoComparables(account, productId, SAME_MODEL_USED, SEEDED_PRICE_AMOUNT));
+    signIn(account);
+    productDetailPageSteps
+        .openProductPage(productListing)
+        .openHermesRow(PRICES)
+        .verify()
+        .foundPricesInclude(SAME_MODEL_USED, SEEDED_PRICE);
+    priceResearchSteps.verify().isSaved(
+        priceResearchSteps.saveAutoComparables(account, productId, SAME_MODEL_USED, CHANGED_PRICE_AMOUNT));
+    productDetailPageSteps
+        .addMyPrice(MY_PRICE)
+        .verify()
+        .myPriceSaveConflict(PRICES_CHANGED, MY_PRICE);
   }
 
   @Test

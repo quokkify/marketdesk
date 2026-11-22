@@ -18,6 +18,7 @@ public class ProductDetailPageVerification
   private static final String ARIA_SELECTED = "aria-selected";
   private static final String SEARCH_AGAIN = "Search again";
   private static final String YOURS = "yours";
+  private static final String RELOAD = "Reload";
 
   public ProductDetailPageVerification(ProductDetailPageSteps steps, ProductDetailPage page) {
     super(steps, page);
@@ -148,6 +149,14 @@ public class ProductDetailPageVerification
   public ProductDetailPageVerification myPricesInclude(String price) {
     page.myPricesList().shouldHave(Condition.text(price), getTimeout());
     page.myPricesList().shouldHave(Condition.text(YOURS), getTimeout());
+    return this;
+  }
+
+  @Step("Your prices says {message}, offers Reload and keeps the typed price {price}")
+  public ProductDetailPageVerification myPriceSaveConflict(String message, String price) {
+    page.myPriceError().shouldHave(Condition.text(message), getTimeout());
+    page.myPriceReloadButton().shouldHave(Condition.exactText(RELOAD), getTimeout());
+    page.myPriceInput().shouldHave(Condition.exactValue(price), getTimeout());
     return this;
   }
 

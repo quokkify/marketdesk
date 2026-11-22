@@ -84,25 +84,11 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return service.getVerdictHistory(account.token(), productId, limit);
   }
 
-  @Step("Read the market search id the newest sale verdict run started")
-  public String newestResearchRunId(ValidatableResponse history) {
-    return history.extract().path("data[0].researchRunId");
-  }
-
   @Step("Wait until the sale verdict run of product {productId} ends")
   public ValidatableResponse awaitVerdict(AccountPojo account, String productId) {
     Waiter.awaitCondition(() -> hasEnded(service.getVerdict(account.token(), productId)),
         "the sale verdict run has ended", VERDICT_TIMEOUT, POLL_INTERVAL);
     return service.getVerdict(account.token(), productId);
-  }
-
-  @Step("Wait until the {check} check of product {productId} is newer than {before}")
-  public ValidatableResponse awaitCheckLater(AccountPojo account, String productId, String check, String before) {
-    Waiter.awaitCondition(() -> {
-      String now = checkedAt(service.getVerdict(account.token(), productId), check);
-      return now != null && java.time.Instant.parse(now).isAfter(java.time.Instant.parse(before));
-    }, "the " + check + " check is newer", VERDICT_TIMEOUT, POLL_INTERVAL);
-    return awaitVerdict(account, productId);
   }
 
   @Step("Recheck listing {listingId} of product {productId}")
