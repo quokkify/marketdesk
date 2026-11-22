@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A simpler Products page: four empty columns gone, filters gap fixed, AI analysis from the row and for selected rows, short listing id, clickable row, Sold tab.
+**Goal:** A simpler Products page: four empty columns gone, filters gap fixed, AI analysis from the row and for selected rows with suggestions approved or dismissed in a row expansion, short listing id, clickable row, Sold tab.
 
 **Architecture:** Frontend only. Pure helpers in `productsCatalogueState.ts` and a new `productsRowAnalysis.ts` carry every decision that Jest can check without a DOM; `ProductsTable.tsx` renders them; `ProductsPage.tsx` wires the existing `useRunHermes` mutation and Hermes settings query. Browser behaviour (gap, clicks, analysis end to end) is pinned by a live q4j UI test.
 
@@ -175,13 +175,15 @@ Expected: FAIL (old columns present, no `PRODUCT_TABLE_COLUMNS` / `rowClickInten
 **Interfaces:**
 - Consumes: `PRODUCT_TABLE_COLUMNS` `ai` column and `data-row-stop` (Task 2); `productHermesDisabledReason` from `src/frontend/pages/ListingDetailsPage.tsx`.
 - Produces (in `productsRowAnalysis.ts`):
-  - `type RowAnalysisState = { status: 'running' } | { status: 'done'; count: number } | { status: 'error'; message: string }`
-  - `rowAnalysisLabel(state: RowAnalysisState | undefined): string | null` — `null` for undefined/running, `` `${count} to review` `` for count ≥ 1, `No new suggestions` for 0, the message for error.
+  - `type RowAnalysisState = { status: 'running' } | { status: 'done'; count: number } | { status: 'reviewed' } | { status: 'error'; message: string }`
+  - `rowAnalysisLabel(state: RowAnalysisState | undefined): string | null` — `null` for undefined/running, `` `${count} to review` `` for count ≥ 1, `No new suggestions` for 0, `All reviewed` for reviewed, the message for error.
+  - `stateAfterPendingChange(prev: RowAnalysisState | undefined, pending: number): RowAnalysisState | undefined` — called when the live pending list of an expanded row changes: `pending ≥ 1` → `{ status: 'done', count: pending }`; `pending === 0` after a `done` with count ≥ 1 → `{ status: 'reviewed' }`; otherwise `prev` unchanged.
   - `canStartRowAnalysis(state: RowAnalysisState | undefined, disabledReason: string | null): boolean`
   - `rowAnalyzeDisabledReason(input: { settingsLoaded: boolean; listingSeoEnabled: boolean }): string | null` — delegates to `productHermesDisabledReason` with a non-empty product id placeholder so only the settings reasons apply.
   - `runSequentially(ids: readonly string[], run: (id: string) => Promise<number>, onState: (id: string, state: RowAnalysisState) => void): Promise<{ analyzed: number; notRun: string[] }>` — one at a time; before each id emits `running`; on success `done` with the count; on an error whose `status === 429` emits the error for that id, stops, and returns the rest (including that id) in `notRun`; any other error marks that id `error` and continues.
   - `ProductRowHandlers.onAnalyze?: (product: Product) => void`; `productRowMenuItems` adds `Analyze with AI` as the first item when `onAnalyze` is set (disabled when `analyzeDisabledReason` is set).
-  - `ProductsCollectionProps` gains `analysisByProductId?: Record<string, RowAnalysisState>`, `onAnalyze?: (product: Product) => void`, `analyzeDisabledReason?: string | null`, `analysisHref?: (product: Product) => string` (target of the `N to review` link).
+  - `ProductsCollectionProps` gains `analysisByProductId?: Record<string, RowAnalysisState>`, `onAnalyze?: (product: Product) => void`, `analyzeDisabledReason?: string | null`, `expandedProductId?: string | null`, `onToggleReview?: (product: Product) => void`, `renderReview?: (product: Product) => React.ReactNode` (content of the expansion row; the table only places it).
+- Produces (new `src/frontend/components/tables/ProductRowSuggestions.tsx`): `ProductRowSuggestions: React.FC<{ productId: string; onPendingCountChange: (pending: number) => void }>` — reads `useHermesEvents({ productId, status: ['pending_review'], sort: '-createdAt', limit: 20 })`, renders one `HermesEventCard` per event (`variant={isSeoRecommendation(e) ? 'compactReview' : 'default'}`, actions shown), a `CircularProgress` while loading, `ErrorRetry` on error, and calls `onPendingCountChange(events.length)` whenever the loaded list length changes. No Jest test (it is store-bound; project rule: no Jest mocks for new tests) — covered live in Task 5.
 
 - [ ] **Step 1: Write the failing tests** (`productsRowAnalysis.test.ts`)
 
@@ -189,8 +191,17 @@ Expected: FAIL (old columns present, no `PRODUCT_TABLE_COLUMNS` / `rowClickInten
 it.each([
   [undefined, null], [{ status: 'running' }, null],
   [{ status: 'done', count: 2 }, '2 to review'], [{ status: 'done', count: 1 }, '1 to review'],
-  [{ status: 'done', count: 0 }, 'No new suggestions'], [{ status: 'error', message: 'Boom' }, 'Boom'],
+  [{ status: 'done', count: 0 }, 'No new suggestions'], [{ status: 'reviewed' }, 'All reviewed'],
+  [{ status: 'error', message: 'Boom' }, 'Boom'],
 ])('label for %o is %s', (state, label) => expect(rowAnalysisLabel(state as RowAnalysisState | undefined)).toBe(label));
+
+it('follows the live pending list of an expanded row', () => {
+  expect(stateAfterPendingChange({ status: 'done', count: 2 }, 1)).toEqual({ status: 'done', count: 1 });
+  expect(stateAfterPendingChange({ status: 'done', count: 1 }, 0)).toEqual({ status: 'reviewed' });
+  expect(stateAfterPendingChange({ status: 'done', count: 0 }, 0)).toEqual({ status: 'done', count: 0 });
+  expect(stateAfterPendingChange(undefined, 3)).toEqual({ status: 'done', count: 3 });
+  expect(stateAfterPendingChange({ status: 'running' }, 0)).toEqual({ status: 'running' });
+});
 
 it('refuses to start while running or disabled', () => {
   expect(canStartRowAnalysis({ status: 'running' }, null)).toBe(false);
@@ -231,12 +242,24 @@ it('marks a failed product and continues with the next one', async () => {
 And in `ProductsTable.test.tsx`:
 
 ```tsx
-it('renders the analyze button, result link and disabled reason', () => {
+it('renders the analyze button and a review toggle for pending suggestions', () => {
   const html = renderToStaticMarkup(<MemoryRouter><ProductsTable products={[product]} onAnalyze={() => {}}
-    analysisByProductId={{ 'p-1': { status: 'done', count: 2 } }} analysisHref={(p) => `/products/${p.id}#suggestions`} /></MemoryRouter>);
+    onToggleReview={() => {}} analysisByProductId={{ 'p-1': { status: 'done', count: 2 } }} /></MemoryRouter>);
   expect(html).toContain('aria-label="Analyze with AI: Wireless Headphones"');
   expect(html).toContain('2 to review');
-  expect(html).toContain('href="/products/p-1#suggestions"');
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).not.toContain('href="/products/p-1#');
+});
+it('places the review content in a full-width row under the expanded product only', () => {
+  const other = { ...product, id: 'p-2', name: 'Other' };
+  const html = renderToStaticMarkup(<MemoryRouter><ProductsTable products={[product, other]} onToggleReview={() => {}}
+    analysisByProductId={{ 'p-1': { status: 'done', count: 1 } }} expandedProductId="p-1"
+    renderReview={(p) => <span>review-of-{p.id}</span>} /></MemoryRouter>);
+  expect(html).toContain('review-of-p-1');
+  expect(html).not.toContain('review-of-p-2');
+  expect(html).toContain('colSpan="7"');
+  expect(html).toContain('aria-expanded="true"');
+  expect(html.indexOf('review-of-p-1')).toBeLessThan(html.indexOf('Other'));
 });
 it('disables the analyze button while running', () => {
   const html = renderToStaticMarkup(<MemoryRouter><ProductsTable products={[product]} onAnalyze={() => {}}
@@ -254,7 +277,7 @@ it('puts Analyze with AI first in the row menu when available', () => {
 Run: `SKIP_REDIS_TESTS=true npx jest --forceExit src/frontend/pages/productsRowAnalysis.test.ts src/frontend/components/tables/ProductsTable.test.tsx`
 Expected: FAIL (module missing, no AI cell).
 
-- [ ] **Step 3: Implement** the module per the Interfaces block (error message via the same shape `errorMessage` in `ProductsPage.tsx` reads: `data.error.message`, then `message`, else `Request failed`). In the table's `ai` cell (`data-row-stop`): an `IconButton` with `AutoAwesomeOutlined` icon, `aria-label={`Analyze with AI: ${product.name}`}`, disabled unless `canStartRowAnalysis`, wrapped in a `Tooltip` showing `analyzeDisabledReason` when set; a `CircularProgress size={16}` in place of the icon while running; then the label — a `Link` to `analysisHref(product)` when count ≥ 1, plain secondary text otherwise, error text in `error.main`. Cards get the menu item only.
+- [ ] **Step 3: Implement** the module per the Interfaces block (error message via the same shape `errorMessage` in `ProductsPage.tsx` reads: `data.error.message`, then `message`, else `Request failed`). In the table's `ai` cell (`data-row-stop`): an `IconButton` with `AutoAwesomeOutlined` icon, `aria-label={`Analyze with AI: ${product.name}`}`, disabled unless `canStartRowAnalysis`, wrapped in a `Tooltip` showing `analyzeDisabledReason` when set; a `CircularProgress size={16}` in place of the icon while running; then the label — when count ≥ 1 a text `Button` (`size="small"`, `aria-expanded`, `aria-controls` of the expansion row, end icon ▾/▴) calling `onToggleReview(product)`; plain secondary text otherwise; error text in `error.main`. Directly after the product's `TableRow`, when `expandedProductId === product.id`, render a second `TableRow` with one `TableCell colSpan={PRODUCT_TABLE_COLUMNS.length}` (`data-row-stop`, not clickable) containing `renderReview(product)`. Cards: the menu item, the same toggle under the card body, and `renderReview(product)` inside the card when expanded. Then create `ProductRowSuggestions` per its Interfaces line.
 
 - [ ] **Step 4: Run to verify they pass** — same command, expected PASS.
 
@@ -271,7 +294,7 @@ Expected: FAIL (module missing, no AI cell).
 **Interfaces:**
 - Consumes: Task 1 `visibleProductTabs`, `ProductsTab` incl. `sold`; Task 3 `RowAnalysisState`, `runSequentially`, `rowAnalyzeDisabledReason`, new table props; `useRunHermes`, `productScopedHermesRunInput` (`ListingDetailsPage.tsx`), `useGetHermesSettingsQuery` + `settingsPrincipalKey` (`state/api/settingsApi.ts`, used the same way as `ListingDetailsPage.tsx:702`).
 
-- [ ] **Step 1: Wire row analysis.** State `analysisByProductId: Record<string, RowAnalysisState>`; `analyzeOne(product)` sets `running`, awaits `runHermes(productScopedHermesRunInput(product.id)).unwrap()`, sets `done` with `events.length` or `error`. Pass `onAnalyze`, `analysisByProductId`, `analyzeDisabledReason`, and `analysisHref = (p) => `/products/${p.id}`` to both `ProductsTable` and `ProductsCards`. The state is page-local (leaving the page drops it — spec call).
+- [ ] **Step 1: Wire row analysis.** State `analysisByProductId: Record<string, RowAnalysisState>`; `analyzeOne(product)` sets `running`, awaits `runHermes(productScopedHermesRunInput(product.id)).unwrap()`, sets `done` with `events.length` or `error`. State `expandedProductId: string | null`; a row analysis that returns ≥ 1 event sets it to that product (auto-open; one row at a time). `onToggleReview` toggles it. `renderReview = (p) => <ProductRowSuggestions productId={p.id} onPendingCountChange={(n) => { setAnalysis(p.id, stateAfterPendingChange(prev, n)); if (n === 0) setExpandedProductId(null); }} />`. Bulk runs do not auto-expand. Pass `onAnalyze`, `analysisByProductId`, `analyzeDisabledReason`, `expandedProductId`, `onToggleReview`, `renderReview` to both `ProductsTable` and `ProductsCards`. The state is page-local (leaving the page drops it — spec call).
 
 - [ ] **Step 2: Bulk.** In the selection bar, before Export CSV: `Analyze selected` button (`AutoAwesomeOutlined` icon), disabled while a bulk run is going or `analyzeDisabledReason` is set; shows `Analyzing 3 / 12` while running. It calls `runSequentially([...selectedIds], run, onState)` where `run` returns the event count. On finish: success toast `Analyzed N products.`; when `notRun.length > 0`, warning toast `AI rate limit reached: N products were not analyzed.` and those rows go back to idle (remove their state). Selection stays.
 
@@ -306,11 +329,17 @@ Follow the existing `ProductDetailPage` / `ProductDetailPageSteps` / `ProductDet
     .lacksColumns(List.of("Markets", "Cost", "Profit", "Tags")); }
 @Test public void filtersPanelKeepsItsDistanceFromTheTable() { … openFilters().verify().filtersPanelGapAtLeast(16); }
 @Test public void analyzeFromTheRowStaysOnTheCatalogue() { … analyzeRow(name).verify().rowShowsAnalysisResult(name).isOnProductsPage(); }
+@Test public void suggestionIsApprovedInPlaceOnTheActiveTab() { … openTab("Active").analyzeRow(name)
+    .verify().reviewExpandedUnder(name).isOnProductsPage().activeTabSelected();
+  productsPageSteps.approveFirstSuggestion(name).verify().pendingCountDecreased(name).isOnProductsPage().activeTabSelected(); }
+@Test public void suggestionIsDismissedInPlace() { … analyzeRow(name).dismissFirstSuggestion(name).verify().pendingCountDecreased(name).isOnProductsPage(); }
 @Test public void clickingTheRowOpensTheProduct() { … clickRow(name).verify().isOnProductPage(productListing.productId()); }
 ```
 
+The two review tests need the stand's analysis to return at least one suggestion for the seeded listing; confirm on the stand which listing data the offline heuristics flag (e.g. a short title) and seed that through `productSteps.updateName` before analyzing. Extra step/verification methods: `openTab(String)`, `approveFirstSuggestion(String)`, `dismissFirstSuggestion(String)`, `reviewExpandedUnder(String)`, `pendingCountDecreased(String)`, `activeTabSelected()`.
+
 Gap = `table card top − filters panel bottom` via `getBoundingClientRect` in JS, after the Collapse transition (wait for `aria-expanded="true"` and a stable panel height).
 
-- [ ] **Step 2: Run against a stand** — `../scripts/ci-java-api-tests.sh`-style Compose stack built from this branch, then `JAVA_HOME=$(brew --prefix openjdk@21) ./gradlew uiTest --tests '*ProductsCatalogueUiTest'`. Expected: 4 passed. Also run on `origin/main`'s build once to confirm `filtersPanelGapAtLeast(16)` fails there (regression guard for the gap bug).
+- [ ] **Step 2: Run against a stand** — `../scripts/ci-java-api-tests.sh`-style Compose stack built from this branch, then `JAVA_HOME=$(brew --prefix openjdk@21) ./gradlew uiTest --tests '*ProductsCatalogueUiTest'`. Expected: 6 passed. Also run on `origin/main`'s build once to confirm `filtersPanelGapAtLeast(16)` fails there (regression guard for the gap bug).
 
 - [ ] **Step 3: Commit** — `test(ui): products catalogue columns, filters gap, row analyze and row click`

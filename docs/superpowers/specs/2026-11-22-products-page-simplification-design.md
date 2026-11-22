@@ -16,6 +16,7 @@ growing. The demo the owner reviewed (stage 1 and stage 2 layouts) was accepted 
 - Remove Markets, Cost, Profit and Tags from the table and the card view.
 - Fix the missing gap between the opened Filters panel and the table.
 - Analyze a product with Hermes from its row, and analyze several selected products in sequence.
+- Approve or dismiss the resulting suggestions in place, under the row, without leaving the tab.
 - Show views, their 7-day growth and a small trend line per product.
 - Replace the empty Attention tab with a computed "Needs action" tab.
 - Small daily-use fixes: short listing id instead of the long SKU, clickable row, two-line titles,
@@ -91,9 +92,19 @@ It is a real link, so Cmd/Ctrl-click opens a new tab.
 kebab (the kebab item is the only entry point in the card view). It calls the existing `runHermes`
 mutation (`POST /hermes/products/:id/run`, `trigger: 'manual'`) and reuses the product page's helpers
 for the disabled reason, provider label and success wording (`ListingDetailsPage.tsx`). States:
-idle → running (spinner, button disabled) → "N to review" (link to the product's suggestions) or
-"no new suggestions" or the error text. If the listing SEO agent is disabled, the button is disabled
-with the same reason the product page shows. In stage 1 the result lives for the session only.
+idle → running (spinner, button disabled) → "N to review ▾" or "no new suggestions" or the error
+text. If the listing SEO agent is disabled, the button is disabled with the same reason the product
+page shows. In stage 1 the result lives for the session only.
+
+**Review in place (owner, 2026-11-22).** The owner stays on the Active tab: reviewing a suggestion
+must not navigate away or move the product to another tab. "N to review ▾" expands a row directly
+under the product (full table width) listing its pending suggestions, each with Approve and Dismiss,
+using the existing `HermesEventCard` (`compactReview` variant for SEO suggestions, `default`
+otherwise) and its existing approve/dismiss mutations. The expansion opens by itself when a row
+analysis returns at least one suggestion; one row is expanded at a time; clicking "N to review ▴"
+collapses it. The count follows the live pending list (approve/dismiss invalidate it); when the last
+suggestion is resolved the expansion closes and the cell reads "All reviewed". In the card view the
+same list expands inside the card. Approving applies the change exactly as on the product page.
 
 **Bulk analyze.** When rows are selected, the selection bar gets "Analyze selected" next to Export
 CSV. It runs the selected products one by one, each row showing its own state, the bar showing
@@ -116,8 +127,9 @@ the listing's; if a product has several listings, views and messages are summed 
 the worst one (error > expired > draft > live).
 
 **Pending-suggestion counts.** `GET /hermes/events/pending-counts` → `Record<productId, number>` of
-Hermes events in `pending_review`. The row's AI cell shows "N to review" from this count, so results
-survive reloads; a row analyze run refreshes it.
+Hermes events in `pending_review`. The row's AI cell shows "N to review ▾" from this count, so
+results survive reloads and can be reviewed in place without running a new analysis; a row analyze
+run, approve and dismiss refresh it.
 
 **Views column.** Replaces Updated: current views, then `▲ +N` (green) or "no growth" (grey) for 7
 days, a 14-day trend line (single colour, no axes), and a muted line "N watching · N msgs · synced
@@ -129,7 +141,6 @@ existing sort fields).
 it when any of these holds:
 
 - a buyer is waiting for a reply (existing awaiting count);
-- it has Hermes suggestions pending review;
 - its OLX listing is expired or in error;
 - no view growth for 7 days, counted only for live listings that synced within the last 24 hours
   and have been live for at least 7 days.
@@ -164,8 +175,11 @@ same server computation.
 ## Owner decisions recorded
 
 - Remove Markets, Cost, Profit, Tags now; bring Markets back later without clutter.
-- Needs action reasons: buyer waiting, AI suggestions to review, listing expired/error, no view
-  growth. Condition-not-confirmed stays a hint only.
+- Needs action reasons: buyer waiting, listing expired/error, no view growth.
+  Condition-not-confirmed stays a hint only. Pending AI suggestions do NOT put a product into Needs
+  action (owner revised 2026-11-22): they are reviewed in place from the row on the Active tab.
+- AI suggestions are approved or dismissed in a row expansion under the product, not on the product
+  page and not in a side panel or popover (owner's pick).
 - Two-stage delivery.
 - OLX sync runs `hourly` on prod. Before stage 2 ships, the prod sync mode is checked; if it is
   `manual`, it is switched to `hourly` (a marketplace setting, not code). Stage 2's freshness and
