@@ -1,5 +1,6 @@
 import type { HermesEvent, ResearchRun, SaleVerdict, VerdictCheck } from '@shared/types';
-import { buildHistory, defaultExpandedId, historyQueryState } from './hermesHistory';
+import type { HistoryEntry } from './hermesHistory';
+import { HISTORY_TITLES, buildHistory, defaultExpandedId, historyQueryState } from './hermesHistory';
 
 const T0 = '2026-11-20T10:00:00.000Z';
 const T1 = '2026-11-20T10:01:00.000Z';
@@ -170,6 +171,103 @@ describe('buildHistory', () => {
     expect(last.detail).toContain('something went wrong');
   });
 
+  it('a failed research run shows a node still running as Not run', () => {
+    const entries = buildHistory({
+      ...base,
+      researchRuns: [
+        run({ outcome: 'failed', errorCode: 'timeout', nodes: { identify: 'done', sameModelUsed: 'running' } }),
+      ],
+    });
+    const steps = entries[0]!.steps;
+    expect(steps[1]).toEqual({ label: 'Same model used', status: 'none', detail: 'Not run' });
+    expect(steps.some((step) => step.status === 'running' || step.detail === 'Running')).toBe(false);
+  });
+
+  it('an active research run marks its running node running', () => {
+    const entries = buildHistory({
+      ...base,
+      researchRuns: [run({ status: 'running', outcome: null, finishedAt: null, nodes: { identify: 'done', sameModelUsed: 'running' } })],
+    });
+    expect(entries[0]!.steps.slice(0, 3)).toEqual([
+      { label: 'Identify the model', status: 'ok', detail: 'Done' },
+      { label: 'Same model used', status: 'running', detail: 'Running' },
+      { label: 'Last new price', status: 'none', detail: 'Not run' },
+    ]);
+  });
+
+  it('a failed verdict shows its pending checks and its linked research nodes as Not run', () => {
+    const entries = buildHistory({
+      ...base,
+      researchRuns: [run({ status: 'running', outcome: null, finishedAt: null, nodes: { identify: 'done', sameModelUsed: 'running' } })],
+      verdicts: [
+        verdict({
+          status: 'failed',
+          overall: null,
+          errorCode: 'expired',
+          researchRunId: 'run-1',
+          checks: { price: check('price', 'pending') },
+        }),
+      ],
+    });
+    const steps = entries[0]!.steps;
+    expect(steps.find((step) => step.label === 'Same model used')).toMatchObject({ status: 'none', detail: 'Not run' });
+    expect(steps.find((step) => step.label === 'Price check')).toEqual({ label: 'Price check', status: 'none', detail: 'Not run' });
+    expect(steps.map((step) => step.detail).join(' ')).not.toContain('researching');
+    expect(steps.some((step) => step.status === 'running')).toBe(false);
+    expect(steps[steps.length - 1]).toEqual({
+      label: 'Result',
+      status: 'bad',
+      detail: 'Analysis failed: the analysis took too long and was stopped.',
+    });
+  });
+
+  it('an active verdict shows its checks without a result as running', () => {
+    const entries = buildHistory({
+      ...base,
+      verdicts: [verdict({ status: 'running', overall: null, completedAt: null, checks: { price: check('price', 'pending') } })],
+    });
+    expect(entries[0]!.steps.map((step) => step.status)).toEqual(['running', 'running', 'running']);
+  });
+
+  it('a Search again is a Price search with the search steps and the price check only', () => {
+    const entries = buildHistory({
+      ...base,
+      researchRuns: [run({ trigger: 'manual' })],
+      verdicts: [
+        verdict({ scope: ['price'], researchRunId: 'run-1', checks: { price: check('price', 'ready', 'The price is fair') } }),
+      ],
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ title: HISTORY_TITLES.priceSearch, startedBy: 'you' });
+    expect(entries[0]!.steps.map((s) => s.label)).toEqual([
+      'Identify the model',
+      'Same model used',
+      'Last new price',
+      'New substitutes',
+      'Used substitutes',
+      'Price check',
+    ]);
+  });
+
+  it('a full analysis with a forced search stays an Analysis', () => {
+    const entries = buildHistory({
+      ...base,
+      researchRuns: [run({ trigger: 'manual' })],
+      verdicts: [verdict({ researchRunId: 'run-1' })],
+    });
+    expect(entries[0]!.title).toBe(HISTORY_TITLES.analysis);
+    expect(entries[0]!.steps).toHaveLength(8);
+  });
+
+  it('an entry lists only the checks in its scope', () => {
+    const entries = buildHistory({
+      ...base,
+      verdicts: [verdict({ scope: ['info'], checks: { info: check('info', 'ready') } })],
+    });
+    expect(entries[0]!.title).toBe(HISTORY_TITLES.analysis);
+    expect(entries[0]!.steps.map((s) => s.label)).toEqual(['Info check']);
+  });
+
   it('a running run has durationMs null and outcome tone info, label Running', () => {
     const entries = buildHistory({
       ...base,
@@ -244,7 +342,7 @@ describe('historyQueryState', () => {
 });
 
 describe('defaultExpandedId', () => {
-  const entry = (id: string, title: 'Analysis' | 'Price search' | 'Suggestion') =>
+  const entry = (id: string, title: HistoryEntry['title']) =>
     ({ id, at: T0, title, startedBy: 'you', durationMs: null, outcome: { label: 'x', tone: 'default' }, steps: [] }) as const;
 
   it('opens the newest run, skipping suggestions above it', () => {

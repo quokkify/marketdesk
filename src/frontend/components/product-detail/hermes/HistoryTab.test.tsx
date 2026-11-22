@@ -69,6 +69,24 @@ describe('HistoryTab', () => {
     expect(html).not.toContain('Not run: Shorten');
   });
 
+  it('a running step reads Running and a finished one never does', () => {
+    const html = render({
+      entries: [
+        entry(0, {
+          durationMs: null,
+          outcome: { label: 'Running', tone: 'info' },
+          steps: [{ label: 'Same model used', status: 'running', detail: 'Running' }],
+        }),
+      ],
+    });
+
+    expect(html).toContain('Running: ');
+    expect(html).toContain('role="progressbar"');
+    const finished = render({ entries: [entry(0, { steps: [{ label: 'Same model used', status: 'none', detail: 'Running' }] })] });
+    expect(finished).toContain('Not run: ');
+    expect(finished).not.toContain('role="progressbar"');
+  });
+
   it('a running entry shows no duration', () => {
     const html = render({ entries: [entry(0, { durationMs: null, outcome: { label: 'Running', tone: 'info' } })] });
 

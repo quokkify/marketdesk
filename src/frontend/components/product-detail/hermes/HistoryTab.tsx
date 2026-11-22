@@ -16,7 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ErrorRetry } from '../../common/ErrorRetry.js';
 import { LoadingSkeleton } from '../../common/Skeleton.js';
 import { formatDateTime } from '../../../utils/formatters.js';
-import { defaultExpandedId, formatDuration, type HistoryEntry, type HistoryStep } from './hermesHistory.js';
+import { HISTORY_TITLES, defaultExpandedId, formatDuration, type HistoryEntry, type StepStatus } from './hermesHistory.js';
 import type { RowStatus } from './hermesCardModel.js';
 import { STATUS_TEXT, StatusMark } from './StatusMark.js';
 
@@ -32,15 +32,16 @@ const CHIP_COLOR = {
   default: 'default',
 } as const;
 
-function stepStatus(step: HistoryStep): RowStatus {
-  if (step.status === 'ok') return 'ok';
-  if (step.status === 'bad') return 'bad';
-  if (step.status === 'attention') return 'attention';
-  return step.detail === 'Running' ? 'running' : 'idle';
-}
+const STEP_STATUS: Record<StepStatus, RowStatus> = {
+  ok: 'ok',
+  bad: 'bad',
+  attention: 'attention',
+  running: 'running',
+  none: 'idle',
+};
 
 function headline(entry: HistoryEntry): string {
-  return entry.title === 'Suggestion' && entry.steps[0] ? `Suggestion · ${entry.steps[0].label}` : entry.title;
+  return entry.title === HISTORY_TITLES.suggestion && entry.steps[0] ? `${entry.title} · ${entry.steps[0].label}` : entry.title;
 }
 
 const EntryHeader: React.FC<{ entry: HistoryEntry }> = ({ entry }) => {
@@ -88,7 +89,7 @@ const EntryRow: React.FC<{ entry: HistoryEntry; defaultExpanded: boolean }> = ({
       <AccordionDetails sx={{ pt: 0 }}>
         <Stack spacing={1} component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {entry.steps.map((step, index) => {
-            const status = stepStatus(step);
+            const status = STEP_STATUS[step.status];
             return (
               <Stack
                 key={`${index}:${step.label}`}

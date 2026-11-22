@@ -10,19 +10,26 @@ import type {
   VerdictCheckStatus,
 } from '@shared/types';
 import { checkLabel, overallColor, overallLabel } from '../../products/verdictDisplay.js';
-import { errorReason } from '../priceResearchModel.js';
+import { errorReason, verdictErrorReason } from '../priceResearchModel.js';
 
-export type StepStatus = 'ok' | 'bad' | 'attention' | 'none';
+export type StepStatus = 'ok' | 'bad' | 'attention' | 'running' | 'none';
 export interface HistoryStep {
   label: string;
   status: StepStatus;
   detail: string;
 }
 type Tone = 'success' | 'warning' | 'error' | 'info' | 'default';
+
+export const HISTORY_TITLES = {
+  analysis: 'Analysis',
+  priceSearch: 'Price search',
+  suggestion: 'Suggestion',
+} as const;
+
 export interface HistoryEntry {
   id: string;
   at: string;
-  title: 'Analysis' | 'Price search' | 'Suggestion';
+  title: (typeof HISTORY_TITLES)[keyof typeof HISTORY_TITLES];
   startedBy: 'you' | 'autopilot' | 'Hermes';
   durationMs: number | null;
   outcome: { label: string; tone: Tone };
@@ -41,9 +48,11 @@ const NODE_STEPS: Record<NodeStatus, { status: StepStatus; detail: string }> = {
   done: { status: 'ok', detail: 'Done' },
   failed: { status: 'bad', detail: 'Failed' },
   timeout: { status: 'bad', detail: 'Took too long' },
-  running: { status: 'none', detail: 'Running' },
+  running: { status: 'running', detail: 'Running' },
   pending: { status: 'none', detail: 'Not run' },
 };
+const NOT_RUN: { status: StepStatus; detail: string } = { status: 'none', detail: 'Not run' };
+const CHECK_RUNNING: { status: StepStatus; detail: string } = { status: 'running', detail: 'Running' };
 
 const CHECK_LABELS: Record<VerdictCheckName, string> = {
   price: 'Price check',
@@ -52,11 +61,10 @@ const CHECK_LABELS: Record<VerdictCheckName, string> = {
 };
 const CHECK_ORDER: VerdictCheckName[] = ['price', 'info', 'photos'];
 
-const CHECK_STATUS: Record<VerdictCheckStatus, StepStatus> = {
+const CHECK_STATUS: Record<Exclude<VerdictCheckStatus, 'pending'>, StepStatus> = {
   ready: 'ok',
   fix: 'bad',
   needs_human: 'bad',
-  pending: 'none',
 };
 
 const EVENT_OUTCOMES: Record<HermesEventStatus, { label: string; tone: Tone }> = {
@@ -103,7 +111,7 @@ export function historyQueryState(queries: HistoryQuery[]): { loading: boolean; 
 // The entry opened by default: the newest run, since that is the log the seller just started; a
 // suggestion is created a moment after its analysis and would otherwise take the spot.
 export function defaultExpandedId(entries: HistoryEntry[]): string | null {
-  const run = entries.find((entry) => entry.title !== 'Suggestion');
+  const run = entries.find((entry) => entry.title !== HISTORY_TITLES.suggestion);
   return (run ?? entries[0])?.id ?? null;
 }
 
@@ -121,22 +129,29 @@ function duration(from: string, to: string | null): number | null {
   return Number.isNaN(ms) ? null : Math.max(0, ms);
 }
 
-function sentence(prefix: string, code: string | null): string {
-  return `${prefix}: ${errorReason(code)}.`;
+function verdictOver(verdict: SaleVerdict): boolean {
+  return verdict.status === 'completed' || verdict.status === 'failed';
 }
 
-function researchSteps(run: ResearchRun): HistoryStep[] {
-  const steps = NODE_LABELS.map(([node, label]) => ({ label, ...NODE_STEPS[run.nodes[node] ?? 'pending'] }));
+// Once its run is over, a step that never finished did not run: it is never left "running".
+function researchSteps(run: ResearchRun, over: boolean): HistoryStep[] {
+  const ended = over || run.status === 'finished';
+  const steps: HistoryStep[] = NODE_LABELS.map(([node, label]) => {
+    const status = run.nodes[node] ?? 'pending';
+    return { label, ...(ended && (status === 'running' || status === 'pending') ? NOT_RUN : NODE_STEPS[status]) };
+  });
   if (run.status === 'finished' && run.outcome === 'failed') {
-    steps.push({ label: 'Result', status: 'bad', detail: sentence('Price search failed', run.errorCode) });
+    steps.push({ label: 'Result', status: 'bad', detail: `Price search failed: ${errorReason(run.errorCode)}.` });
   }
   return steps;
 }
 
+// Only the checks in the run's scope.
 function verdictSteps(verdict: SaleVerdict): HistoryStep[] {
-  const steps = CHECK_ORDER.map((name) => {
+  const over = verdictOver(verdict);
+  const steps: HistoryStep[] = CHECK_ORDER.filter((name) => verdict.scope.includes(name)).map((name) => {
     const check = verdict.checks[name];
-    if (!check) return { label: CHECK_LABELS[name], status: 'none' as const, detail: 'Not checked' };
+    if (!check || check.status === 'pending') return { label: CHECK_LABELS[name], ...(over ? NOT_RUN : CHECK_RUNNING) };
     return {
       label: CHECK_LABELS[name],
       status: CHECK_STATUS[check.status],
@@ -144,9 +159,15 @@ function verdictSteps(verdict: SaleVerdict): HistoryStep[] {
     };
   });
   if (verdict.status === 'failed') {
-    steps.push({ label: 'Result', status: 'bad', detail: sentence('Analysis failed', verdict.errorCode) });
+    steps.push({ label: 'Result', status: 'bad', detail: `Analysis failed: ${verdictErrorReason(verdict.errorCode)}.` });
   }
   return steps;
+}
+
+// A price-only run linked to a forced search is what Search again starts.
+function verdictTitle(verdict: SaleVerdict, linked: ResearchRun | undefined): HistoryEntry['title'] {
+  const priceOnly = verdict.scope.length === 1 && verdict.scope[0] === 'price';
+  return priceOnly && linked?.trigger === 'manual' ? HISTORY_TITLES.priceSearch : HISTORY_TITLES.analysis;
 }
 
 function verdictOutcome(verdict: SaleVerdict): HistoryEntry['outcome'] {
@@ -181,11 +202,11 @@ export function buildHistory(input: {
     entries.push({
       id: `verdict:${verdict.id}`,
       at: verdict.createdAt,
-      title: 'Analysis',
+      title: verdictTitle(verdict, linked),
       startedBy: runStartedBy(linked),
       durationMs: duration(verdict.createdAt, verdict.completedAt),
       outcome: verdictOutcome(verdict),
-      steps: [...(linked ? researchSteps(linked) : []), ...verdictSteps(verdict)],
+      steps: [...(linked ? researchSteps(linked, verdictOver(verdict)) : []), ...verdictSteps(verdict)],
     });
   }
 
@@ -195,11 +216,11 @@ export function buildHistory(input: {
     entries.push({
       id: `research:${run.id}`,
       at,
-      title: 'Price search',
+      title: HISTORY_TITLES.priceSearch,
       startedBy: runStartedBy(run),
       durationMs: duration(at, run.finishedAt),
       outcome: researchOutcome(run),
-      steps: researchSteps(run),
+      steps: researchSteps(run, false),
     });
   }
 
@@ -207,7 +228,7 @@ export function buildHistory(input: {
     entries.push({
       id: `event:${event.id}`,
       at: event.createdAt,
-      title: 'Suggestion',
+      title: HISTORY_TITLES.suggestion,
       startedBy: 'Hermes',
       durationMs: null,
       outcome: EVENT_OUTCOMES[event.status],
