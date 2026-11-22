@@ -28,12 +28,6 @@ public class ProductDetailPageSteps
     return this;
   }
 
-  @Step("Suggest improvements")
-  public ProductDetailPageSteps suggestImprovements() {
-    page.suggestImprovementsButton().shouldBe(Condition.enabled).click();
-    return this;
-  }
-
   @Step("Open the publication dialog")
   public ProductDetailPageSteps openPublicationDialog() {
     page.publishButton().shouldBe(Condition.enabled).click();

@@ -34,7 +34,7 @@ other finding of the review to be fixed in the same branch (`chore/remove-playwr
 | sends one product when Publish to OLX is pressed twice quickly | *moves* | Two clicks in one script call, as before; the API then lists exactly one product with that name. |
 | keeps Publish to OLX disabled without a price or while the category changes | *dropped* | Covered by `ProductWizardForm.test.tsx` ("keeps Publish to OLX disabled at price 0 and names the reason", "blocks publishing while the chosen category is being changed"). |
 | on a phone: shows Publish to OLX without scrolling | *moves* | Window set to 390×844 for that test only; a script checks that the button's bounding box lies fully inside the viewport. |
-| shows review-only assistance and the manual publication review | *moves* (already in PR 500) | `PublicationJourneyUiTest.creationEntryAndReviewOnlyAssistanceAreVisible`, rechained. Its console check for "does not recognize the" is *dropped*: the stack serves the production build, where React never prints that warning, so the check could not fail. |
+| shows review-only assistance and the manual publication review | *moves* (already in PR 500) | `PublicationJourneyUiTest.creationEntryAndPublicationReviewAreVisible`, rechained. The review-only suggestions left the product page with the sale verdict (#504), which `SaleVerdictUiTest` covers, so the test keeps the creation entry, the readiness check and the publication review. Its console check for "does not recognize the" is *dropped*: the stack serves the production build, where React never prints that warning, so the check could not fail. |
 
 ## Design
 

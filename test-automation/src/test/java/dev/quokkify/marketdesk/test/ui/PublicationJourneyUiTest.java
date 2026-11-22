@@ -4,20 +4,18 @@ import java.util.UUID;
 
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
-import dev.quokkify.marketdesk.model.ProductRequestPojo;
 
 import org.testng.annotations.Test;
 
 public class PublicationJourneyUiTest extends BaseUiTest {
 
-  private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final String SANDBOX_CAMERAS_ID = "1001";
   private static final String DRAFT = "draft";
   private static final int PHONE_WIDTH = 390;
   private static final int PHONE_HEIGHT = 844;
 
   @Test
-  public void creationEntryAndReviewOnlyAssistanceAreVisible() {
+  public void creationEntryAndPublicationReviewAreVisible() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
@@ -39,10 +37,6 @@ public class PublicationJourneyUiTest extends BaseUiTest {
         .openProductPage(productListing)
         .verify()
         .showsPublicationReadinessCheck()
-        .backToSteps()
-        .suggestImprovements()
-        .verify()
-        .showsSuggestionsForReviewOnly(PRODUCT_NAME)
         .backToSteps()
         .openPublicationDialog()
         .verify()

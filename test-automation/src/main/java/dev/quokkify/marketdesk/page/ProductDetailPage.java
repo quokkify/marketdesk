@@ -37,15 +37,9 @@ public class ProductDetailPage implements Page {
   private static final String SELLING_PRICE = "//label[text()='Selling price']/following::input[1]";
   private static final String LAST_RESEARCH_RUN = "[data-testid=\"price-research-last-run\"]";
   private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
-  private static final String PRODUCT_TITLE = "#product-detail-title";
-  private static final String SUGGESTED_IMPROVEMENTS = "Suggested improvements";
-  private static final String SUGGESTED_PRICE = "Suggested price:";
-  private static final String REVIEW_ONLY = "Suggestions are for review only.";
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String PUBLICATION_QUEUED = "Publication was accepted and queued.";
 
-  @FindBy(xpath = "//button[contains(normalize-space(.), 'Suggest improvements')]")
-  private SelenideElement suggestImprovementsButton;
   @FindBy(xpath = "//button[contains(normalize-space(.), 'Publication readiness check')]")
   private SelenideElement publicationReadinessButton;
   @FindBy(xpath = "//button[@aria-label='Publish']")
@@ -71,32 +65,12 @@ public class ProductDetailPage implements Page {
     Selenide.open(getUrl() + "/" + productId);
   }
 
-  public SelenideElement suggestImprovementsButton() {
-    return suggestImprovementsButton;
-  }
-
   public SelenideElement publicationReadinessButton() {
     return publicationReadinessButton;
   }
 
   public SelenideElement publishButton() {
     return publishButton;
-  }
-
-  public SelenideElement productTitle() {
-    return Selenide.$(PRODUCT_TITLE);
-  }
-
-  public SelenideElement suggestedImprovementsHeading() {
-    return Selenide.$(Selectors.byText(SUGGESTED_IMPROVEMENTS));
-  }
-
-  public SelenideElement suggestedPriceHeading() {
-    return Selenide.$(Selectors.withText(SUGGESTED_PRICE));
-  }
-
-  public SelenideElement reviewOnlyNote() {
-    return Selenide.$(Selectors.withText(REVIEW_ONLY));
   }
 
   // On phones the sidebar is a kept-mounted MUI Drawer, which also carries role="dialog".

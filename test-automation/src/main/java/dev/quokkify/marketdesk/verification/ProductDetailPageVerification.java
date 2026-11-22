@@ -33,15 +33,6 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The product page shows suggestions for review only and leaves {productName} unchanged")
-  public ProductDetailPageVerification showsSuggestionsForReviewOnly(String productName) {
-    page.suggestedImprovementsHeading().shouldBe(Condition.visible, getTimeout());
-    page.suggestedPriceHeading().shouldBe(Condition.visible, getTimeout());
-    page.reviewOnlyNote().shouldBe(Condition.visible, getTimeout());
-    page.productTitle().shouldHave(Condition.exactText(productName), getTimeout());
-    return this;
-  }
-
   @Step("The product page says the publication was queued and shows no dialog")
   public ProductDetailPageVerification showsPublicationQueued() {
     page.publicationQueuedNotice().shouldBe(Condition.visible, getTimeout());
