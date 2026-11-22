@@ -29,6 +29,8 @@ import GridViewIcon from '@mui/icons-material/GridView';
 import ListIcon from '@mui/icons-material/ViewList';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import { skipToken } from '@reduxjs/toolkit/query';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import type { BlockerFunction } from 'react-router-dom';
 import type { Marketplace, Product } from '@shared/types';
@@ -39,6 +41,7 @@ import {
   useCheckMarketplace,
   useMarketplaces,
   useProducts,
+  useRunHermes,
 } from '../services/hooks/index.js';
 import {
   useGetAwaitingCountsQuery,
@@ -46,13 +49,26 @@ import {
   useLazySearchMarketplaceCategoriesQuery,
 } from '../state/api/index.js';
 import type { ProductListParams } from '../state/api/index.js';
+import { useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useAppDispatch, useAppSelector } from '../state/hooks.js';
 import { enqueueToast } from '../state/slices/uiSlice.js';
 import { Card } from '../components/common/Card.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
 import { useProductDeletion } from '../hooks/useProductDeletion.js';
-import { CatalogueFooter, ProductsCards, ProductsTable } from '../components/tables/index.js';
+import {
+  CatalogueFooter,
+  ProductRowSuggestions,
+  ProductsCards,
+  ProductsTable,
+} from '../components/tables/index.js';
+import { productScopedHermesRunInput } from './ListingDetailsPage.js';
+import {
+  rowAnalyzeDisabledReason,
+  runSequentially,
+  stateAfterPendingChange,
+} from './productsRowAnalysis.js';
+import type { RowAnalysisState } from './productsRowAnalysis.js';
 import {
   hasCatalogueFilters,
   parseProductsCatalogueState,
@@ -62,6 +78,7 @@ import {
   productsToCsv,
   tabStatus,
   updateProductsCatalogueSearch,
+  visibleProductTabs,
 } from './productsCatalogueState.js';
 import type {
   ProductsCatalogueState,
@@ -156,6 +173,83 @@ const ProductsPage: React.FC = () => {
       next.delete(deleted.id);
       return next;
     })
+  );
+  const [analysisByProductId, setAnalysisByProductId] = useState<Record<string, RowAnalysisState>>(
+    {}
+  );
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [runHermes] = useRunHermes();
+  const hermesPrincipal = workspaceId && userId ? { workspaceId, userId } : null;
+  const hermesSettings = useGetHermesSettingsQuery(hermesPrincipal ?? skipToken);
+  const analyzeDisabledReason = rowAnalyzeDisabledReason({
+    settingsLoaded: Boolean(hermesSettings.currentData),
+    listingSeoEnabled: hermesSettings.currentData?.agents.listingSeo.enabled ?? false,
+  });
+  const setRowAnalysis = useCallback((productId: string, state: RowAnalysisState | undefined) => {
+    setAnalysisByProductId((current) => {
+      if (current[productId] === state) return current;
+      const next = { ...current };
+      if (state) next[productId] = state;
+      else delete next[productId];
+      return next;
+    });
+  }, []);
+  const runRowAnalysis = useCallback(
+    async (productId: string) =>
+      (await runHermes(productScopedHermesRunInput(productId)).unwrap()).length,
+    [runHermes]
+  );
+  const analyzeProduct = async (product: Product) => {
+    await runSequentially([product.id], runRowAnalysis, (id, state) => {
+      setRowAnalysis(id, state);
+      if (state.status === 'done' && state.count > 0) setExpandedProductId(id);
+    });
+  };
+  const analyzeSelected = async () => {
+    const ids = [...selectedIds];
+    let done = 0;
+    setBulkProgress({ done, total: ids.length });
+    const result = await runSequentially(ids, runRowAnalysis, (id, state) => {
+      setRowAnalysis(id, state);
+      if (state.status !== 'running') {
+        done += 1;
+        setBulkProgress({ done, total: ids.length });
+      }
+    });
+    setBulkProgress(null);
+    if (result.notRun.length > 0) {
+      for (const id of result.notRun) setRowAnalysis(id, undefined);
+      dispatch(
+        enqueueToast({
+          message: `AI rate limit reached: ${result.notRun.length} products were not analyzed.`,
+          severity: 'warning',
+        })
+      );
+    }
+    if (result.analyzed > 0) {
+      dispatch(
+        enqueueToast({ message: `Analyzed ${result.analyzed} products.`, severity: 'success' })
+      );
+    }
+  };
+  const toggleReview = (product: Product) =>
+    setExpandedProductId((current) => (current === product.id ? null : product.id));
+  const renderReview = (product: Product) => (
+    <ProductRowSuggestions
+      productId={product.id}
+      onPendingCountChange={(pending) => {
+        setAnalysisByProductId((current) => {
+          const next = stateAfterPendingChange(current[product.id], pending);
+          if (next === current[product.id]) return current;
+          const updated = { ...current };
+          if (next) updated[product.id] = next;
+          else delete updated[product.id];
+          return updated;
+        });
+        if (pending === 0) setExpandedProductId(null);
+      }}
+    />
   );
   const wizardOpen = query.get('newProduct') === '1';
 
@@ -273,9 +367,12 @@ const ProductsPage: React.FC = () => {
   const activeCount = useProducts({ status: ['active'], limit: 1, offset: 0 });
   const attentionCount = useProducts({ status: ['attention'], limit: 1, offset: 0 });
   const draftCount = useProducts({ status: ['draft'], limit: 1, offset: 0 });
+  const soldCount = useProducts({ status: ['sold'], limit: 1, offset: 0 });
   const totalPages = currentData ? Math.ceil(currentData.total / PRODUCTS_PAGE_SIZE) : 0;
   const activeFilterCount =
-    catalogue.tags.length + (catalogue.priceMin.trim() ? 1 : 0) + (catalogue.priceMax.trim() ? 1 : 0);
+    catalogue.tags.length +
+    (catalogue.priceMin.trim() ? 1 : 0) +
+    (catalogue.priceMax.trim() ? 1 : 0);
   const activeSortLabel =
     PRODUCT_SORT_OPTIONS.find((option) => option.value === catalogue.sort)?.label ?? 'Custom order';
   const pageOutOfRange = Boolean(currentData && catalogue.page > Math.max(0, totalPages - 1));
@@ -568,9 +665,16 @@ const ProductsPage: React.FC = () => {
       setInitialDraft(null);
       allowWizardNavigationRef.current = true;
       if (outcome.kind === 'publish_started') {
-        dispatch(enqueueToast({ message: 'Product created. Preparing its marketplace listing.', severity: 'success' }));
+        dispatch(
+          enqueueToast({
+            message: 'Product created. Preparing its marketplace listing.',
+            severity: 'success',
+          })
+        );
         navigate(`/products/${outcome.productId}`, {
-          state: { publicationJourney: { ...outcome.journey, version: PUBLICATION_JOURNEY_VERSION } },
+          state: {
+            publicationJourney: { ...outcome.journey, version: PUBLICATION_JOURNEY_VERSION },
+          },
         });
         return;
       }
@@ -638,43 +742,43 @@ const ProductsPage: React.FC = () => {
             },
           }}
         >
-          {(
-            [
-              ['all', 'All', allCount],
-              ['active', 'Active', activeCount],
-              ['attention', 'Attention', attentionCount],
-              ['draft', 'Drafts', draftCount],
-            ] as const
-          ).map(([value, label, countQuery]) => (
-            <ToggleButton key={value} value={value} aria-label={`${label} products`}>
-              {label}
-              <Chip
-                component="span"
-                size="small"
-                label={
-                  countQuery.isLoading || countQuery.isError
-                    ? '—'
-                    : (countQuery.data?.total ?? 0)
-                }
-                sx={(theme) => ({
-                  ml: 0.75,
-                  height: 20,
-                  pointerEvents: 'none',
-                  fontWeight: 700,
-                  bgcolor:
-                    catalogue.tab === value
-                      ? alpha(theme.palette.primary.main, 0.14)
-                      : theme.palette.action.selected,
-                  color: catalogue.tab === value ? 'primary.main' : 'text.secondary',
-                })}
-              />
-            </ToggleButton>
-          ))}
+          {visibleProductTabs(attentionCount.data?.total).map((value) => {
+            const [label, countQuery] = {
+              all: ['All', allCount],
+              active: ['Active', activeCount],
+              attention: ['Attention', attentionCount],
+              draft: ['Drafts', draftCount],
+              sold: ['Sold', soldCount],
+            }[value] as [string, typeof allCount];
+            return (
+              <ToggleButton key={value} value={value} aria-label={`${label} products`}>
+                {label}
+                <Chip
+                  component="span"
+                  size="small"
+                  label={
+                    countQuery.isLoading || countQuery.isError ? '—' : (countQuery.data?.total ?? 0)
+                  }
+                  sx={(theme) => ({
+                    ml: 0.75,
+                    height: 20,
+                    pointerEvents: 'none',
+                    fontWeight: 700,
+                    bgcolor:
+                      catalogue.tab === value
+                        ? alpha(theme.palette.primary.main, 0.14)
+                        : theme.palette.action.selected,
+                    color: catalogue.tab === value ? 'primary.main' : 'text.secondary',
+                  })}
+                />
+              </ToggleButton>
+            );
+          })}
         </ToggleButtonGroup>
         <Box sx={{ flex: 1 }} />
         <TextField
           size="small"
-          placeholder="Search name, SKU or tag"
+          placeholder="Search name or OLX id"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           slotProps={{
@@ -767,57 +871,59 @@ const ProductsPage: React.FC = () => {
         </Stack>
       </Stack>
       <Collapse in={filtersOpen} id="products-filters">
-        <Card sx={{ mb: 2 }} contentSx={{ p: 2 }}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1.25}
-            sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
-          >
-            <TextField
-              size="small"
-              type="number"
-              label="Minimum price"
-              value={catalogue.priceMin}
-              onChange={(event) => navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-            <TextField
-              size="small"
-              type="number"
-              label="Maximum price"
-              value={catalogue.priceMax}
-              onChange={(event) => navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)}
-              slotProps={{ htmlInput: { min: 0 } }}
-            />
-            <Autocomplete
-              multiple
-              freeSolo
-              size="small"
-              options={[]}
-              value={catalogue.tags}
-              onChange={(_event, next) => navigateCatalogue({ tags: next as string[], page: 0 })}
-              renderValue={(value, getItemProps) =>
-                value.map((tag, index) => {
-                  const { key, ...itemProps } = getItemProps({ index });
-                  return (
-                    <Chip key={key} variant="outlined" size="small" label={tag} {...itemProps} />
-                  );
-                })
-              }
-              renderInput={(params) => (
-                <TextField {...params} label="Tags" placeholder="Type and press Enter" />
-              )}
-              sx={{ minWidth: 240, flex: 1 }}
-            />
-            <Button onClick={clearFilters} disabled={!hasCatalogueFilters(catalogue)}>
-              Clear filters
-            </Button>
-          </Stack>
-          <Alert severity="info" sx={{ mt: 1.5 }}>
-            Marketplace, margin and updated-date filters are not shown because the catalogue API
-            does not expose those filters yet.
-          </Alert>
-        </Card>
+        <Box sx={{ pb: 2 }}>
+          <Card contentSx={{ p: 2 }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.25}
+              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+            >
+              <TextField
+                size="small"
+                type="number"
+                label="Minimum price"
+                value={catalogue.priceMin}
+                onChange={(event) =>
+                  navigateCatalogue({ priceMin: event.target.value, page: 0 }, true)
+                }
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Maximum price"
+                value={catalogue.priceMax}
+                onChange={(event) =>
+                  navigateCatalogue({ priceMax: event.target.value, page: 0 }, true)
+                }
+                slotProps={{ htmlInput: { min: 0 } }}
+              />
+              <Autocomplete
+                multiple
+                freeSolo
+                size="small"
+                options={[]}
+                value={catalogue.tags}
+                onChange={(_event, next) => navigateCatalogue({ tags: next as string[], page: 0 })}
+                renderValue={(value, getItemProps) =>
+                  value.map((tag, index) => {
+                    const { key, ...itemProps } = getItemProps({ index });
+                    return (
+                      <Chip key={key} variant="outlined" size="small" label={tag} {...itemProps} />
+                    );
+                  })
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Tags" placeholder="Type and press Enter" />
+                )}
+                sx={{ minWidth: 240, flex: 1 }}
+              />
+              <Button onClick={clearFilters} disabled={!hasCatalogueFilters(catalogue)}>
+                Clear filters
+              </Button>
+            </Stack>
+          </Card>
+        </Box>
       </Collapse>
 
       {selectedIds.size > 0 && (
@@ -847,6 +953,17 @@ const ProductsPage: React.FC = () => {
               flexItem
               sx={{ borderColor: 'rgba(255,255,255,.3)', display: { xs: 'none', md: 'block' } }}
             />
+            <Button
+              color="inherit"
+              startIcon={<AutoAwesomeOutlinedIcon />}
+              onClick={analyzeSelected}
+              disabled={Boolean(bulkProgress) || Boolean(analyzeDisabledReason)}
+              title={analyzeDisabledReason ?? undefined}
+            >
+              {bulkProgress
+                ? `Analyzing ${bulkProgress.done} / ${bulkProgress.total}`
+                : 'Analyze selected'}
+            </Button>
             <Button color="inherit" startIcon={<DownloadIcon />} onClick={exportSelected}>
               Export CSV
             </Button>
@@ -874,6 +991,12 @@ const ProductsPage: React.FC = () => {
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             awaitingByProductId={awaitingByProductId}
+            analysisByProductId={analysisByProductId}
+            onAnalyze={analyzeProduct}
+            analyzeDisabledReason={analyzeDisabledReason}
+            expandedProductId={expandedProductId}
+            onToggleReview={toggleReview}
+            renderReview={renderReview}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
             clearFiltersAction={<Button onClick={clearFilters}>Clear filters</Button>}
             emptyAction={
@@ -895,6 +1018,12 @@ const ProductsPage: React.FC = () => {
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             awaitingByProductId={awaitingByProductId}
+            analysisByProductId={analysisByProductId}
+            onAnalyze={analyzeProduct}
+            analyzeDisabledReason={analyzeDisabledReason}
+            expandedProductId={expandedProductId}
+            onToggleReview={toggleReview}
+            renderReview={renderReview}
             emptyFiltered={hasCatalogueFilters(catalogue) || (currentData?.total ?? 0) > 0}
             clearFiltersAction={<Button onClick={clearFilters}>Clear filters</Button>}
             emptyAction={
