@@ -16,6 +16,13 @@ public class ProductService extends MarketDeskApiService {
   private static final String NAME_PATCH = "{\"name\": \"%s\"}";
   private static final String PRODUCT_LISTINGS = PRODUCTS + "/%s/listings";
   private static final String PRODUCT_IMPROVEMENTS = PRODUCTS + "/%s/improvements";
+  private static final String PRODUCT_STATS = PRODUCTS + "/stats";
+  private static final String NEEDS_ACTION_PRODUCTS = PRODUCTS + "?needsAction=true";
+  private static final String STATUS_PATCH = "{\"status\": \"%s\"}";
+  private static final String HERMES_RUN = "/api/hermes/products/%s/run";
+  private static final String HERMES_RUN_BODY = "{\"trigger\": \"manual\"}";
+  private static final String HERMES_PENDING_COUNTS = "/api/hermes/events/pending-counts";
+  private static final String HERMES_DISMISS = "/api/hermes/events/%s/dismiss";
 
   public ValidatableResponse getProducts(String token) {
     return get(authorized(token), PRODUCTS);
@@ -47,6 +54,38 @@ public class ProductService extends MarketDeskApiService {
 
   public ValidatableResponse updateName(String token, String productId, String name) {
     return patch(authorized(token), PRODUCT.formatted(productId), NAME_PATCH.formatted(name));
+  }
+
+  public ValidatableResponse getProductStats(String token) {
+    return get(authorized(token), PRODUCT_STATS);
+  }
+
+  public ValidatableResponse getProductStats() {
+    return get(anonymous(), PRODUCT_STATS);
+  }
+
+  public ValidatableResponse getNeedsActionProducts(String token) {
+    return get(authorized(token), NEEDS_ACTION_PRODUCTS);
+  }
+
+  public ValidatableResponse updateStatus(String token, String productId, String status) {
+    return patch(authorized(token), PRODUCT.formatted(productId), STATUS_PATCH.formatted(status));
+  }
+
+  public ValidatableResponse runHermes(String token, String productId) {
+    return post(authorized(token), HERMES_RUN.formatted(productId), HERMES_RUN_BODY);
+  }
+
+  public ValidatableResponse getPendingCounts(String token) {
+    return get(authorized(token), HERMES_PENDING_COUNTS);
+  }
+
+  public ValidatableResponse getPendingCounts() {
+    return get(anonymous(), HERMES_PENDING_COUNTS);
+  }
+
+  public ValidatableResponse dismissEvent(String token, String eventId) {
+    return post(authorized(token), HERMES_DISMISS.formatted(eventId), "{}");
   }
 
   // Keeps nulls: the API requires costPrice and reads null as an unknown cost price.
