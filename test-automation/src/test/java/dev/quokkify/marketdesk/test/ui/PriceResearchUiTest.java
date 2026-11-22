@@ -10,7 +10,8 @@ import org.testng.annotations.Test;
 
 public class PriceResearchUiTest extends BaseUiTest {
 
-  private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
+  private static final String SEARCH_UNAVAILABLE = "Price search failed: market search is unavailable";
+  private static final String HERMES_UNAVAILABLE = "hermes_unavailable";
   private static final String OLX_ADVERT = "https://www.olx.pl/d/oferta/airpods-4-bez-anc-CID99-ID1d1eUB.html";
   private static final String OLX_ADVERT_2 = "https://www.olx.pl/d/oferta/airpods-4-CID99-ID1d1eUC.html";
   private static final String OLX_ADVERT_3 = "https://www.olx.pl/d/oferta/airpods-4-pro-CID99-ID1d1eUD.html";
@@ -41,9 +42,10 @@ public class PriceResearchUiTest extends BaseUiTest {
         .showsDiscountAgainstNew(RETAIL_PRICE_SHOWN, SOURCE);
   }
 
-  // The stack has no research profile; the real search is checked by hand on production.
+  // The research profile mock has no answers for this product, so the search the button starts fails; the real
+  // search is checked by hand on production.
   @Test
-  public void findPricesShowsNotConfigured() {
+  public void findPricesShowsAFailedSearch() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
@@ -56,7 +58,10 @@ public class PriceResearchUiTest extends BaseUiTest {
         .openProductPage(productListing)
         .findPrices()
         .verify()
-        .showsAlert(SEARCH_NOT_CONFIGURED);
+        .showsLastResearchRun(SEARCH_UNAVAILABLE);
+    // The line is shared by several error codes; the run itself says the mock refused the call.
+    priceResearchSteps.verify().lastRunFailed(
+        priceResearchSteps.awaitResearchRun(account, productListing.productId()), HERMES_UNAVAILABLE);
   }
 
   @Test

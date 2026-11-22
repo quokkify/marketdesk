@@ -1,5 +1,7 @@
 package dev.quokkify.marketdesk.verification;
 
+import java.util.List;
+
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.verification.BaseApiVerification;
 
@@ -14,8 +16,6 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   private static final String UNAUTHORIZED = "UNAUTHORIZED";
   private static final String NOT_FOUND = "NOT_FOUND";
   private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
-  private static final String SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
-  private static final String SEARCH_NOT_CONFIGURED = "Market search is not configured";
   private static final String CONFLICT = "CONFLICT";
   private static final double PRICE_TOLERANCE = 0.001;
   private static final String RESEARCH_CHANGED = "Price research changed since you opened it. Reload and try again.";
@@ -124,20 +124,48 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
-  // The API stack has no research profile, so the market search cannot run.
-  @Step("Market search answers that it is not configured")
-  public PriceResearchVerification isRefreshNotConfigured(ValidatableResponse response) {
-    failsWith(response, HttpStatus.SC_SERVICE_UNAVAILABLE, SERVICE_UNAVAILABLE);
-    response.body("error.message", Matchers.equalTo(SEARCH_NOT_CONFIGURED));
+  @Step("The refresh is accepted and runs in the background")
+  public PriceResearchVerification isRefreshAccepted(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_ACCEPTED);
+    response.body("success", Matchers.equalTo(true));
+    response.body("data.run", Matchers.notNullValue());
     return self();
   }
 
-  // Nothing stored and no run yet: the whole answer is null, or a view without a run.
-  @Step("Product has no price research run")
-  public PriceResearchVerification hasNoRun(ValidatableResponse response) {
+  @Step("The last price research run ended {outcome} with every node done")
+  public PriceResearchVerification lastRunSucceeded(ValidatableResponse response, String outcome) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
-    response.body("data", Matchers.anyOf(Matchers.nullValue(),
-        Matchers.allOf(Matchers.hasEntry("run", null), Matchers.hasEntry("lastRun", null))));
+    response.body("data.lastRun.outcome", Matchers.equalTo(outcome));
+    response.body("data.lastRun.errorCode", Matchers.nullValue());
+    response.body("data.lastRun.failedTiers", Matchers.empty());
+    response.body("data.lastRun.nodes.values()", Matchers.everyItem(Matchers.equalTo("done")));
+    return self();
+  }
+
+  @Step("The last price research run failed with {errorCode}, the tiers {failedTiers} did not answer")
+  public PriceResearchVerification lastRunFailed(ValidatableResponse response, String errorCode,
+      String... failedTiers) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.lastRun.outcome", Matchers.equalTo("failed"));
+    response.body("data.lastRun.errorCode", Matchers.equalTo(errorCode));
+    response.body("data.lastRun.failedTiers", Matchers.equalTo(List.of(failedTiers)));
+    return self();
+  }
+
+  @Step("Price research holds auto anchors of the tiers {tiers}")
+  public PriceResearchVerification hasAutoAnchorsOf(ValidatableResponse response, String... tiers) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.comparables.findAll { it.source == 'auto' }.tier", Matchers.hasItems(tiers));
+    response.body("data.comparables.findAll { it.source != 'auto' }", Matchers.empty());
+    return self();
+  }
+
+  // A failed run saves nothing: no comparables and no saved research row behind the run view.
+  @Step("Price research stores no comparables and was never saved")
+  public PriceResearchVerification storesNothing(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.comparables", Matchers.empty());
+    response.body("data.updatedAt", Matchers.nullValue());
     return self();
   }
 
@@ -170,7 +198,7 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
-  // Research is stored but no run has finished (the stand has no research profile), so nothing is ready to price from.
+  // Research is stored but no run has finished, so nothing is ready to price from.
   @Step("Price research carries the run state and reads as degraded without a successful run")
   public PriceResearchVerification hasRunStateAndIsDegraded(ValidatableResponse response) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);

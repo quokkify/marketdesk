@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-3f4e5d6c7b8a49f0e1d2c3b4a5f6e7d8",
+  "object": "chat.completion",
+  "created": 1795359863,
+  "model": "hermes-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"anchors\":[{\"tier\":\"substitute_used\",\"price\":189,\"currency\":\"PLN\",\"title\":\"Projektor Beamix HX300 720p LED, uzywany\",\"url\":\"https://www.olx.pl/d/oferta/projektor-beamix-hx300-720p-led-uzywany-CID99-ID1qU3kP.html\",\"classAttributes\":[{\"name\":\"Native resolution\",\"value\":\"1280×720\",\"unit\":\"pixels\",\"match\":\"equal\"},{\"name\":\"Brightness\",\"value\":200,\"unit\":\"ANSI lumens\",\"match\":\"ratio\"},{\"name\":\"Light source\",\"value\":\"LED\",\"unit\":null,\"match\":\"equal\"}]}]}",
+        "reasoning_content": "**Comparing used substitutes**"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 58120,
+    "completion_tokens": 402,
+    "total_tokens": 58522
+  }
+}

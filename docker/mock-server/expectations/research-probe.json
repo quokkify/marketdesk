@@ -1,0 +1,72 @@
+[
+  {
+    "id": "research-probe-models",
+    "httpRequest": {
+      "method": "GET",
+      "path": "/p/marketdesk-research/v1/models"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": {
+        "type": "JSON",
+        "json": {
+          "object": "list",
+          "data": [
+            {
+              "id": "marketdesk-research",
+              "object": "model",
+              "created": 1795359863,
+              "owned_by": "hermes",
+              "permission": [],
+              "root": "marketdesk-research",
+              "parent": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "id": "research-probe-toolsets",
+    "httpRequest": {
+      "method": "GET",
+      "path": "/p/marketdesk-research/v1/toolsets"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "body": {
+        "type": "JSON",
+        "json": {
+          "object": "list",
+          "platform": "api_server",
+          "data": [
+            {
+              "name": "web",
+              "label": "Web Search & Scraping",
+              "description": "web_search, web_extract",
+              "enabled": true,
+              "configured": true,
+              "tools": ["web_extract", "web_search"]
+            },
+            {
+              "name": "browser",
+              "label": "Browser Automation",
+              "description": "navigate, click, type, scroll",
+              "enabled": false,
+              "configured": true,
+              "tools": ["browser_navigate", "browser_click"]
+            },
+            {
+              "name": "terminal",
+              "label": "Terminal & Processes",
+              "description": "terminal, process",
+              "enabled": false,
+              "configured": true,
+              "tools": ["process_manage", "terminal"]
+            }
+          ]
+        }
+      }
+    }
+  }
+]

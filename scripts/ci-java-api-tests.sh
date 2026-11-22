@@ -13,7 +13,12 @@ export HERMES_API_KEY=marketdesk-ci-hermes-key
 export APP_PORT=3000
 selenium_port="${SELENIUM_PORT:-4444}"
 export SELENIUM_PORT="$selenium_port"
-export COMPOSE_FILE="docker-compose.yml:docker/selenium-grid/docker-compose.yml"
+mock_server_port="${MOCK_SERVER_PORT:-1080}"
+export MOCK_SERVER_PORT="$mock_server_port"
+export COMPOSE_FILE="docker-compose.yml:docker/selenium-grid/docker-compose.yml:docker/mock-server/docker-compose.yml"
+# A MockServer stands in for the Hermes research profile only; the main profile stays unreachable, so the
+# rest of the stack keeps the offline heuristics. The tests give the research answers per product.
+export HERMES_RESEARCH_API_URL=http://mock-server:1080/p/marketdesk-research/v1
 
 cd "$repo_root"
 
@@ -32,6 +37,9 @@ export MARKETPLACE_CREDENTIALS_KEY="$credentials_key"
 grep -v '^MARKETPLACE_CREDENTIALS_KEY=' .env.example > "$env_file"
 printf 'MARKETPLACE_CREDENTIALS_KEY=%s\n' "$credentials_key" >> "$env_file"
 export MARKETDESK_ENV_FILE="$env_file"
+# Generated per run: the mock does not check it, but the app leaves the research off without a key.
+research_key="$(openssl rand -hex 32)"
+export HERMES_RESEARCH_API_KEY="$research_key"
 
 # The app mounts this directory read-only; creating it here keeps Docker from creating it root-owned.
 mkdir -p hermes-usage
@@ -71,6 +79,23 @@ if [[ "$grid_ready" != true ]]; then
   exit 1
 fi
 
+mock_ready=false
+for attempt in {1..60}; do
+  if curl --fail --silent --output /dev/null -X PUT "http://127.0.0.1:${mock_server_port}/mockserver/status"; then
+    mock_ready=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$mock_ready" != true ]]; then
+  docker compose ps || true
+  docker compose logs --no-color mock-server || true
+  echo "The research profile mock did not become ready" >&2
+  exit 1
+fi
+
+export MARKETDESK_HERMES_MOCK_BASE_URI="http://127.0.0.1:${mock_server_port}"
 export BROWSER_REMOTE_URL="http://127.0.0.1:${selenium_port}/wd/hub"
 export MARKETDESK_UI_BASE_URI=http://localhost:3000
 

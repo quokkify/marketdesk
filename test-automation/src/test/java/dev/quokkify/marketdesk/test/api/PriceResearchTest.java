@@ -122,9 +122,10 @@ public class PriceResearchTest extends BaseTest {
         priceResearchSteps.savePriceResearchUnauthenticated(productId, PriceResearchPojo.sample()));
   }
 
-  // The API stack has no Hermes, so the verdict's price check runs offline and its estimate has low confidence.
+  // The API stack has no main Hermes profile, so the estimate runs offline with low confidence. The research the
+  // analysis starts fails on the research profile mock, and the price check judges on the saved research.
   @Test
-  public void analysisWithoutHermesProposesNoPriceChange() {
+  public void offlineEstimateOnSavedResearchProposesNoPriceChange() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
