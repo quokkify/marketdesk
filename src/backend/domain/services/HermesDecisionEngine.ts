@@ -119,6 +119,11 @@ function withOfflineNotice(detail: string): string {
   return /[.!?]$/.test(text) ? `${text} ${OFFLINE_AI_NOTICE}` : `${text}. ${OFFLINE_AI_NOTICE}`;
 }
 
+// Structural, so the container can pass its logger.
+export interface HermesEngineLogger {
+  warn(context: Record<string, unknown>, message: string): void;
+}
+
 export class HermesDecisionEngine {
   constructor(
     private readonly productRepo: IProductRepository,
@@ -128,7 +133,8 @@ export class HermesDecisionEngine {
     private readonly aiProvider: IAIProvider,
     private readonly priceResearchRepo: IPriceResearchRepository,
     private readonly researchRefresher: IPriceResearchRefresher | null,
-    private readonly idFactory: IdFactory
+    private readonly idFactory: IdFactory,
+    private readonly logger?: HermesEngineLogger
   ) {}
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
@@ -495,18 +501,23 @@ export class HermesDecisionEngine {
     }
   }
 
-  private rememberEstimate(
+  // The stored estimate is display-only, so a failed write is logged and the price path goes on.
+  private async rememberEstimate(
     product: Product,
     estimate: PriceEstimate,
     hiddenReason: EstimateHiddenReason | null,
     researchNote: string | null,
   ): Promise<void> {
-    return this.priceResearchRepo.saveEstimate(product.workspaceId, product.id, {
-      estimate,
-      estimatedAt: new Date().toISOString(),
-      hiddenReason,
-      researchNote,
-    });
+    try {
+      await this.priceResearchRepo.saveEstimate(product.workspaceId, product.id, {
+        estimate,
+        estimatedAt: new Date().toISOString(),
+        hiddenReason,
+        researchNote,
+      });
+    } catch (error) {
+      this.logger?.warn({ productId: product.id, err: error }, 'Storing the last price estimate failed');
+    }
   }
 
   /**

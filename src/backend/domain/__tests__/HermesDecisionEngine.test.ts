@@ -47,6 +47,20 @@ class EvidencedResearchRepository extends InMemoryPriceResearchRepository {
   }
 }
 
+// The stored estimate is display-only: a failing store must not cost the seller the price event.
+class FailingEstimateStore extends EvidencedResearchRepository {
+  async saveEstimate(): Promise<void> {
+    throw new Error('estimate store is down');
+  }
+}
+
+class RecordingLogger {
+  readonly warnings: Array<{ context: Record<string, unknown>; message: string }> = [];
+  warn(context: Record<string, unknown>, message: string): void {
+    this.warnings.push({ context, message });
+  }
+}
+
 function makeEngine(overrides?: {
   productRepo?: InMemoryProductRepository;
   listingRepo?: InMemoryListingRepository;
@@ -850,13 +864,13 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
 
   async function analyse(
     answer: PriceEstimate | Error,
-    options: { price?: number; research?: PriceResearch } = {},
+    options: { price?: number; research?: PriceResearch; priceResearchRepo?: EvidencedResearchRepository; logger?: RecordingLogger } = {},
   ) {
     const price = options.price ?? 100;
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const eventRepo = new InMemoryEventRepository();
-    const priceResearchRepo = new EvidencedResearchRepository();
+    const priceResearchRepo = options.priceResearchRepo ?? new EvidencedResearchRepository();
     if (options.research) priceResearchRepo.items.set('w1:p1', options.research);
     const engine = new HermesDecisionEngine(
       productRepo,
@@ -867,6 +881,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       priceResearchRepo,
       null,
       sequentialIdFactory('pe'),
+      options.logger,
     );
     const product = unwrap(
       Product.create({
@@ -911,6 +926,16 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     });
     expect(estimateOf(priceEvent)).toMatchObject({ startPrice: 90, floorPrice: 80, confidence: 'medium' });
     expect(product.sellingPrice.amount).toBe(100);
+  });
+
+  it('still surfaces the price event and logs it when storing the estimate fails', async () => {
+    const logger = new RecordingLogger();
+    const { priceEvent } = await analyse(estimate(), { priceResearchRepo: new FailingEstimateStore(), logger });
+
+    expect(priceEvent).toMatchObject({ type: 'suggested_lower_price', proposedChange: { kind: 'price', from: 100, to: 90 } });
+    expect(logger.warnings).toEqual([
+      { context: { productId: 'p1', err: new Error('estimate store is down') }, message: 'Storing the last price estimate failed' },
+    ]);
   });
 
   it('proposes no price when the difference is under 5%', async () => {

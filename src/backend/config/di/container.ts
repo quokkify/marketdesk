@@ -491,7 +491,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     aiProvider,
     priceResearchRepo,
     anchorLadderService,
-    idGenerator
+    idGenerator,
+    overrides.logger
   );
 
   // 7. Application use cases.
