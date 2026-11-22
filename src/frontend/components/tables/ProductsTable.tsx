@@ -2,10 +2,12 @@ import React, { useId, useState } from 'react';
 import {
   Avatar,
   Box,
-  ButtonBase,
+  Button,
   Checkbox,
   Chip,
+  CircularProgress,
   IconButton,
+  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -24,11 +26,15 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import { Link as RouterLink } from 'react-router-dom';
 import type { Product } from '@shared/types';
 import { formatDateTime, formatMoney, formatRelative } from '../../utils/formatters.js';
 import { ProductStatusBadge } from '../common/Badge.js';
@@ -39,7 +45,10 @@ import {
   catalogueFooterLabel,
   productInitials,
   productTileTone,
+  shortListingSku,
 } from '../../pages/productsCatalogueState.js';
+import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAnalysis.js';
+import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
@@ -93,62 +102,40 @@ function AwaitingReplyBadge({ count }: { count: number | undefined }) {
   return label ? <Chip size="small" color="warning" label={label} sx={{ ml: 1 }} /> : null;
 }
 
-function ProductIdentity({
-  product,
-  onOpen,
-}: {
-  product: Product;
-  onOpen?: (product: Product) => void;
-}) {
+function ProductIdentity({ product }: { product: Product }) {
   return (
-    <ButtonBase
-      disabled={!onOpen}
-      onClick={() => onOpen?.(product)}
-      sx={{ width: '100%', justifyContent: 'flex-start', borderRadius: 1, textAlign: 'left' }}
-    >
-      <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
-        <ProductThumbnail product={product} />
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
-            {product.name}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            noWrap
-            sx={{ display: 'block', fontFamily: SKU_FONT }}
-          >
-            {product.sku}
-          </Typography>
-        </Box>
-      </Stack>
-    </ButtonBase>
-  );
-}
-
-function Profit({ product, currency }: { product: Product; currency?: string }) {
-  if (product.costPrice === null) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        —
-      </Typography>
-    );
-  }
-  const profit = product.sellingPrice - product.costPrice;
-  const margin = product.sellingPrice === 0 ? null : (profit / product.sellingPrice) * 100;
-  return (
-    <Box>
-      <Typography
-        variant="body2"
-        color={profit < 0 ? 'error.main' : 'success.main'}
-        sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}
-      >
-        {formatMoney(profit, currency)}
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {margin === null ? 'Margin unavailable' : `${Math.round(margin)}% margin`}
-      </Typography>
-    </Box>
+    <Stack direction="row" spacing={1.25} sx={{ minWidth: 0, alignItems: 'center' }}>
+      <ProductThumbnail product={product} />
+      <Box sx={{ minWidth: 0 }}>
+        <Link
+          component={RouterLink}
+          to={`/products/${product.id}`}
+          underline="hover"
+          color="text.primary"
+          variant="body2"
+          title={product.name}
+          data-row-stop
+          sx={{
+            fontWeight: 700,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {product.name}
+        </Link>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          title={product.sku}
+          sx={{ display: 'block', fontFamily: SKU_FONT }}
+        >
+          {shortListingSku(product.sku)}
+        </Typography>
+      </Box>
+    </Stack>
   );
 }
 
@@ -160,7 +147,60 @@ function UpdatedAt({ value }: { value: string }) {
   );
 }
 
+export type ProductTableColumnKey =
+  'select' | 'product' | 'status' | 'price' | 'updated' | 'ai' | 'actions';
+
+export const PRODUCT_TABLE_COLUMNS: ReadonlyArray<{
+  key: ProductTableColumnKey;
+  label: string;
+  sortField?: string;
+  align?: 'right';
+}> = [
+  { key: 'select', label: '' },
+  { key: 'product', label: 'Product', sortField: 'name' },
+  { key: 'status', label: 'Status', sortField: 'status' },
+  { key: 'price', label: 'Price', sortField: 'sellingPrice', align: 'right' },
+  { key: 'updated', label: 'Updated', sortField: 'updatedAt', align: 'right' },
+  { key: 'ai', label: 'AI' },
+  { key: 'actions', label: '' },
+];
+
+// Elements marked data-row-stop (checkbox, title link, AI, actions) never open the product, and
+// neither do clicks from portaled menus and dialogs, which React bubbles to the row from outside it.
+export function rowClickIntent(event: {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  button: number;
+  insideStop: boolean;
+  insideRow: boolean;
+}): 'open' | 'new-tab' | 'ignore' {
+  if (event.insideStop || !event.insideRow) return 'ignore';
+  if (event.button !== 0 && event.button !== 1) return 'ignore';
+  if (event.metaKey || event.ctrlKey || event.button === 1) return 'new-tab';
+  return 'open';
+}
+
+function handleRowClick(
+  event: React.MouseEvent<HTMLElement>,
+  product: Product,
+  onOpen: ((product: Product) => void) | undefined
+) {
+  if (!onOpen) return;
+  const target = event.target as HTMLElement;
+  const intent = rowClickIntent({
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    button: event.button,
+    insideStop: Boolean(target.closest('[data-row-stop]')),
+    insideRow: event.currentTarget.contains(target),
+  });
+  if (intent === 'open') onOpen(product);
+  else if (intent === 'new-tab') window.open(`/products/${product.id}`, '_blank', 'noopener');
+}
+
 export interface ProductRowHandlers {
+  onAnalyze?: (product: Product) => void;
+  analyzeDisabled?: boolean;
   onOpen?: (product: Product) => void;
   onEdit?: (product: Product) => void;
   onDelete?: (product: Product) => void;
@@ -178,6 +218,16 @@ export function productRowMenuItems(
     handler(product);
   };
   const items: React.ReactElement[] = [];
+  if (handlers.onAnalyze) {
+    items.push(
+      <MenuItem key="analyze" disabled={handlers.analyzeDisabled} onClick={run(handlers.onAnalyze)}>
+        <ListItemIcon>
+          <AutoAwesomeOutlinedIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText>Analyze with AI</ListItemText>
+      </MenuItem>
+    );
+  }
   if (handlers.onOpen) {
     items.push(
       <MenuItem key="open" onClick={run(handlers.onOpen)}>
@@ -298,6 +348,106 @@ export interface ProductsCollectionProps {
   selectedIds?: ReadonlySet<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   awaitingByProductId?: Record<string, number>;
+  analysisByProductId?: Record<string, RowAnalysisState>;
+  onAnalyze?: (product: Product) => void;
+  analyzeDisabledReason?: string | null;
+  expandedProductId?: string | null;
+  onToggleReview?: (product: Product) => void;
+  renderReview?: (product: Product) => React.ReactNode;
+}
+
+const reviewRegionId = (product: Product) => `product-review-${product.id}`;
+
+function rowHandlers(props: ProductsCollectionProps, product: Product): ProductRowHandlers {
+  return {
+    onAnalyze: props.onAnalyze,
+    analyzeDisabled: !canStartRowAnalysis(
+      props.analysisByProductId?.[product.id],
+      props.analyzeDisabledReason ?? null
+    ),
+    onOpen: props.onOpen,
+    onEdit: props.onEdit,
+    onDelete: props.onDelete,
+  };
+}
+
+function ReviewToggle({
+  product,
+  count,
+  expanded,
+  onToggle,
+}: {
+  product: Product;
+  count: number;
+  expanded: boolean;
+  onToggle?: (product: Product) => void;
+}) {
+  return (
+    <Button
+      size="small"
+      variant="text"
+      aria-expanded={expanded ? 'true' : 'false'}
+      aria-controls={reviewRegionId(product)}
+      endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      onClick={() => onToggle?.(product)}
+      sx={{ whiteSpace: 'nowrap', textTransform: 'none', fontWeight: 700 }}
+    >
+      {`${count} to review`}
+    </Button>
+  );
+}
+
+function RowAnalysisControl({
+  product,
+  props,
+}: {
+  product: Product;
+  props: ProductsCollectionProps;
+}) {
+  const state = props.analysisByProductId?.[product.id];
+  if (!props.onAnalyze && !state) return null;
+  const reason = props.analyzeDisabledReason ?? null;
+  const running = state?.status === 'running';
+  const label = rowAnalysisLabel(state);
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+      {props.onAnalyze && (
+        <Tooltip title={reason ?? 'Analyze with AI'}>
+          <span>
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label={`Analyze with AI: ${product.name}`}
+              disabled={!canStartRowAnalysis(state, reason)}
+              onClick={() => props.onAnalyze?.(product)}
+            >
+              {running ? (
+                <CircularProgress size={16} />
+              ) : (
+                <AutoAwesomeOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      {state?.status === 'done' && state.count > 0 ? (
+        <ReviewToggle
+          product={product}
+          count={state.count}
+          expanded={props.expandedProductId === product.id}
+          onToggle={props.onToggleReview}
+        />
+      ) : label ? (
+        <Typography
+          variant="caption"
+          color={state?.status === 'error' ? 'error.main' : 'text.secondary'}
+          sx={{ maxWidth: 180 }}
+        >
+          {label}
+        </Typography>
+      ) : null}
+    </Stack>
+  );
 }
 
 export type ProductsTableProps = ProductsCollectionProps;
@@ -352,111 +502,110 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
 
   return (
     <TableContainer sx={{ overflowX: 'auto' }}>
-      <Table size="medium" sx={{ minWidth: 1120 }} aria-label="Products catalogue">
+      <Table size="medium" sx={{ minWidth: 820 }} aria-label="Products catalogue">
         <TableHead>
           <TableRow>
-            <TableCell padding="checkbox">
-              <Checkbox
-                slotProps={{ input: { 'aria-label': 'Select all products on this page' } }}
-                checked={allSelected}
-                indeterminate={!allSelected && someSelected}
-                onChange={(_event, checked) =>
-                  onSelectionChange?.(
-                    checked ? new Set(products.map((product) => product.id)) : new Set()
-                  )
-                }
-              />
-            </TableCell>
-            <TableCell sx={{ minWidth: 250 }}>{sortHeading('Product', 'name')}</TableCell>
-            <TableCell>{sortHeading('Status', 'status')}</TableCell>
-            <TableCell>Markets</TableCell>
-            <TableCell align="right">{sortHeading('Cost', 'costPrice')}</TableCell>
-            <TableCell align="right">{sortHeading('Price', 'sellingPrice')}</TableCell>
-            <TableCell>Profit</TableCell>
-            <TableCell sx={{ minWidth: 160 }}>Tags</TableCell>
-            <TableCell align="right">{sortHeading('Updated', 'updatedAt')}</TableCell>
-            <TableCell align="right" aria-label="Actions" />
+            {PRODUCT_TABLE_COLUMNS.map((column) => {
+              if (column.key === 'select') {
+                return (
+                  <TableCell key={column.key} padding="checkbox">
+                    <Checkbox
+                      slotProps={{ input: { 'aria-label': 'Select all products on this page' } }}
+                      checked={allSelected}
+                      indeterminate={!allSelected && someSelected}
+                      onChange={(_event, checked) =>
+                        onSelectionChange?.(
+                          checked ? new Set(products.map((product) => product.id)) : new Set()
+                        )
+                      }
+                    />
+                  </TableCell>
+                );
+              }
+              if (column.key === 'actions') {
+                return <TableCell key={column.key} align="right" aria-label="Actions" />;
+              }
+              return (
+                <TableCell
+                  key={column.key}
+                  align={column.align}
+                  sx={column.key === 'product' ? { minWidth: 280 } : undefined}
+                >
+                  {column.sortField ? sortHeading(column.label, column.sortField) : column.label}
+                </TableCell>
+              );
+            })}
           </TableRow>
         </TableHead>
         <TableBody>
           {loading
             ? Array.from({ length: 8 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  {Array.from({ length: 10 }).map((__, cell) => (
-                    <TableCell key={cell}>
+                  {PRODUCT_TABLE_COLUMNS.map((column, cell) => (
+                    <TableCell key={column.key}>
                       <Skeleton width={cell === 1 ? 190 : 70} />
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             : products.map((product) => (
-                <TableRow key={product.id} hover selected={selectedIds.has(product.id)}>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      slotProps={{ input: { 'aria-label': `Select ${product.name}` } }}
-                      checked={selectedIds.has(product.id)}
-                      onChange={(_event, checked) =>
-                        onSelectionChange?.(toggleSelection(selectedIds, product.id, checked))
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <ProductIdentity product={product} onOpen={props.onOpen} />
-                  </TableCell>
-                  <TableCell>
-                    <ProductStatusBadge status={product.status} />
-                    <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Marketplace count is not included in the products catalogue API">
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        aria-label="Marketplace count unavailable"
+                <React.Fragment key={product.id}>
+                  <TableRow
+                    hover
+                    selected={selectedIds.has(product.id)}
+                    onClick={(event) => handleRowClick(event, product, props.onOpen)}
+                    onAuxClick={(event) => handleRowClick(event, product, props.onOpen)}
+                    sx={{ cursor: props.onOpen ? 'pointer' : undefined }}
+                  >
+                    <TableCell padding="checkbox" data-row-stop>
+                      <Checkbox
+                        slotProps={{ input: { 'aria-label': `Select ${product.name}` } }}
+                        checked={selectedIds.has(product.id)}
+                        onChange={(_event, checked) =>
+                          onSelectionChange?.(toggleSelection(selectedIds, product.id, checked))
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <ProductIdentity product={product} />
+                    </TableCell>
+                    <TableCell>
+                      <ProductStatusBadge status={product.status} />
+                      <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {formatMoney(product.sellingPrice, props.currency)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                      <UpdatedAt value={product.updatedAt} />
+                    </TableCell>
+                    <TableCell data-row-stop>
+                      <RowAnalysisControl product={product} props={props} />
+                    </TableCell>
+                    <TableCell align="right" data-row-stop>
+                      <ProductRowActions product={product} handlers={rowHandlers(props, product)} />
+                    </TableCell>
+                  </TableRow>
+                  {props.expandedProductId === product.id && props.renderReview && (
+                    <TableRow>
+                      <TableCell
+                        id={reviewRegionId(product)}
+                        colSpan={PRODUCT_TABLE_COLUMNS.length}
+                        data-row-stop
+                        sx={{ bgcolor: 'action.hover', py: 2 }}
                       >
-                        —
-                      </Typography>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    {product.costPrice === null
-                      ? '—'
-                      : formatMoney(product.costPrice, props.currency)}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-                    {formatMoney(product.sellingPrice, props.currency)}
-                  </TableCell>
-                  <TableCell>
-                    <Profit product={product} currency={props.currency} />
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                      {product.tags.length ? (
-                        product.tags
-                          .slice(0, 3)
-                          .map((tag) => <Chip key={tag} label={tag} size="small" />)
-                      ) : (
-                        <Typography color="text.secondary">—</Typography>
-                      )}
-                      {product.tags.length > 3 && (
-                        <Chip
-                          label={`+${product.tags.length - 3}`}
-                          size="small"
-                          variant="outlined"
-                        />
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell align="right" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    <UpdatedAt value={product.updatedAt} />
-                  </TableCell>
-                  <TableCell align="right">
-                    <ProductRowActions
-                      product={product}
-                      handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
-                    />
-                  </TableCell>
-                </TableRow>
+                        {props.renderReview(product)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               ))}
         </TableBody>
       </Table>
@@ -506,45 +655,23 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 }
               />
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <ProductIdentity product={product} onOpen={props.onOpen} />
+                <ProductIdentity product={product} />
               </Box>
               <ProductStatusBadge status={product.status} />
               <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
-              <ProductRowActions
-                product={product}
-                handlers={{ onOpen: props.onOpen, onEdit: props.onEdit, onDelete: props.onDelete }}
-              />
-            </Stack>
-            <Stack
-              direction="row"
-              spacing={0.5}
-              useFlexGap
-              sx={{ my: 2, minHeight: 24, flexWrap: 'wrap' }}
-            >
-              {product.tags.map((tag) => (
-                <Chip key={tag} label={tag} size="small" />
-              ))}
+              <ProductRowActions product={product} handlers={rowHandlers(props, product)} />
             </Stack>
             <Box
               sx={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 gap: 1,
+                mt: 2,
                 pt: 1.5,
                 borderTop: 1,
                 borderColor: 'divider',
               }}
             >
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Cost
-                </Typography>
-                <Typography variant="body2">
-                  {product.costPrice === null
-                    ? '—'
-                    : formatMoney(product.costPrice, props.currency)}
-                </Typography>
-              </Box>
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   Price
@@ -555,24 +682,6 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
               </Box>
               <Box>
                 <Typography variant="caption" color="text.secondary">
-                  Profit
-                </Typography>
-                <Profit product={product} currency={props.currency} />
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Markets
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  aria-label="Marketplace count unavailable"
-                >
-                  —
-                </Typography>
-              </Box>
-              <Box sx={{ gridColumn: '1 / -1' }}>
-                <Typography variant="caption" color="text.secondary">
                   Updated
                 </Typography>
                 <Typography variant="body2">
@@ -580,6 +689,16 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                 </Typography>
               </Box>
             </Box>
+            {(props.onAnalyze || props.analysisByProductId?.[product.id]) && (
+              <Box sx={{ mt: 1.5 }}>
+                <RowAnalysisControl product={product} props={props} />
+              </Box>
+            )}
+            {props.expandedProductId === product.id && props.renderReview && (
+              <Box id={reviewRegionId(product)} sx={{ mt: 1.5 }}>
+                {props.renderReview(product)}
+              </Box>
+            )}
           </Box>
         );
       })}
