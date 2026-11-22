@@ -45,6 +45,17 @@ public class ProductsCatalogueUiTest extends BaseUiTest {
         .isOnProductsPage();
   }
 
+  // Regression guard: clicks in the portaled row menu bubbled to the row and opened the product.
+  @Test
+  public void analyzeFromTheRowMenuStaysOnTheCatalogue() {
+    signInWithOneListedProduct();
+    productsPageSteps
+        .analyzeFromRowMenu(PRODUCT_NAME)
+        .verify()
+        .rowShowsAnalysisResult(PRODUCT_NAME)
+        .isOnProductsPage();
+  }
+
   @Test
   public void clickingTheRowOpensTheProduct() {
     ProductListingPojo productListing = signInWithOneListedProduct();

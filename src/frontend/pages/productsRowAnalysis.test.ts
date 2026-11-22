@@ -97,3 +97,39 @@ describe('sequential analysis of selected products', () => {
     expect(states.b).toEqual({ status: 'done', count: 1 });
   });
 });
+
+describe('sequential analysis guards', () => {
+  // Regression guard: a row already running is never analyzed a second time at once.
+  it('skips products that are already running', async () => {
+    const ran: string[] = [];
+    const result = await runSequentially(
+      ['a', 'b'],
+      async (id) => {
+        ran.push(id);
+        return 0;
+      },
+      () => {},
+      { skip: (id) => id === 'a' }
+    );
+    expect(ran).toEqual(['b']);
+    expect(result).toEqual({ analyzed: 1, notRun: [] });
+  });
+
+  // Regression guard: leaving the page stops the run instead of spending the AI rate limit.
+  it('stops before the next product once told not to continue', async () => {
+    let keepGoing = true;
+    const ran: string[] = [];
+    const result = await runSequentially(
+      ['a', 'b', 'c'],
+      async (id) => {
+        ran.push(id);
+        keepGoing = false;
+        return 0;
+      },
+      () => {},
+      { shouldContinue: () => keepGoing }
+    );
+    expect(ran).toEqual(['a']);
+    expect(result).toEqual({ analyzed: 1, notRun: ['b', 'c'] });
+  });
+});

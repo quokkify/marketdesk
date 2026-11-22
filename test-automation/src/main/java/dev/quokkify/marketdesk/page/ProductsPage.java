@@ -21,6 +21,9 @@ public class ProductsPage implements Page {
   private static final String REVIEW_TOGGLE = "button[aria-controls^=\"product-review-\"]";
   private static final String REVIEW_REGION = "[id^=\"product-review-\"]";
   private static final String TAB = "button[aria-label=\"%s products\"]";
+  private static final String ROW_ACTIONS = "button[aria-label=\"Actions for %s\"]";
+  private static final String MENU_ITEM = "[role=\"menuitem\"]";
+  private static final String ANALYZE_WITH_AI = "Analyze with AI";
   private static final String BUTTON = "button";
   private static final String APPROVE = "Approve";
   private static final String DISMISS = "Dismiss";
@@ -73,6 +76,14 @@ public class ProductsPage implements Page {
 
   public SelenideElement dismissButton() {
     return reviewRegion().$$(BUTTON).findBy(Condition.text(DISMISS));
+  }
+
+  public SelenideElement rowActionsButton(String productName) {
+    return Selenide.$(String.format(ROW_ACTIONS, productName));
+  }
+
+  public SelenideElement analyzeMenuItem() {
+    return Selenide.$$(MENU_ITEM).findBy(Condition.text(ANALYZE_WITH_AI));
   }
 
   public SelenideElement tab(String label) {

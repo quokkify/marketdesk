@@ -103,18 +103,30 @@ describe('ProductsTable catalogue hierarchy', () => {
     expect(html).toContain('title="OLX-5e881fca-2811-4a73-aaaf-da9b23f485a1-1085784120"');
   });
 
+  // Regression guard: a middle-click on the title is handled by the link alone, never also by the row.
+  it('excludes the title link from row opening', () => {
+    const html = markup(<ProductsTable products={[product]} onOpen={() => {}} />);
+    expect(html).toMatch(
+      /<a[^>]*href="\/products\/p-1"[^>]*data-row-stop|<a[^>]*data-row-stop[^>]*href="\/products\/p-1"/
+    );
+  });
+
   it('links the product title to its page', () => {
     const html = markup(<ProductsTable products={[product]} onOpen={() => {}} />);
     expect(html).toContain('href="/products/p-1"');
   });
 
   it.each([
-    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false }, 'open'],
-    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: false }, 'new-tab'],
-    [{ metaKey: false, ctrlKey: true, button: 0, insideStop: false }, 'new-tab'],
-    [{ metaKey: false, ctrlKey: false, button: 1, insideStop: false }, 'new-tab'],
-    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: true }, 'ignore'],
-    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: true }, 'ignore'],
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false, insideRow: true }, 'open'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: true, button: 0, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 1, insideStop: false, insideRow: true }, 'new-tab'],
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: true, insideRow: true }, 'ignore'],
+    [{ metaKey: true, ctrlKey: false, button: 0, insideStop: true, insideRow: true }, 'ignore'],
+    // Regression guard: clicks in the portaled row menu bubble to the row through React.
+    [{ metaKey: false, ctrlKey: false, button: 0, insideStop: false, insideRow: false }, 'ignore'],
+    // Regression guard: right-click (auxclick with button 2) must not open the product.
+    [{ metaKey: false, ctrlKey: false, button: 2, insideStop: false, insideRow: true }, 'ignore'],
   ] as const)('row click %o opens as %s', (event, intent) => {
     expect(rowClickIntent(event)).toBe(intent);
   });
@@ -230,6 +242,26 @@ describe('row analysis in the table', () => {
       />
     );
     expect(html).toContain('The listing SEO agent is switched off for this workspace.');
+  });
+
+  it('disables the menu analyze item when told to', () => {
+    const items = productRowMenuItems(
+      product,
+      { onAnalyze: () => {}, analyzeDisabled: true },
+      () => {}
+    ) as ElementLike[];
+    expect(items[0]!.props.disabled).toBe(true);
+  });
+
+  // Regression guard: the kebab item must not start a second run on a row that is already running.
+  it('disables the analyze controls of a running row in the menu too', () => {
+    const table = ProductsTable({
+      products: [product],
+      onAnalyze: jest.fn(),
+      analysisByProductId: { 'p-1': { status: 'running' } },
+    }) as ElementLike;
+    const actions = findByType(table, ProductRowActions)[0]!;
+    expect((actions.props.handlers as { analyzeDisabled?: boolean }).analyzeDisabled).toBe(true);
   });
 
   it('puts Analyze with AI first in the row menu when available', () => {

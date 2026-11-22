@@ -98,8 +98,7 @@ export function updateProductsCatalogueSearch(
 }
 
 // Imported SKUs read `<MARKETPLACE>-<workspace uuid>-<advert id>`; the uuid repeats on every row.
-const IMPORTED_SKU =
-  /^([A-Z]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(.+)$/;
+const IMPORTED_SKU = /^([A-Z]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(.+)$/;
 
 export function shortListingSku(sku: string): string {
   const match = IMPORTED_SKU.exec(sku);
@@ -111,6 +110,16 @@ export function visibleProductTabs(attentionCount: number | undefined): Products
   return attentionCount
     ? ['all', 'active', 'attention', 'draft', 'sold']
     : ['all', 'active', 'draft', 'sold'];
+}
+
+// Skeletons only before the first page arrives (or while an out-of-range page is corrected);
+// a background refetch, e.g. after approving a suggestion, keeps the rows on screen.
+export function catalogueShowsSkeleton(input: {
+  hasData: boolean;
+  isFetching: boolean;
+  pageOutOfRange: boolean;
+}): boolean {
+  return input.pageOutOfRange || (!input.hasData && input.isFetching);
 }
 
 export function tabStatus(tab: ProductsTab): ProductStatus[] | undefined {

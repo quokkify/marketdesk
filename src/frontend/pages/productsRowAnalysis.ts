@@ -56,14 +56,26 @@ function isRateLimited(err: unknown): boolean {
   );
 }
 
+export interface SequentialRunOptions {
+  /** Ids to leave alone, e.g. rows whose analysis is already running. */
+  skip?: (id: string) => boolean;
+  /** Checked before each product; false stops the run (the page was left). */
+  shouldContinue?: () => boolean;
+}
+
 export async function runSequentially(
   ids: readonly string[],
   run: (id: string) => Promise<number>,
-  onState: (id: string, state: RowAnalysisState) => void
+  onState: (id: string, state: RowAnalysisState) => void,
+  options: SequentialRunOptions = {}
 ): Promise<{ analyzed: number; notRun: string[] }> {
   let analyzed = 0;
   for (let index = 0; index < ids.length; index += 1) {
     const id = ids[index]!;
+    if (options.shouldContinue && !options.shouldContinue()) {
+      return { analyzed, notRun: ids.slice(index) };
+    }
+    if (options.skip?.(id)) continue;
     onState(id, { status: 'running' });
     try {
       const count = await run(id);

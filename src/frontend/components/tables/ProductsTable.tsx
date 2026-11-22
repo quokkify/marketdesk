@@ -114,7 +114,7 @@ function ProductIdentity({ product }: { product: Product }) {
           color="text.primary"
           variant="body2"
           title={product.name}
-          onClick={(event: React.MouseEvent) => event.stopPropagation()}
+          data-row-stop
           sx={{
             fontWeight: 700,
             display: '-webkit-box',
@@ -165,14 +165,17 @@ export const PRODUCT_TABLE_COLUMNS: ReadonlyArray<{
   { key: 'actions', label: '' },
 ];
 
-// Cells marked data-row-stop (checkbox, AI, actions) never open the product.
+// Elements marked data-row-stop (checkbox, title link, AI, actions) never open the product, and
+// neither do clicks from portaled menus and dialogs, which React bubbles to the row from outside it.
 export function rowClickIntent(event: {
   metaKey: boolean;
   ctrlKey: boolean;
   button: number;
   insideStop: boolean;
+  insideRow: boolean;
 }): 'open' | 'new-tab' | 'ignore' {
-  if (event.insideStop) return 'ignore';
+  if (event.insideStop || !event.insideRow) return 'ignore';
+  if (event.button !== 0 && event.button !== 1) return 'ignore';
   if (event.metaKey || event.ctrlKey || event.button === 1) return 'new-tab';
   return 'open';
 }
@@ -189,6 +192,7 @@ function handleRowClick(
     ctrlKey: event.ctrlKey,
     button: event.button,
     insideStop: Boolean(target.closest('[data-row-stop]')),
+    insideRow: event.currentTarget.contains(target),
   });
   if (intent === 'open') onOpen(product);
   else if (intent === 'new-tab') window.open(`/products/${product.id}`, '_blank', 'noopener');
@@ -354,10 +358,13 @@ export interface ProductsCollectionProps {
 
 const reviewRegionId = (product: Product) => `product-review-${product.id}`;
 
-function rowHandlers(props: ProductsCollectionProps): ProductRowHandlers {
+function rowHandlers(props: ProductsCollectionProps, product: Product): ProductRowHandlers {
   return {
     onAnalyze: props.onAnalyze,
-    analyzeDisabled: Boolean(props.analyzeDisabledReason),
+    analyzeDisabled: !canStartRowAnalysis(
+      props.analysisByProductId?.[product.id],
+      props.analyzeDisabledReason ?? null
+    ),
     onOpen: props.onOpen,
     onEdit: props.onEdit,
     onDelete: props.onDelete,
@@ -583,7 +590,7 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                       <RowAnalysisControl product={product} props={props} />
                     </TableCell>
                     <TableCell align="right" data-row-stop>
-                      <ProductRowActions product={product} handlers={rowHandlers(props)} />
+                      <ProductRowActions product={product} handlers={rowHandlers(props, product)} />
                     </TableCell>
                   </TableRow>
                   {props.expandedProductId === product.id && props.renderReview && (
@@ -652,7 +659,7 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
               </Box>
               <ProductStatusBadge status={product.status} />
               <AwaitingReplyBadge count={props.awaitingByProductId?.[product.id]} />
-              <ProductRowActions product={product} handlers={rowHandlers(props)} />
+              <ProductRowActions product={product} handlers={rowHandlers(props, product)} />
             </Stack>
             <Box
               sx={{

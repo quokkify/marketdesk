@@ -70,6 +70,7 @@ import {
 } from './productsRowAnalysis.js';
 import type { RowAnalysisState } from './productsRowAnalysis.js';
 import {
+  catalogueShowsSkeleton,
   hasCatalogueFilters,
   parseProductsCatalogueState,
   PRODUCTS_PAGE_SIZE,
@@ -195,28 +196,59 @@ const ProductsPage: React.FC = () => {
       return next;
     });
   }, []);
+  // Rows with a request in flight, shared by the row button, the menu item and bulk runs, so one
+  // product never has two analyses at once. Unmounting stops a bulk run before its next product.
+  const inFlightRef = useRef<Set<string>>(new Set());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const runRowAnalysis = useCallback(
-    async (productId: string) =>
-      (await runHermes(productScopedHermesRunInput(productId)).unwrap()).length,
+    async (productId: string) => {
+      inFlightRef.current.add(productId);
+      try {
+        return (await runHermes(productScopedHermesRunInput(productId)).unwrap()).length;
+      } finally {
+        inFlightRef.current.delete(productId);
+      }
+    },
     [runHermes]
   );
+  const runOptions = {
+    skip: (id: string) => inFlightRef.current.has(id),
+    shouldContinue: () => mountedRef.current,
+  };
   const analyzeProduct = async (product: Product) => {
-    await runSequentially([product.id], runRowAnalysis, (id, state) => {
-      setRowAnalysis(id, state);
-      if (state.status === 'done' && state.count > 0) setExpandedProductId(id);
-    });
+    await runSequentially(
+      [product.id],
+      runRowAnalysis,
+      (id, state) => {
+        setRowAnalysis(id, state);
+        if (state.status === 'done' && state.count > 0) setExpandedProductId(id);
+      },
+      runOptions
+    );
   };
   const analyzeSelected = async () => {
-    const ids = [...selectedIds];
+    const ids = [...selectedIds].filter((id) => !inFlightRef.current.has(id));
     let done = 0;
     setBulkProgress({ done, total: ids.length });
-    const result = await runSequentially(ids, runRowAnalysis, (id, state) => {
-      setRowAnalysis(id, state);
-      if (state.status !== 'running') {
-        done += 1;
-        setBulkProgress({ done, total: ids.length });
-      }
-    });
+    const result = await runSequentially(
+      ids,
+      runRowAnalysis,
+      (id, state) => {
+        setRowAnalysis(id, state);
+        if (state.status !== 'running') {
+          done += 1;
+          setBulkProgress({ done, total: ids.length });
+        }
+      },
+      runOptions
+    );
+    if (!mountedRef.current) return;
     setBulkProgress(null);
     if (result.notRun.length > 0) {
       for (const id of result.notRun) setRowAnalysis(id, undefined);
@@ -979,7 +1011,11 @@ const ProductsPage: React.FC = () => {
         {catalogue.view === 'list' ? (
           <ProductsTable
             products={items}
-            loading={isLoading || isFetching || pageOutOfRange}
+            loading={catalogueShowsSkeleton({
+              hasData: Boolean(currentData),
+              isFetching: isLoading || isFetching,
+              pageOutOfRange,
+            })}
             error={isError ? error : undefined}
             onRetry={refetch}
             currency={currency}
@@ -1008,7 +1044,11 @@ const ProductsPage: React.FC = () => {
         ) : (
           <ProductsCards
             products={items}
-            loading={isLoading || isFetching || pageOutOfRange}
+            loading={catalogueShowsSkeleton({
+              hasData: Boolean(currentData),
+              isFetching: isLoading || isFetching,
+              pageOutOfRange,
+            })}
             error={isError ? error : undefined}
             onRetry={refetch}
             currency={currency}

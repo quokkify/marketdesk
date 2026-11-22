@@ -43,6 +43,13 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Analyze {productName} with AI from its row menu")
+  public ProductsPageSteps analyzeFromRowMenu(String productName) {
+    page.rowActionsButton(productName).shouldBe(Condition.visible).click();
+    page.analyzeMenuItem().shouldBe(Condition.visible).click();
+    return this;
+  }
+
   @Step("Click the row of {productName}")
   public ProductsPageSteps clickRow(String productName) {
     page.row(productName).$("td:nth-child(4)").click();

@@ -1,6 +1,7 @@
 import type { Product } from '@shared/types';
 import {
   catalogueFooterLabel,
+  catalogueShowsSkeleton,
   hasCatalogueFilters,
   parseProductsCatalogueState,
   PRODUCT_SORT_OPTIONS,
@@ -154,5 +155,25 @@ describe('stage 1 catalogue helpers', () => {
     expect(PRODUCT_SORT_OPTIONS.map((o) => o.value)).not.toContain('costPrice');
     expect(PRODUCT_SORT_OPTIONS.map((o) => o.value)).not.toContain('-costPrice');
     expect(parseProductsCatalogueState('?sort=-costPrice').sort).toBe('-costPrice');
+  });
+});
+
+describe('catalogue loading state', () => {
+  // Regression guard: approving a suggestion refetches the list; the visible rows must stay.
+  it('keeps showing rows while a refetch runs', () => {
+    expect(catalogueShowsSkeleton({ hasData: true, isFetching: true, pageOutOfRange: false })).toBe(
+      false
+    );
+  });
+  it('shows skeletons before the first data and while correcting an out-of-range page', () => {
+    expect(
+      catalogueShowsSkeleton({ hasData: false, isFetching: true, pageOutOfRange: false })
+    ).toBe(true);
+    expect(catalogueShowsSkeleton({ hasData: true, isFetching: false, pageOutOfRange: true })).toBe(
+      true
+    );
+    expect(
+      catalogueShowsSkeleton({ hasData: true, isFetching: false, pageOutOfRange: false })
+    ).toBe(false);
   });
 });
