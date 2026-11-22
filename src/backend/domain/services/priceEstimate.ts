@@ -67,11 +67,13 @@ const CEILING_PERCENT = Math.round(SUBSTITUTE_CEILING_RATIO * 100);
 const NEAREST_SUBSTITUTES = 3;
 const CONFIDENCE_RANK: Record<PriceEstimate['confidence'], number> = { low: 0, medium: 1, high: 2 };
 
+// Absorbs binary float error (0.29 x 100 = 28.999999999999996) without rounding a real fraction up.
+const FLOAT_GUARD = 1e-9;
 const toCents = (amount: number): number => Math.round(amount * CENTS_PER_UNIT);
 
 // Integer-cent arithmetic, so 0.7 x 300 is exactly 210 and not 209.99999999999997.
 function floorToCents(amount: number): number {
-  return Math.floor(toCents(amount)) / CENTS_PER_UNIT;
+  return Math.floor(amount * CENTS_PER_UNIT + FLOAT_GUARD) / CENTS_PER_UNIT;
 }
 
 function pricesOf(rows: readonly PriceComparable[], tier: PriceComparable['tier']): number[] {
@@ -96,8 +98,8 @@ export function startPriceCeiling(
   const caps: number[] = [];
   const reference = substituteNewReference(rows);
   if (reference !== null) caps.push(Math.floor((toCents(reference) * CEILING_PERCENT) / 100) / CENTS_PER_UNIT);
-  caps.push(...pricesOf(rows, 'last_new_price'));
-  if (researchAnchor !== null) caps.push(researchAnchor);
+  caps.push(...pricesOf(rows, 'last_new_price').map(floorToCents));
+  if (researchAnchor !== null) caps.push(floorToCents(researchAnchor));
   return caps.length === 0 ? null : Math.min(...caps);
 }
 
@@ -113,11 +115,9 @@ export function applyLadderRules(
   rows: readonly PriceComparable[],
   researchAnchor: number | null,
 ): PriceEstimate {
-  if (rows.length === 0 && researchAnchor === null) return e;
   const ceiling = startPriceCeiling(rows, researchAnchor);
-  const startPrice = ceiling === null ? e.startPrice : Math.min(e.startPrice, floorToCents(ceiling));
+  const startPrice = ceiling === null ? e.startPrice : Math.min(e.startPrice, ceiling);
   const tier = tierConfidence(rows);
-  const confidence =
-    rows.length === 0 || CONFIDENCE_RANK[e.confidence] <= CONFIDENCE_RANK[tier] ? e.confidence : tier;
+  const confidence = CONFIDENCE_RANK[e.confidence] <= CONFIDENCE_RANK[tier] ? e.confidence : tier;
   return { ...e, startPrice, floorPrice: Math.min(e.floorPrice, startPrice), confidence };
 }

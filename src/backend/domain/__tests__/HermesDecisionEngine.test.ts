@@ -21,6 +21,32 @@ import type { ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
 
 const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
 
+// The ladder caps confidence to what the comparables support, so an estimate only surfaces with
+// evidence. This repository supplies a same-model used price (far from any used range under test)
+// wherever a test stored no comparable.
+class EvidencedResearchRepository extends InMemoryPriceResearchRepository {
+  async findByProduct(workspaceId: string, productId: string): Promise<PriceResearch | null> {
+    const stored = await super.findByProduct(workspaceId, productId);
+    const evidence: PriceComparable = { price: 10000, note: 'same model, used' };
+    if (stored === null) {
+      return {
+        productId,
+        retailPrice: null,
+        retailCurrency: null,
+        retailSource: null,
+        retailCheckedAt: null,
+        comparables: [evidence],
+        specs: null,
+        dismissedUrls: [],
+        lastAttemptAt: null,
+        lastEstimate: null,
+        updatedAt: '2026-11-21T00:00:00.000Z',
+      };
+    }
+    return stored.comparables.length === 0 ? { ...stored, comparables: [evidence] } : stored;
+  }
+}
+
 function makeEngine(overrides?: {
   productRepo?: InMemoryProductRepository;
   listingRepo?: InMemoryListingRepository;
@@ -40,7 +66,7 @@ function makeEngine(overrides?: {
     eventRepo,
     publisher,
     ai,
-    overrides?.priceResearchRepo ?? new InMemoryPriceResearchRepository(),
+    overrides?.priceResearchRepo ?? new EvidencedResearchRepository(),
     null,
     sequentialIdFactory(),
   );
@@ -254,7 +280,7 @@ describe('HermesDecisionEngine.run', () => {
     async function runWithListingIn(currency: string) {
       const ai = new StubAIProvider();
       const estimatePrice = jest.spyOn(ai, 'estimatePrice');
-      const priceResearchRepo = new InMemoryPriceResearchRepository();
+      const priceResearchRepo = new EvidencedResearchRepository();
       priceResearchRepo.items.set('w1:p1', research);
       const { engine, productRepo, listingRepo } = makeEngine({ ai, priceResearchRepo });
       seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
@@ -339,7 +365,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       eventRepo,
       publisher,
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
       null,
       sequentialIdFactory('g'),
     );
@@ -502,7 +528,7 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       new InMemoryEventRepository(),
       new RecordingEventPublisher(),
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
       null,
       sequentialIdFactory('s'),
     );
@@ -672,7 +698,7 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       eventRepo,
       new RecordingEventPublisher(),
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
       null,
       sequentialIdFactory('seo'),
     );
@@ -830,7 +856,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const eventRepo = new InMemoryEventRepository();
-    const priceResearchRepo = new InMemoryPriceResearchRepository();
+    const priceResearchRepo = new EvidencedResearchRepository();
     if (options.research) priceResearchRepo.items.set('w1:p1', options.research);
     const engine = new HermesDecisionEngine(
       productRepo,

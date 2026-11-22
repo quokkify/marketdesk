@@ -141,6 +141,10 @@ describe('startPriceCeiling', () => {
     expect(startPriceCeiling(NEW_SUBSTITUTES, 150)).toBe(150);
   });
 
+  it('floors a fractional cap instead of rounding it', () => {
+    expect(startPriceCeiling([row(199.996, 'last_new_price')], null)).toBe(199.99);
+  });
+
   it('is null without caps', () => {
     expect(startPriceCeiling([row(200, 'same_model_used')], null)).toBeNull();
   });
@@ -180,9 +184,9 @@ describe('applyLadderRules', () => {
     expect(applyLadderRules(estimate({ confidence: 'medium' }), rows, null).confidence).toBe('medium');
   });
 
-  it('leaves an estimate without rows alone', () => {
+  it('drops confidence to low with no rows at all and leaves prices alone', () => {
     const e = estimate({ confidence: 'high' });
-    expect(applyLadderRules(e, [], null)).toEqual(e);
+    expect(applyLadderRules(e, [], null)).toEqual({ ...e, confidence: 'low' });
   });
 });
 
