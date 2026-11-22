@@ -169,4 +169,21 @@ describeDb('PriceResearchRunRepository (PostgreSQL integration, TEMP table)', ()
     await expect(repo().findLastFinished(WS, P1)).resolves.toMatchObject({ id: runId(1), finishedAt: later(30) });
     await expect(repo().findLastFinished(OTHER_WS, P1)).resolves.toBeNull();
   });
+
+  it('lists a product\'s runs of every status newest first, capped by the limit, in the workspace only', async () => {
+    if (!tempReady) return;
+    await queue(1, P1, later(0));
+    await repo().finish(runId(1), finished());
+    await queue(2, P1, later(10));
+    await repo().finish(runId(2), finished({ outcome: 'failed', errorCode: 'job_lost', nextAutoAt: null }));
+    await queue(3, P1, later(20));
+    await queue(4, P2, later(30));
+    await queue(5, P1, later(40), OTHER_WS);
+
+    const all = await repo().listForProduct(WS, P1, 20);
+    expect(all.map((run) => run.id)).toEqual([runId(3), runId(2), runId(1)]);
+    expect(all.map((run) => run.status)).toEqual(['queued', 'finished', 'finished']);
+    expect((await repo().listForProduct(WS, P1, 2)).map((run) => run.id)).toEqual([runId(3), runId(2)]);
+    await expect(repo().listForProduct(OTHER_WS, P2, 20)).resolves.toEqual([]);
+  });
 });

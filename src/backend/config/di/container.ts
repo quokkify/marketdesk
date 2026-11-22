@@ -650,6 +650,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
           now: () => new Date(),
           logger: overrides.logger,
         }),
+        verdicts: saleVerdictRepo,
         configured: researchConfig !== null,
         newId: idGenerator,
       }),

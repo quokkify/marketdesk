@@ -67,3 +67,28 @@ describe('PriceResearchRuns.latest', () => {
     expect(latest.last).toMatchObject({ id: 'stuck', consecutiveFailures: 3 });
   });
 });
+
+describe('PriceResearchRuns.history', () => {
+  it('lists every run of the product newest first, up to the limit', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'a', queuedAt: at(-3 * HOUR_MS) }));
+    runs.runs.push(storedRun({ id: 'b', queuedAt: at(-2 * HOUR_MS) }));
+    runs.runs.push(storedRun({ id: 'c', status: 'queued', outcome: null, finishedAt: null, queuedAt: at(-60 * 1000) }));
+
+    expect((await setup(runs).history(WS, PID, 20)).map((run) => run.id)).toEqual(['c', 'b', 'a']);
+    expect((await setup(runs).history(WS, PID, 2)).map((run) => run.id)).toEqual(['c', 'b']);
+  });
+
+  it('lists an expired active run as failed', async () => {
+    const runs = new InMemoryPriceResearchRunRepository();
+    runs.runs.push(storedRun({ id: 'stuck', status: 'running', outcome: null, finishedAt: null, leaseUntil: at(-1), queuedAt: at(-HOUR_MS) }));
+
+    await expect(setup(runs).history(WS, PID, 20)).resolves.toMatchObject([
+      { id: 'stuck', status: 'finished', outcome: 'failed', errorCode: 'lease_expired' },
+    ]);
+  });
+
+  it('returns an empty list for a product with no runs', async () => {
+    await expect(setup(new InMemoryPriceResearchRunRepository()).history(WS, PID, 20)).resolves.toEqual([]);
+  });
+});

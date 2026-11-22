@@ -44,6 +44,8 @@ export interface CheckContext {
   marketplace: Marketplace | null;
   now: () => Date;
   options: CheckOptions;
+  // The verdict run; absent for the synchronous Recheck's info check.
+  runId?: string;
   // The verdict run's budget.
   signal: AbortSignal;
 }
@@ -126,6 +128,7 @@ export class SaleVerdictGraph {
       marketplace,
       now: this.deps.now,
       options: { forceResearch: false, infoCodeOnly: false, ...input.options },
+      runId: input.runId,
       signal: input.signal,
     };
   }
@@ -193,6 +196,8 @@ export class SaleVerdictGraph {
         status: 'completed',
         overall: combined.overall,
         checks: combined.checks,
+        researchRunId: null,
+        errorCode: null,
         createdAt: combined.completedAt,
         completedAt: combined.completedAt,
       },

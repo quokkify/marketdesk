@@ -29,6 +29,7 @@ export interface ISaleVerdictRepository {
   // queued → running for this run only; null when the run is no longer queued.
   claim(runId: string, startedAt: string, leaseUntil: string): Promise<SaleVerdict | null>;
   setListing(runId: string, listingId: string | null): Promise<void>;
+  setResearchRun(runId: string, researchRunId: string): Promise<void>;
   // queued or running → completed; false when the run already left those states.
   complete(runId: string, fields: CompletedVerdictFields): Promise<boolean>;
   // queued or running → failed; false when the run already left those states.
@@ -37,6 +38,8 @@ export interface ISaleVerdictRepository {
   // job was lost); true when one was failed.
   failExpired(workspaceId: string, productId: string, now: string, queuedBefore: string, errorCode: string): Promise<boolean>;
   findById(workspaceId: string, runId: string): Promise<SaleVerdict | null>;
+  // Every run of the product, whatever its status, newest queued_at first.
+  listForProduct(workspaceId: string, productId: string, limit: number): Promise<SaleVerdict[]>;
   findLatestCompleted(workspaceId: string, productId: string): Promise<SaleVerdict | null>;
   findLatestCompletedForProducts(
     workspaceId: string,
@@ -44,6 +47,4 @@ export interface ISaleVerdictRepository {
   ): Promise<Map<string, SaleVerdict>>;
   // The ids among productIds whose newest run (by queued_at) failed, in one query.
   lastRunFailedForProducts(workspaceId: string, productIds: string[]): Promise<Set<string>>;
-  // True when the newest run of the product (by queued_at) failed.
-  lastRunFailed(workspaceId: string, productId: string): Promise<boolean>;
 }

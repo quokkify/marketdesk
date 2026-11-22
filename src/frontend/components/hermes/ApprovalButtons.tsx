@@ -15,6 +15,8 @@ import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
 import { ConfirmDialog } from '../common/ConfirmDialog.js';
 
+export const APPROVE_SUCCESS_MESSAGE = 'Suggestion approval recorded.';
+
 export interface ApprovalButtonsProps {
   event: HermesEvent;
   size?: 'small' | 'medium';
@@ -37,7 +39,7 @@ export const ApprovalButtons: React.FC<ApprovalButtonsProps> = ({
   size = 'small',
   onResolved,
   approveLabel = 'Approve',
-  successMessage = 'Suggestion approval recorded.',
+  successMessage = APPROVE_SUCCESS_MESSAGE,
   dismissOnly = false,
 }) => {
   const dispatch = useAppDispatch();

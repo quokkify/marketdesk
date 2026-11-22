@@ -12,7 +12,6 @@ import {
   Button,
   Checkbox,
   Chip,
-  Divider,
   FormControlLabel,
   Stack,
   TextField,
@@ -24,12 +23,12 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   HermesEvent,
-  HermesStatusView,
   Listing,
   Marketplace,
   Product,
   ProductCategoryProvenance,
   ProductRecheckResult,
+  SaleVerdict,
 } from '@shared/types';
 import type {
   HermesRunInput,
@@ -55,9 +54,13 @@ import {
   usePriceHistory,
   useHermesEvents,
   useHermesStatus,
+  useApproveHermesEvent,
   useRunHermes,
   useProductVerdict,
+  VERDICT_POLL_MS,
 } from '../services/hooks/index.js';
+import { HISTORY_LIMIT, useGetProductVerdictsQuery } from '../state/api/hermesApi.js';
+import { useGetPriceResearchRunsQuery } from '../state/api/productsApi.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
 import { useProductDeletion } from '../hooks/useProductDeletion.js';
@@ -75,7 +78,6 @@ import { usePendingPublicationPolling } from './usePendingPublicationPolling.js'
 import type { CreationJourneyOutcome } from '../workflows/creationJourney.js';
 import type { OlxCategorySearchResult } from '../state/api/listingsApi.js';
 import { Card } from '../components/common/Card.js';
-import VerdictSummary from '../components/products/VerdictSummary.js';
 import { isVerdictStale } from '../components/products/verdictDisplay.js';
 import { Modal } from '../components/common/Modal.js';
 import { ConfirmDialog } from '../components/common/ConfirmDialog.js';
@@ -86,7 +88,7 @@ import { OlxCategoryPicker, ProductForm } from '../components/forms/index.js';
 import type { ProductFormValues, WizardOlxCategory } from '../components/forms/index.js';
 import { PricingForm } from '../components/forms/index.js';
 import { priceSyncMessage } from '../components/product-detail/priceSyncMessage.js';
-import { SeoRecommendationQueue } from '../components/hermes/index.js';
+import { APPROVE_SUCCESS_MESSAGE } from '../components/hermes/index.js';
 import {
   mainPreviewImageSx,
   OlxInsightsCard,
@@ -98,16 +100,26 @@ import {
   ProductGalleryCard,
   ProductIdentityHero,
   productDetailRailSx,
-  ProductActivityCard,
-  productActivityItems,
-  ProductHermesCard,
   ProductTimelineCard,
   PublicationReadinessSection,
 } from '../components/product-detail/ProductDetailSections.js';
 import { ConversationsSection } from '../components/product-detail/ConversationsSection.js';
 import type { ProductPrimaryAction } from '../components/product-detail/ProductDetailSections.js';
 import { RevivalDialog } from '../components/product-detail/RevivalDialog.js';
-import { PriceResearchSection, ProductPriceDiscount } from '../components/product-detail/PriceResearchSection.js';
+import {
+  ProductPriceDiscount,
+  usePriceResearchView,
+} from '../components/product-detail/PriceResearchSection.js';
+import { runProgressText } from '../components/product-detail/priceResearchModel.js';
+import { HermesCard } from '../components/product-detail/hermes/HermesCard.js';
+import { HermesDrawer } from '../components/product-detail/hermes/HermesDrawer.js';
+import { ChecksTab } from '../components/product-detail/hermes/ChecksTab.js';
+import { PricesTabContainer } from '../components/product-detail/hermes/PricesTab.js';
+import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
+import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
+import { buildHistory, historyQueryState } from '../components/product-detail/hermes/hermesHistory.js';
+import { hermesCardState, hermesProviderNote } from '../components/product-detail/hermes/hermesCardModel.js';
+import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
 export { mainPreviewImageSx };
 
@@ -192,11 +204,6 @@ export function productScopedHermesRunInput(productId: string): HermesRunInput {
   return { trigger: 'manual', productId };
 }
 
-export type ProductHermesAnalysisState =
-  | { status: 'idle' }
-  | { status: 'success'; message: string }
-  | { status: 'error'; message: string };
-
 export function productHermesDisabledReason(input: {
   settingsLoaded: boolean;
   listingSeoEnabled: boolean;
@@ -208,20 +215,16 @@ export function productHermesDisabledReason(input: {
   return null;
 }
 
-// Names the provider that answers the run: offline heuristics stand in while Hermes is
-// unavailable. Neutral while the provider status is still unknown, and never credits Hermes
-// while its API server is refused for having tools enabled.
-export function productHermesAnalyzingNote(
-  activeProvider: HermesStatusView['activeProvider'] | undefined,
-  hermesToolsSafe?: HermesStatusView['hermesToolsSafe']
-): string {
-  const subject =
-    activeProvider === 'hermes' && hermesToolsSafe !== false
-      ? 'Hermes is analyzing'
-      : activeProvider === 'offline'
-        ? 'Offline heuristics are analyzing'
-        : 'Analyzing';
-  return `${subject} this product only. Any recommendation will remain review-only.`;
+// The price card's pointer to the Hermes checks: how many checks of the latest verdict need
+// a fix. Nothing while a run is in progress, before the first verdict, when the verdict is stale,
+// or when no check needs a fix.
+export function hermesFixHint(verdict: SaleVerdict | null, running: boolean, stale: boolean): string | null {
+  if (running || stale || !verdict) return null;
+  const count = Object.values(verdict.checks).filter(
+    (check) => check && (check.status === 'fix' || check.status === 'needs_human')
+  ).length;
+  if (count === 0) return null;
+  return `Hermes: ${count} ${count === 1 ? 'thing' : 'things'} to fix`;
 }
 
 export const PublicationReadinessAction: React.FC<{
@@ -663,8 +666,6 @@ const ListingDetailsPage: React.FC = () => {
     { skip: !productId }
   );
   const hermesSettings = useGetHermesSettingsQuery(principal ?? skipToken);
-  const hermesStatus = useHermesStatus();
-  const activeProvider = hermesStatus.data?.activeProvider;
   const {
     marketplaces,
     marketplacesLoading,
@@ -691,8 +692,13 @@ const ListingDetailsPage: React.FC = () => {
   const [publishListing, { isLoading: publishing }] = usePublishListing();
   const [createListing, { isLoading: creatingListing }] = useCreateProductListing();
   const [runHermes, { isLoading: startingRun }] = useRunHermes();
+  const [approveEvent, { isLoading: settingPrice }] = useApproveHermesEvent();
   const verdictView = useProductVerdict(productId).currentData;
+  const priceResearchQuery = usePriceResearchView(productId);
+  const priceResearch = priceResearchQuery.currentData ?? null;
   const analyzing = startingRun || Boolean(verdictView?.active);
+  const hermesStatus = useHermesStatus().currentData;
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const { requestDelete, dialog: deleteDialog } = useProductDeletion(() => navigate('/products'));
 
   const [editOpen, setEditOpen] = useState(false);
@@ -710,7 +716,24 @@ const ListingDetailsPage: React.FC = () => {
   const [previewingPublication, setPreviewingPublication] = useState(false);
   const [submittingPublication, setSubmittingPublication] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
-  const [analysisState, setAnalysisState] = useState<ProductHermesAnalysisState>({ status: 'idle' });
+  const [drawerTab, setDrawerTab] = useState<HermesDrawerTab | null>(null);
+  // The drawer keeps its last tab on screen while it slides closed.
+  const [shownDrawerTab, setShownDrawerTab] = useState<HermesDrawerTab>('checks');
+  if (drawerTab && drawerTab !== shownDrawerTab) setShownDrawerTab(drawerTab);
+  // The history lists load once the drawer has been opened on any tab for this product.
+  const [drawerOpenedFor, setDrawerOpenedFor] = useState<string | null>(null);
+  if (drawerTab && drawerOpenedFor !== productId) setDrawerOpenedFor(productId);
+  const historyArgs = productId && drawerOpenedFor === productId ? productId : skipToken;
+  const runActive = analyzing || runProgressText(priceResearch?.run ?? null) !== null;
+  const historyPolling = { pollingInterval: runActive ? VERDICT_POLL_MS : 0 };
+  const researchRuns = useGetPriceResearchRunsQuery(historyArgs, historyPolling);
+  const verdictHistory = useGetProductVerdictsQuery(historyArgs, historyPolling);
+  // Every suggestion of the product, resolved ones included; the card and the Suggestions tab keep the pending-only call.
+  const eventHistory = useHermesEvents(
+    { productId, sort: '-createdAt', limit: HISTORY_LIMIT },
+    { skip: historyArgs === skipToken }
+  );
+  const historyState = historyQueryState([researchRuns, verdictHistory, eventHistory]);
   const [categoryLookupError, setCategoryLookupError] = useState<string | null>(null);
   const [creationFailure, setCreationFailure] = useState<string | null>(null);
   // The advert queued from this page, followed until OLX answers.
@@ -771,6 +794,13 @@ const ListingDetailsPage: React.FC = () => {
     setQuotaOverrideReason('');
     setCategoryLookupError(null);
   };
+
+  const recommendationSuccessMessage = (event: HermesEvent) =>
+    !event.proposedChange || event.proposedChange.kind === 'category_recreation'
+      ? undefined
+      : primaryListing?.status === 'live' && primaryListing.marketplaceListingId
+        ? 'Suggestion applied locally. Connected live listing updates were queued.'
+        : 'Suggestion applied to the product.';
 
   const refreshAfterRecommendation = async () => {
     await Promise.all([
@@ -867,24 +897,30 @@ const ListingDetailsPage: React.FC = () => {
       listingSeoEnabled: hermesSettings.currentData?.agents.listingSeo.enabled ?? false,
       productId,
     });
-    if (disabledReason) {
-      setAnalysisState({ status: 'error', message: disabledReason });
-      return;
-    }
-    setAnalysisState({ status: 'idle' });
+    if (disabledReason) return;
+    setAnalyzeError(null);
     try {
       // The run ends in the background; the verdict query follows it.
       await runHermes(productScopedHermesRunInput(productId)).unwrap();
     } catch (err) {
-      const message = errorMessage(err);
-      setAnalysisState({ status: 'error', message });
-      dispatch(enqueueToast({ message, severity: 'error' }));
+      setAnalyzeError(errorMessage(err));
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
   };
 
-  const handleReviewPrice = async () => {
+  // Approves the price suggestion the card offers, as Apply does in the suggestions queue.
+  const handleSetPrice = async (eventId: string) => {
+    const event = recommendations.find((item) => item.id === eventId);
+    if (!event) return;
     try {
-      await runHermes({ ...productScopedHermesRunInput(productId), scope: ['price'] }).unwrap();
+      await approveEvent(eventId).unwrap();
+      dispatch(
+        enqueueToast({
+          message: recommendationSuccessMessage(event) ?? APPROVE_SUCCESS_MESSAGE,
+          severity: 'success',
+        })
+      );
+      void refreshAfterRecommendation();
     } catch (err) {
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
     }
@@ -893,8 +929,12 @@ const ListingDetailsPage: React.FC = () => {
   useEffect(() => {
     recheckRequestIdentity.current += 1;
     setRecheckResult(null);
-    setAnalysisState({ status: 'idle' });
   }, [productId, principalCacheKey]);
+
+  useEffect(() => {
+    setDrawerTab(null);
+    setAnalyzeError(null);
+  }, [productId]);
 
   const beginPublicationReview = useCallback(
     async (listing: Listing, mode: 'publish' | 'relist') => {
@@ -1192,11 +1232,19 @@ const ListingDetailsPage: React.FC = () => {
     olxListing: recheckListing,
     olxConnected: Boolean(olxMarketplace?.connected),
   });
-  const hermesNote = analyzing
-    ? productHermesAnalyzingNote(activeProvider, hermesStatus.data?.hermesToolsSafe)
-    : analysisState.status === 'idle'
-      ? (analyzeDisabledReason ?? 'Runs only the enabled listing SEO agent for this product; no catalogue run or automatic apply is started.')
-      : analysisState.message;
+  const now = new Date();
+  const latestVerdict = verdictView?.latest ?? null;
+  const verdictStale = latestVerdict ? isVerdictStale(latestVerdict, p.updatedAt, primaryListing?.updatedAt) : false;
+  const hermesState = hermesCardState({
+    verdict: verdictView ?? null,
+    research: priceResearch,
+    stale: verdictStale,
+    pendingEvents: recommendations,
+    suggestionTotal: recommendationTotal,
+    currency,
+    now,
+  });
+  const fixHint = hermesFixHint(latestVerdict, runActive, verdictStale);
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
@@ -1329,6 +1377,7 @@ const ListingDetailsPage: React.FC = () => {
             onRevive={recheckListing ? () => setReviveOpen(true) : undefined}
             onReactivate={recheckListing ? () => setReactivateOpen(true) : undefined}
             onConnect={() => navigate('/marketplaces')}
+            hermesHint={fixHint ? { text: fixHint, onClick: () => setDrawerTab('checks') } : undefined}
           />
           <OlxInsightsCard
             listing={primaryListing}
@@ -1352,80 +1401,50 @@ const ListingDetailsPage: React.FC = () => {
             }
             statusColor={remoteMarketplaceChipColor(primaryListing)}
           />
-          <PriceResearchSection
+          <HermesCard
+            state={hermesState}
+            analyzeDisabledReason={analyzeDisabledReason}
+            note={hermesProviderNote(hermesStatus?.activeProvider, hermesStatus?.hermesToolsSafe, analyzing)}
+            error={analyzeError}
+            busy={analyzing || settingPrice}
+            onAnalyze={() => void handleAnalyzeWithHermes()}
+            onSetPrice={(eventId) => void handleSetPrice(eventId)}
+            onOpen={setDrawerTab}
+          />
+        </Stack>
+      </Box>
+
+      <HermesDrawer
+        open={drawerTab !== null}
+        tab={shownDrawerTab}
+        onTabChange={setDrawerTab}
+        onClose={() => setDrawerTab(null)}
+        title={`Hermes · ${p.name}`}
+      >
+        {shownDrawerTab === 'prices' && (
+          <PricesTabContainer
             productId={p.id}
-            currentPrice={p.sellingPrice}
+            view={priceResearchQuery.currentData}
+            error={priceResearchQuery.error}
+            refetch={priceResearchQuery.refetch}
             currency={currency}
             listingCurrency={primaryListing?.currency ?? null}
-          />
-          <Card title="Sale verdict" subtitle="Is this product ready to sell?">
-            <Stack spacing={1.5}>
-              <VerdictSummary
-                verdict={verdictView?.latest ?? null}
-                running={analyzing}
-                lastFailed={verdictView?.lastFailed ?? false}
-                stale={
-                  verdictView?.latest
-                    ? isVerdictStale(verdictView.latest, p.updatedAt, primaryListing?.updatedAt)
-                    : false
-                }
-              />
-              {!verdictView?.latest && !analyzing && (
-                <Typography variant="body2" color="text.secondary">
-                  Not checked yet. Run Analyze to get a verdict.
-                </Typography>
-              )}
-              <Box>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={analyzing || !productId || !hermesSettings.currentData}
-                  onClick={() => void handleReviewPrice()}
-                  data-testid="review-price-button"
-                >
-                  Review price
-                </Button>
-              </Box>
-            </Stack>
-          </Card>
-          <ProductHermesCard
-            analyzing={analyzing}
-            activeProvider={activeProvider}
-            analyzeDisabled={Boolean(analyzeDisabledReason)}
-            note={hermesNote}
-            noteIsError={analysisState.status === 'error'}
             onAnalyze={() => void handleAnalyzeWithHermes()}
+            analyzing={analyzing}
+            analyzeDisabledReason={analyzeDisabledReason}
+          />
+        )}
+        {shownDrawerTab === 'checks' && (
+          <ChecksTab
+            verdict={latestVerdict}
+            setPrice={hermesState.primary.kind === 'set_price' ? hermesState.primary : null}
+            busy={analyzing || settingPrice}
+            running={runActive}
+            now={now}
+            onSetPrice={(eventId) => void handleSetPrice(eventId)}
+            onOpenPrices={() => setDrawerTab('prices')}
+            onEdit={() => setEditOpen(true)}
           >
-            {hermesEvents.isLoading || hermesEvents.isFetching ? (
-              <LoadingSkeleton lines={2} height={96} />
-            ) : hermesEvents.isError ? (
-              <ErrorRetry error={hermesEvents.error} onRetry={hermesEvents.refetch} />
-            ) : recommendations.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No pending recommendations for this product.
-              </Typography>
-            ) : (
-              <Stack spacing={1.5}>
-                <SeoRecommendationQueue
-                  events={recommendations}
-                  total={recommendationTotal}
-                  onResolved={refreshAfterRecommendation}
-                  onViewAll={() => navigate('/hermes')}
-                  approveLabel="Apply"
-                  successMessage={(event) =>
-                    !event.proposedChange || event.proposedChange.kind === 'category_recreation'
-                      ? undefined
-                      : primaryListing?.status === 'live' && primaryListing.marketplaceListingId
-                        ? 'Suggestion applied locally. Connected live listing updates were queued.'
-                        : 'Suggestion applied to the product.'
-                  }
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Category correction always uses separate audited delist and recreate reviews.
-                </Typography>
-              </Stack>
-            )}
-            <Divider />
             <PublicationReadinessSection
               action={
                 <PublicationReadinessAction
@@ -1451,18 +1470,39 @@ const ListingDetailsPage: React.FC = () => {
                 />
               )}
             </PublicationReadinessSection>
-          </ProductHermesCard>
-          <ProductActivityCard
-            items={productActivityItems(priceHistory.data ?? [], recommendations, currency)}
-            loading={listings.isLoading || priceHistory.isLoading || hermesEvents.isLoading}
-            error={priceHistory.isError ? priceHistory.error : hermesEvents.isError ? hermesEvents.error : undefined}
+          </ChecksTab>
+        )}
+        {shownDrawerTab === 'suggestions' && (
+          <SuggestionsTab
+            loading={hermesEvents.isLoading || hermesEvents.isFetching}
+            error={hermesEvents.isError ? hermesEvents.error : undefined}
+            onRetry={() => void hermesEvents.refetch()}
+            events={recommendations}
+            total={recommendationTotal}
+            onResolved={() => void refreshAfterRecommendation()}
+            onViewAll={() => navigate('/hermes')}
+            successMessage={recommendationSuccessMessage}
+          />
+        )}
+        {shownDrawerTab === 'history' && (
+          <HistoryTab
+            key={p.id}
+            entries={buildHistory({
+              researchRuns: researchRuns.currentData ?? [],
+              verdicts: verdictHistory.currentData ?? [],
+              events: eventHistory.currentData?.items ?? [],
+              currency,
+            })}
+            loading={historyState.loading}
+            error={historyState.error}
             onRetry={() => {
-              if (priceHistory.isError) void priceHistory.refetch();
-              if (hermesEvents.isError) void hermesEvents.refetch();
+              if (researchRuns.isError) void researchRuns.refetch();
+              if (verdictHistory.isError) void verdictHistory.refetch();
+              if (eventHistory.isError) void eventHistory.refetch();
             }}
           />
-        </Stack>
-      </Box>
+        )}
+      </HermesDrawer>
 
       {deleteDialog}
       {recheckListing && (

@@ -62,6 +62,8 @@ export class RecordedResearchRun {
     run: { id: string; workspaceId: string; productId: string; trigger: RunTrigger },
     signal: AbortSignal,
     queuedRunId?: string,
+    // Called with the id of a run recorded here, before it executes.
+    onQueued?: (runId: string) => Promise<void>,
   ): Promise<RecordedRun | { kind: 'active' }> {
     if (queuedRunId) {
       const claimed = await this.execute(queuedRunId, signal);
@@ -69,6 +71,12 @@ export class RecordedResearchRun {
     }
     const queued = await this.deps.runs.insertQueued({ ...run, queuedAt: this.deps.now().toISOString() });
     if (!queued) return { kind: 'active' };
+    // The link is only a hint for readers: a failure to write it must not strand the queued run.
+    try {
+      await onQueued?.(queued.id);
+    } catch (error) {
+      this.deps.logger?.error({ productId: run.productId, runId: queued.id, err: error }, 'Linking the research run failed');
+    }
     return this.execute(queued.id, signal);
   }
 

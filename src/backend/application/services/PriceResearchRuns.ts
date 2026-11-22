@@ -22,6 +22,11 @@ export class PriceResearchRuns implements IPriceResearchRuns {
     return this.current(workspaceId, productId, this.deps.now());
   }
 
+  async history(workspaceId: string, productId: string, limit: number): Promise<ResearchRun[]> {
+    await this.current(workspaceId, productId, this.deps.now());
+    return this.deps.runs.listForProduct(workspaceId, productId, limit);
+  }
+
   private async current(
     workspaceId: string,
     productId: string,

@@ -219,7 +219,7 @@ describe('Hermes endpoints against the wire format', () => {
   it('refetches the sale verdict of the product after a run is started', async () => {
     respond = (url) => ({
       success: true,
-      data: url.pathname.endsWith('/run') ? { id: 'run-1' } : { latest: null, active: null, lastFailed: false },
+      data: url.pathname.endsWith('/run') ? { id: 'run-1' } : { latest: null, active: null, lastFailed: false, lastFailedCode: null },
     });
     const store = newStore();
     const verdict = store.dispatch(hermesApi.endpoints.getProductVerdict.initiate('product-1'));

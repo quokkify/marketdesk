@@ -14,6 +14,7 @@ import org.openqa.selenium.interactions.WheelInput;
 public class ProductDetailPageSteps
     extends PageSteps<ProductDetailPageSteps, ProductDetailPageVerification, ProductDetailPage> {
 
+  private static final String SEARCHING = "Searching…";
   private static final int WHEEL_TICKS = 5;
   private static final int WHEEL_TICK_PIXELS = 60;
 
@@ -62,25 +63,42 @@ public class ProductDetailPageSteps
     return this;
   }
 
-  @Step("Enter the retail price {price} {currency} from {source} and save it")
-  public ProductDetailPageSteps saveRetailAnchor(String price, String currency, String source) {
-    page.retailPriceInput().shouldBe(Condition.visible).setValue(price);
-    page.retailCurrencyInput().sendKeys(Keys.chord(Keys.CONTROL, "a"), currency);
-    page.retailSourceInput().setValue(source);
-    page.savePriceResearchButton().shouldBe(Condition.enabled).click();
-    page.priceResearchSavedNote().shouldBe(Condition.visible);
+  @Step("Analyze the product with the primary action of the Hermes card")
+  public ProductDetailPageSteps analyzeFromTheCard() {
+    page.hermesPrimaryAction().shouldBe(Condition.enabled).click();
     return this;
   }
 
-  @Step("Find prices")
-  public ProductDetailPageSteps findPrices() {
-    page.findPricesButton().shouldBe(Condition.enabled).click();
+  @Step("Open the Hermes drawer from the {row} row of the card")
+  public ProductDetailPageSteps openHermesRow(String row) {
+    page.hermesRow(row).shouldBe(Condition.enabled).click();
     return this;
   }
 
-  @Step("Review the price")
-  public ProductDetailPageSteps reviewPrice() {
-    page.reviewPriceButton().shouldBe(Condition.enabled).click();
+  @Step("Open the Hermes drawer from the Log and history link")
+  public ProductDetailPageSteps openLogAndHistory() {
+    page.hermesHistoryLink().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
+  @Step("Press Escape and wait until the Hermes drawer is gone")
+  public ProductDetailPageSteps closeHermesDrawerWithEscape() {
+    Selenide.actions().sendKeys(Keys.ESCAPE).perform();
+    page.hermesDrawer().should(Condition.disappear);
+    return this;
+  }
+
+  @Step("Add the price {price} to Your prices")
+  public ProductDetailPageSteps addMyPrice(String price) {
+    page.myPriceInput().shouldBe(Condition.visible).setValue(price);
+    page.addMyPriceButton().shouldBe(Condition.enabled).click();
+    return this;
+  }
+
+  @Step("Press Search again and wait until the search is running")
+  public ProductDetailPageSteps searchPricesAgain() {
+    page.pricesSearchAgainButton().shouldBe(Condition.enabled).click();
+    page.pricesSearchAgainButton().shouldHave(Condition.text(SEARCHING));
     return this;
   }
 

@@ -10,6 +10,7 @@ import io.restassured.response.ValidatableResponse;
 public class PriceResearchService extends MarketDeskApiService {
 
   private static final String PRICE_RESEARCH = "/api/products/%s/price-research";
+  private static final String PRICE_RESEARCH_RUNS = "/api/products/%s/price-research/runs";
   private static final String PRICE_RESEARCH_REFRESH = "/api/products/%s/price-research/refresh";
   private static final String EMPTY_BODY = "{}";
 
@@ -32,6 +33,14 @@ public class PriceResearchService extends MarketDeskApiService {
 
   public ValidatableResponse putPriceResearch(String productId, PriceResearchPojo body) {
     return put(anonymous(), PRICE_RESEARCH.formatted(productId), JsonConverter.toJson(body));
+  }
+
+  public ValidatableResponse getRunHistory(String token, String productId) {
+    return get(authorized(token), PRICE_RESEARCH_RUNS.formatted(productId));
+  }
+
+  public ValidatableResponse getRunHistory(String token, String productId, String limit) {
+    return get(authorized(token), PRICE_RESEARCH_RUNS.formatted(productId) + "?limit=" + limit);
   }
 
   public ValidatableResponse refreshPriceResearch(String token, String productId) {

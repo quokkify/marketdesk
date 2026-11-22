@@ -7,6 +7,7 @@ const NOW = new Date('2026-11-22T12:00:00.000Z');
 const NEW_RUN = { id: 'new', workspaceId: WS, productId: PID, trigger: 'manual' as const };
 
 function setup() {
+  const logged: Array<Record<string, unknown>> = [];
   const runs = new InMemoryPriceResearchRunRepository();
   const run = jest.fn(async () => ({ outcome: 'ok', nodes: {}, failedTiers: [], errorCode: null, rowsChanged: false }));
   const published: unknown[] = [];
@@ -15,8 +16,9 @@ function setup() {
     graph: { run } as never,
     events: { publish: async (event: unknown) => { published.push(event); } } as never,
     now: () => NOW,
+    logger: { error: (context) => { logged.push(context); } },
   });
-  return { runs, recorded, run, published };
+  return { runs, recorded, run, published, logged };
 }
 
 describe('RecordedResearchRun.start', () => {
@@ -27,6 +29,34 @@ describe('RecordedResearchRun.start', () => {
 
     expect(out).toMatchObject({ kind: 'finished', outcome: 'ok', run: { id: 'new' } });
     expect(runs.runs.map((r) => r.id)).toEqual(['new']);
+  });
+
+  it('reports the id of a run it records, before the run executes, and not for a given queued run', async () => {
+    const { runs, recorded } = setup();
+    await runs.insertQueued({ ...NEW_RUN, id: 'queued-earlier', queuedAt: NOW.toISOString() });
+    const seen: Array<[string, string | undefined]> = [];
+    const onQueued = async (id: string) => {
+      seen.push([id, runs.runs.find((r) => r.id === id)?.status]);
+    };
+
+    await recorded.start(NEW_RUN, new AbortController().signal, 'queued-earlier', onQueued);
+    expect(seen).toEqual([]);
+
+    await recorded.start(NEW_RUN, new AbortController().signal, undefined, onQueued);
+    expect(seen).toEqual([['new', 'queued']]);
+  });
+
+  it('still executes a recorded run when reporting its id fails, and logs the failure', async () => {
+    const { runs, recorded, logged } = setup();
+
+    const out = await recorded.start(NEW_RUN, new AbortController().signal, undefined, async () => {
+      throw new Error('db blip');
+    });
+
+    expect(out).toMatchObject({ kind: 'finished', outcome: 'ok', run: { id: 'new' } });
+    expect(runs.runs.map((r) => [r.id, r.status])).toEqual([['new', 'finished']]);
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ runId: 'new', productId: PID });
   });
 
   it('executes the run queued at request time instead of inserting another', async () => {

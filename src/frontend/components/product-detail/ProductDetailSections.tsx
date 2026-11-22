@@ -1,7 +1,6 @@
 import React, { useId, useState } from 'react';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   ButtonBase,
@@ -9,6 +8,7 @@ import {
   Collapse,
   Divider,
   IconButton,
+  Link,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -17,15 +17,13 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import type { Theme } from '@mui/material/styles';
-import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { HermesEvent, HermesStatusView, Listing, PriceHistory, Product } from '@shared/types';
+import type { Listing, PriceHistory, Product } from '@shared/types';
 import { Card } from '../common/Card.js';
 import { ProductStatusBadge } from '../common/Badge.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
@@ -271,7 +269,9 @@ export const PricingSummaryCard: React.FC<{
   // Plain reactivation, kept beside the revival for an expired advert.
   onReactivate?: () => void;
   onConnect?: () => void;
-}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect }) => {
+  // What Hermes found to fix, opening its checks.
+  hermesHint?: { text: string; onClick: () => void };
+}> = ({ product, currency, primaryAction, externalUrl, sandboxAdvert = false, sandboxRevival = false, busy = false, onEdit, onPublish, onRelist, onRevive, onReactivate, onConnect, hermesHint }) => {
   const pricing = profitSummary(product.costPrice, product.sellingPrice);
   const primaryHandler = { publish: onPublish, relist: onRelist, revive: onRevive, connect: onConnect }[
     primaryAction as Exclude<ProductPrimaryAction, 'edit'>
@@ -324,6 +324,18 @@ export const PricingSummaryCard: React.FC<{
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           Publishing needs a connected OLX account.
         </Typography>
+      )}
+      {hermesHint && (
+        <Link
+          component="button"
+          type="button"
+          variant="body2"
+          onClick={hermesHint.onClick}
+          data-testid="pricing-hermes-hint"
+          sx={{ display: 'block', mt: 1.5, textAlign: 'left' }}
+        >
+          {hermesHint.text}
+        </Link>
       )}
     </Card>
   );
@@ -455,130 +467,6 @@ export const ProductTimelineCard: React.FC<{ product: Product; listing?: Listing
     </Card>
   );
 };
-
-export interface ProductActivityItem {
-  id: string;
-  actor: 'hermes' | 'user';
-  title: string;
-  detail?: string;
-  at: string;
-}
-
-const ACTIVITY_LIMIT = 8;
-const ACTOR_LABEL: Record<ProductActivityItem['actor'], string> = { hermes: 'Hermes', user: 'A user' };
-
-// Activity with a known actor: recorded price changes and pending Hermes suggestions.
-export function productActivityItems(
-  history: PriceHistory[],
-  events: HermesEvent[],
-  currency: string,
-): ProductActivityItem[] {
-  const priceChanges: ProductActivityItem[] = history.map((entry) => ({
-    id: `price:${entry.id}`,
-    actor: entry.changedBy,
-    title:
-      entry.oldPrice != null
-        ? `Changed the price ${formatMoney(entry.oldPrice, currency)} → ${formatMoney(entry.newPrice, currency)}`
-        : `Set the price to ${formatMoney(entry.newPrice, currency)}`,
-    detail: entry.reason,
-    at: entry.createdAt,
-  }));
-  const suggestions: ProductActivityItem[] = events.map((event) => ({
-    id: `event:${event.id}`,
-    actor: 'hermes',
-    title: event.title,
-    detail: event.status === 'pending_review' ? 'Waiting for your review' : undefined,
-    at: event.createdAt,
-  }));
-  return [...priceChanges, ...suggestions]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, ACTIVITY_LIMIT);
-}
-
-export const ProductActivityCard: React.FC<{
-  items: ProductActivityItem[];
-  loading?: boolean;
-  error?: unknown;
-  onRetry?: () => void;
-}> = ({ items, loading = false, error, onRetry }) => (
-  <Card title="Activity" subtitle="Price changes and Hermes suggestions">
-    {loading ? (
-      <LoadingSkeleton lines={3} height={36} />
-    ) : error ? (
-      <ErrorRetry error={error} onRetry={onRetry} title="Activity unavailable" compact />
-    ) : items.length === 0 ? (
-      <Typography variant="body2" color="text.secondary">No recorded price changes or Hermes suggestions yet.</Typography>
-    ) : (
-      <Stack spacing={1.5}>
-        {items.map((item) => (
-          <Stack key={item.id} direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
-            <Avatar
-              aria-hidden
-              sx={(theme) => ({
-                width: 28,
-                height: 28,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                bgcolor: alpha(item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary, 0.14),
-                color: item.actor === 'hermes' ? theme.palette.primary.main : theme.palette.text.secondary,
-              })}
-            >
-              {item.actor === 'hermes' ? 'H' : 'U'}
-            </Avatar>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>{ACTOR_LABEL[item.actor]}</Typography>
-              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{item.title}</Typography>
-              {item.detail && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{item.detail}</Typography>}
-            </Box>
-            <Typography variant="caption" color="text.secondary" title={formatDateTime(item.at)} sx={{ whiteSpace: 'nowrap' }}>{formatRelative(item.at)}</Typography>
-          </Stack>
-        ))}
-      </Stack>
-    )}
-  </Card>
-);
-
-const ANALYZE_LABELS: Record<
-  HermesStatusView['activeProvider'] | 'unknown',
-  { idle: string; running: string }
-> = {
-  hermes: { idle: 'Analyze with Hermes', running: 'Analyzing with Hermes…' },
-  offline: { idle: 'Analyze (offline heuristics)', running: 'Analyzing with offline heuristics…' },
-  unknown: { idle: 'Analyze', running: 'Analyzing…' },
-};
-
-// Hermes actions for one product. Everything Hermes produces stays review-only.
-// The analyze button names the provider that answers; it stays neutral while the status is unknown.
-export const ProductHermesCard: React.FC<{
-  analyzing: boolean;
-  analyzeDisabled: boolean;
-  note: string;
-  noteIsError?: boolean;
-  activeProvider?: HermesStatusView['activeProvider'];
-  onAnalyze: () => void;
-  children?: React.ReactNode;
-}> = ({ analyzing, analyzeDisabled, note, noteIsError = false, activeProvider, onAnalyze, children }) => (
-  <Card
-    title="Hermes"
-    subtitle="Review-only suggestions for this product"
-    sx={{
-      borderColor: (theme: Theme) => alpha(theme.palette.primary.main, 0.32),
-      bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.03),
-    }}
-  >
-    <Stack spacing={2}>
-      <Stack spacing={1}>
-        <Button fullWidth variant="contained" startIcon={<AutoAwesomeOutlinedIcon />} disabled={analyzing || analyzeDisabled} onClick={onAnalyze}>
-          {ANALYZE_LABELS[activeProvider ?? 'unknown'][analyzing ? 'running' : 'idle']}
-        </Button>
-        <Typography variant="caption" color={noteIsError ? 'error.main' : 'text.secondary'} role={noteIsError ? 'alert' : undefined}>
-          {note}
-        </Typography>
-      </Stack>
-      {children}
-    </Stack>
-  </Card>
-);
 
 export const PublicationReadinessSection: React.FC<{
   action: React.ReactNode;

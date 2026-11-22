@@ -30,7 +30,8 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async insertQueued(run: NewVerdictRun): Promise<SaleVerdict | null> {
     const row: SaleVerdict = {
       id: run.id, productId: run.productId, listingId: null, graphVersion: run.graphVersion, scope: run.scope,
-      status: 'queued', overall: null, checks: {}, createdAt: run.queuedAt, completedAt: null,
+      status: 'queued', overall: null, checks: {}, researchRunId: null, errorCode: null, createdAt: run.queuedAt,
+      completedAt: null,
     };
     this.rows.push(row);
     return row;
@@ -46,6 +47,10 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   }
   async setListing(runId: string, listingId: string | null): Promise<void> {
     this.listingIds.set(runId, listingId);
+  }
+  async setResearchRun(runId: string, researchRunId: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === runId);
+    if (row) row.researchRunId = researchRunId;
   }
   async complete(runId: string, fields: CompletedVerdictFields): Promise<boolean> {
     const row = this.rows.find((r) => r.id === runId);
@@ -65,6 +70,9 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async findById(_workspaceId: string, runId: string): Promise<SaleVerdict | null> {
     return this.rows.find((r) => r.id === runId) ?? null;
   }
+  async listForProduct(): Promise<SaleVerdict[]> {
+    return [];
+  }
   async findLatestCompleted(_workspaceId: string, productId: string): Promise<SaleVerdict | null> {
     const done = this.rows.filter((r) => r.productId === productId && r.status === 'completed');
     return done[done.length - 1] ?? null;
@@ -75,9 +83,6 @@ class InMemorySaleVerdictRepository implements ISaleVerdictRepository {
   async lastRunFailedForProducts(): Promise<Set<string>> {
     return new Set();
   }
-  async lastRunFailed(): Promise<boolean> {
-    return false;
-  }
 }
 
 function check(name: VerdictCheckName, status: VerdictCheck['status'], checkedAt: string): VerdictCheck {
@@ -86,7 +91,7 @@ function check(name: VerdictCheckName, status: VerdictCheck['status'], checkedAt
 
 const PREVIOUS: SaleVerdict = {
   id: 'run-1', productId: PID, listingId: 'l1', graphVersion: SALE_VERDICT_GRAPH_VERSION,
-  scope: ['info', 'price', 'photos'], status: 'completed', overall: 'fix',
+  scope: ['info', 'price', 'photos'], status: 'completed', overall: 'fix', researchRunId: null, errorCode: null,
   checks: {
     info: check('info', 'ready', EARLIER),
     price: check('price', 'fix', EARLIER),

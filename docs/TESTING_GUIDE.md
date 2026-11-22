@@ -110,12 +110,13 @@ What to check:
 
 - A sandbox advert has no page on olx.pl, so the listing shows a **Sandbox advert** label where a real advert would have its **Open on OLX** link. No real advert was created.
 - No publication quota, fee warning or OLX credentials come into play. The sandbox has no quota.
-- **Check again** in the publication readiness check validates the saved product without publishing it.
+- The publication readiness check is in the Hermes drawer: on the product page choose the **Price** row of the Hermes card (or any row that opens the **Checks** tab). **Check again** there validates the saved product without publishing it.
 
 ### 4. Review Hermes suggestions
 
-1. On the product page, choose **Suggest improvements**. You get proposed title and description wording and a price suggestion, each with its reason. They are for review only. To use one, edit the product or listing yourself.
-2. Choose the analyze button. It reads **Analyze with Hermes** while a Hermes Agent API server is configured and reachable, and **Analyze (offline heuristics)** when the built-in heuristics answer, which is the default for testers. While the provider status is still loading or unknown, the button reads a bare **Analyze**. This asks the listing SEO agent, which is switched on by default, for a recommendation about this product. Open **Hermes AI** in the sidebar, find the recommendation, and approve or dismiss it. Approving applies the change in MarketDesk and queues an update for any live listing of the product.
+1. On the product page, find the **Hermes** card in the right column. A product Hermes has not looked at shows the chip **Not analysed** and the button **Analyze product**. A line under the button says who answers: **Hermes** while a Hermes Agent API server is configured and reachable, and the **offline heuristics** when the built-in heuristics answer, which is the default for testers. While the provider status is still loading or unknown, the line names neither.
+2. Choose **Analyze product**. This asks the listing SEO agent, which is switched on by default, to check the price, the product info and the photos of this product. While it runs, the chip counts the steps. When it ends, the chip shows the verdict (for example **Needs you**), and the rows under it show each result: market prices, Price, Info, Photos and Suggestions. Choose a row to open the drawer on its tab: **Market prices**, **Checks**, **Suggestions**, or **Log and history** for everything Hermes did for this product. Press Esc or **Close** to close the drawer.
+3. In the **Suggestions** tab, find the proposed title, description or price wording with its reason, and choose **Apply** or dismiss it. You can also open **Hermes AI** in the sidebar. Applying a suggestion changes the product in MarketDesk and queues an update for any live listing of the product. When the card offers **Set price to …**, that button applies the price suggestion the same way.
 
 What to check:
 

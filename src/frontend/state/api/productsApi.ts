@@ -9,11 +9,13 @@ import type {
   ProductRecheckResult,
   PriceResearch,
   PriceResearchView,
+  ResearchRun,
   SaleVerdict,
   PriceSync,
   ProductStats,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
+import { HISTORY_LIMIT } from './hermesApi.js';
 import { buildQueryString } from './queryString.js';
 import { unwrap, unwrapPaginated } from './envelope.js';
 import type { PaginatedApiResponse } from './envelope.js';
@@ -116,6 +118,12 @@ export const productsApi = baseApi.injectEndpoints({
     getPriceResearch: builder.query<PriceResearchView | null, string>({
       query: (id) => `/products/${id}/price-research`,
       transformResponse: (res: ApiResponse<PriceResearchView | null>) => unwrap(res),
+      providesTags: (_result, _error, id) => [{ type: 'PriceResearch', id }],
+    }),
+
+    getPriceResearchRuns: builder.query<ResearchRun[], string>({
+      query: (id) => `/products/${id}/price-research/runs?limit=${HISTORY_LIMIT}`,
+      transformResponse: (res: ApiResponse<ResearchRun[]>) => unwrap(res),
       providesTags: (_result, _error, id) => [{ type: 'PriceResearch', id }],
     }),
 
@@ -235,6 +243,7 @@ export const {
   useGetProductListingsQuery,
   useGetProductStatsQuery,
   useGetPriceResearchQuery,
+  useGetPriceResearchRunsQuery,
   useSavePriceResearchMutation,
   useRefreshPriceResearchMutation,
 } = productsApi;

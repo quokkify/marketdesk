@@ -4,6 +4,7 @@ import dev.quokkify.marketdesk.page.ProductDetailPage;
 import dev.quokkify.marketdesk.step.ProductDetailPageSteps;
 import dev.quokkify.model.Verification;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import io.qameta.allure.Step;
 
@@ -14,6 +15,10 @@ public class ProductDetailPageVerification
   private static final String OFFLINE_USAGE_LINE = "Offline heuristics · no AI usage";
   private static final String CONDITION_PLACEHOLDER = "Choose condition";
   private static final String UNKNOWN_CONDITION_LABEL = "Requires confirmation";
+  private static final String ARIA_SELECTED = "aria-selected";
+  private static final String SEARCH_AGAIN = "Search again";
+  private static final String YOURS = "yours";
+  private static final String RELOAD = "Reload";
   private static final String CONFIRM_PUBLICATION = "Confirm publication request";
   private static final String OLX_FEE = "Confirm possible OLX fee";
 
@@ -101,14 +106,6 @@ public class ProductDetailPageVerification
     return this;
   }
 
-  @Step("The saved retail anchor {price} {currency} from {source} is shown")
-  public ProductDetailPageVerification showsRetailAnchor(String price, String currency, String source) {
-    page.retailPriceInput().shouldHave(Condition.value(price), getTimeout());
-    page.retailCurrencyInput().shouldHave(Condition.value(currency), getTimeout());
-    page.retailSourceInput().shouldHave(Condition.value(source), getTimeout());
-    return this;
-  }
-
   @Step("The discount against new {retailPrice} from {source} is shown under the product price")
   public ProductDetailPageVerification showsDiscountAgainstNew(String retailPrice, String source) {
     page.discountLine().shouldHave(Condition.text("% vs new · " + retailPrice), getTimeout());
@@ -116,41 +113,89 @@ public class ProductDetailPageVerification
     return this;
   }
 
+  @Step("The Hermes card shows the chip {chip}")
+  public ProductDetailPageVerification showsHermesChip(String chip) {
+    page.hermesChip().shouldHave(Condition.exactText(chip), getTimeout());
+    return this;
+  }
+
+  @Step("The Hermes card says {text}")
+  public ProductDetailPageVerification showsHermesLead(String text) {
+    page.hermesLead().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The Hermes card offers {label} as its primary action")
+  public ProductDetailPageVerification offersHermesPrimaryAction(String label) {
+    page.hermesPrimaryAction().shouldHave(Condition.exactText(label), getTimeout());
+    page.hermesPrimaryAction().shouldBe(Condition.enabled, getTimeout());
+    return this;
+  }
+
+  @Step("The Hermes drawer is open on the tab {tab}")
+  public ProductDetailPageVerification hermesDrawerIsOnTab(String tab) {
+    page.hermesDrawer().shouldBe(Condition.visible, getTimeout());
+    page.hermesTab(tab).shouldHave(Condition.attribute(ARIA_SELECTED, "true"), getTimeout());
+    return this;
+  }
+
+  @Step("The product page shows neither the removed Review price button nor the products table verdict summary")
+  public ProductDetailPageVerification showsNoOldCards() {
+    page.hermesCard().shouldBe(Condition.visible, getTimeout());
+    page.removedReviewPriceButton().shouldNot(Condition.exist);
+    page.tableVerdictSummary().shouldNot(Condition.exist);
+    return this;
+  }
+
+  @Step("The Hermes drawer reads the {check} check as {text}")
+  public ProductDetailPageVerification checksTabReads(String check, String text) {
+    page.hermesCheck(check).shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
+  @Step("The prices found for {tier} include {text}")
+  public ProductDetailPageVerification foundPricesInclude(String tier, String text) {
+    page.foundPriceRows(tier).findBy(Condition.text(text)).shouldBe(Condition.visible, getTimeout());
+    return this;
+  }
+
+  @Step("The found price links to the advert {href} as open")
+  public ProductDetailPageVerification foundPriceLinksTo(String href) {
+    page.foundPriceLink(href).shouldHave(Condition.exactText("open"), getTimeout());
+    return this;
+  }
+
   @Step("The last price search says {text}")
-  public ProductDetailPageVerification showsLastResearchRun(String text) {
-    page.lastResearchRunLine().shouldHave(Condition.text(text), getTimeout());
+  public ProductDetailPageVerification showsLastPriceSearch(String text) {
+    page.pricesLastRunLine().shouldHave(Condition.text(text), getTimeout());
     return this;
   }
 
-  @Step("The sale verdict says {text}")
-  public ProductDetailPageVerification showsVerdictText(String text) {
-    page.verdictSummary().shouldHave(Condition.text(text), getTimeout());
+  @Step("The price search has finished and Search again is offered")
+  public ProductDetailPageVerification priceSearchHasFinished() {
+    page.pricesSearchAgainButton().shouldHave(Condition.exactText(SEARCH_AGAIN), getTimeout());
     return this;
   }
 
-  @Step("The {check} check of the sale verdict reads {text}")
-  public ProductDetailPageVerification showsVerdictCheck(String check, String text) {
-    page.verdictCheck(check).shouldHave(Condition.text(text), getTimeout());
+  @Step("Your prices lists {price} marked as yours")
+  public ProductDetailPageVerification myPricesInclude(String price) {
+    page.myPricesList().shouldHave(Condition.text(price), getTimeout());
+    page.myPricesList().shouldHave(Condition.text(YOURS), getTimeout());
     return this;
   }
 
-  @Step("The saved comparable shows an OLX link to {href}")
-  public ProductDetailPageVerification showsOlxLink(String href) {
-    page.comparableOlxLink().shouldHave(Condition.text("OLX"), getTimeout());
-    page.comparableOlxLink().shouldHave(Condition.attribute("href", href), getTimeout());
+  @Step("Your prices says {message}, offers Reload and keeps the typed price {price}")
+  public ProductDetailPageVerification myPriceSaveConflict(String message, String price) {
+    page.myPriceError().shouldHave(Condition.text(message), getTimeout());
+    page.myPriceReloadButton().shouldHave(Condition.exactText(RELOAD), getTimeout());
+    page.myPriceInput().shouldHave(Condition.exactValue(price), getTimeout());
     return this;
   }
 
-  @Step("The {label} anchor line says {text}")
-  public ProductDetailPageVerification showsAnchorTier(String tier, String label, String text) {
-    page.anchorTier(tier).shouldHave(Condition.text(label), getTimeout());
-    page.anchorTier(tier).shouldHave(Condition.text(text), getTimeout());
-    return this;
-  }
-
-  @Step("The substitute shows the class line {text}")
-  public ProductDetailPageVerification showsClassLine(String text) {
-    page.anchorClassLine().shouldHave(Condition.text(text), getTimeout());
+  @Step("The history has an entry whose steps include {step}")
+  public ProductDetailPageVerification historyHasStep(String step) {
+    page.historyEntries().shouldHave(CollectionCondition.sizeGreaterThan(0), getTimeout());
+    page.historySteps().findBy(Condition.text(step)).shouldBe(Condition.visible, getTimeout());
     return this;
   }
 

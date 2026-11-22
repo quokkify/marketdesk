@@ -31,7 +31,8 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
     if (this.rows.some((r) => r.status === 'queued' || r.status === 'running')) return null;
     const row: SaleVerdict = {
       id: run.id, productId: run.productId, listingId: null, graphVersion: run.graphVersion, scope: run.scope,
-      status: 'queued', overall: null, checks: {}, createdAt: run.queuedAt, completedAt: null,
+      status: 'queued', overall: null, checks: {}, researchRunId: null, errorCode: null, createdAt: run.queuedAt,
+      completedAt: null,
     };
     this.rows.push(row);
     return row;
@@ -42,7 +43,7 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
   async fail(runId: string, completedAt: string, errorCode: string): Promise<boolean> {
     const row = this.rows.find((r) => r.id === runId);
     if (!row) return false;
-    Object.assign(row, { status: 'failed', completedAt });
+    Object.assign(row, { status: 'failed', completedAt, errorCode });
     this.errorCodes.set(runId, errorCode);
     return true;
   }
@@ -53,14 +54,18 @@ class Verdicts implements Partial<ISaleVerdictRepository> {
     return true;
   }
   async setListing(): Promise<void> {}
+  async setResearchRun(runId: string, researchRunId: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === runId);
+    if (row) row.researchRunId = researchRunId;
+  }
   async findLatestCompleted(): Promise<SaleVerdict | null> {
     return this.rows.filter((r) => r.status === 'completed').pop() ?? null;
   }
+  async listForProduct(_ws: string, _pid: string, limit: number): Promise<SaleVerdict[]> {
+    return [...this.rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
   async lastRunFailedForProducts(): Promise<Set<string>> {
     return new Set();
-  }
-  async lastRunFailed(): Promise<boolean> {
-    return false;
   }
 }
 
@@ -115,6 +120,14 @@ describe('SaleVerdictRuns', () => {
     });
   });
 
+  it('links the verdict run to the forced research run it queued', async () => {
+    const { runs, verdicts } = setup();
+
+    await runs.request(WS, PID, ['price'], 'manual', { forceResearch: true });
+
+    await expect(verdicts.findActive()).resolves.toMatchObject({ id: 'run-1', researchRunId: 'run-2' });
+  });
+
   it('records no research run for a request that does not force research', async () => {
     const { runs, researchRuns, jobs } = setup();
 
@@ -146,7 +159,7 @@ describe('SaleVerdictRuns', () => {
 
   it('refuses a forced refresh while a research run is active and fails the new verdict run', async () => {
     const { runs, verdicts, researchRuns, jobs } = setup();
-    await researchRuns.insertQueued({ id: 'research-0', workspaceId: WS, productId: PID, trigger: 'auto', queuedAt: NOW.toISOString() });
+    await researchRuns.insertQueued({ id: 'research-0', workspaceId: WS, productId: PID, trigger: 'autopilot', queuedAt: NOW.toISOString() });
 
     await expect(runs.request(WS, PID, ['price'], 'manual', { forceResearch: true })).rejects.toMatchObject({
       message: ANALYSIS_RUNNING,
@@ -208,7 +221,7 @@ describe('SaleVerdictRuns', () => {
 
   const stuck = (status: SaleVerdict['status'], queuedAgoMs: number): SaleVerdict => ({
     id: 'old', productId: PID, listingId: null, graphVersion: 'sale-verdict@1', scope: ['info'], status,
-    overall: null, checks: {}, createdAt: new Date(NOW.getTime() - queuedAgoMs).toISOString(), completedAt: null,
+    overall: null, checks: {}, researchRunId: null, errorCode: null, createdAt: new Date(NOW.getTime() - queuedAgoMs).toISOString(), completedAt: null,
   });
   const MIN = 60 * 1000;
 
@@ -255,6 +268,26 @@ describe('SaleVerdictRuns', () => {
     expect(verdicts.errorCodes.get('old')).toBe('expired');
   });
 
+  it('view returns the error code of the newest run when it failed', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(stuck('queued', VERDICT_QUEUED_TTL_MS + 1000));
+
+    const view = await runs.view(WS, PID);
+
+    expect(view).toMatchObject({ lastFailed: true, lastFailedCode: 'expired' });
+  });
+
+  it('view has no failed code when the newest run did not fail', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push({ ...stuck('failed', 2 * MIN), id: 'older', errorCode: 'run_error' });
+    verdicts.rows.push({ ...stuck('completed', MIN), id: 'newer', overall: 'ready' });
+
+    const view = await runs.view(WS, PID);
+
+    expect(view).toMatchObject({ lastFailed: false, lastFailedCode: null });
+    expect(view.latest?.id).toBe('newer');
+  });
+
   it('fails a run that could not be enqueued and rethrows', async () => {
     const { runs, verdicts, errors } = setup({ enqueue: async () => { throw new Error('redis down'); } });
 
@@ -282,5 +315,31 @@ describe('SaleVerdictRuns', () => {
     expect(errors).toEqual(['Storing the sale verdict of a recheck failed']);
     expect(verdicts.rows[0]).toMatchObject({ status: 'failed' });
     expect(verdicts.errorCodes.get('run-1')).toBe('store_failed');
+  });
+});
+
+describe('SaleVerdictRuns.history', () => {
+  it('lists the product\'s runs newest first, up to the limit', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push(
+      { id: 'old', productId: PID, createdAt: '2026-11-20T00:00:00.000Z', status: 'failed' } as SaleVerdict,
+      { id: 'new', productId: PID, createdAt: '2026-11-21T00:00:00.000Z', status: 'completed' } as SaleVerdict,
+    );
+
+    expect((await runs.history(WS, PID, 20)).map((row) => row.id)).toEqual(['new', 'old']);
+    expect((await runs.history(WS, PID, 1)).map((row) => row.id)).toEqual(['new']);
+  });
+
+  it('expires a stuck run before listing it', async () => {
+    const { runs, verdicts } = setup();
+    verdicts.rows.push({
+      id: 'lost', productId: PID, status: 'queued', createdAt: new Date(NOW.getTime() - VERDICT_QUEUED_TTL_MS - 1).toISOString(),
+    } as SaleVerdict);
+
+    await expect(runs.history(WS, PID, 20)).resolves.toMatchObject([{ id: 'lost', status: 'failed' }]);
+  });
+
+  it('throws NotFoundError for a product that is not in the workspace', async () => {
+    await expect(setup().runs.history(WS, 'other', 20)).rejects.toThrow('Product not found');
   });
 });

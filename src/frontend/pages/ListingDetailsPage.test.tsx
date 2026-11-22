@@ -1,4 +1,11 @@
-import type { HermesEvent, Listing, Marketplace, ProductRecheckResult } from '@shared/types';
+import type {
+  HermesEvent,
+  Listing,
+  Marketplace,
+  ProductRecheckResult,
+  SaleVerdict,
+  VerdictCheck,
+} from '@shared/types';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -15,7 +22,7 @@ import {
   PUBLICATION_READINESS_CHECKING_LABEL,
   PUBLICATION_READINESS_RECHECK_LABEL,
   PublicationReadinessAction,
-  productHermesAnalyzingNote,
+  hermesFixHint,
   productHermesDisabledReason,
   productPrimaryAction,
   ProductRecheckReview,
@@ -102,22 +109,42 @@ describe('ListingDetailsPage presentation', () => {
     ).toBeNull();
   });
 
-  it('names the provider that is analyzing the product and stays neutral while it is unknown', () => {
-    expect(productHermesAnalyzingNote('hermes')).toBe(
-      'Hermes is analyzing this product only. Any recommendation will remain review-only.'
-    );
-    expect(productHermesAnalyzingNote('offline')).toBe(
-      'Offline heuristics are analyzing this product only. Any recommendation will remain review-only.'
-    );
-    expect(productHermesAnalyzingNote('hermes', true)).toBe(
-      'Hermes is analyzing this product only. Any recommendation will remain review-only.'
-    );
-    expect(productHermesAnalyzingNote('hermes', false)).toBe(
-      'Analyzing this product only. Any recommendation will remain review-only.'
-    );
-    expect(productHermesAnalyzingNote(undefined)).toBe(
-      'Analyzing this product only. Any recommendation will remain review-only.'
-    );
+  it('points the price card at the checks Hermes found not ready', () => {
+    const check = (status: VerdictCheck['status']): VerdictCheck => ({
+      check: 'price',
+      status,
+      reasons: [],
+      checkedAt: '2026-07-15T18:00:00.000Z',
+      refs: { eventIds: [] },
+    });
+    const verdict = (checks: SaleVerdict['checks']): SaleVerdict => ({
+      id: 'verdict-1',
+      productId: 'product-1',
+      listingId: null,
+      graphVersion: '1',
+      scope: ['info', 'price', 'photos'],
+      status: 'completed',
+      overall: 'fix',
+      checks,
+      researchRunId: null,
+      errorCode: null,
+      createdAt: '2026-07-15T18:00:00.000Z',
+      completedAt: '2026-07-15T18:01:00.000Z',
+    });
+    const oneToFix = verdict({ price: check('fix'), info: check('ready'), photos: check('ready') });
+    const twoToFix = verdict({ price: check('fix'), info: check('needs_human'), photos: check('ready') });
+
+    const pendingOnly = verdict({ price: check('fix'), info: check('pending'), photos: check('pending') });
+
+    expect(hermesFixHint(oneToFix, false, false)).toBe('Hermes: 1 thing to fix');
+    expect(hermesFixHint(twoToFix, false, false)).toBe('Hermes: 2 things to fix');
+    expect(hermesFixHint(verdict({ price: check('ready'), info: check('ready') }), false, false)).toBeNull();
+    expect(hermesFixHint(null, false, false)).toBeNull();
+    expect(hermesFixHint(twoToFix, true, false)).toBeNull();
+    // Task 5 review: checks still pending are not things to fix, and a stale verdict gives no hint.
+    expect(hermesFixHint(pendingOnly, false, false)).toBe('Hermes: 1 thing to fix');
+    expect(hermesFixHint(verdict({ price: check('pending'), info: check('pending') }), false, false)).toBeNull();
+    expect(hermesFixHint(twoToFix, false, true)).toBeNull();
   });
 
   it('marks a recheck stale immediately when the saved product version changes', () => {

@@ -410,6 +410,13 @@ export class InMemoryPriceResearchRunRepository implements IPriceResearchRunRepo
     const last = finished.sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))[0];
     return last ? { ...last } : null;
   }
+  async listForProduct(workspaceId: string, productId: string, limit: number): Promise<ResearchRun[]> {
+    return this.runs
+      .filter((r) => r.workspaceId === workspaceId && r.productId === productId)
+      .sort((a, b) => b.queuedAt.localeCompare(a.queuedAt))
+      .slice(0, limit)
+      .map((r) => ({ ...r }));
+  }
   async claim(runId: string, startedAt: string, leaseUntil: string): Promise<ResearchRun | null> {
     const run = this.runs.find((r) => r.id === runId && r.status === 'queued');
     if (!run) return null;

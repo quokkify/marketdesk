@@ -74,20 +74,21 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
   }
 
   // A run is over when nothing is active; it left a completed verdict, or the last run failed.
+  @Step("Get the sale verdict run history of product {productId}")
+  public ValidatableResponse getVerdictHistory(AccountPojo account, String productId) {
+    return service.getVerdictHistory(account.token(), productId);
+  }
+
+  @Step("Get the sale verdict run history of product {productId} with the limit {limit}")
+  public ValidatableResponse getVerdictHistory(AccountPojo account, String productId, String limit) {
+    return service.getVerdictHistory(account.token(), productId, limit);
+  }
+
   @Step("Wait until the sale verdict run of product {productId} ends")
   public ValidatableResponse awaitVerdict(AccountPojo account, String productId) {
     Waiter.awaitCondition(() -> hasEnded(service.getVerdict(account.token(), productId)),
         "the sale verdict run has ended", VERDICT_TIMEOUT, POLL_INTERVAL);
     return service.getVerdict(account.token(), productId);
-  }
-
-  @Step("Wait until the {check} check of product {productId} is newer than {before}")
-  public ValidatableResponse awaitCheckLater(AccountPojo account, String productId, String check, String before) {
-    Waiter.awaitCondition(() -> {
-      String now = checkedAt(service.getVerdict(account.token(), productId), check);
-      return now != null && java.time.Instant.parse(now).isAfter(java.time.Instant.parse(before));
-    }, "the " + check + " check is newer", VERDICT_TIMEOUT, POLL_INTERVAL);
-    return awaitVerdict(account, productId);
   }
 
   @Step("Recheck listing {listingId} of product {productId}")

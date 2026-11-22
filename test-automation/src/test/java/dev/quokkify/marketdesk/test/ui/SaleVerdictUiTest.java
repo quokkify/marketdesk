@@ -4,7 +4,6 @@ import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 
-import io.restassured.response.ValidatableResponse;
 import org.testng.annotations.Test;
 
 // The stand's research profile mock has no answers for the sample product, so its price research fails; the product
@@ -13,16 +12,18 @@ public class SaleVerdictUiTest extends BaseUiTest {
 
   private static final String PRODUCT_NAME = ProductRequestPojo.sample().name();
   private static final String NEEDS_YOU = "Needs you";
-  private static final String OUT_OF_DATE = "Out of date";
+  private static final String ANALYZE_AGAIN = "Analyze again";
+  private static final String CHANGED_SINCE_CHECK = "The product changed since this check.";
   private static final String PHOTOS = "photos";
-  private static final String INFO = "info";
-  private static final String PRICE = "price";
   private static final String PHOTOS_MISSING = "Photos ✗";
   private static final String ACCESSORIES = "remote";
 
   @Test
   public void analyzeShowsVerdictInRow() {
-    signInWithOneListedProduct();
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    listingSteps.createOlxProductListing(account);
+    signIn(account);
     productsPageSteps
         .analyzeRow(PRODUCT_NAME)
         .verify()
@@ -31,62 +32,45 @@ public class SaleVerdictUiTest extends BaseUiTest {
   }
 
   @Test
-  public void reviewPriceRunsOnlyPrice() {
-    AccountPojo account = authSteps.registerNewAccount();
-    marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    String productId = productListing.productId();
-    ValidatableResponse before = verdictSteps.analyzeAndAwait(account, productId);
-    String infoBefore = verdictSteps.checkedAt(before, INFO);
-    String priceBefore = verdictSteps.checkedAt(before, PRICE);
-    loginPageSteps
-        .openLoginPage()
-        .signIn(account.email(), account.password())
-        .verify()
-        .productsCatalogueIsShown();
-    productDetailPageSteps
-        .openProductPage(productListing)
-        .verify()
-        .showsVerdictText(NEEDS_YOU);
-    productDetailPageSteps.reviewPrice();
-    ValidatableResponse after = verdictSteps.awaitCheckLater(account, productId, PRICE, priceBefore);
-    verdictSteps.verify().isUnchanged(infoBefore, verdictSteps.checkedAt(after, INFO));
-    productDetailPageSteps
-        .verify()
-        .showsVerdictText(NEEDS_YOU)
-        .showsVerdictCheck(PHOTOS, PHOTOS_MISSING);
-  }
-
-  @Test
-  public void editMarksVerdictOutOfDate() {
+  public void checksTabShowsTheFailingPhotosCheck() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     verdictSteps.analyzeAndAwait(account, productListing.productId());
-    loginPageSteps
-        .openLoginPage()
-        .signIn(account.email(), account.password())
-        .verify()
-        .productsCatalogueIsShown();
+    signIn(account);
     productDetailPageSteps
         .openProductPage(productListing)
         .verify()
-        .showsVerdictText(NEEDS_YOU);
+        .showsHermesChip(NEEDS_YOU);
     productDetailPageSteps
-        .saveMissingAccessories(ACCESSORIES)
+        .openHermesRow(PHOTOS)
         .verify()
-        .showsVerdictText(OUT_OF_DATE);
+        .checksTabReads(PHOTOS, PHOTOS_MISSING);
   }
 
-  private ProductListingPojo signInWithOneListedProduct() {
+  @Test
+  public void editMarksTheVerdictOutOfDate() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
+    signIn(account);
+    productDetailPageSteps
+        .openProductPage(productListing)
+        .verify()
+        .showsHermesChip(NEEDS_YOU);
+    productDetailPageSteps
+        .saveMissingAccessories(ACCESSORIES)
+        .verify()
+        .showsHermesLead(CHANGED_SINCE_CHECK)
+        .offersHermesPrimaryAction(ANALYZE_AGAIN);
+  }
+
+  private void signIn(AccountPojo account) {
     loginPageSteps
         .openLoginPage()
         .signIn(account.email(), account.password())
         .verify()
         .productsCatalogueIsShown();
-    return productListing;
   }
 }

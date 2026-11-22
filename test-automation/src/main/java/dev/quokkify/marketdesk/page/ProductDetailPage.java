@@ -4,6 +4,7 @@ import dev.quokkify.annotation.PageUrl;
 import dev.quokkify.impl.Page;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -23,20 +24,31 @@ public class ProductDetailPage implements Page {
   private static final String REVIVAL_DIALOG = "[data-testid=\"revival-dialog\"]";
   private static final String REVIVAL_CONDITION = "[data-testid=\"revival-condition\"] [role=\"combobox\"]";
   private static final String OPTION = "[role=\"option\"]";
-  private static final String RETAIL_PRICE = "[data-testid=\"price-research-retail-price\"] input";
-  private static final String RETAIL_CURRENCY = "[data-testid=\"price-research-currency\"] input";
-  private static final String RETAIL_SOURCE = "[data-testid=\"price-research-source\"] input";
-  private static final String PRICE_RESEARCH_SAVED = "[data-testid=\"price-research-saved\"]";
   private static final String DISCOUNT_LINE = "[data-testid=\"product-price-discount\"]";
-  private static final String ANCHOR_TIER = "[data-testid=\"anchor-tier-%s\"]";
-  private static final String ANCHOR_CLASS_LINE = "[data-testid=\"anchor-class-line\"]";
-  private static final String REVIEW_PRICE = "[data-testid=\"review-price-button\"]";
-  private static final String VERDICT_SUMMARY = "[data-testid=\"verdict-summary\"]";
-  private static final String VERDICT_CHECK = "[data-testid=\"verdict-check-%s\"]";
+  private static final String HERMES_CARD = "[data-testid=\"hermes-card\"]";
+  private static final String HERMES_CHIP = "[data-testid=\"hermes-chip\"]";
+  private static final String HERMES_LEAD = "[data-testid=\"hermes-lead\"]";
+  private static final String HERMES_PRIMARY_ACTION = "[data-testid=\"hermes-primary-action\"]";
+  private static final String HERMES_ROW = "[data-testid=\"hermes-row-%s\"]";
+  private static final String HERMES_HISTORY_LINK = "[data-testid=\"hermes-history-link\"]";
+  // The app has a second drawer in the DOM, the phone sidebar; the Hermes one is the dialog inside its own root.
+  private static final String HERMES_DRAWER = "[data-testid=\"hermes-drawer\"] [role=\"dialog\"]";
+  private static final String HERMES_TAB = "[data-testid=\"hermes-tab-%s\"]";
+  private static final String HERMES_CHECK = "[data-testid=\"hermes-check-%s\"]";
+  private static final String PRICES_SEARCH_AGAIN = "[data-testid=\"prices-search-again\"]";
+  private static final String PRICES_LAST_RUN = "[data-testid=\"prices-last-run\"]";
+  private static final String PRICES_FOUND_TIER = "[data-testid=\"found-tier-%s\"]";
+  private static final String PRICES_FOUND_LINK = "[data-testid=\"prices-found-list\"] a[href=\"%s\"]";
+  private static final String MY_PRICES_LIST = "[data-testid=\"my-prices-list\"]";
+  private static final String MY_PRICE_INPUT = "[data-testid=\"my-price-price\"]";
+  private static final String MY_PRICE_ADD = "[data-testid=\"my-price-add\"]";
+  private static final String MY_PRICE_ERROR = "[data-testid=\"my-price-error\"]";
+  private static final String HISTORY_ENTRY = "[data-testid=\"history-entry\"]";
+  private static final String HISTORY_STEP = "[data-testid=\"history-step\"]";
+  private static final String REMOVED_REVIEW_PRICE = "[data-testid=\"review-price-button\"]";
+  private static final String TABLE_VERDICT_SUMMARY = "[data-testid=\"verdict-summary\"]";
   private static final String MISSING_ACCESSORIES = "//label[text()='Missing accessories']/following::input[1]";
   private static final String SELLING_PRICE = "//label[text()='Selling price']/following::input[1]";
-  private static final String LAST_RESEARCH_RUN = "[data-testid=\"price-research-last-run\"]";
-  private static final String COMPARABLE_OLX_LINK = "[data-testid=\"comparable-olx-link\"]";
   private static final String DIALOG = "[role=\"dialog\"]";
   private static final String PUBLICATION_QUEUED = "Publication was accepted and queued.";
 
@@ -52,11 +64,8 @@ public class ProductDetailPage implements Page {
   private SelenideElement reviveButton;
   @FindBy(xpath = "//button[contains(normalize-space(.), 'Apply and bring back on OLX')]")
   private SelenideElement applyRevivalButton;
-  @FindBy(css = "[data-testid=\"price-research-save\"]")
-  private SelenideElement savePriceResearchButton;
-  @FindBy(css = "[data-testid=\"find-prices-button\"]")
-  private SelenideElement findPricesButton;
-  @FindBy(xpath = "//button[contains(normalize-space(.), 'Edit product')]")
+  // The Checks tab of the Hermes drawer has its own Edit product button.
+  @FindBy(xpath = "//button[contains(normalize-space(.), 'Edit product') and not(ancestor::*[@data-testid='hermes-drawer'])]")
   private SelenideElement editProductButton;
   @FindBy(xpath = "//button[contains(normalize-space(.), 'Save changes')]")
   private SelenideElement saveChangesButton;
@@ -131,52 +140,96 @@ public class ProductDetailPage implements Page {
     return applyRevivalButton;
   }
 
-  public SelenideElement retailPriceInput() {
-    return Selenide.$(RETAIL_PRICE);
-  }
-
-  public SelenideElement retailCurrencyInput() {
-    return Selenide.$(RETAIL_CURRENCY);
-  }
-
-  public SelenideElement retailSourceInput() {
-    return Selenide.$(RETAIL_SOURCE);
-  }
-
-  public SelenideElement savePriceResearchButton() {
-    return savePriceResearchButton;
-  }
-
   public SelenideElement discountLine() {
     return Selenide.$(DISCOUNT_LINE);
   }
 
-  public SelenideElement priceResearchSavedNote() {
-    return Selenide.$(PRICE_RESEARCH_SAVED);
+  public SelenideElement hermesCard() {
+    return Selenide.$(HERMES_CARD);
   }
 
-  public SelenideElement findPricesButton() {
-    return findPricesButton;
+  public SelenideElement hermesChip() {
+    return Selenide.$(HERMES_CHIP);
   }
 
-  public SelenideElement anchorTier(String tier) {
-    return Selenide.$(String.format(ANCHOR_TIER, tier));
+  public SelenideElement hermesLead() {
+    return Selenide.$(HERMES_LEAD);
   }
 
-  public SelenideElement anchorClassLine() {
-    return Selenide.$(ANCHOR_CLASS_LINE);
+  public SelenideElement hermesPrimaryAction() {
+    return Selenide.$(HERMES_PRIMARY_ACTION);
   }
 
-  public SelenideElement reviewPriceButton() {
-    return Selenide.$(REVIEW_PRICE);
+  public SelenideElement hermesRow(String key) {
+    return Selenide.$(String.format(HERMES_ROW, key));
   }
 
-  public SelenideElement verdictSummary() {
-    return Selenide.$(VERDICT_SUMMARY);
+  public SelenideElement hermesHistoryLink() {
+    return Selenide.$(HERMES_HISTORY_LINK);
   }
 
-  public SelenideElement verdictCheck(String check) {
-    return verdictSummary().$(String.format(VERDICT_CHECK, check));
+  public SelenideElement hermesDrawer() {
+    return Selenide.$(HERMES_DRAWER);
+  }
+
+  public SelenideElement hermesTab(String tab) {
+    return hermesDrawer().$(String.format(HERMES_TAB, tab));
+  }
+
+  public SelenideElement hermesCheck(String check) {
+    return hermesDrawer().$(String.format(HERMES_CHECK, check));
+  }
+
+  public SelenideElement pricesSearchAgainButton() {
+    return hermesDrawer().$(PRICES_SEARCH_AGAIN);
+  }
+
+  public SelenideElement pricesLastRunLine() {
+    return hermesDrawer().$(PRICES_LAST_RUN);
+  }
+
+  public ElementsCollection foundPriceRows(String tier) {
+    return hermesDrawer().$$(String.format(PRICES_FOUND_TIER, tier));
+  }
+
+  public SelenideElement foundPriceLink(String href) {
+    return hermesDrawer().$(String.format(PRICES_FOUND_LINK, href));
+  }
+
+  public SelenideElement myPricesList() {
+    return hermesDrawer().$(MY_PRICES_LIST);
+  }
+
+  public SelenideElement myPriceInput() {
+    return hermesDrawer().$(MY_PRICE_INPUT);
+  }
+
+  public SelenideElement addMyPriceButton() {
+    return hermesDrawer().$(MY_PRICE_ADD);
+  }
+
+  public SelenideElement myPriceError() {
+    return hermesDrawer().$(MY_PRICE_ERROR);
+  }
+
+  public SelenideElement myPriceReloadButton() {
+    return myPriceError().$("button");
+  }
+
+  public ElementsCollection historyEntries() {
+    return hermesDrawer().$$(HISTORY_ENTRY);
+  }
+
+  public ElementsCollection historySteps() {
+    return hermesDrawer().$$(HISTORY_STEP);
+  }
+
+  public SelenideElement removedReviewPriceButton() {
+    return Selenide.$(REMOVED_REVIEW_PRICE);
+  }
+
+  public SelenideElement tableVerdictSummary() {
+    return Selenide.$(TABLE_VERDICT_SUMMARY);
   }
 
   public SelenideElement editProductButton() {
@@ -193,13 +246,5 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement saveChangesButton() {
     return saveChangesButton;
-  }
-
-  public SelenideElement lastResearchRunLine() {
-    return Selenide.$(LAST_RESEARCH_RUN);
-  }
-
-  public SelenideElement comparableOlxLink() {
-    return Selenide.$(COMPARABLE_OLX_LINK);
   }
 }
