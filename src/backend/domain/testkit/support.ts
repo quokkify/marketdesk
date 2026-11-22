@@ -123,8 +123,11 @@ export class InMemoryListingRepository implements IListingRepository {
   async findByMarketplace(marketplaceId: string): Promise<Listing[]> {
     return [...this.items.values()].filter((l) => l.marketplaceId === marketplaceId);
   }
-  async findByWorkspace(): Promise<Listing[]> {
-    return [...this.items.values()];
+  async findByWorkspace(workspaceId?: string): Promise<Listing[]> {
+    return [...this.items.values()].filter((l) => {
+      const owner = this.listingWorkspaces.get(l.id);
+      return owner === undefined || workspaceId === undefined || owner === workspaceId;
+    });
   }
   async findExpiring(before: Date): Promise<Listing[]> {
     return [...this.items.values()].filter(
