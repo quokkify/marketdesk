@@ -11,6 +11,7 @@ public class VerdictService extends MarketDeskApiService {
 
   private static final String HERMES_RUN = "/api/hermes/products/%s/run";
   private static final String VERDICT = "/api/hermes/products/%s/verdict";
+  private static final String IMPROVEMENTS = "/api/products/%s/improvements";
   private static final String RECHECK = "/api/products/%s/recheck";
   private static final String HERMES_SETTINGS = "/api/settings/hermes";
   private static final String EMPTY_BODY = "{}";
@@ -38,6 +39,10 @@ public class VerdictService extends MarketDeskApiService {
 
   public ValidatableResponse recheck(String token, String productId, String listingId) {
     return post(authorized(token), RECHECK.formatted(productId), JsonConverter.toJson(Map.of("listingId", listingId)));
+  }
+
+  public ValidatableResponse improvements(String token, String productId) {
+    return post(authorized(token), IMPROVEMENTS.formatted(productId), EMPTY_BODY);
   }
 
   public ValidatableResponse enableListingSeo(String token) {

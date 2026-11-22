@@ -164,4 +164,33 @@ public class SaleVerdictTest extends BaseTest {
     verdictSteps.verify().isCompletedWithChecks(view, INFO);
     verdictSteps.verify().isLater("1970-01-01T00:00:00Z", verdictSteps.checkedAt(view, INFO));
   }
+
+  // The Improve endpoint was removed with the single-prompt pricing.
+  @Test
+  public void improvementsEndpointIsGone() {
+    AccountPojo account = authSteps.registerNewAccount();
+    String productId = verdictSteps.createProduct(account, ProductRequestPojo.sample());
+    verdictSteps.verify().isEndpointGone(verdictSteps.requestImprovements(account, productId));
+  }
+
+  // No research is stored on this stack, so the revival proposal has no estimate to take a price from.
+  @Test
+  public void revivalProposalWithoutResearchHasNoPrice() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    String listingId = listingSteps.createExpiredOlxProductListing(account).listingId();
+    listingSteps.verify().hasPriceIssueAndNoPriceProposal(listingSteps.requestRevivalProposal(account, listingId));
+  }
+
+  // The refresh runs the price scope of a verdict: without a research profile it still answers "not
+  // configured", and neither it nor the verdict's price check leaves a research run row.
+  @Test
+  public void refreshResearchRunsPriceScope() {
+    AccountPojo account = accountWithSandbox();
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    String productId = productListing.productId();
+    priceResearchSteps.verify().isRefreshNotConfigured(priceResearchSteps.refreshPriceResearch(account, productId));
+    verdictSteps.verify().checkIs(analyzeAndAwait(account, productId), PRICE, NEEDS_HUMAN, "not_configured");
+    priceResearchSteps.verify().hasNoRun(priceResearchSteps.getPriceResearch(account, productId));
+  }
 }

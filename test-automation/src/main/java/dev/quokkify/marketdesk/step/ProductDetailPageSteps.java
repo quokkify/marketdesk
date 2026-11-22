@@ -24,12 +24,6 @@ public class ProductDetailPageSteps
     return this;
   }
 
-  @Step("Suggest improvements")
-  public ProductDetailPageSteps suggestImprovements() {
-    page.suggestImprovementsButton().shouldBe(Condition.enabled).click();
-    return this;
-  }
-
   @Step("Replace the draft reply to the buyer message {buyerText} with {reply} and send it")
   public ProductDetailPageSteps editAndSendDraft(String buyerText, String reply) {
     page.replaceReplyText(buyerText, reply);

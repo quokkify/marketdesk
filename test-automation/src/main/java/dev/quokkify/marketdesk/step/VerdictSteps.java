@@ -41,6 +41,18 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return service.runAnalyze(account.token(), productId);
   }
 
+  // Analyze answers 202 with the run; the checks and their suggestions exist once the run has ended.
+  @Step("Analyze product {productId} and wait for the sale verdict")
+  public ValidatableResponse analyzeAndAwait(AccountPojo account, String productId) {
+    service.runAnalyze(account.token(), productId).statusCode(HttpStatus.SC_ACCEPTED);
+    return awaitVerdict(account, productId);
+  }
+
+  @Step("Read the suggestion ids of the {check} check")
+  public List<String> eventIds(ValidatableResponse view, String check) {
+    return view.extract().jsonPath().getList("data.latest.checks." + check + ".refs.eventIds", String.class);
+  }
+
   @Step("Analyze product {productId} without authentication")
   public ValidatableResponse runAnalyzeUnauthenticated(String productId) {
     return service.runAnalyze(productId);
@@ -72,6 +84,11 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
   @Step("Recheck listing {listingId} of product {productId}")
   public ValidatableResponse recheck(AccountPojo account, String productId, String listingId) {
     return service.recheck(account.token(), productId, listingId);
+  }
+
+  @Step("Ask for improvements of product {productId}")
+  public ValidatableResponse requestImprovements(AccountPojo account, String productId) {
+    return service.improvements(account.token(), productId);
   }
 
   @Step("Turn the listing SEO agent on")

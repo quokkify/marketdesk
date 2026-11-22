@@ -122,7 +122,7 @@ public class PriceResearchTest extends BaseTest {
         priceResearchSteps.savePriceResearchUnauthenticated(productId, PriceResearchPojo.sample()));
   }
 
-  // The API stack has no Hermes, so the analysis runs offline and its estimate has low confidence.
+  // The API stack has no Hermes, so the verdict's price check runs offline and its estimate has low confidence.
   @Test
   public void analysisWithoutHermesProposesNoPriceChange() {
     AccountPojo account = authSteps.registerNewAccount();
@@ -130,7 +130,7 @@ public class PriceResearchTest extends BaseTest {
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     priceResearchSteps.savePriceResearch(account, productListing.productId(), PriceResearchPojo.sample());
     priceResearchSteps.verify().proposesNoPriceChange(
-        priceResearchSteps.runProductAnalysis(account, productListing.productId()));
+        verdictSteps.analyzeAndAwait(account, productListing.productId()));
   }
 
   private static final String ALLEGRO_OFFER = "https://allegro.pl/oferta/projektor-123";

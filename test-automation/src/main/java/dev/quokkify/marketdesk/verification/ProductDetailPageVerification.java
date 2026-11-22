@@ -19,7 +19,7 @@ public class ProductDetailPageVerification
     super(steps, page);
   }
 
-  @Step("The suggestions say they used offline heuristics and no AI usage")
+  @Step("The revival proposal says it used offline heuristics and no AI usage")
   public ProductDetailPageVerification showsOfflineUsageLine() {
     page.aiUsageLine().shouldHave(Condition.exactText(OFFLINE_USAGE_LINE), getTimeout());
     return this;

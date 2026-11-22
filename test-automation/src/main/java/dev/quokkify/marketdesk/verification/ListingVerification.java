@@ -66,8 +66,16 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     return self();
   }
 
+  @Step("Revival proposal names the price as an AI issue and carries no price proposal")
+  public ListingVerification hasPriceIssueAndNoPriceProposal(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.aiIssues", Matchers.hasItem("price"));
+    response.body("data.price", Matchers.nullValue());
+    return self();
+  }
+
   // The stack runs on the offline heuristics, which Hermes never reviewed, so there is no AI proposal to check.
-  @Step("Revival proposal asks for the condition and the cost price and proposes nothing from offline AI")
+  @Step("Revival proposal asks for the condition and the cost price, proposes nothing from offline AI and has no price")
   public ListingVerification isProposalWithMissingConditionAndCostPrice(ValidatableResponse response) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);
     response.body("success", Matchers.equalTo(true));
@@ -77,7 +85,8 @@ public class ListingVerification extends BaseApiVerification<ListingVerification
     response.body("data.priceGuard.status", Matchers.oneOf("unchecked", "no_proposal"));
     response.body("data.priceGuard.costPrice", Matchers.nullValue());
     response.body("data.aiUsage.provider", Matchers.equalTo("offline"));
-    response.body("data.aiIssues", Matchers.empty());
+    // No research is stored, so the price has no estimate to come from.
+    response.body("data.aiIssues", Matchers.contains("price"));
     response.body("data.productUpdatedAt", Matchers.notNullValue());
     response.body("data.listingUpdatedAt", Matchers.notNullValue());
     return self();

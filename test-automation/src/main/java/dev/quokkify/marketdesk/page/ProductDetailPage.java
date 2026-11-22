@@ -11,8 +11,7 @@ import com.codeborne.selenide.SelenideElement;
 public class ProductDetailPage implements Page {
 
   private static final String BUTTON = "button";
-  private static final String SUGGEST_IMPROVEMENTS = "Suggest improvements";
-  private static final String AI_USAGE_LINE = "[data-testid=\"ai-usage-line\"]";
+  private static final String AI_USAGE_LINE = "[data-testid=\"revival-ai-usage\"]";
   private static final String CONVERSATION_THREAD = "[data-testid=\"conversation-thread\"]";
   private static final String REPLY_TEXT = "textarea[data-testid=\"reply-draft-text\"]";
   private static final String SEND = "Send";
@@ -42,10 +41,6 @@ public class ProductDetailPage implements Page {
 
   public void open(String productId) {
     Selenide.open(getUrl() + "/" + productId);
-  }
-
-  public SelenideElement suggestImprovementsButton() {
-    return Selenide.$$(BUTTON).findBy(Condition.text(SUGGEST_IMPROVEMENTS));
   }
 
   public SelenideElement aiUsageLine() {

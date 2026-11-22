@@ -90,13 +90,12 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
   }
 
   // The API stack has no Hermes, so the offline estimate has low confidence and must stay silent.
-  @Step("Analysis ran and proposes no price change and no price estimate notice")
-  public PriceResearchVerification proposesNoPriceChange(ValidatableResponse response) {
-    verifyResponseStatusCode(response, HttpStatus.SC_ACCEPTED);
-    response.body("success", Matchers.equalTo(true));
-    response.body("data", Matchers.not(Matchers.empty()));
-    response.body("data.proposedChange.kind", Matchers.not(Matchers.hasItem("price")));
-    response.body("data.type", Matchers.not(Matchers.hasItem("price_estimate_unavailable")));
+  @Step("The verdict's price check ran and proposed no price change and no price estimate notice")
+  public PriceResearchVerification proposesNoPriceChange(ValidatableResponse verdict) {
+    verifyResponseStatusCode(verdict, HttpStatus.SC_OK);
+    verdict.body("data.latest.status", Matchers.equalTo("completed"));
+    verdict.body("data.latest.checks.price.status", Matchers.notNullValue());
+    verdict.body("data.latest.checks.price.refs.eventIds", Matchers.empty());
     return self();
   }
 

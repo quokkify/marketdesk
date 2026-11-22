@@ -128,6 +128,12 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
     return failsWith(response, HttpStatus.SC_NOT_FOUND, NOT_FOUND);
   }
 
+  @Step("The endpoint is gone and answers 404")
+  public VerdictVerification isEndpointGone(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_NOT_FOUND);
+    return self();
+  }
+
   @Step("Request is rejected as unauthenticated")
   public VerdictVerification isUnauthenticated(ValidatableResponse response) {
     return failsWith(response, HttpStatus.SC_UNAUTHORIZED, UNAUTHORIZED);

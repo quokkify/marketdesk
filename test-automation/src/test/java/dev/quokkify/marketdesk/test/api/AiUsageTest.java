@@ -7,34 +7,37 @@ import dev.quokkify.marketdesk.test.BaseTest;
 import org.testng.annotations.Test;
 
 // The API test stack has no Hermes, so every analysis runs on the offline heuristics; Hermes token counts are
-// checked by hand on production.
+// checked by hand on production. The verdict's listing SEO call is the analysis the usage report counts.
 public class AiUsageTest extends BaseTest {
 
+  private ProductListingPojo listingWithSeoAgent(AccountPojo account) {
+    marketplaceSteps.connectSandboxOlx(account);
+    verdictSteps.enableListingSeo(account);
+    return listingSteps.createOlxProductListing(account);
+  }
+
   @Test
-  public void improvementReportsOfflineUsage() {
+  public void revivalProposalReportsOfflineUsage() {
     AccountPojo account = authSteps.registerNewAccount();
     marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    productSteps.verify().reportsOfflineAiUsage(productSteps.proposeImprovements(account, productListing));
+    String listingId = listingSteps.createExpiredOlxProductListing(account).listingId();
+    productSteps.verify().reportsOfflineAiUsage(listingSteps.requestRevivalProposal(account, listingId));
   }
 
   @Test
   public void usageCountsAnOfflineAnalysisToday() {
     AccountPojo account = authSteps.registerNewAccount();
-    marketplaceSteps.connectSandboxOlx(account);
-    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    productSteps.proposeImprovements(account, productListing);
+    ProductListingPojo productListing = listingWithSeoAgent(account);
+    verdictSteps.analyzeAndAwait(account, productListing.productId());
     aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
   }
 
   @Test
   public void usageIsScopedToTheWorkspace() {
     AccountPojo account = authSteps.registerNewAccount();
-    marketplaceSteps.connectSandboxOlx(account);
-    productSteps.proposeImprovements(account, listingSteps.createOlxProductListing(account));
+    verdictSteps.analyzeAndAwait(account, listingWithSeoAgent(account).productId());
     AccountPojo other = authSteps.registerNewAccount();
-    marketplaceSteps.connectSandboxOlx(other);
-    productSteps.proposeImprovements(other, listingSteps.createOlxProductListing(other));
+    verdictSteps.analyzeAndAwait(other, listingWithSeoAgent(other).productId());
     aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(account, 1), 1);
     aiUsageSteps.verify().countsOfflineAnalysesToday(aiUsageSteps.getUsageOnceCounted(other, 1), 1);
   }
