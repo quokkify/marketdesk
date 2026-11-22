@@ -3,7 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PriceComparable, PriceResearchView, ResearchRun } from '@shared/types';
 import { lightTheme } from '../../../theme/lightTheme';
-import { EMPTY_MESSAGE, PricesTab } from './PricesTab';
+import { EMPTY_MESSAGE, PricesTab, STALE_ESTIMATE_MESSAGE } from './PricesTab';
 
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 
@@ -136,5 +136,24 @@ describe('PricesTab', () => {
   it('shows a skeleton while loading and a retry on error', () => {
     expect(render({ view: undefined })).not.toContain('my-price-form');
     expect(render({ view: undefined, error: { status: 500 } })).toContain('Try again');
+  });
+
+  it('says why an estimate is not suggested, only when it is not', () => {
+    expect(render()).not.toContain('prices-hidden-reason');
+    const hidden = { ...view.lastEstimate!, hiddenReason: 'low_confidence' as const };
+    const html = render({ view: { ...view, lastEstimate: hidden } });
+    expect(html).toContain('Not suggested: confidence is low.');
+  });
+
+  it('shows the research note of the estimate, only when there is one', () => {
+    expect(render()).not.toContain('prices-research-note');
+    const noted = { ...view.lastEstimate!, researchNote: 'Nothing found for this model' };
+    expect(render({ view: { ...view, lastEstimate: noted } })).toContain('Nothing found for this model');
+  });
+
+  it('says the estimate predates the research, only when it does', () => {
+    expect(render()).not.toContain('prices-estimate-stale');
+    const stale = { ...view.lastEstimate!, researchUpdatedAt: '2026-11-20T10:00:00.000Z' };
+    expect(render({ view: { ...view, lastEstimate: stale } })).toContain(STALE_ESTIMATE_MESSAGE);
   });
 });

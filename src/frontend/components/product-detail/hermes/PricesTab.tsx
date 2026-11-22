@@ -17,6 +17,7 @@ import {
   OLX_PLN_ONLY,
   classLine,
   discountVsNew,
+  hiddenReasonText,
   lastRunText,
   runProgressText,
   storedResearch,
@@ -36,6 +37,7 @@ const CONFLICT = 409;
 export const CHANGED_MESSAGE = 'Prices changed. Reload and add it again.';
 export const EMPTY_MESSAGE =
   'No market prices yet. Hermes searches for them when you analyze the product, or you can add your own below.';
+export const STALE_ESTIMATE_MESSAGE = 'This estimate was made before your last change. Analyze again to update it.';
 const NONE_FOUND = 'none found';
 
 const KIND_LABEL = new Map(MY_PRICE_KINDS.map(({ kind, label }) => [kind, label]));
@@ -244,6 +246,17 @@ export const PricesTab: React.FC<PricesTabProps> = ({
                 ))}
               </Box>
               <Typography variant="caption" color="text.secondary">{summarySentence(stored)}</Typography>
+              {hiddenReasonText(stored.hiddenReason) && (
+                <Typography variant="caption" color="text.secondary" data-testid="prices-hidden-reason">
+                  {hiddenReasonText(stored.hiddenReason)}
+                </Typography>
+              )}
+              {stored.researchNote && (
+                <Typography variant="caption" color="text.secondary" data-testid="prices-research-note">{stored.researchNote}</Typography>
+              )}
+              {research && stored.researchUpdatedAt !== research.updatedAt && (
+                <Typography variant="caption" color="text.secondary" data-testid="prices-estimate-stale">{STALE_ESTIMATE_MESSAGE}</Typography>
+              )}
             </Stack>
           )}
 

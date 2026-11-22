@@ -2,6 +2,7 @@
 // The limits mirror the server's rules.
 import type {
   AnchorTier,
+  EstimateHiddenReason,
   PriceComparable,
   PriceEstimate,
   PriceResearch,
@@ -90,6 +91,16 @@ const TIER_LABELS: [AnchorTier, string][] = [
   ['substitute_new', 'New substitutes'],
   ['substitute_used', 'Used substitutes'],
 ];
+const HIDDEN_REASON_TEXT: Record<EstimateHiddenReason, string> = {
+  low_confidence: 'Not suggested: confidence is low.',
+  within_threshold: 'Not suggested: within 5 % of the current price.',
+  floor_cancels: 'Not suggested: your lowest acceptable price blocks this change.',
+};
+
+export function hiddenReasonText(reason: EstimateHiddenReason | null): string | null {
+  return reason ? HIDDEN_REASON_TEXT[reason] : null;
+}
+
 const TIER_NODES = ['sameModelUsed', 'lastNewPrice', 'substitutesNew', 'substitutesUsed'] as const;
 const NODE_OVER = new Set(['done', 'failed', 'timeout']);
 

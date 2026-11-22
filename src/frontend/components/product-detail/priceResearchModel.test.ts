@@ -8,6 +8,7 @@ import {
   lastRunText,
   anchorsUpdatedAt,
   classLine,
+  hiddenReasonText,
 } from './priceResearchModel';
 import { formatDateTime } from '../../utils/formatters';
 
@@ -208,5 +209,14 @@ describe('classLine', () => {
   it('is null for a row with nothing to show', () => {
     expect(classLine(row({}))).toBeNull();
     expect(classLine(row({ classChecked: true, classAttributes: [] }))).toBeNull();
+  });
+});
+
+describe('hiddenReasonText', () => {
+  it('words every reason why an estimate is not suggested, and is null without one', () => {
+    expect(hiddenReasonText(null)).toBeNull();
+    expect(hiddenReasonText('low_confidence')).toBe('Not suggested: confidence is low.');
+    expect(hiddenReasonText('within_threshold')).toBe('Not suggested: within 5 % of the current price.');
+    expect(hiddenReasonText('floor_cancels')).toBe('Not suggested: your lowest acceptable price blocks this change.');
   });
 });
