@@ -16,19 +16,18 @@
 - Check names: `'info' | 'price' | 'photos'`. Overall: `'ready' | 'fix' | 'needs_human'`.
 - Seller free text and Hermes text never go into graph state, logs or reason codes (same rule as `PriceResearchGraph`, `ConversationReplyGraph`).
 - Migrations replay on every start: `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`, never a `DROP`.
-- Research runs only in its own background job (`IPriceResearchRuns` contract: "the graph runs in a background job, never in the caller"). The verdict never runs `PriceResearchGraph` itself.
+- Price research becomes a node of the price subgraph (owner decision 2026-11-22: the separate research job was legacy behaviour to move onto graphs). `PriceResearchGraph` is invoked inside the price subgraph, within the verdict job's budget; the separate `price-research` queue and `PriceResearchHandler` are removed. The `price_research_runs` table stays as the research node's progress and schedule record, so the research UI and `nextAutoAt` keep working.
 - AI usage scope feature name for verdict runs: `'verdict'`.
 - New behaviour is tested with live q4j tests in `test-automation` (`./gradlew apiTest`, `./gradlew uiTest`, `JAVA_HOME` = Homebrew openjdk@21) against an isolated Compose stack built from the branch. Jest is used only for pure functions without mocks and for minimal edits that keep existing tests compiling. The API stack has no research profile and answers AI from offline heuristics; real Hermes paths are checked by hand on production and the PR says so.
 - No secret-looking literals in tests or docs (Gitleaks scans full branch history).
 
-## Deviation from the spec (confirm with the owner before Task 4)
+## Owner decisions taken while planning (2026-11-22)
 
-The spec says the price check "runs `PriceResearchGraph` inline as a subgraph and waits". The code forbids running research outside its job, and a verdict job blocking up to 7 minutes on another job is fragile. The plan instead: the price check **requests** research when it is due (`IPriceResearchRuns.request(..., { force: false, trigger: 'analyze' })`) and returns status `pending` with reason `research_running`; when the research job finishes, its `afterRun` hook requests a verdict run with scope `['price']`. The seller sees "price: researching…" and then the price verdict, without pressing anything again. This adds check status `pending` (overall is unaffected by a pending check unless every check is pending; see Task 1).
-
-Second, smaller deviation: the spec's table says Recheck "also writes its check into the verdict".
-This plan leaves Recheck exactly as it is (synchronous, pre-publish) and does not write it into the
-verdict; the verdict's info check reuses Recheck's logic instead. Writing a code-only info check
-from Recheck can follow once the verdict UI exists.
+- **Research is a node, not a separate job.** The price subgraph runs `PriceResearchGraph` as its
+  `research` node when research is missing, older than its `nextAutoAt`, or forced, and waits for
+  it. "Refresh price research" becomes a verdict run with scope `['price']` and `forceResearch: true`.
+- **Recheck is on the graph too.** Recheck runs the `info` subgraph in code-only mode
+  synchronously (no Hermes call, no queue) and writes its check into the verdict.
 
 ## Review Focus
 
@@ -108,7 +107,7 @@ Delete (Task 7): `src/backend/domain/services/HermesDecisionEngine.ts` and its t
 4. `currentPrice < stored.estimate.floorPrice` → `fix`, `below_floor`.
 5. Otherwise → `ready`, `fair_price` (covers `within_threshold`, `floor_cancels`, and a higher-price suggestion that is still within the band; that suggestion's event stays as an optional proposal).
 
-Other kinds: `no_listing`, `not_pln`, `not_configured`, `failed`(→`check_failed`) → `needs_human`; `research_running` → `pending`.
+Other kinds: `no_listing`, `not_pln`, `not_configured`, `failed`(→`check_failed`) → `needs_human`; `research_running` → `pending` (only reachable while a legacy research run started before deploy is still active).
 
 **Combine:** fresh results replace previous ones by check name; overall over non-`pending` checks: any `needs_human` → `needs_human`; else any `fix` → `fix`; else `ready`. If every present check is `pending` → `needs_human`.
 
@@ -217,7 +216,9 @@ Behaviour-preserving move. The engine keeps working by delegating to the new cla
   }
   ```
 - Info subgraph nodes: `codeChecks` (recheck when a listing exists; without a listing, condition/title/description checks via `missingFacts` + `fitsOlxTitle`) → `seo` (only when `workspace.listingSeoEnabled`; `ListingSeoProposals.propose`; its failure marks the check `needs_human`/`check_failed` but keeps code-check reasons) → `result`.
-- Price subgraph nodes: `guard` (no listing / non-PLN / not configured) → `estimate` (`PriceProposals.proposeForVerdict`) → `rule` (`priceCheckFromEstimate`).
+- Price subgraph nodes: `guard` (no listing / non-PLN / not configured) → `research` (conditional: runs when research is missing, past `nextAutoAt`, or `forceResearch`; invokes `PriceResearchGraph.run` with the verdict job's `AbortSignal`, writes progress to `price_research_runs` via `IPriceResearchRunRepository.insertQueued/claim/saveNode/finish` exactly as `PriceResearchHandler` does today, then `PriceProposals.reestimateAfterResearch`) → `estimate` (`PriceProposals.proposeForVerdict`, which no longer requests research) → `rule` (`priceCheckFromEstimate`). Research failing or timing out → price `needs_human` `check_failed`; the estimate still runs on stored research when there is some.
+- `CheckContext` gains `options: { forceResearch: boolean; infoCodeOnly: boolean }`; `SaleVerdictGraph.run` input gains the same optional `options`.
+- Info subgraph with `infoCodeOnly` skips the `seo` node.
 - Photos subgraph: one node, `photosCheck(product.imageCount)`.
 - `SaleVerdictGraph`: `load` → conditional `route` to the scoped checks (parallel) → `combine` (with `findLatestCompleted(...).checks` as previous) → `save` (`complete`). A check that throws becomes `checkFailed(name)`. All Hermes calls inside `withAiUsageScope({ workspaceId, feature: 'verdict', productId })`.
 
@@ -233,7 +234,9 @@ Behaviour-preserving move. The engine keeps working by delegating to the new cla
 
 **Files:**
 - Create: `.../verdict/SaleVerdictRuns.ts`, `src/backend/infrastructure/jobQueue/JobHandlers/SaleVerdictHandler.ts`
-- Modify: `src/backend/application/ports/IJobQueue.ts` (add `SaleVerdictJob { workspaceId; productId; runId }`), `src/backend/config/di/container.ts` (queue `sale-verdict`, `attempts: 1`, wiring; research `afterRun` also calls `saleVerdictRuns.request(ws, pid, ['price'], 'research')` after the re-estimate, only if the product has a completed verdict)
+- Modify: `src/backend/application/ports/IJobQueue.ts` (add `SaleVerdictJob { workspaceId; productId; runId; forceResearch: boolean }`; remove `PriceResearchJob`), `src/backend/config/di/container.ts` (queue `sale-verdict`, `attempts: 1`, wiring; remove the `price-research` queue and `PriceResearchHandler` registration)
+- Delete: `src/backend/infrastructure/jobQueue/JobHandlers/PriceResearchHandler.ts` and its test (its claim/lease/finish logic moves into the price subgraph's `research` node)
+- Modify: `PriceResearchRuns.ts` → keep only `latest()` and the expiry/TTL logic (read side for the research UI); `request()` is replaced by `SaleVerdictRuns.request(..., ['price'], 'manual', { forceResearch: true })`. `ProductController.refreshPriceResearch` calls that and keeps its response shape (the existing `PriceResearchRefreshTest` / `PriceResearchTest` q4j tests must pass unchanged).
 
 **Interfaces:**
 - Produces:
@@ -241,13 +244,15 @@ Behaviour-preserving move. The engine keeps working by delegating to the new cla
   export const VERDICT_RUN_TTL_MS = 15 * 60 * 1000;
   export type VerdictTrigger = 'manual' | 'research';
   class SaleVerdictRuns {
-    request(workspaceId: string, productId: string, scope: VerdictCheckName[], trigger: VerdictTrigger): Promise<{ run: SaleVerdict; enqueued: boolean }>; // 404 for foreign/missing product; returns the active run when one exists
+    request(workspaceId: string, productId: string, scope: VerdictCheckName[], trigger: VerdictTrigger, opts?: { forceResearch?: boolean }): Promise<{ run: SaleVerdict; enqueued: boolean }>; // 404 for foreign/missing product; returns the active run when one exists
+    recheckInfo(workspaceId: string, productId: string, listingId: string): Promise<ProductRecheckResult>; // synchronous: runs the info subgraph code-only, writes a completed scope ['info'] verdict row, returns the Recheck result shape unchanged
     view(workspaceId: string, productId: string): Promise<ProductVerdictView>;   // expires an active run older than the TTL to failed (error_code 'expired') before answering
     viewsFor(workspaceId: string, productIds: string[]): Promise<Map<string, SaleVerdict>>;
   }
   class SaleVerdictHandler { handle(job: SaleVerdictJob): Promise<{ kind: 'skipped' } | { kind: 'finished'; status: VerdictRunStatus }> }
   ```
-  Handler: claim (lease 10 min, budget 8 min via `AbortSignal`), run graph, on throw `fail(runId, now, 'run_error')`; never retried by the queue.
+  Handler: claim (lease 12 min, budget 10 min via `AbortSignal` — research alone had 7 min), run graph, on throw `fail(runId, now, 'run_error')`; never retried by the queue. `VERDICT_RUN_TTL_MS` = 15 min stays above the lease.
+- `ProductController.recheck` calls `saleVerdictRuns.recheckInfo` instead of `ProductAssistanceGraph`'s `publication` branch (the branch is removed in Task 7).
 
 - [ ] **Step 1:** Implement runs + handler + wiring.
 - [ ] **Step 2:** `npm run type-check` → clean; `npx jest container` → PASS.
@@ -275,6 +280,8 @@ Behaviour-preserving move. The engine keeps working by delegating to the new cla
 - `offlineSeoDoesNotFailVerdict` — `listingSeoEnabled` on, offline stack → run `completed`, info present (Review Focus 3).
 - `otherWorkspaceIs404` on POST run and GET verdict, nothing queued (Review Focus 5); `requiresLogin`.
 - `catalogueCarriesLatestVerdict` — GET products → the product has `verdict.overall`.
+- `recheckWritesInfoCheck` — POST recheck → same response shape as before; GET verdict → info check present with a fresh `checkedAt`, price/photos untouched.
+- `refreshResearchRunsPriceScope` — POST price-research/refresh on the API stack → still "not configured" (existing contract); with a PLN listing the verdict's price check is `needs_human` `not_configured`, no research run row created.
 
 - [ ] **Step 1:** Write the q4j tests and steps.
 - [ ] **Step 2:** Build an isolated stack from the branch *before* the API changes (stash nothing: run from the Task 5 commit in a separate worktree) → `./gradlew apiTest --tests '*SaleVerdictTest*'` → FAIL (404 on verdict endpoint).
@@ -288,12 +295,12 @@ Behaviour-preserving move. The engine keeps working by delegating to the new cla
 
 **Files:**
 - Delete: `src/backend/domain/services/HermesDecisionEngine.ts` and its `__tests__`; engine construction in `container.ts`.
-- Modify: `ProductAssistanceGraph.ts` (drop `improve` node and `kind: 'improve'`; `revive` price from `PriceProposals`' stored estimate: `research.findByProduct(...).lastEstimate` → `price: { suggestedPrice: startPrice, reasoning, confidence }` when present, otherwise `aiIssues: ['price']`; no research run requested), `ProductController.ts` + `routes/products.ts:35` (remove improvements), `IAIProvider.ts:47` (remove `suggestPrice`, `PriceSuggestionContext`, `PriceSuggestion` if unused), `HermesAI.ts`, `OfflineHeuristicAIProvider.ts`, `AIProviderSelector.ts`, `domain/testkit/support.ts`, `experiments/ProductAssistanceExperiment.ts` (+ its test), Jest tests listed by `git grep -l suggestPrice` (remove the cases for deleted code only).
+- Modify: `ProductAssistanceGraph.ts` (drop `improve` and `publication` nodes and their kinds; `revive` price from `PriceProposals`' stored estimate: `research.findByProduct(...).lastEstimate` → `price: { suggestedPrice: startPrice, reasoning, confidence }` when present, otherwise `aiIssues: ['price']`; no research run requested), `ProductController.ts` + `routes/products.ts:35` (remove improvements), `IAIProvider.ts:47` (remove `suggestPrice`, `PriceSuggestionContext`, `PriceSuggestion` if unused), `HermesAI.ts`, `OfflineHeuristicAIProvider.ts`, `AIProviderSelector.ts`, `domain/testkit/support.ts`, `experiments/ProductAssistanceExperiment.ts` (+ its test), Jest tests listed by `git grep -l suggestPrice` (remove the cases for deleted code only).
 - Modify q4j: remove Improve calls from `ProductService.java`, `ProductSteps.java`, `AiUsageTest.java`, `AiUsageUiTest.java` (point AI-usage tests at Analyze); add to `SaleVerdictTest`: `improvementsEndpointIsGone` (POST `/api/products/{id}/improvements` → 404) and `revivalProposalWithoutResearchHasNoPrice` (expired OLX listing fixture as in the existing revival tests → `aiIssues` contains `price`).
 
 - [ ] **Step 1:** Add the two q4j tests → run against the stack from Task 6 → FAIL (improvements still 200).
 - [ ] **Step 2:** Delete and rewire.
-- [ ] **Step 3:** `git grep -n -E "suggestPrice|HermesDecisionEngine|proposeImprovements|'improve'" -- src test-automation` → no hits outside CHANGELOG files.
+- [ ] **Step 3:** `git grep -n -E "suggestPrice|HermesDecisionEngine|proposeImprovements|'improve'|PriceResearchHandler|PRICE_RESEARCH_QUEUE" -- src test-automation` → no hits outside CHANGELOG files.
 - [ ] **Step 4:** `npm run type-check && npm run lint && SKIP_REDIS_TESTS=true npx jest --ci --forceExit` → PASS; rebuild stack, `./gradlew apiTest` → PASS.
 - [ ] **Step 5: Commit** `refactor(hermes)!: remove the decision engine, Improve and single-prompt pricing`.
 

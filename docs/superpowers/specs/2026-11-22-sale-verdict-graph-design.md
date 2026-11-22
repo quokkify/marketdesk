@@ -254,6 +254,10 @@ Left for the autopilot project (not in this work):
 - AI actions are composable: each check is its own subgraph, buttons run a scope of checks
   (e.g. "Review price" runs only the price checks), and new AI buttons are added the same way.
 
+- (planning, 2026-11-22) The separate price-research job is legacy behaviour: research becomes a
+  node of the price subgraph, run inline; "Refresh price research" is a `price` scope run that
+  forces research. Recheck runs the info subgraph code-only and writes its check into the verdict.
+
 ## Calls made by Claude (open to correction)
 
 - Fair price = at or below market ceiling, at or above seller floor; weak research → `needs_human`.
