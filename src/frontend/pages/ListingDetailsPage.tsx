@@ -1430,6 +1430,8 @@ const ListingDetailsPage: React.FC = () => {
             currency={currency}
             listingCurrency={primaryListing?.currency ?? null}
             onAnalyze={() => void handleAnalyzeWithHermes()}
+            analyzing={analyzing}
+            analyzeDisabledReason={analyzeDisabledReason}
           />
         )}
         {shownDrawerTab === 'checks' && (

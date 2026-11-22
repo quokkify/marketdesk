@@ -1,6 +1,18 @@
 import type { PriceComparable, PriceResearch } from '@shared/types';
 import { MAX_COMPARABLES, MAX_URL_LENGTH, PRICE_ERROR } from '../priceResearchModel';
-import { LIMIT_MESSAGE, addMyPrice, myPrices, removeMyPrice, type MyPriceInput, type MyPriceResult } from './myPricesModel';
+import {
+  CHANGED_MESSAGE,
+  LIMIT_MESSAGE,
+  MAX_RETAIL_LINK_LENGTH,
+  SAVE_FAILED_MESSAGE,
+  addMyPrice,
+  formAfterSave,
+  myPrices,
+  removeMyPrice,
+  saveFailure,
+  type MyPriceInput,
+  type MyPriceResult,
+} from './myPricesModel';
 
 const auto: PriceComparable = {
   price: 290, note: 'ProjectorShop', url: 'https://www.ceneo.pl/123', source: 'auto', tier: 'substitute_new',
@@ -89,6 +101,18 @@ describe('addMyPrice', () => {
     expect(addMyPrice(research, input({ url: '' }), 'PLN').ok).toBe(true);
   });
 
+  it('a last new price link longer than the stored retail source fails with a plain message', () => {
+    const at = (length: number) => `https://shop.example/${'a'.repeat(length - 'https://shop.example/'.length)}`;
+    expect(MAX_RETAIL_LINK_LENGTH).toBe(200);
+    expect(addMyPrice(research, input({ kind: 'last_new_price', url: at(201) }), 'PLN')).toEqual({
+      ok: false,
+      field: 'url',
+      message: 'Enter an https link of at most 200 characters',
+    });
+    expect(okBody(addMyPrice(research, input({ kind: 'last_new_price', url: at(200) }), 'PLN')).retailSource).toBe(at(200));
+    expect(addMyPrice(research, input({ url: at(201) }), 'PLN').ok).toBe(true);
+  });
+
   it('rejects a seenAt that is not an ISO date', () => {
     for (const seenAt of ['', '22.11.2026', '2026-13-45']) {
       expect(addMyPrice(research, input({ seenAt }), 'PLN')).toMatchObject({ ok: false, field: 'seenAt' });
@@ -134,5 +158,40 @@ describe('removeMyPrice', () => {
     const body = removeMyPrice(research, 2);
     expect(body.comparables).toEqual([auto, web, untieredManual]);
     expect(body.retailPrice).toBe(649);
+  });
+});
+
+describe('saveFailure', () => {
+  it('a 409 asks to reload and add the price again', () => {
+    expect(saveFailure({ status: 409, data: { error: { message: 'Price research changed' } } })).toEqual({
+      message: CHANGED_MESSAGE,
+      conflict: true,
+    });
+    expect(CHANGED_MESSAGE).toBe('Prices changed. Reload and add it again.');
+  });
+
+  it('another error shows the server message without a reload', () => {
+    expect(saveFailure({ status: 400, data: { error: { message: 'Too many prices' } } })).toEqual({
+      message: 'Too many prices',
+      conflict: false,
+    });
+  });
+
+  it('an error without a status or a server message gives a generic sentence', () => {
+    for (const err of [new Error('Failed to fetch'), { status: 'FETCH_ERROR', error: 'TypeError' }, { status: 500 }, null]) {
+      expect(saveFailure(err)).toEqual({ message: SAVE_FAILED_MESSAGE, conflict: false });
+    }
+  });
+});
+
+describe('formAfterSave', () => {
+  const typed = input({ price: '199', url: 'https://shop.example/p', kind: 'substitute_new' });
+
+  it('a failed save, a conflict included, leaves the typed values untouched', () => {
+    expect(formAfterSave(typed, false)).toEqual(typed);
+  });
+
+  it('a saved price clears the price and the link and keeps the kind and the date', () => {
+    expect(formAfterSave(typed, true)).toEqual({ ...typed, price: '', url: '' });
   });
 });

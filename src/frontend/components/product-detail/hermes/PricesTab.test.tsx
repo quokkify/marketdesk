@@ -66,6 +66,8 @@ function render(props: Partial<React.ComponentProps<typeof PricesTab>> = {}): st
         searchMessage={null}
         onSearchAgain={() => undefined}
         onAnalyze={() => undefined}
+        analyzing={false}
+        analyzeDisabledReason={null}
         onSave={async () => undefined}
         onReload={() => undefined}
         {...props}
@@ -115,10 +117,23 @@ describe('PricesTab', () => {
     expect(html).toMatch(/<input[^>]*disabled[^>]*data-testid="my-price-price"|<input[^>]*data-testid="my-price-price"[^>]*disabled/);
   });
 
-  it('disables Search again with the reason for a listing that is not in PLN', () => {
+  it('disables Search again with the reason for a listing that is not in PLN, and keeps the add form enabled', () => {
     const html = render({ listingCurrency: 'EUR' });
     expect(html).toContain('OLX search needs a PLN listing');
     expect(html).toMatch(/<button[^>]*disabled[^>]*data-testid="prices-search-again"|<button[^>]*data-testid="prices-search-again"[^>]*disabled/);
+    expect(html).toMatch(/<button[^>]*data-testid="my-price-add"/);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*data-testid="my-price-add"|<button[^>]*data-testid="my-price-add"[^>]*disabled/);
+    expect(html).not.toMatch(/<input[^>]*disabled[^>]*data-testid="my-price-price"|<input[^>]*data-testid="my-price-price"[^>]*disabled/);
+  });
+
+  it('the empty-state Analyze product is disabled while an analysis starts or runs, and says why it is off', () => {
+    const disabled = /<button[^>]*disabled[^>]*data-testid="prices-analyze"|<button[^>]*data-testid="prices-analyze"[^>]*disabled/;
+    expect(render({ view: emptyView })).toMatch(/data-testid="prices-analyze"/);
+    expect(render({ view: emptyView })).not.toMatch(disabled);
+    expect(render({ view: emptyView, analyzing: true })).toMatch(disabled);
+    const off = render({ view: emptyView, analyzeDisabledReason: 'The listing SEO agent is switched off for this workspace.' });
+    expect(off).toMatch(disabled);
+    expect(off).toContain('The listing SEO agent is switched off for this workspace.');
   });
 
   it('keeps Search again enabled for a PLN listing and says Searching… with progress while a run is active', () => {

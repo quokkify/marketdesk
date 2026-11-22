@@ -27,14 +27,15 @@ import {
   LIMIT_MESSAGE,
   MY_PRICE_KINDS,
   addMyPrice,
+  formAfterSave,
   myPrices,
   removeMyPrice,
+  saveFailure,
   type MyPriceKind,
   type MyPriceRow,
+  type SaveFailure,
 } from './myPricesModel.js';
 
-const CONFLICT = 409;
-export const CHANGED_MESSAGE = 'Prices changed. Reload and add it again.';
 export const EMPTY_MESSAGE =
   'No market prices yet. Hermes searches for them when you analyze the product, or you can add your own below.';
 export const STALE_ESTIMATE_MESSAGE = 'This estimate was made before your last change. Analyze again to update it.';
@@ -116,16 +117,6 @@ function joinDots(parts: (React.ReactNode | null | undefined | false)[]): React.
   return shown.flatMap((part, i) => (i === 0 ? [part] : [' · ', part]));
 }
 
-interface SaveFailure {
-  message: string;
-  conflict: boolean;
-}
-
-function saveFailure(err: unknown): SaveFailure {
-  if ((err as { status?: unknown } | null)?.status === CONFLICT) return { message: CHANGED_MESSAGE, conflict: true };
-  return { message: requestErrorMessage(err), conflict: false };
-}
-
 export interface PricesTabProps {
   // Undefined while the research loads.
   view: PriceResearchView | null | undefined;
@@ -139,6 +130,10 @@ export interface PricesTabProps {
   searchMessage: string | null;
   onSearchAgain: () => void;
   onAnalyze: () => void;
+  // An analysis is starting or running.
+  analyzing: boolean;
+  // Why analysis is off, as the Hermes card says it.
+  analyzeDisabledReason: string | null;
   // Saves a new research body; rejects with the request error.
   onSave: (body: PriceResearchBody) => Promise<unknown>;
   onReload: () => Promise<unknown> | void;
@@ -155,6 +150,8 @@ export const PricesTab: React.FC<PricesTabProps> = ({
   searchMessage,
   onSearchAgain,
   onAnalyze,
+  analyzing,
+  analyzeDisabledReason,
   onSave,
   onReload,
 }) => {
@@ -198,15 +195,15 @@ export const PricesTab: React.FC<PricesTabProps> = ({
   const handleAdd = async (event: React.FormEvent) => {
     event.preventDefault();
     setFailure(null);
-    const result = addMyPrice(research, { price, kind, url, seenAt }, currency);
+    const typed = { price, kind, url, seenAt };
+    const result = addMyPrice(research, typed, currency);
     if (!result.ok) {
       setFailure({ message: result.message, conflict: false, field: result.field });
       return;
     }
-    if (await save(result.body)) {
-      setPrice('');
-      setUrl('');
-    }
+    const next = formAfterSave(typed, await save(result.body));
+    setPrice(next.price);
+    setUrl(next.url);
   };
 
   const handleRemove = async (index: number | 'retail') => {
@@ -229,9 +226,19 @@ export const PricesTab: React.FC<PricesTabProps> = ({
         <Stack spacing={1.5} data-testid="prices-summary">
           <Typography variant="body2" color="text.secondary">{EMPTY_MESSAGE}</Typography>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-            <Button variant="contained" disabled={active} onClick={onAnalyze}>Analyze product</Button>
+            <Button
+              variant="contained"
+              disabled={active || analyzing || analyzeDisabledReason !== null}
+              onClick={onAnalyze}
+              data-testid="prices-analyze"
+            >
+              Analyze product
+            </Button>
             {progress && <Typography variant="body2" color="text.secondary">{progress}</Typography>}
           </Stack>
+          {analyzeDisabledReason && (
+            <Typography variant="caption" color="text.secondary">{analyzeDisabledReason}</Typography>
+          )}
         </Stack>
       ) : (
         <>
@@ -441,6 +448,8 @@ export interface PricesTabContainerProps {
   currency: string;
   listingCurrency: string | null;
   onAnalyze: () => void;
+  analyzing: boolean;
+  analyzeDisabledReason: string | null;
 }
 
 // Owns the save and search mutations; the tab itself only renders and calls back.
@@ -452,6 +461,8 @@ export const PricesTabContainer: React.FC<PricesTabContainerProps> = ({
   currency,
   listingCurrency,
   onAnalyze,
+  analyzing,
+  analyzeDisabledReason,
 }) => {
   const [save] = useSavePriceResearchMutation();
   const [refresh, { isLoading: refreshing }] = useRefreshPriceResearchMutation();
@@ -479,6 +490,8 @@ export const PricesTabContainer: React.FC<PricesTabContainerProps> = ({
       searchMessage={searchMessage}
       onSearchAgain={() => void handleSearchAgain()}
       onAnalyze={onAnalyze}
+      analyzing={analyzing}
+      analyzeDisabledReason={analyzeDisabledReason}
       onSave={(body) => save({ productId, body }).unwrap()}
       onReload={refetch}
     />

@@ -39,7 +39,12 @@ export const MY_PRICE_KINDS: ReadonlyArray<{ kind: MyPriceKind; label: string }>
 ];
 
 export const LIMIT_MESSAGE = `${MAX_COMPARABLES} prices is the limit. Remove one to add another.`;
-const URL_ERROR = `Enter an https link of at most ${MAX_URL_LENGTH} characters`;
+// A last new price's link is stored as the retail source, which the server caps shorter.
+export const MAX_RETAIL_LINK_LENGTH = 200;
+const urlError = (max: number) => `Enter an https link of at most ${max} characters`;
+export const CHANGED_MESSAGE = 'Prices changed. Reload and add it again.';
+export const SAVE_FAILED_MESSAGE = 'Your prices could not be saved. Try again.';
+const CONFLICT = 409;
 const DATE_ERROR = 'Enter the date as YYYY-MM-DD';
 const MANUAL_RETAIL_SOURCE = 'manual';
 
@@ -58,8 +63,9 @@ export function addMyPrice(research: PriceResearch | null, input: MyPriceInput, 
   const price = parsePrice(input.price);
   if (price === null) return { ok: false, field: 'price', message: PRICE_ERROR };
   const url = input.url.trim();
-  if (url && (url.length > MAX_URL_LENGTH || !url.startsWith('https://'))) {
-    return { ok: false, field: 'url', message: URL_ERROR };
+  const maxUrl = input.kind === 'last_new_price' ? MAX_RETAIL_LINK_LENGTH : MAX_URL_LENGTH;
+  if (url && (url.length > maxUrl || !url.startsWith('https://'))) {
+    return { ok: false, field: 'url', message: urlError(maxUrl) };
   }
   if (!isIsoDate(input.seenAt)) return { ok: false, field: 'seenAt', message: DATE_ERROR };
 
@@ -120,4 +126,25 @@ export function myPrices(research: PriceResearch | null): MyPriceRow[] {
     rows.push({ index, kind: row.tier ?? 'same_model_used', price: row.price, url: row.url ?? null, seenAt: row.seenAt ?? null });
   });
   return rows;
+}
+
+export interface SaveFailure {
+  message: string;
+  // The research changed since it was read: the form offers a reload.
+  conflict: boolean;
+}
+
+// What the form shows when a save fails: the server's own message for a refused request, a plain
+// sentence when there is none, never internal error text.
+export function saveFailure(err: unknown): SaveFailure {
+  const e = err as { status?: unknown; data?: { error?: { message?: unknown } } } | null | undefined;
+  if (e?.status === CONFLICT) return { message: CHANGED_MESSAGE, conflict: true };
+  const server = e?.data?.error?.message;
+  if (typeof e?.status === 'number' && typeof server === 'string' && server) return { message: server, conflict: false };
+  return { message: SAVE_FAILED_MESSAGE, conflict: false };
+}
+
+// The form after a save: a saved price clears the price and its link; a failure keeps what was typed.
+export function formAfterSave(input: MyPriceInput, saved: boolean): MyPriceInput {
+  return saved ? { ...input, price: '', url: '' } : input;
 }
