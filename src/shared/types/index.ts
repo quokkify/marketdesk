@@ -135,7 +135,39 @@ export interface PriceEstimate {
 
 export type AnchorTier = 'same_model_used' | 'last_new_price' | 'substitute_new' | 'substitute_used';
 
+// A price research run: one background graph run of narrow research calls for a product.
+export type ResearchNode = 'identify' | 'sameModelUsed' | 'lastNewPrice' | 'substitutesNew' | 'substitutesUsed';
+export type NodeStatus = 'pending' | 'running' | 'done' | 'failed' | 'timeout';
+export type RunOutcome = 'ok' | 'partial' | 'failed';
+export type RunStatus = 'queued' | 'running' | 'finished';
+export type RunTrigger = 'manual' | 'analyze' | 'autopilot';
+
+export interface ResearchRun {
+  id: string;
+  workspaceId: string;
+  productId: string;
+  trigger: RunTrigger;
+  status: RunStatus;
+  nodes: Partial<Record<ResearchNode, NodeStatus>>;
+  outcome: RunOutcome | null;
+  failedTiers: AnchorTier[];
+  errorCode: string | null;
+  consecutiveFailures: number;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  leaseUntil: string | null;
+  nextAutoAt: string | null;
+}
+
 export type PriceComparableSource = 'manual' | 'web' | 'auto';
+
+export interface ClassAttribute {
+  name: string;
+  value: string | number;
+  unit?: string | null;
+  match: 'equal' | 'ratio';
+}
 
 export interface PriceComparable {
   price: number;
@@ -144,6 +176,8 @@ export interface PriceComparable {
   source?: PriceComparableSource | null;
   tier?: AnchorTier | null;
   seenAt?: string | null; // ISO date
+  classAttributes?: ClassAttribute[] | null;
+  classChecked?: boolean | null;
 }
 
 export type EstimateHiddenReason = 'low_confidence' | 'within_threshold' | 'floor_cancels';
@@ -153,6 +187,8 @@ export interface StoredPriceEstimate {
   estimatedAt: string;
   hiddenReason: EstimateHiddenReason | null;
   researchNote: string | null;
+  // The research row's updatedAt the estimate was computed from; null when there was no research.
+  researchUpdatedAt: string | null;
 }
 
 export interface PriceResearch {
@@ -168,6 +204,19 @@ export interface PriceResearch {
   lastEstimate: StoredPriceEstimate | null;
   updatedAt: string;
 }
+
+// Whether a price may be set unattended: only on `ready`; otherwise it is held for the seller's review.
+export type PriceReadiness = 'ready' | 'degraded' | 'blocked';
+
+// GET /products/:id/price-research: the stored research with the state of its background runs.
+// Before any research is stored (a first run is still going) the research fields are empty and updatedAt is null.
+export type PriceResearchView = Omit<PriceResearch, 'updatedAt'> & {
+  updatedAt: string | null;
+  run: ResearchRun | null;
+  lastRun: ResearchRun | null;
+  nextAutoAt: string | null;
+  readiness: PriceReadiness;
+};
 
 export interface PriceChangePayload {
   kind: 'price';
@@ -330,6 +379,8 @@ export interface Product {
   sellingPrice: number;
   // Lowest price the seller accepts in negotiation (major units); null means none.
   minAcceptablePrice: number | null;
+  // Free text naming accessories the item lacks; used only to price the item.
+  missingAccessories: string | null;
   condition: ProductCondition;
   category: string;
   categoryProvenance?: ProductCategoryProvenance | null;

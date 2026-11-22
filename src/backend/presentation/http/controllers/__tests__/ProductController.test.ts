@@ -1,4 +1,7 @@
 import { ProductController, parseStringList } from '../ProductController';
+import { statusForError } from '../../formatters/ResponseFormatter';
+import type { IPriceResearchRuns } from '../../../../domain/ports/IPriceResearchRuns';
+import type { ResearchRun } from '../../../../../shared/types';
 
 describe('ProductController list parsing', () => {
   it('preserves commas inside JSON-encoded tag values', () => {
@@ -49,5 +52,52 @@ describe('ProductController recheck', () => {
     });
     expect(json).toHaveBeenCalledWith({ success: true, data: result });
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductController price research refresh', () => {
+  type Answer = Awaited<ReturnType<IPriceResearchRuns['request']>>;
+  const run = { id: 'run-1', status: 'queued' } as unknown as ResearchRun;
+
+  async function refresh(answer: Answer) {
+    const request = jest.fn(async () => answer);
+    const runs: IPriceResearchRuns = { request, latest: async () => ({ active: null, last: null }) };
+    const controller = new ProductController(
+      {} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
+      () => 'id', undefined, undefined, undefined, runs,
+    );
+    const req = { params: { id: 'product-1' }, user: { workspaceId: 'workspace-1', userId: 'user-1' } } as never;
+    const json = jest.fn();
+    const status = jest.fn(() => ({ json }));
+    const next = jest.fn();
+    await controller.refreshPriceResearch(req, { status } as never, next);
+    return { request, status, json, next };
+  }
+
+  it('queues a forced manual run and answers 202 with the run', async () => {
+    const { request, status, json } = await refresh({ run, enqueued: true, reason: 'enqueued' });
+
+    expect(request).toHaveBeenCalledWith('workspace-1', 'product-1', { force: true, trigger: 'manual' });
+    expect(status).toHaveBeenCalledWith(202);
+    expect(json).toHaveBeenCalledWith({ success: true, data: { run } });
+  });
+
+  it('answers 200 with the run already queued or running', async () => {
+    const { status, json } = await refresh({ run, enqueued: false, reason: 'active' });
+
+    expect(status).toHaveBeenCalledWith(200);
+    expect(json).toHaveBeenCalledWith({ success: true, data: { run } });
+  });
+
+  it.each([
+    ['not_configured' as const, 503, 'Market search is not configured'],
+    ['not_pln' as const, 422, 'OLX search needs a PLN listing'],
+  ])('answers %s synchronously with %i', async (reason, code, message) => {
+    const { next, status } = await refresh({ run: null, enqueued: false, reason });
+
+    const error = next.mock.calls[0]?.[0];
+    expect(statusForError(error)).toBe(code);
+    expect(error).toMatchObject({ message });
+    expect(status).not.toHaveBeenCalled();
   });
 });

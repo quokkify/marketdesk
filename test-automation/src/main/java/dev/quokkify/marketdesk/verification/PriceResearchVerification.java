@@ -133,6 +133,15 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     return self();
   }
 
+  // Nothing stored and no run yet: the whole answer is null, or a view without a run.
+  @Step("Product has no price research run")
+  public PriceResearchVerification hasNoRun(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data", Matchers.anyOf(Matchers.nullValue(),
+        Matchers.allOf(Matchers.hasEntry("run", null), Matchers.hasEntry("lastRun", null))));
+    return self();
+  }
+
   @Step("Save is refused because the price research changed since the form was opened")
   public PriceResearchVerification isStale(ValidatableResponse response) {
     failsWith(response, HttpStatus.SC_CONFLICT, CONFLICT);
@@ -160,5 +169,17 @@ public class PriceResearchVerification extends BaseApiVerification<PriceResearch
     response.body("success", Matchers.equalTo(false));
     response.body("error.code", Matchers.equalTo(code));
     return self();
+  }
+
+  // Research is stored but no run has finished (the stand has no research profile), so nothing is ready to price from.
+  @Step("Price research carries the run state and reads as degraded without a successful run")
+  public PriceResearchVerification hasRunStateAndIsDegraded(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data", Matchers.allOf(Matchers.hasKey("run"), Matchers.hasKey("lastRun"),
+        Matchers.hasKey("nextAutoAt"), Matchers.hasKey("readiness")));
+    response.body("data.run", Matchers.nullValue());
+    response.body("data.lastRun", Matchers.nullValue());
+    response.body("data.readiness", Matchers.equalTo("degraded"));
+    return this;
   }
 }

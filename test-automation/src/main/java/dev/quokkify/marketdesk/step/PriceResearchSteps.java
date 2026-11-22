@@ -101,4 +101,29 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.putPriceResearch(account.token(), productId,
         new PriceResearchPojo(null, null, null, null, rows));
   }
+
+  @Step("Save class-checked auto comparables of product {productId}")
+  public ValidatableResponse saveClassCheckedComparables(AccountPojo account, String productId, String tier,
+      Double... prices) {
+    List<PriceResearchPojo.ClassAttribute> attributes = List.of(
+        new PriceResearchPojo.ClassAttribute("native resolution", "1280x720", null, "equal"),
+        new PriceResearchPojo.ClassAttribute("brightness", 200, "ANSI lumens", "ratio"));
+    List<PriceResearchPojo.Comparable> rows = IntStream.range(0, prices.length)
+        .mapToObj(i -> new PriceResearchPojo.Comparable(prices[i], "Projector " + i,
+            ALLEGRO_OFFER + i, "auto", tier, SEEN_AT, attributes, true))
+        .toList();
+    return service.putPriceResearch(account.token(), productId,
+        new PriceResearchPojo(null, null, null, null, rows));
+  }
+
+  @Step("Save a checked substitute with class attributes for product {productId}")
+  public ValidatableResponse saveClassCheckedSubstitute(AccountPojo account, String productId) {
+    PriceResearchPojo.Comparable row = new PriceResearchPojo.Comparable(190.0, "Projector 720p", ALLEGRO_OFFER + "720",
+        "auto", "substitute_used", SEEN_AT,
+        List.of(new PriceResearchPojo.ClassAttribute("resolution", "720p", null, "equal"),
+            new PriceResearchPojo.ClassAttribute("brightness", 200, "ANSI lm", "ratio")),
+        true);
+    return service.putPriceResearch(account.token(), productId,
+        new PriceResearchPojo(null, null, null, null, List.of(row)));
+  }
 }

@@ -74,6 +74,15 @@ public class ProductDetailPageSteps
     return this;
   }
 
+  @Step("Set the missing accessories to {accessories} in the edit form and save")
+  public ProductDetailPageSteps saveMissingAccessories(String accessories) {
+    page.editProductButton().shouldBe(Condition.enabled).click();
+    page.missingAccessoriesInput().shouldBe(Condition.visible).setValue(accessories);
+    page.saveChangesButton().shouldBe(Condition.enabled).click();
+    page.missingAccessoriesInput().should(Condition.disappear);
+    return this;
+  }
+
   @Step("Reload the product page")
   public ProductDetailPageSteps reloadPage() {
     Selenide.refresh();

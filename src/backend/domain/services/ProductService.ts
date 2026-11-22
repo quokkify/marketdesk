@@ -19,6 +19,7 @@ export interface CreateProductCommand {
   costPrice: Money | null;
   sellingPrice: Money;
   minAcceptablePrice?: Money | null;
+  missingAccessories?: string | null;
   condition: ProductCondition;
   category: string;
   tags?: string[];

@@ -1,26 +1,34 @@
 // What the owner knows about the market price of one product: the retail price of a new one and
 // a few comparable used prices. Hermes reads it when it proposes a start price. The retail price
 // is never written to the product's cost price.
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, IconButton, Link, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { PriceResearch } from '@shared/types';
+import type { PriceResearch, PriceResearchView } from '@shared/types';
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { Card } from '../common/Card.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
 import { LoadingSkeleton } from '../common/Skeleton.js';
 import {
+  productsApi,
   useGetPriceResearchQuery,
   useSavePriceResearchMutation,
   useRefreshPriceResearchMutation,
 } from '../../state/api/productsApi.js';
+import { baseApi } from '../../state/api/baseApi.js';
 import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
 import {
   MAX_COMPARABLES,
   anchorTierLines,
   discountLine,
+  classLine,
   editComparablePrice,
+  lastRunText,
+  anchorsUpdatedAt,
+  runProgressText,
+  shouldRekeyEditor,
+  storedResearch,
   storedEstimateLines,
   toPriceResearchBody,
   toPriceResearchForm,
@@ -31,18 +39,27 @@ import { requestErrorMessage } from './revivalView.js';
 
 const OLX_PLN_ONLY = 'OLX search needs a PLN listing';
 const OLX_CURRENCY = 'PLN';
+const POLL_INTERVAL_MS = 5000;
+const NEW_PRICES_NOTICE = 'New prices found. Reload to see them.';
+const ESTIMATE_PENDING = 'Searching prices, about 2–4 min. The estimate appears when it finishes.';
+const SUBSTITUTE_TIERS = new Set(['substitute_new', 'substitute_used']);
 
 interface PriceResearchFormProps {
   productId: string;
   research: PriceResearch | null;
   currency: string;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
-const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency }) => {
+const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency, onDirtyChange }) => {
   const dispatch = useAppDispatch();
   const [save, { isLoading: saving }] = useSavePriceResearchMutation();
   const [form, setForm] = useState<PriceResearchForm>(() => toPriceResearchForm(research, currency));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The form as last loaded or saved; the editor is dirty while the form differs from it.
+  const [baseline, setBaseline] = useState(() => JSON.stringify(form));
+  const dirty = JSON.stringify(form) !== baseline;
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   const patch = (change: Partial<PriceResearchForm>) => setForm((current) => ({ ...current, ...change }));
   const patchComparable = (index: number, change: Partial<PriceResearchForm['comparables'][number]>) =>
@@ -57,6 +74,7 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
     setErrors({});
     try {
       await save({ productId, body: result.body }).unwrap();
+      setBaseline(JSON.stringify(form));
       dispatch(enqueueToast({ message: 'Price research saved.', severity: 'success' }));
     } catch (err) {
       dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
@@ -170,16 +188,22 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
 
 interface PriceAnchorsProps {
   productId: string;
+  view: PriceResearchView | null;
   research: PriceResearch | null;
   currency: string;
   listingCurrency: string | null;
 }
 
-const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, research, currency, listingCurrency }) => {
+const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, view, research, currency, listingCurrency }) => {
   const dispatch = useAppDispatch();
   const [refresh, { isLoading: refreshing }] = useRefreshPriceResearchMutation();
   const pln = listingCurrency === OLX_CURRENCY;
   const estimate = storedEstimateLines(research?.lastEstimate ?? null, currency);
+  const run = view?.run ?? null;
+  const progress = runProgressText(run);
+  const lastRun = lastRunText(view?.lastRun ?? null, view?.nextAutoAt ?? null, new Date());
+  const updatedAt = anchorsUpdatedAt(view?.lastRun ?? null, research);
+  const estimateStale = !research || research.lastEstimate?.researchUpdatedAt !== research.updatedAt;
 
   const handleFind = async () => {
     try {
@@ -193,16 +217,16 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, research, curren
     <Stack spacing={1} data-testid="price-anchors">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
         <Typography variant="subtitle2">Price anchors</Typography>
-        {research?.lastAttemptAt && (
+        {updatedAt && (
           <Typography variant="caption" color="text.secondary" data-testid="price-anchors-updated">
-            {`updated ${formatDate(research.lastAttemptAt)}`}
+            {`updated ${formatDate(updatedAt)}`}
           </Typography>
         )}
         <Tooltip title={pln ? '' : OLX_PLN_ONLY}>
           <span>
             <Button
               size="small"
-              disabled={!pln || refreshing}
+              disabled={!pln || refreshing || run !== null}
               startIcon={refreshing ? <CircularProgress size={14} /> : undefined}
               onClick={() => void handleFind()}
               data-testid="find-prices-button"
@@ -213,10 +237,31 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, research, curren
         </Tooltip>
         {!pln && <Typography variant="caption" color="text.secondary">{OLX_PLN_ONLY}</Typography>}
       </Stack>
+      {progress && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="price-research-progress">
+          <CircularProgress size={14} />
+          <Typography variant="body2">{progress}</Typography>
+        </Stack>
+      )}
+      {!progress && lastRun && (
+        <Typography variant="caption" color="text.secondary" data-testid="price-research-last-run">{lastRun}</Typography>
+      )}
       {anchorTierLines(research, currency).map((line) => (
         <Stack key={line.tier} direction="row" spacing={1} sx={{ alignItems: 'baseline' }} data-testid={`anchor-tier-${line.tier}`}>
           <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>{line.label}</Typography>
           <Typography variant="body2">{line.text}</Typography>
+          {SUBSTITUTE_TIERS.has(line.tier) && (
+            <Stack>
+              {line.rows.map((row, index) => {
+                const detail = classLine(row);
+                return detail ? (
+                  <Typography key={index} variant="caption" color="text.secondary" data-testid="anchor-class-line">
+                    {`${formatMoney(row.price, currency)} · ${detail}`}
+                  </Typography>
+                ) : null;
+              })}
+            </Stack>
+          )}
           {line.rows.map((row, index) =>
             row.url && row.url.startsWith('https://') ? (
               <Link
@@ -237,6 +282,9 @@ const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, research, curren
         <Typography variant="caption" color="text.secondary" data-testid="price-anchors-specs">
           {`Matched by: ${research.specs}`}
         </Typography>
+      )}
+      {run !== null && estimateStale && (
+        <Typography variant="body2" color="text.secondary" data-testid="estimate-pending">{ESTIMATE_PENDING}</Typography>
       )}
       {estimate.length > 0 && (
         <Box data-testid="stored-estimate">
@@ -261,18 +309,37 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
   currency,
   listingCurrency = null,
 }) => {
-  const query = useGetPriceResearchQuery(productId);
-  const research = query.currentData;
+  const dispatch = useAppDispatch();
+  const cached = productsApi.endpoints.getPriceResearch.useQueryState(productId).currentData;
+  const query = useGetPriceResearchQuery(productId, { pollingInterval: cached?.run ? POLL_INTERVAL_MS : 0 });
+  const view = query.currentData;
+  const research = storedResearch(view);
   const discount = research ? discountLine(currentPrice, research, currency) : null;
+
+  const active = Boolean(view?.run);
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !active) {
+      dispatch(baseApi.util.invalidateTags([{ type: 'PriceResearch', id: productId }, { type: 'HermesEvent', id: 'LIST' }]));
+    }
+    wasActive.current = active;
+  }, [active, dispatch, productId]);
+
+  // The editor keeps the research it was built from; new research replaces it only while it has no unsaved edits.
+  const [dirty, setDirty] = useState(false);
+  const [applied, setApplied] = useState<string | null | undefined>(undefined);
+  const nextUpdatedAt = view?.updatedAt ?? null;
+  const decision = applied === undefined ? 'rekey' : shouldRekeyEditor(dirty, applied, nextUpdatedAt);
+  if (view !== undefined && decision === 'rekey' && applied !== nextUpdatedAt) setApplied(nextUpdatedAt);
 
   return (
     <Card
       title="Price research"
       subtitle="Hermes uses this when it proposes a start price. It never changes your cost price."
     >
-      {research === undefined && query.isError ? (
+      {view === undefined && query.isError ? (
         <ErrorRetry error={query.error} onRetry={query.refetch} />
-      ) : research === undefined ? (
+      ) : view === undefined ? (
         <LoadingSkeleton lines={3} height={48} />
       ) : (
         <Stack spacing={2}>
@@ -286,12 +353,14 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
               {`Saved ${formatDateTime(research.updatedAt)}`}
             </Typography>
           )}
-          <PriceAnchors productId={productId} research={research} currency={currency} listingCurrency={listingCurrency} />
+          <PriceAnchors productId={productId} view={view} research={research} currency={currency} listingCurrency={listingCurrency} />
+          {decision === 'notice' && <Alert severity="info" data-testid="price-research-new-prices">{NEW_PRICES_NOTICE}</Alert>}
           <PriceResearchEditor
-            key={`${productId}:${research?.updatedAt ?? 'none'}`}
+            key={`${productId}:${applied ?? 'none'}`}
             productId={productId}
             research={research}
             currency={currency}
+            onDirtyChange={setDirty}
           />
         </Stack>
       )}
@@ -301,7 +370,7 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
 
 // The product price with its discount against a new one, shown in the product's header.
 export const ProductPriceDiscount: React.FC<PriceResearchSectionProps> = ({ productId, currentPrice, currency }) => {
-  const research = useGetPriceResearchQuery(productId).currentData;
+  const research = storedResearch(useGetPriceResearchQuery(productId).currentData);
   const discount = research ? discountLine(currentPrice, research, currency) : null;
   return (
     <Box sx={{ mt: 0.75 }}>

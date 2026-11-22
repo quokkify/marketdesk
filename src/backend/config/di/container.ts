@@ -81,7 +81,12 @@ import { AesGcmCredentialVault } from '../../infrastructure/security/AesGcmCrede
 import { FilesystemProductImageStorage } from '../../infrastructure/storage/FilesystemProductImageStorage';
 import { OlxOAuthClient } from '../../infrastructure/external/OlxOAuthClient';
 import { env } from '../env';
-import { HermesAI, loadHermesConfig, loadHermesResearchConfig } from '../../infrastructure/external/HermesAI';
+import {
+  HermesAI,
+  loadHermesConfig,
+  loadHermesResearchConfig,
+  loadHermesResearchMaxConcurrency,
+} from '../../infrastructure/external/HermesAI';
 import { HermesCompletionClient } from '../../infrastructure/external/HermesCompletionClient';
 import { HermesHealthProbe } from '../../infrastructure/external/HermesHealthProbe';
 import { HermesLimitsReader } from '../../infrastructure/external/HermesLimitsReader';
@@ -92,17 +97,22 @@ import { OfflineReplyDraftAI } from '../../infrastructure/external/OfflineReplyD
 import { ReplyDraftAISelector } from '../../infrastructure/external/ReplyDraftAISelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
-import { AnchorLadderService } from '../../application/services/AnchorLadderService';
+import { PriceResearchRuns } from '../../application/services/PriceResearchRuns';
+import { PriceResearchRunRepository } from '../../infrastructure/persistence/repositories/PriceResearchRunRepository';
+import { PriceResearchGraph } from '../../application/services/PriceResearchGraph';
+import { createResearchCallLimiter } from '../../application/services/researchCallLimiter';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
 import { ConversationReplyHandler } from '../../infrastructure/jobQueue/JobHandlers/ConversationReplyHandler';
+import { PriceResearchHandler } from '../../infrastructure/jobQueue/JobHandlers/PriceResearchHandler';
 
 // --- Domain: services + ports ---
 import { ProductService } from '../../domain/services/ProductService';
 import { ListingService } from '../../domain/services/ListingService';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
 // --- Application: use cases + services + ports ---
@@ -153,6 +163,7 @@ import type {
   ConversationReplyJob,
   IJobQueue,
   JobEnqueueOptions,
+  PriceResearchJob,
   PublishListingJob,
   SyncMarketplaceJob,
 } from '../../application/ports/IJobQueue';
@@ -202,7 +213,11 @@ const CONVERSATION_REPLY_ENQUEUE_FAILED_MESSAGE = 'Conversation reply run not qu
 const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
-export function buildBullAddOptions(_name: string, options?: JobEnqueueOptions) {
+const PRICE_RESEARCH_QUEUE = 'price-research';
+
+export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
+  // A failed research run is recorded on the run and retried by its schedule, never by the queue.
+  if (name === PRICE_RESEARCH_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -451,6 +466,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const marketplaceSyncScheduler = new MarketplaceSyncScheduler(syncQueue);
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
+  const priceResearchQueue = createQueue<PriceResearchJob>(PRICE_RESEARCH_QUEUE);
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -471,27 +487,50 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   // The web-enabled research profile serves only the market search; a new probe per search keeps
   // its toolset guard from acting on a cached answer.
   const researchConfig = loadHermesResearchConfig();
-  const anchorLadderService = new AnchorLadderService(
-    productRepo,
-    listingRepo,
-    priceResearchRepo,
-    researchConfig
+  const priceResearchGraph = new PriceResearchGraph({
+    products: productRepo,
+    listings: listingRepo,
+    research: priceResearchRepo,
+    profile: researchConfig
       ? {
           client: new HermesCompletionClient(researchConfig, aiUsageSink),
           checkProfile: () => new HermesHealthProbe(researchConfig).reachability(),
         }
       : null,
-    undefined,
-    overrides.logger,
-  );
+    // One limiter for the process: every research run shares its slots.
+    limiter: createResearchCallLimiter(loadHermesResearchMaxConcurrency()),
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  const priceResearchRunRepo = new PriceResearchRunRepository(pool);
+  const priceResearchRuns = new PriceResearchRuns({
+    products: productRepo,
+    listings: listingRepo,
+    runs: priceResearchRunRepo,
+    research: priceResearchRepo,
+    queue: priceResearchQueue,
+    configured: researchConfig !== null,
+    newId: idGenerator,
+    now: () => new Date(),
+    // hermesEngine is created below; the hook runs only once the container is built.
+    onExpired: async (workspaceId: string, productId: string): Promise<void> => {
+      await hermesEngine.reestimateAfterResearch(workspaceId, productId, null);
+    },
+    logger: overrides.logger,
+  });
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
     listingRepo,
     eventRepo,
     eventPublisher,
     aiProvider,
-    priceResearchRepo,
-    anchorLadderService,
+    new PriceEstimateService({
+      ai: aiProvider,
+      research: priceResearchRepo,
+      runs: priceResearchRuns,
+      logger: overrides.logger,
+    }),
+    priceResearchRuns,
     idGenerator,
     overrides.logger
   );
@@ -908,6 +947,22 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   );
   conversationReplyQueue.registerHandler((data) => replyHandler.handle(data));
 
+  const priceResearchHandler = new PriceResearchHandler({
+    runs: priceResearchRunRepo,
+    graph: priceResearchGraph,
+    afterRun: async (workspaceId, productId, result) => {
+      await hermesEngine.reestimateAfterResearch(
+        workspaceId,
+        productId,
+        result && { outcome: result.outcome, rowsChanged: result.rowsChanged },
+      );
+    },
+    events: eventPublisher,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  priceResearchQueue.registerHandler((data) => priceResearchHandler.handle(data));
+
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
   void conversationRetentionQueue
@@ -982,7 +1037,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analyticsService,
     productRepo,
     priceResearchRepo,
-    anchorLadderService,
+    priceResearchRuns,
     productStatsService,
     listingRepo,
     marketplaceRepo,
@@ -1013,6 +1068,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     syncQueue as ManagedQueue<unknown>,
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
+    priceResearchQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

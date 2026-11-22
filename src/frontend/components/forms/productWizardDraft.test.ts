@@ -64,6 +64,18 @@ describe('product wizard draft persistence', () => {
     expect(key).toContain('user%40example.com');
   });
 
+  it('keeps the missing accessories text and reads an older draft without it as blank', () => {
+    const storage = new MemoryStorage();
+    const key = 'draft';
+    const withText = { ...draft(), values: { ...draft().values, missingAccessories: 'remote' } };
+    expect(writeProductWizardDraft(storage, key, withText, 1_000)).toBe(true);
+    expect(readProductWizardDraft(storage, key, 2_000)?.values.missingAccessories).toBe('remote');
+
+    const { missingAccessories: _omitted, ...older } = draft().values;
+    storage.setItem(key, JSON.stringify({ ...draft(), values: older, version: 2, updatedAt: 1_000 }));
+    expect(readProductWizardDraft(storage, key, 2_000)?.values.missingAccessories).toBe('');
+  });
+
   it('ignores malformed, future, stale, and unsupported-version values', () => {
     const storage = new MemoryStorage();
     const key = 'draft';

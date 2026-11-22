@@ -11,6 +11,7 @@ import {
   PRODUCT_STATUS_LIST,
   PRODUCT_DESCRIPTION_MIN_LENGTH,
   PRODUCT_DESCRIPTION_MAX_LENGTH,
+  PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH,
 } from '../../../shared/constants';
 import type { ProductStatus, ProductCondition } from '../../../shared/types';
 import type { CreateProductDTO } from '../dto/CreateProductDTO';
@@ -30,6 +31,7 @@ const createProductSchema = z
     costPrice: z.number().finite().nonnegative().nullable(),
     sellingPrice: z.number().finite().nonnegative(),
     minAcceptablePrice: z.number().finite().nullable().optional(),
+    missingAccessories: z.string().trim().max(PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH).nullable().optional(),
     currency: currencySchema.optional(),
     condition: conditionSchema,
     category: z.string().trim().min(1, 'category is required'),
@@ -53,6 +55,7 @@ const updateProductSchema = z
     costPrice: z.number().finite().nonnegative().nullable().optional(),
     sellingPrice: z.number().finite().nonnegative().optional(),
     minAcceptablePrice: z.number().finite().nullable().optional(),
+    missingAccessories: z.string().trim().max(PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH).nullable().optional(),
     currency: currencySchema.optional(),
     condition: conditionSchema.optional(),
     category: z.string().trim().min(1, 'category is required').optional(),
@@ -71,6 +74,7 @@ const updateProductSchema = z
       dto.costPrice !== undefined ||
       dto.sellingPrice !== undefined ||
       dto.minAcceptablePrice !== undefined ||
+      dto.missingAccessories !== undefined ||
       dto.currency !== undefined ||
       dto.condition !== undefined ||
       dto.category !== undefined ||

@@ -9,7 +9,8 @@ export type DomainErrorCode =
   | 'CONFLICT'
   | 'GUARDRAIL_VIOLATION'
   | 'SERVICE_UNAVAILABLE'
-  | 'BAD_GATEWAY';
+  | 'BAD_GATEWAY'
+  | 'TOO_MANY_REQUESTS';
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;
@@ -84,5 +85,12 @@ export class BadGatewayError extends DomainError {
   constructor(message: string, cause?: unknown) {
     super(message, 'BAD_GATEWAY');
     this.cause = cause;
+  }
+}
+
+// A workspace asked for more work than its limits allow right now.
+export class TooManyRequestsError extends DomainError {
+  constructor(message: string) {
+    super(message, 'TOO_MANY_REQUESTS');
   }
 }

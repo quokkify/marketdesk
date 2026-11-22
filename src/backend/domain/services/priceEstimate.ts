@@ -80,9 +80,15 @@ function pricesOf(rows: readonly PriceComparable[], tier: PriceComparable['tier'
   return rows.filter((r) => r.tier === tier).map((r) => r.price);
 }
 
+// A substitute whose class could not be checked (the item's class is unknown) is shown to the
+// seller but sets neither the substitute ceiling nor the tier confidence. An auto row counts only
+// when its class check passed (rows saved before the check have no flag); manual rows always count.
+const classUnchecked = (r: PriceComparable): boolean =>
+  r.source === 'auto' ? r.classChecked !== true : r.classChecked === false;
+
 // Median of the three cheapest new substitutes: one cheap outlier does not set the ceiling.
 export function substituteNewReference(rows: readonly PriceComparable[]): number | null {
-  const nearest = pricesOf(rows, 'substitute_new')
+  const nearest = pricesOf(rows.filter((r) => !classUnchecked(r)), 'substitute_new')
     .sort((a, b) => a - b)
     .slice(0, NEAREST_SUBSTITUTES);
   if (nearest.length === 0) return null;
@@ -106,7 +112,9 @@ export function startPriceCeiling(
 // Untiered rows (manual or older data) are same-model used prices.
 export function tierConfidence(rows: readonly PriceComparable[]): PriceEstimate['confidence'] {
   if (rows.some((r) => r.tier == null || r.tier === 'same_model_used')) return 'high';
-  const substitutes = rows.filter((r) => r.tier === 'substitute_new' || r.tier === 'substitute_used');
+  const substitutes = rows.filter(
+    (r) => (r.tier === 'substitute_new' || r.tier === 'substitute_used') && !classUnchecked(r),
+  );
   return substitutes.length >= 2 ? 'medium' : 'low';
 }
 

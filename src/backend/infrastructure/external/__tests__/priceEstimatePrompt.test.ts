@@ -1,3 +1,4 @@
+import { buildIdentifyPrompt } from '../priceResearchPrompts';
 import { buildPriceEstimatePrompt, parsePriceEstimate } from '../priceEstimatePrompt';
 import { Product } from '../../../domain/entities/Product';
 import { Listing } from '../../../domain/entities/Listing';
@@ -5,7 +6,7 @@ import type { PriceEstimateContext } from '../../../domain/ports/IAIProvider';
 import type { PriceResearch } from '../../../../shared/types';
 import { money, unwrap } from '../../../domain/testkit/support';
 
-function buildProduct(): Product {
+function buildProduct(missingAccessories: string | null = null): Product {
   return unwrap(
     Product.create({
       id: 'p1',
@@ -19,6 +20,7 @@ function buildProduct(): Product {
       category: 'electronics',
       images: ['a.jpg'],
       tags: [],
+      missingAccessories,
     }),
   );
 }
@@ -59,6 +61,28 @@ function ctx(overrides: Partial<PriceEstimateContext> = {}): PriceEstimateContex
     ...overrides,
   };
 }
+
+describe('missing accessories in the prompts', () => {
+  const RULE = 'If missing accessories are listed, lower the price for them and name the deduction in reasoning.';
+
+  it('puts the text inside the seller_data block and adds the deduction rule', () => {
+    const prompt = buildPriceEstimatePrompt(ctx({ product: buildProduct('pilot') }));
+    const block = prompt.slice(prompt.indexOf('<seller_data>'), prompt.indexOf('</seller_data>'));
+    expect(block).toContain('"missingAccessories":"pilot"');
+    expect(prompt).toContain(RULE);
+  });
+
+  it('never reaches the price research prompt', () => {
+    const product = buildProduct('pilot');
+    const { system, prompt } = buildIdentifyPrompt({
+      name: product.name,
+      condition: product.condition,
+      category: product.category,
+      currency: 'PLN',
+    });
+    expect(system + prompt).not.toContain('pilot');
+  });
+});
 
 describe('buildPriceEstimatePrompt', () => {
   it('includesProductCardAndAnchor', () => {

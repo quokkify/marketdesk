@@ -17,6 +17,8 @@ public class PriceResearchUiTest extends BaseUiTest {
 
   private static final String RETAIL_PRICE = "469.99";
   private static final String RETAIL_PRICE_SHOWN = "469,99 zł";
+  private static final String MISSING_ACCESSORIES = "remote, charger";
+  private static final String CLASS_LINE = "720p · 200 ANSI lm";
   private static final String CURRENCY = "PLN";
   private static final String SOURCE = "MediaMarkt";
 
@@ -99,5 +101,40 @@ public class PriceResearchUiTest extends BaseUiTest {
         .reloadPage()
         .verify()
         .showsOlxLink(OLX_ADVERT);
+  }
+
+  @Test
+  public void missingAccessoriesFieldSaves() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    loginPageSteps
+        .openLoginPage()
+        .signIn(account.email(), account.password())
+        .verify()
+        .productsCatalogueIsShown();
+    productDetailPageSteps
+        .openProductPage(productListing)
+        .saveMissingAccessories(MISSING_ACCESSORIES);
+    productSteps.verify().hasMissingAccessories(
+        productSteps.getProduct(account, productListing.productId()), MISSING_ACCESSORIES);
+  }
+
+  @Test
+  public void substituteShowsClassLine() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
+    priceResearchSteps.verify().isSaved(
+        priceResearchSteps.saveClassCheckedSubstitute(account, productListing.productId()));
+    loginPageSteps
+        .openLoginPage()
+        .signIn(account.email(), account.password())
+        .verify()
+        .productsCatalogueIsShown();
+    productDetailPageSteps
+        .openProductPage(productListing)
+        .verify()
+        .showsClassLine(CLASS_LINE);
   }
 }

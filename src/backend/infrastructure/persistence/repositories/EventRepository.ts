@@ -2,7 +2,7 @@ import type { PoolClient, Pool } from 'pg';
 import { query, withTransaction } from '../../../config/database';
 import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
 import type { HermesEvent } from '../../../domain/entities/HermesEvent';
-import type { HermesEventStatus } from '../../../../shared/types';
+import type { HermesEventStatus, HermesEventType } from '../../../../shared/types';
 import { EventMapper } from '../mappers/EventMapper';
 import type { HermesEventRow } from '../mappers/rows';
 import type { AgentRecommendationRecord } from '../../../domain/agents/MarketDeskAgentCatalog';
@@ -76,6 +76,35 @@ export class EventRepository implements IEventRepository {
 
   async findPendingReview(workspaceId: string): Promise<HermesEvent[]> {
     return this.findByStatus(workspaceId, 'pending_review');
+  }
+
+  async findPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+  ): Promise<HermesEvent[]> {
+    const { rows } = await query<HermesEventRow>(
+      `${EVENT_SELECT} WHERE workspace_id = $1 AND product_id = $2 AND status = 'pending_review' AND type = ANY($3::text[])
+       ORDER BY created_at DESC`,
+      [workspaceId, productId, [...types]],
+      this.queryClient,
+    );
+    return rows.map((row) => EventMapper.toDomain(row));
+  }
+
+  async dismissPendingByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+    resolvedAt: Date,
+  ): Promise<number> {
+    const { rowCount } = await query(
+      `UPDATE hermes_events SET status = 'dismissed', resolved_at = $4
+       WHERE workspace_id = $1 AND product_id = $2 AND status = 'pending_review' AND type = ANY($3::text[])`,
+      [workspaceId, productId, [...types], resolvedAt],
+      this.queryClient,
+    );
+    return rowCount;
   }
 
   async save(event: HermesEvent): Promise<void> {

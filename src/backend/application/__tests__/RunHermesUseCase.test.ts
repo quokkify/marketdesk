@@ -5,6 +5,7 @@ import { PriceChangeService } from '../services/PriceChangeService';
 import { ApproveHermesEventUseCase } from '../usecases/ApproveHermesEventUseCase';
 import { DismissHermesEventUseCase } from '../usecases/DismissHermesEventUseCase';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import { Product } from '../../domain/entities/Product';
 import { Workspace } from '../../domain/entities/Workspace';
 import {
@@ -63,7 +64,7 @@ function setup(aiProvider: IAIProvider = new StubAIProvider()) {
     eventRepo,
     publisher,
     aiProvider,
-    new InMemoryPriceResearchRepository(),
+    new PriceEstimateService({ ai: aiProvider, research: new InMemoryPriceResearchRepository(), runs: null }),
     null,
     sequentialIdFactory('evt')
   );

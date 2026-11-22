@@ -40,6 +40,7 @@ import { HermesEvent } from '../../domain/entities/HermesEvent';
 
 import { ProductService } from '../../domain/services/ProductService';
 import { HermesDecisionEngine } from '../../domain/services/HermesDecisionEngine';
+import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 
 import { CreateProductUseCase } from '../../application/usecases/CreateProductUseCase';
 import { UpdateProductUseCase } from '../../application/usecases/UpdateProductUseCase';
@@ -162,7 +163,7 @@ async function build(): Promise<Ctx> {
     eventRepo,
     events,
     aiProvider,
-    new InMemoryPriceResearchRepository(),
+    new PriceEstimateService({ ai: aiProvider, research: new InMemoryPriceResearchRepository(), runs: null }),
     null,
     idGenerator
   );

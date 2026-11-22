@@ -88,6 +88,8 @@ export function statusForError(error: unknown): number {
         return 503;
       case 'BAD_GATEWAY':
         return 502;
+      case 'TOO_MANY_REQUESTS':
+        return 429;
       default:
         return 500;
     }

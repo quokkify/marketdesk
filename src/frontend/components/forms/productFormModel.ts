@@ -2,7 +2,11 @@
 // Mirrors domain invariants (ARCHITECTURE §3) client-side; the API remains the
 // source of truth. sellingPrice < costPrice is a soft warning, not a hard block.
 import type { Product, ProductCondition, ProductStatus } from '@shared/types';
-import { PRODUCT_DESCRIPTION_MIN_LENGTH, PRODUCT_DESCRIPTION_MAX_LENGTH } from '@shared/constants';
+import {
+  PRODUCT_DESCRIPTION_MIN_LENGTH,
+  PRODUCT_DESCRIPTION_MAX_LENGTH,
+  PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH,
+} from '@shared/constants';
 
 export interface ProductFormValues {
   name: string;
@@ -11,6 +15,8 @@ export interface ProductFormValues {
   costPrice: number | null;
   sellingPrice: number;
   minAcceptablePrice: number | null;
+  // Blank means none; the server stores it as null.
+  missingAccessories: string;
   condition: ProductCondition;
   category: string;
   status: ProductStatus;
@@ -36,6 +42,7 @@ export function emptyProductValues(): ProductFormValues {
     costPrice: null,
     sellingPrice: 0,
     minAcceptablePrice: null,
+    missingAccessories: '',
     condition: 'good',
     category: '',
     status: 'draft',
@@ -52,6 +59,7 @@ export function productToValues(product: Product): ProductFormValues {
     costPrice: product.costPrice,
     sellingPrice: product.sellingPrice,
     minAcceptablePrice: product.minAcceptablePrice ?? null,
+    missingAccessories: product.missingAccessories ?? '',
     condition: product.condition,
     category: product.category,
     status: product.status,
@@ -83,6 +91,9 @@ export function validateProductValues(values: ProductFormValues): ProductFieldEr
     } else if (values.minAcceptablePrice > values.sellingPrice) {
       errors.minAcceptablePrice = 'Lowest price cannot exceed the selling price.';
     }
+  }
+  if (values.missingAccessories.trim().length > PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH) {
+    errors.missingAccessories = `Missing accessories must be at most ${PRODUCT_MISSING_ACCESSORIES_MAX_LENGTH} characters.`;
   }
   return errors;
 }
@@ -174,6 +185,7 @@ const FORM_FIELDS = new Set<string>([
   'costPrice',
   'sellingPrice',
   'minAcceptablePrice',
+  'missingAccessories',
   'condition',
   'category',
   'status',
