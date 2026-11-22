@@ -1,0 +1,1 @@
+{"id":"b0f4cafeab850e82f01fd596e25c7d91.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API token renewal keeps a young token on /api/auth/me as it is","name":"keeps a young token on /api/auth/me as it is","status":"passed","testResultsByEnv":{"default":"0c61fc258bf1535d0ddbf1ba02a9a3d3"}}

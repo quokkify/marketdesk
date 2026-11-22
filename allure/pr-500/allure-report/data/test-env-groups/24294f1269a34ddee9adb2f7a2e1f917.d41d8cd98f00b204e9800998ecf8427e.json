@@ -1,0 +1,1 @@
+{"id":"24294f1269a34ddee9adb2f7a2e1f917.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/shared/__tests__/anchorUrl.test.ts#normalizeAnchorUrl rejects hosts that only mention an allowed name","name":"rejects hosts that only mention an allowed name","status":"passed","testResultsByEnv":{"default":"e9b80d2445777901f9c2ded5af6e4d34"}}

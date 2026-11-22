@@ -1,0 +1,1 @@
+{"id":"c49f43ee278660fc8a5f6ab7fbb5e8f5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ReplySendService.test.ts#sendingInFlightWindowMs is the OLX request timeout plus one minute","name":"is the OLX request timeout plus one minute","status":"passed","testResultsByEnv":{"default":"d18709dae62f810c64a6c45dbcad69a4"}}

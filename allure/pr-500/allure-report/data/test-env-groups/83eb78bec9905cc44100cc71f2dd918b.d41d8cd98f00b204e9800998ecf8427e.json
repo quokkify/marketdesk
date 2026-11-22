@@ -1,0 +1,1 @@
+{"id":"83eb78bec9905cc44100cc71f2dd918b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ConversationRetentionService.test.ts#ConversationRetentionService ignoresThreadsWithoutRetentionStart","name":"ignoresThreadsWithoutRetentionStart","status":"passed","testResultsByEnv":{"default":"1bb3cdd9e9f6fce387f572dace13fe42"}}
