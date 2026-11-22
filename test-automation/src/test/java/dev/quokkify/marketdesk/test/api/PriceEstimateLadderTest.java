@@ -1,0 +1,53 @@
+package dev.quokkify.marketdesk.test.api;
+
+import dev.quokkify.marketdesk.model.AccountPojo;
+import dev.quokkify.marketdesk.model.ProductListingPojo;
+import dev.quokkify.marketdesk.test.BaseTest;
+
+import org.testng.annotations.Test;
+
+// The API stack has no Hermes and no research profile: the offline heuristic provider keeps the
+// listing price as the start price with low confidence, and the market search reports not configured.
+public class PriceEstimateLadderTest extends BaseTest {
+
+  // Above the substitute ceiling, so the offline start price (the listing price) must be cut to it.
+  private static final double PRODUCT_PRICE = 299.0;
+  // 70 % of the median of the three cheapest new substitutes (280, 300, 320).
+  private static final double SUBSTITUTE_CEILING = 210.0;
+  private static final String LOW = "low";
+  private static final String LOW_CONFIDENCE = "low_confidence";
+
+  @Test
+  public void runStoresLastEstimate() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
+    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.verify().hasLastEstimate(
+        priceResearchSteps.getPriceResearch(account, productListing.productId()));
+  }
+
+  // Without the ceiling the stored start price would stay at the listing price, 299.
+  @Test
+  public void substituteCeilingCapsStartPrice() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
+    priceResearchSteps.saveAutoComparables(account, productListing.productId(), "substitute_new",
+        280.0, 300.0, 320.0);
+    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.verify().lastEstimateStartsAt(
+        priceResearchSteps.getPriceResearch(account, productListing.productId()), SUBSTITUTE_CEILING);
+  }
+
+  // No tier evidence caps the confidence at low, and a low estimate is kept but never proposed.
+  @Test
+  public void hiddenEstimateHasReason() {
+    AccountPojo account = authSteps.registerNewAccount();
+    marketplaceSteps.connectSandboxOlx(account);
+    ProductListingPojo productListing = listingSteps.createOlxProductListing(account, PRODUCT_PRICE);
+    priceResearchSteps.runProductAnalysis(account, productListing.productId());
+    priceResearchSteps.verify().lastEstimateIsHidden(
+        priceResearchSteps.getPriceResearch(account, productListing.productId()), LOW, LOW_CONFIDENCE);
+  }
+}

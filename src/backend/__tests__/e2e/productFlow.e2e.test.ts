@@ -142,6 +142,7 @@ async function buildE2E(): Promise<E2EContext> {
     events,
     aiProvider,
     new InMemoryPriceResearchRepository(),
+    null,
     idGenerator
   );
 

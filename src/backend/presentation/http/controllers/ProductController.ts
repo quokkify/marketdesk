@@ -3,6 +3,7 @@
 // service, and translates the Result via ResponseFormatter. No business logic here.
 
 import type { Request, Response, NextFunction } from 'express';
+import { dismissedAfterEdit, researchChangedSince, withNormalizedAutoUrls } from '../../../domain/services/priceResearchEdit';
 import type { ProductApplicationService } from '../../../application/services/ProductApplicationService';
 import type { ListingApplicationService } from '../../../application/services/ListingApplicationService';
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
@@ -10,8 +11,8 @@ import type { ProductRecheckService } from '../../../application/services/Produc
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import {
   SEARCH_NOT_CONFIGURED,
-  type ComparableSearchService,
-} from '../../../application/services/ComparableSearchService';
+  type AnchorLadderService,
+} from '../../../application/services/AnchorLadderService';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IPriceResearchRepository } from '../../../domain/repositories/interfaces/IPriceResearchRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -19,12 +20,19 @@ import type { IMarketplaceRepository } from '../../../domain/repositories/interf
 import type { CreateProductDTO } from '../../../application/dto/CreateProductDTO';
 import type { UpdateProductDTO } from '../../../application/dto/UpdateProductDTO';
 import type { ListProductsQueryDTO, SortKey } from '../../../application/dto/ListProductsQueryDTO';
-import type { ProductStatus } from '../../../../shared/types';
+import type { PriceResearch, ProductStatus } from '../../../../shared/types';
 import { ConflictError, NotFoundError, ServiceUnavailableError } from '../../../domain/shared/DomainError';
 import { Listing } from '../../../domain/entities/Listing';
 import { Money } from '../../../domain/valueObjects/Money';
 import { ok, created, paginated } from '../formatters/ResponseFormatter';
 import { presentListing } from '../../../application/dto/presenters';
+
+const RESEARCH_CHANGED = 'Price research changed since you opened it. Reload and try again.';
+
+// The validated PUT body: the editable research plus the updatedAt the client's form was built from.
+type PriceResearchPutBody = Pick<PriceResearch, 'retailPrice' | 'retailCurrency' | 'retailSource' | 'retailCheckedAt' | 'comparables'> & {
+  baseUpdatedAt?: string | null;
+};
 
 function routeParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
@@ -89,7 +97,7 @@ export class ProductController {
     private readonly productRecheck?: ProductRecheckService,
     private readonly assistance?: ProductAssistanceGraph,
     private readonly priceResearchRepo?: IPriceResearchRepository,
-    private readonly comparableSearch?: ComparableSearchService,
+    private readonly anchorLadder?: AnchorLadderService,
   ) {}
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -201,14 +209,22 @@ export class ProductController {
       const productId = routeParam(req.params.id);
       const workspaceId = req.user!.workspaceId!;
       await this.requireProduct(productId, workspaceId);
-      ok(res, await this.requirePriceResearchRepo().upsert(workspaceId, { ...req.body, productId }));
+      const repo = this.requirePriceResearchRepo();
+      const { baseUpdatedAt, ...body } = req.body as PriceResearchPutBody;
+      const stored = await repo.findByProduct(workspaceId, productId);
+      if (researchChangedSince(stored?.updatedAt ?? null, baseUpdatedAt)) throw new ConflictError(RESEARCH_CHANGED);
+      const comparables = withNormalizedAutoUrls(body.comparables);
+      const dismissedUrls = dismissedAfterEdit(stored?.comparables ?? [], comparables, stored?.dismissedUrls ?? []);
+      const saved = await repo.upsert(workspaceId, { ...body, comparables, productId, dismissedUrls }, baseUpdatedAt);
+      if (!saved) throw new ConflictError(RESEARCH_CHANGED);
+      ok(res, saved);
     } catch (error) { next(error); }
   };
 
-  searchComparables = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  refreshPriceResearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      if (!this.comparableSearch) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
-      ok(res, await this.comparableSearch.search(req.user!.workspaceId!, routeParam(req.params.id)));
+      if (!this.anchorLadder) throw new ServiceUnavailableError(SEARCH_NOT_CONFIGURED);
+      ok(res, await this.anchorLadder.refresh(req.user!.workspaceId!, routeParam(req.params.id)));
     } catch (error) { next(error); }
   };
 

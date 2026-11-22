@@ -1,5 +1,9 @@
 package dev.quokkify.marketdesk.step;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
+
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.PriceResearchPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
@@ -15,6 +19,8 @@ import org.apache.http.HttpStatus;
 public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
 
   private static final String DATA_ID = "data.id";
+  private static final String ALLEGRO_OFFER = "https://allegro.pl/oferta/projektor-";
+  private static final String SEEN_AT = "2026-11-20";
 
   private final PriceResearchService service = new PriceResearchService();
   private final ProductService productService = new ProductService();
@@ -42,6 +48,25 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.putPriceResearch(account.token(), productId, research);
   }
 
+  @Step("Save price research of product {productId} with an extra field")
+  public ValidatableResponse savePriceResearch(AccountPojo account, String productId, Map<String, Object> body) {
+    return service.putPriceResearch(account.token(), productId, body);
+  }
+
+  @Step("Save price research of product {productId} built from the version saved at {baseUpdatedAt}")
+  public ValidatableResponse savePriceResearchFrom(AccountPojo account, String productId, PriceResearchPojo research,
+      String baseUpdatedAt) {
+    return service.putPriceResearch(account.token(), productId, research.withExtraField("baseUpdatedAt", baseUpdatedAt));
+  }
+
+  @Step("Read when the price research of product {productId} was last changed")
+  public String priceResearchUpdatedAt(AccountPojo account, String productId) {
+    return service.getPriceResearch(account.token(), productId)
+        .statusCode(HttpStatus.SC_OK)
+        .extract()
+        .path("data.updatedAt");
+  }
+
   @Step("Run the AI analysis of product {productId}")
   public ValidatableResponse runProductAnalysis(AccountPojo account, String productId) {
     return service.runProductAnalysis(account.token(), productId);
@@ -57,13 +82,23 @@ public class PriceResearchSteps extends ApiSteps<PriceResearchVerification> {
     return service.putPriceResearch(productId, research);
   }
 
-  @Step("Search OLX for comparables of product {productId}")
-  public ValidatableResponse searchComparables(AccountPojo account, String productId) {
-    return service.searchComparables(account.token(), productId);
+  @Step("Refresh the price anchor ladder of product {productId}")
+  public ValidatableResponse refreshPriceResearch(AccountPojo account, String productId) {
+    return service.refreshPriceResearch(account.token(), productId);
   }
 
-  @Step("Search OLX for comparables without authentication")
-  public ValidatableResponse searchComparablesUnauthenticated(String productId) {
-    return service.searchComparables(productId);
+  @Step("Refresh the price anchor ladder without authentication")
+  public ValidatableResponse refreshPriceResearchUnauthenticated(String productId) {
+    return service.refreshPriceResearch(productId);
+  }
+
+  @Step("Save the auto comparables of product {productId}")
+  public ValidatableResponse saveAutoComparables(AccountPojo account, String productId, String tier, Double... prices) {
+    List<PriceResearchPojo.Comparable> rows = IntStream.range(0, prices.length)
+        .mapToObj(i -> new PriceResearchPojo.Comparable(prices[i], "Projector " + i,
+            ALLEGRO_OFFER + i, "auto", tier, SEEN_AT))
+        .toList();
+    return service.putPriceResearch(account.token(), productId,
+        new PriceResearchPojo(null, null, null, null, rows));
   }
 }

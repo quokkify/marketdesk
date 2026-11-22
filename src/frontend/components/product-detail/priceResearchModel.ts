@@ -1,10 +1,18 @@
 // Price research of one product: the form the owner fills in, the body the API takes, and the
 // lines that show an estimate. The limits mirror the server's rules.
-import type { ComparableCandidate, PriceComparable, PriceComparableSource, PriceEstimate, PriceResearch } from '@shared/types';
+import type {
+  AnchorTier,
+  EstimateHiddenReason,
+  PriceComparable,
+  PriceComparableSource,
+  PriceEstimate,
+  PriceResearch,
+  StoredPriceEstimate,
+} from '@shared/types';
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { currencySymbol, formatMoney } from '../../utils/formatters.js';
 
-export const MAX_COMPARABLES = 10;
+export const MAX_COMPARABLES = 30;
 export const MAX_SOURCE_LENGTH = 200;
 export const MAX_NOTE_LENGTH = 300;
 export const MAX_URL_LENGTH = 500;
@@ -19,7 +27,9 @@ export interface PriceResearchForm {
   retailCurrency: string;
   retailSource: string;
   retailCheckedAt: string;
-  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource }[];
+  comparables: { price: string; note: string; url?: string; source?: PriceComparableSource; tier?: AnchorTier; seenAt?: string }[];
+  // The updatedAt of the research this form was built from; the server refuses the save if it moved on.
+  baseUpdatedAt: string | null;
 }
 
 export interface PriceResearchBody {
@@ -28,6 +38,7 @@ export interface PriceResearchBody {
   retailSource: string | null;
   retailCheckedAt: string | null;
   comparables: PriceComparable[];
+  baseUpdatedAt: string | null;
 }
 
 export type PriceResearchBodyResult =
@@ -36,7 +47,7 @@ export type PriceResearchBodyResult =
 
 export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = ''): PriceResearchForm {
   if (!r) {
-    return { retailPrice: '', retailCurrency: defaultCurrency, retailSource: '', retailCheckedAt: '', comparables: [] };
+    return { retailPrice: '', retailCurrency: defaultCurrency, retailSource: '', retailCheckedAt: '', comparables: [], baseUpdatedAt: null };
   }
   return {
     retailPrice: r.retailPrice === null ? '' : String(r.retailPrice),
@@ -48,7 +59,10 @@ export function toPriceResearchForm(r: PriceResearch | null, defaultCurrency = '
       note: c.note,
       ...(c.url ? { url: c.url } : {}),
       ...(c.source ? { source: c.source } : {}),
+      ...(c.tier ? { tier: c.tier } : {}),
+      ...(c.seenAt ? { seenAt: c.seenAt } : {}),
     })),
+    baseUpdatedAt: r.updatedAt,
   };
 }
 
@@ -103,7 +117,14 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
       errors[`comparables.${index}.url`] = 'Enter an OLX advert link';
     }
     if (price !== null) {
-      comparables.push({ price, note, ...(url ? { url } : {}), ...(row.source ? { source: row.source } : {}) });
+      comparables.push({
+        price,
+        note,
+        ...(url ? { url } : {}),
+        ...(row.source ? { source: row.source } : {}),
+        ...(row.tier ? { tier: row.tier } : {}),
+        ...(row.seenAt ? { seenAt: row.seenAt } : {}),
+      });
     }
   }
 
@@ -116,6 +137,7 @@ export function toPriceResearchBody(f: PriceResearchForm): PriceResearchBodyResu
       retailSource: source || null,
       retailCheckedAt: checkedAt || null,
       comparables,
+      baseUpdatedAt: f.baseUpdatedAt,
     },
   };
 }
@@ -139,21 +161,8 @@ export function discountLine(price: number, research: PriceResearch | null, curr
   return `${percentText(percent)} vs new · ${formatMoney(research.retailPrice, currency)}${origin ? ` (${origin})` : ''}`;
 }
 
-const isBlankRow = (row: PriceResearchForm['comparables'][number]) => row.price.trim() === '' && row.note.trim() === '';
-
-export function mergeFoundComparables(form: PriceResearchForm, picked: ComparableCandidate[]): PriceResearchForm {
-  const known = new Set(form.comparables.map((row) => (row.url ? normalizeOlxAdvertUrl(row.url) : null)));
-  const added: PriceResearchForm['comparables'] = [];
-  for (const c of picked) {
-    const key = normalizeOlxAdvertUrl(c.url);
-    if (key === null || known.has(key)) continue;
-    known.add(key);
-    added.push({ price: String(c.price), note: c.title, url: c.url, source: 'web' });
-  }
-  return { ...form, comparables: [...form.comparables, ...added] };
-}
-
-// A price the owner types over a web row is no longer the advert's price, so the row becomes manual.
+// A price the owner types over a web or auto row is no longer the advert's price, so the row becomes manual.
+// An auto row keeps its tier, so it still counts toward its tier's anchor.
 export function editComparablePrice(
   rows: PriceResearchForm['comparables'],
   index: number,
@@ -161,14 +170,15 @@ export function editComparablePrice(
 ): PriceResearchForm['comparables'] {
   return rows.map((row, i) => {
     if (i !== index) return row;
-    if (row.source !== 'web' || row.price === price) return { ...row, price };
+    if (row.price === price) return { ...row, price };
+    if (row.source === 'auto') {
+      const { url: _url, seenAt: _seenAt, ...rest } = row;
+      return { ...rest, price, source: 'manual' };
+    }
+    if (row.source !== 'web') return { ...row, price };
     const { source: _source, url: _url, ...manual } = row;
     return { ...manual, price };
   });
-}
-
-export function selectionFits(form: PriceResearchForm, pickedCount: number): boolean {
-  return form.comparables.filter((row) => !isBlankRow(row)).length + pickedCount <= MAX_COMPARABLES;
 }
 
 export function usedRangeSourceNote(research: PriceResearch | null): string | null {
@@ -192,5 +202,61 @@ export function estimateLines(e: PriceEstimate, currency: string, sourceNote: st
     if (percent !== null) lines.push(`${percentText(percent)} vs new`);
   }
   lines.push(`Confidence: ${e.confidence}`);
+  return lines;
+}
+
+export interface AnchorTierLine {
+  tier: AnchorTier;
+  label: string;
+  text: string;
+  rows: PriceComparable[];
+}
+
+const TIER_LABELS: [AnchorTier, string][] = [
+  ['same_model_used', 'Same model, used'],
+  ['last_new_price', 'Last new price'],
+  ['substitute_new', 'New substitutes'],
+  ['substitute_used', 'Used substitutes'],
+];
+const NOT_FOUND = 'not found';
+
+function rangeText(prices: number[], currency: string): string {
+  const low = Math.min(...prices);
+  const high = Math.max(...prices);
+  if (low === high) return formatMoney(high, currency);
+  const suffix = ` ${currencySymbol(currency)}`;
+  return `${formatMoney(low, currency).slice(0, -suffix.length)}–${formatMoney(high, currency)}`;
+}
+
+function tierText(tier: AnchorTier, rows: PriceComparable[], currency: string): string {
+  if (rows.length === 0) return NOT_FOUND;
+  const prices = rows.map((r) => r.price);
+  if (tier === 'last_new_price') {
+    const cheapest = rows.reduce((a, b) => (b.price < a.price ? b : a));
+    return `${formatMoney(cheapest.price, currency)}${cheapest.note ? ` · ${cheapest.note}` : ''}`;
+  }
+  if (tier === 'substitute_new') return `from ${formatMoney(Math.min(...prices), currency)} (${rows.length})`;
+  return `${rangeText(prices, currency)} (${rows.length})`;
+}
+
+// A row saved before tiers existed has no tier; it was a comparable of the same model.
+export function anchorTierLines(r: PriceResearch | null, currency: string): AnchorTierLine[] {
+  return TIER_LABELS.map(([tier, label]) => {
+    const rows = (r?.comparables ?? []).filter((c) => (c.tier ?? 'same_model_used') === tier);
+    return { tier, label, text: tierText(tier, rows, currency), rows };
+  });
+}
+
+const HIDDEN_REASON_TEXT: Record<EstimateHiddenReason, string> = {
+  low_confidence: 'Not suggested: confidence is low.',
+  within_threshold: 'Not suggested: within 5 % of the current price.',
+  floor_cancels: 'Not suggested: your lowest acceptable price blocks this change.',
+};
+
+export function storedEstimateLines(s: StoredPriceEstimate | null, currency: string): string[] {
+  if (!s) return [];
+  const lines = estimateLines(s.estimate, currency);
+  if (s.hiddenReason) lines.push(HIDDEN_REASON_TEXT[s.hiddenReason]);
+  if (s.researchNote) lines.push(s.researchNote);
   return lines;
 }

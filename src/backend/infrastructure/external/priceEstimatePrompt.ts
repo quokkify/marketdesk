@@ -3,7 +3,7 @@
 // through sellerDataBlock.
 
 import type { PriceEstimateContext } from '../../domain/ports/IAIProvider';
-import type { FigureBasis, PriceEstimate } from '../../../shared/types';
+import type { AnchorTier, FigureBasis, PriceComparable, PriceEstimate } from '../../../shared/types';
 import { sellerDataBlock } from './sellerData';
 
 export const PRICE_ESTIMATE_OPERATION = 'estimatePrice';
@@ -54,6 +54,18 @@ function counter(value: number | null): string {
   return value === null ? 'unavailable' : String(value);
 }
 
+// Untiered rows are same-model used prices, the same rule the server applies to the estimate.
+function groupByTier(rows: readonly PriceComparable[]): Record<AnchorTier, PriceComparable[]> {
+  const groups: Record<AnchorTier, PriceComparable[]> = {
+    same_model_used: [],
+    last_new_price: [],
+    substitute_new: [],
+    substitute_used: [],
+  };
+  for (const row of rows) groups[row.tier ?? 'same_model_used'].push(row);
+  return groups;
+}
+
 export function buildPriceEstimatePrompt(ctx: PriceEstimateContext): string {
   const { product, listing, daysLive, research } = ctx;
   const currency = listing.price.currency;
@@ -75,7 +87,8 @@ export function buildPriceEstimatePrompt(ctx: PriceEstimateContext): string {
       category: listing.marketplaceCategory?.path.join(' > ') ?? product.category,
       description: product.description,
       retailAnchor: anchor,
-      comparables: research?.comparables ?? [],
+      specs: research?.specs ?? null,
+      comparables: groupByTier(research?.comparables ?? []),
     }),
     // The engine compares the estimate with the product price, which an approval changes.
     `current price: ${product.sellingPrice.amount} ${currency}`,
@@ -84,6 +97,7 @@ export function buildPriceEstimatePrompt(ctx: PriceEstimateContext): string {
     `watchers: ${counter(listing.watchers)}`,
     `conversations: ${counter(listing.conversations)}`,
     'When the retail anchor is none, estimate it yourself and label it "estimated". Comparables are "observed". startPrice must not exceed the retail anchor, and floorPrice must not exceed startPrice. All amounts are in the listing currency.',
+    'Comparables are grouped by tier. Start below 70 % of the cheapest new substitutes and below the last new price; the server enforces it. The last_new_price tier is history, not the target.',
     'Respond as JSON with keys "startPrice" (number), "floorPrice" (number),',
     '"retailAnchor" ({amount, basis} or null), "usedRange" ({low, high, basis} or null),',
     '"reasoning" (string), "confidence" ("high", "medium" or "low"); basis is "observed" or "estimated".',

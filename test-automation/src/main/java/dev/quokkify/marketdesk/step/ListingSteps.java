@@ -69,6 +69,11 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     return productListing;
   }
 
+  @Step("Create a product priced {sellingPrice} and an OLX listing, keep both ids")
+  public ProductListingPojo createOlxProductListing(AccountPojo account, Double sellingPrice) {
+    return createOlxProductListing(account, ProductRequestPojo.withPriceFloor(sellingPrice, null));
+  }
+
   @Step("Create a product with condition {condition} and an OLX listing")
   public String createOlxListingWithCondition(AccountPojo account, String condition) {
     return createOlxProductListing(account, ProductRequestPojo.sample().withCondition(condition)).listingId();

@@ -3,6 +3,7 @@
 
 import { Result } from '../shared/Result';
 import { Money } from '../valueObjects/Money';
+import { researchChangedSince } from '../services/priceResearchEdit';
 import type { Product } from '../entities/Product';
 import type { Listing } from '../entities/Listing';
 import type { Marketplace } from '../entities/Marketplace';
@@ -17,7 +18,9 @@ import type {
   HermesEventStatus,
   MarketplaceKey,
   PriceEstimate,
+  PriceComparable,
   PriceResearch,
+  StoredPriceEstimate,
 } from '../../../shared/types';
 import type { IProductRepository } from '../repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../repositories/interfaces/IListingRepository';
@@ -284,11 +287,60 @@ export class InMemoryPriceResearchRepository implements IPriceResearchRepository
   }
   async upsert(
     workspaceId: string,
-    research: Omit<PriceResearch, 'updatedAt'>,
-  ): Promise<PriceResearch> {
-    const saved = { ...research, updatedAt: new Date().toISOString() };
+    research: Omit<PriceResearch, 'updatedAt' | 'specs' | 'lastAttemptAt' | 'lastEstimate'>,
+    baseUpdatedAt?: string | null,
+  ): Promise<PriceResearch | null> {
+    const previous = this.items.get(`${workspaceId}:${research.productId}`);
+    if (researchChangedSince(previous?.updatedAt ?? null, baseUpdatedAt) && previous) return null;
+    const saved: PriceResearch = {
+      specs: null,
+      lastAttemptAt: null,
+      lastEstimate: null,
+      ...previous,
+      ...research,
+      updatedAt: new Date().toISOString(),
+    };
     this.items.set(`${workspaceId}:${research.productId}`, saved);
     return saved;
+  }
+  async saveLadder(
+    workspaceId: string,
+    productId: string,
+    ladder: { comparables: PriceComparable[]; specs: string | null; attemptedAt: string },
+  ): Promise<PriceResearch> {
+    const saved: PriceResearch = {
+      ...this.blank(productId),
+      ...this.items.get(`${workspaceId}:${productId}`),
+      comparables: ladder.comparables,
+      specs: ladder.specs,
+      lastAttemptAt: ladder.attemptedAt,
+      updatedAt: new Date().toISOString(),
+    };
+    this.items.set(`${workspaceId}:${productId}`, saved);
+    return saved;
+  }
+  async markAttempt(workspaceId: string, productId: string, attemptedAt: string): Promise<void> {
+    const key = `${workspaceId}:${productId}`;
+    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastAttemptAt: attemptedAt, updatedAt: new Date().toISOString() });
+  }
+  async saveEstimate(workspaceId: string, productId: string, stored: StoredPriceEstimate): Promise<void> {
+    const key = `${workspaceId}:${productId}`;
+    this.items.set(key, { ...this.blank(productId), ...this.items.get(key), lastEstimate: stored, updatedAt: new Date().toISOString() });
+  }
+  private blank(productId: string): PriceResearch {
+    return {
+      productId,
+      retailPrice: null,
+      retailCurrency: null,
+      retailSource: null,
+      retailCheckedAt: null,
+      comparables: [],
+      specs: null,
+      dismissedUrls: [],
+      lastAttemptAt: null,
+      lastEstimate: null,
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 

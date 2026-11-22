@@ -29,6 +29,8 @@ import type {
   AutonomyDecision,
   HermesEventType,
   HermesSeverity,
+  AnchorTier,
+  EstimateHiddenReason,
   PriceComparable,
   PriceEstimate,
   ProposedChange,
@@ -40,7 +42,8 @@ import type { IListingRepository } from '../repositories/interfaces/IListingRepo
 import type { IEventRepository } from '../repositories/interfaces/IEventRepository';
 import type { IPriceResearchRepository } from '../repositories/interfaces/IPriceResearchRepository';
 import type { Listing } from '../entities/Listing';
-import { shouldSurfacePriceEstimate, validatePriceEstimate } from './priceEstimate';
+import { applyLadderRules, estimateHiddenReason, validatePriceEstimate } from './priceEstimate';
+import type { IPriceResearchRefresher } from '../ports/IPriceResearchRefresher';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import {
   isAIProviderSourceAware,
@@ -67,6 +70,8 @@ interface Suggestion {
 
 export type IdFactory = () => string;
 
+const RESEARCH_UNAVAILABLE_NOTE = 'Market research failed; the estimate uses saved data.';
+const USED_TIERS: ReadonlySet<AnchorTier> = new Set(['same_model_used', 'substitute_used']);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function unavailablePriceEstimate(detail: string): Suggestion {
@@ -114,6 +119,11 @@ function withOfflineNotice(detail: string): string {
   return /[.!?]$/.test(text) ? `${text} ${OFFLINE_AI_NOTICE}` : `${text}. ${OFFLINE_AI_NOTICE}`;
 }
 
+// Structural, so the container can pass its logger.
+export interface HermesEngineLogger {
+  warn(context: Record<string, unknown>, message: string): void;
+}
+
 export class HermesDecisionEngine {
   constructor(
     private readonly productRepo: IProductRepository,
@@ -122,7 +132,9 @@ export class HermesDecisionEngine {
     private readonly eventPublisher: IEventPublisher,
     private readonly aiProvider: IAIProvider,
     private readonly priceResearchRepo: IPriceResearchRepository,
-    private readonly idFactory: IdFactory
+    private readonly researchRefresher: IPriceResearchRefresher | null,
+    private readonly idFactory: IdFactory,
+    private readonly logger?: HermesEngineLogger
   ) {}
 
   async run(workspace: Workspace): Promise<HermesEvent[]> {
@@ -489,6 +501,25 @@ export class HermesDecisionEngine {
     }
   }
 
+  // The stored estimate is display-only, so a failed write is logged and the price path goes on.
+  private async rememberEstimate(
+    product: Product,
+    estimate: PriceEstimate,
+    hiddenReason: EstimateHiddenReason | null,
+    researchNote: string | null,
+  ): Promise<void> {
+    try {
+      await this.priceResearchRepo.saveEstimate(product.workspaceId, product.id, {
+        estimate,
+        estimatedAt: new Date().toISOString(),
+        hiddenReason,
+        researchNote,
+      });
+    } catch (error) {
+      this.logger?.warn({ productId: product.id, err: error }, 'Storing the last price estimate failed');
+    }
+  }
+
   /**
    * Proposes a justified start price for the product's primary listing. Returns null when the
    * estimate is valid but not worth surfacing, and an info-only "unavailable" suggestion when it
@@ -498,6 +529,8 @@ export class HermesDecisionEngine {
     product: Product,
     primary: Listing
   ): Promise<Suggestion | null> {
+    const outcome = await this.researchRefresher?.refreshIfStale(product.workspaceId, product.id);
+    const researchNote = outcome === 'unavailable' ? RESEARCH_UNAVAILABLE_NOTE : null;
     const stored = await this.priceResearchRepo.findByProduct(product.workspaceId, product.id);
     // A retail anchor in another currency must not be compared against the listing price.
     const research =
@@ -526,7 +559,11 @@ export class HermesDecisionEngine {
     const validated = validatePriceEstimate(rawEstimate, researchAnchor);
     if (validated.isErr()) return unavailablePriceEstimate(validated.error.message);
 
-    const labelled = labelEstimateFigures(validated.value, researchAnchor, research?.comparables ?? []);
+    const rows = research?.comparables ?? [];
+    const capped = applyLadderRules(validated.value, rows, researchAnchor);
+    // Only used prices describe what the item itself sells for; new prices are not a used range.
+    const usedRows = rows.filter((r) => r.tier == null || USED_TIERS.has(r.tier));
+    const labelled = labelEstimateFigures(capped, researchAnchor, usedRows);
     const currentPrice = product.sellingPrice.amount;
     // A drop never goes below the seller's lowest acceptable price, and a drop the floor cancels
     // is not turned into a raise. Without an explicit floor, the estimate stands as it was.
@@ -535,10 +572,15 @@ export class HermesDecisionEngine {
     if (sellerFloor !== undefined) {
       const startPrice =
         labelled.startPrice < currentPrice ? Math.max(labelled.startPrice, sellerFloor) : labelled.startPrice;
-      if (labelled.startPrice < currentPrice && startPrice >= currentPrice) return null;
+      if (labelled.startPrice < currentPrice && startPrice >= currentPrice) {
+        await this.rememberEstimate(product, labelled, 'floor_cancels', researchNote);
+        return null;
+      }
       estimate = { ...labelled, startPrice };
     }
-    if (!shouldSurfacePriceEstimate(estimate, currentPrice)) return null;
+    const hiddenReason = estimateHiddenReason(estimate, currentPrice);
+    await this.rememberEstimate(product, estimate, hiddenReason, researchNote);
+    if (hiddenReason !== null) return null;
     const isLower = estimate.startPrice < currentPrice;
     return {
       type: isLower ? 'suggested_lower_price' : 'suggested_higher_price',

@@ -1,5 +1,13 @@
-import type { PriceEstimate } from '../../../../shared/types';
-import { shouldSurfacePriceEstimate, validatePriceEstimate } from '../priceEstimate';
+import type { AnchorTier, PriceComparable, PriceEstimate } from '../../../../shared/types';
+import {
+  applyLadderRules,
+  estimateHiddenReason,
+  shouldSurfacePriceEstimate,
+  startPriceCeiling,
+  substituteNewReference,
+  tierConfidence,
+  validatePriceEstimate,
+} from '../priceEstimate';
 
 function estimate(overrides: Partial<PriceEstimate> = {}): PriceEstimate {
   return {
@@ -88,5 +96,110 @@ describe('shouldSurfacePriceEstimate', () => {
     expect(
       shouldSurfacePriceEstimate(estimate({ startPrice: 390, confidence: 'high' }), 399),
     ).toBe(false);
+  });
+});
+
+function row(price: number, tier?: AnchorTier): PriceComparable {
+  return { price, note: 'advert', source: 'auto', tier };
+}
+
+const NEW_SUBSTITUTES = [row(280, 'substitute_new'), row(300, 'substitute_new'), row(320, 'substitute_new')];
+
+describe('substituteNewReference', () => {
+  it('takes the median of the three cheapest new substitutes', () => {
+    expect(substituteNewReference(NEW_SUBSTITUTES)).toBe(300);
+    expect(
+      substituteNewReference([50, 300, 320, 400].map((p) => row(p, 'substitute_new'))),
+    ).toBe(300);
+  });
+
+  it('averages two rows and keeps a single row as it is', () => {
+    expect(substituteNewReference([row(300, 'substitute_new'), row(320, 'substitute_new')])).toBe(310);
+    expect(substituteNewReference([row(300, 'substitute_new')])).toBe(300);
+  });
+
+  it('is null without new substitutes', () => {
+    expect(substituteNewReference([row(300, 'substitute_used'), row(200)])).toBeNull();
+    expect(substituteNewReference([])).toBeNull();
+  });
+});
+
+describe('startPriceCeiling', () => {
+  it('is 70 % of the new substitute reference, exactly in cents', () => {
+    expect(startPriceCeiling(NEW_SUBSTITUTES, null)).toBe(210);
+  });
+
+  it('ignores a last new price above the substitute ceiling', () => {
+    expect(startPriceCeiling([...NEW_SUBSTITUTES, row(799, 'last_new_price')], null)).toBe(210);
+  });
+
+  it('is capped by a lower last new price', () => {
+    expect(startPriceCeiling([...NEW_SUBSTITUTES, row(180, 'last_new_price')], null)).toBe(180);
+  });
+
+  it('is capped by the seller retail price', () => {
+    expect(startPriceCeiling(NEW_SUBSTITUTES, 150)).toBe(150);
+  });
+
+  it('floors a fractional cap instead of rounding it', () => {
+    expect(startPriceCeiling([row(199.996, 'last_new_price')], null)).toBe(199.99);
+  });
+
+  it('is null without caps', () => {
+    expect(startPriceCeiling([row(200, 'same_model_used')], null)).toBeNull();
+  });
+});
+
+describe('tierConfidence', () => {
+  it('is high with a same-model used price', () => {
+    expect(tierConfidence([row(250, 'same_model_used')])).toBe('high');
+  });
+
+  it('counts untiered rows as same-model used', () => {
+    expect(tierConfidence([row(250)])).toBe('high');
+  });
+
+  it('is medium with two substitute rows', () => {
+    expect(tierConfidence([row(300, 'substitute_new'), row(200, 'substitute_used')])).toBe('medium');
+  });
+
+  it('is low with one substitute row', () => {
+    expect(tierConfidence([row(300, 'substitute_new')])).toBe('low');
+  });
+});
+
+describe('applyLadderRules', () => {
+  it('lowers start and floor to the ceiling', () => {
+    const result = applyLadderRules(
+      estimate({ startPrice: 299, floorPrice: 250, confidence: 'high' }),
+      NEW_SUBSTITUTES,
+      null,
+    );
+    expect(result).toMatchObject({ startPrice: 210, floorPrice: 210, confidence: 'medium' });
+  });
+
+  it('keeps the lower of the model and tier confidence', () => {
+    const rows = [row(250, 'same_model_used')];
+    expect(applyLadderRules(estimate({ confidence: 'low' }), rows, null).confidence).toBe('low');
+    expect(applyLadderRules(estimate({ confidence: 'medium' }), rows, null).confidence).toBe('medium');
+  });
+
+  it('drops confidence to low with no rows at all and leaves prices alone', () => {
+    const e = estimate({ confidence: 'high' });
+    expect(applyLadderRules(e, [], null)).toEqual({ ...e, confidence: 'low' });
+  });
+});
+
+describe('estimateHiddenReason', () => {
+  it('names low confidence', () => {
+    expect(estimateHiddenReason(estimate({ confidence: 'low' }), 100)).toBe('low_confidence');
+  });
+
+  it('names a difference under 5 %', () => {
+    expect(estimateHiddenReason(estimate({ startPrice: 95.1 }), 100)).toBe('within_threshold');
+  });
+
+  it('is null from exactly 5 %', () => {
+    expect(estimateHiddenReason(estimate({ startPrice: 95 }), 100)).toBeNull();
   });
 });

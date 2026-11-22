@@ -9,7 +9,6 @@ import type {
   ProductRecheckResult,
   ProductImprovementSuggestions,
   PriceResearch,
-  ComparableCandidate,
   PriceSync,
 } from '@shared/types';
 import { baseApi } from './baseApi.js';
@@ -106,10 +105,10 @@ export const productsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { productId }) => [{ type: 'PriceResearch', id: productId }],
     }),
 
-    searchComparables: builder.mutation<{ candidates: ComparableCandidate[]; searchedAt: string }, string>({
-      query: (productId) => ({ url: `/products/${productId}/price-research/search`, method: 'POST' }),
-      transformResponse: (res: ApiResponse<{ candidates: ComparableCandidate[]; searchedAt: string }>) => unwrap(res),
-      invalidatesTags: ['AiUsage'],
+    refreshPriceResearch: builder.mutation<PriceResearch, string>({
+      query: (productId) => ({ url: `/products/${productId}/price-research/refresh`, method: 'POST' }),
+      transformResponse: (res: ApiResponse<PriceResearch>) => unwrap(res),
+      invalidatesTags: (_result, _error, productId) => [{ type: 'PriceResearch', id: productId }],
     }),
 
     createProduct: builder.mutation<Product, CreateProductInput>({
@@ -205,5 +204,5 @@ export const {
   useGetProductListingsQuery,
   useGetPriceResearchQuery,
   useSavePriceResearchMutation,
-  useSearchComparablesMutation,
+  useRefreshPriceResearchMutation,
 } = productsApi;

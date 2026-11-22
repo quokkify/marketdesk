@@ -44,6 +44,7 @@ function research(overrides: Partial<PriceResearch> = {}): PriceResearch {
     retailSource: 'x-kom',
     retailCheckedAt: '2026-11-20',
     comparables: [{ price: 350, note: 'sold fast' }],
+    specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
     updatedAt: '2026-11-20T10:00:00.000Z',
     ...overrides,
   };
@@ -84,6 +85,29 @@ describe('buildPriceEstimatePrompt', () => {
     const prompt = buildPriceEstimatePrompt(ctx());
     expect(prompt).toContain('current price: 400 PLN');
     expect(prompt).not.toContain('current price: 399');
+  });
+
+  it('groupsComparablesByTierAndStatesTheCeilingRules', () => {
+    const prompt = buildPriceEstimatePrompt(
+      ctx({
+        research: research({
+          specs: 'Full HD, 3000 lumens',
+          comparables: [
+            { price: 300, note: 'new substitute', tier: 'substitute_new' },
+            { price: 799, note: 'old shelf price', tier: 'last_new_price' },
+            { price: 250, note: 'untiered' },
+          ],
+        }),
+      }),
+    );
+    const block = prompt.slice(prompt.indexOf('<seller_data>'), prompt.indexOf('</seller_data>'));
+    expect(block).toContain('Full HD, 3000 lumens');
+    expect(block).toContain('"substitute_new":[{"price":300');
+    expect(block).toContain('"last_new_price":[{"price":799');
+    expect(block).toContain('"same_model_used":[{"price":250');
+    expect(prompt).toContain('Start below 70 % of the cheapest new substitutes and below the last new price');
+    expect(prompt).toContain('the server enforces it');
+    expect(prompt).toContain('The last_new_price tier is history, not the target');
   });
 
   it('comparableNotesStayInsideSellerData', () => {

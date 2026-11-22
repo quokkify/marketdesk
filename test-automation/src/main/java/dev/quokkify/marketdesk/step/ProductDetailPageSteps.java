@@ -68,9 +68,9 @@ public class ProductDetailPageSteps
     return this;
   }
 
-  @Step("Find comparables on OLX")
-  public ProductDetailPageSteps findComparablesOnOlx() {
-    page.findComparablesButton().shouldBe(Condition.enabled).click();
+  @Step("Find prices")
+  public ProductDetailPageSteps findPrices() {
+    page.findPricesButton().shouldBe(Condition.enabled).click();
     return this;
   }
 

@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, CircularProgress, IconButton, Link, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { ComparableCandidate, PriceResearch } from '@shared/types';
+import type { PriceResearch } from '@shared/types';
 import { normalizeOlxAdvertUrl } from '@shared/olxAdvertUrl';
 import { Card } from '../common/Card.js';
 import { ErrorRetry } from '../common/ErrorRetry.js';
@@ -12,22 +12,22 @@ import { LoadingSkeleton } from '../common/Skeleton.js';
 import {
   useGetPriceResearchQuery,
   useSavePriceResearchMutation,
-  useSearchComparablesMutation,
+  useRefreshPriceResearchMutation,
 } from '../../state/api/productsApi.js';
 import { useAppDispatch } from '../../state/hooks.js';
 import { enqueueToast } from '../../state/slices/uiSlice.js';
 import {
   MAX_COMPARABLES,
+  anchorTierLines,
   discountLine,
   editComparablePrice,
-  mergeFoundComparables,
+  storedEstimateLines,
   toPriceResearchBody,
   toPriceResearchForm,
   type PriceResearchForm,
 } from './priceResearchModel.js';
-import { formatDateTime, formatMoney } from '../../utils/formatters.js';
+import { formatDate, formatDateTime, formatMoney } from '../../utils/formatters.js';
 import { requestErrorMessage } from './revivalView.js';
-import { ComparableSearchDialog } from './ComparableSearchDialog.js';
 
 const OLX_PLN_ONLY = 'OLX search needs a PLN listing';
 const OLX_CURRENCY = 'PLN';
@@ -36,16 +36,13 @@ interface PriceResearchFormProps {
   productId: string;
   research: PriceResearch | null;
   currency: string;
-  listingCurrency: string | null;
 }
 
-const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency, listingCurrency }) => {
+const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, research, currency }) => {
   const dispatch = useAppDispatch();
   const [save, { isLoading: saving }] = useSavePriceResearchMutation();
   const [form, setForm] = useState<PriceResearchForm>(() => toPriceResearchForm(research, currency));
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [search, { isLoading: searching }] = useSearchComparablesMutation();
-  const [found, setFound] = useState<ComparableCandidate[] | null>(null);
 
   const patch = (change: Partial<PriceResearchForm>) => setForm((current) => ({ ...current, ...change }));
   const patchComparable = (index: number, change: Partial<PriceResearchForm['comparables'][number]>) =>
@@ -65,32 +62,6 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
       dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
     }
   };
-
-  const handleSearch = async () => {
-    try {
-      const result = await search(productId).unwrap();
-      setFound(result.candidates);
-    } catch (err) {
-      dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const handleAddFound = async (picked: ComparableCandidate[]) => {
-    const result = toPriceResearchBody(mergeFoundComparables(form, picked));
-    if (!result.ok) {
-      dispatch(enqueueToast({ message: Object.values(result.errors)[0] ?? 'Check the price research', severity: 'error' }));
-      return;
-    }
-    try {
-      await save({ productId, body: result.body }).unwrap();
-      setFound(null);
-      dispatch(enqueueToast({ message: `Added ${picked.length} comparables from OLX.`, severity: 'success' }));
-    } catch (err) {
-      dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
-    }
-  };
-
-  const pln = listingCurrency === OLX_CURRENCY;
 
   return (
     <Stack spacing={2}>
@@ -185,39 +156,95 @@ const PriceResearchEditor: React.FC<PriceResearchFormProps> = ({ productId, rese
           >
             Add comparable
           </Button>
-          <Tooltip title={pln ? '' : OLX_PLN_ONLY}>
-            <span>
-              <Button
-                size="small"
-                disabled={!pln || searching}
-                startIcon={searching ? <CircularProgress size={14} /> : undefined}
-                onClick={() => void handleSearch()}
-                data-testid="comparable-search-button"
-              >
-                {searching ? 'Searching OLX…' : 'Find comparables on OLX'}
-              </Button>
-            </span>
-          </Tooltip>
-          {!pln && <Typography variant="caption" color="text.secondary">{OLX_PLN_ONLY}</Typography>}
         </Stack>
       </Box>
 
-      {found !== null && (
-        <ComparableSearchDialog
-          open
-          candidates={found}
-          form={form}
-          saving={saving}
-          onClose={() => setFound(null)}
-          onAdd={(picked) => void handleAddFound(picked)}
-        />
-      )}
-
       <Box>
-        <Button variant="contained" disabled={saving || searching} onClick={() => void handleSave()} data-testid="price-research-save">
+        <Button variant="contained" disabled={saving} onClick={() => void handleSave()} data-testid="price-research-save">
           Save price research
         </Button>
       </Box>
+    </Stack>
+  );
+};
+
+interface PriceAnchorsProps {
+  productId: string;
+  research: PriceResearch | null;
+  currency: string;
+  listingCurrency: string | null;
+}
+
+const PriceAnchors: React.FC<PriceAnchorsProps> = ({ productId, research, currency, listingCurrency }) => {
+  const dispatch = useAppDispatch();
+  const [refresh, { isLoading: refreshing }] = useRefreshPriceResearchMutation();
+  const pln = listingCurrency === OLX_CURRENCY;
+  const estimate = storedEstimateLines(research?.lastEstimate ?? null, currency);
+
+  const handleFind = async () => {
+    try {
+      await refresh(productId).unwrap();
+    } catch (err) {
+      dispatch(enqueueToast({ message: requestErrorMessage(err), severity: 'error' }));
+    }
+  };
+
+  return (
+    <Stack spacing={1} data-testid="price-anchors">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Typography variant="subtitle2">Price anchors</Typography>
+        {research?.lastAttemptAt && (
+          <Typography variant="caption" color="text.secondary" data-testid="price-anchors-updated">
+            {`updated ${formatDate(research.lastAttemptAt)}`}
+          </Typography>
+        )}
+        <Tooltip title={pln ? '' : OLX_PLN_ONLY}>
+          <span>
+            <Button
+              size="small"
+              disabled={!pln || refreshing}
+              startIcon={refreshing ? <CircularProgress size={14} /> : undefined}
+              onClick={() => void handleFind()}
+              data-testid="find-prices-button"
+            >
+              Find prices
+            </Button>
+          </span>
+        </Tooltip>
+        {!pln && <Typography variant="caption" color="text.secondary">{OLX_PLN_ONLY}</Typography>}
+      </Stack>
+      {anchorTierLines(research, currency).map((line) => (
+        <Stack key={line.tier} direction="row" spacing={1} sx={{ alignItems: 'baseline' }} data-testid={`anchor-tier-${line.tier}`}>
+          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>{line.label}</Typography>
+          <Typography variant="body2">{line.text}</Typography>
+          {line.rows.map((row, index) =>
+            row.url && row.url.startsWith('https://') ? (
+              <Link
+                key={index}
+                href={row.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="body2"
+                aria-label={`${line.label}: advert ${index + 1}`}
+              >
+                ↗
+              </Link>
+            ) : null,
+          )}
+        </Stack>
+      ))}
+      {research?.specs && (
+        <Typography variant="caption" color="text.secondary" data-testid="price-anchors-specs">
+          {`Matched by: ${research.specs}`}
+        </Typography>
+      )}
+      {estimate.length > 0 && (
+        <Box data-testid="stored-estimate">
+          {estimate.map((line) => (
+            <Typography key={line} variant="body2">{line}</Typography>
+          ))}
+        </Box>
+      )}
     </Stack>
   );
 };
@@ -259,12 +286,12 @@ export const PriceResearchSection: React.FC<PriceResearchSectionProps & { listin
               {`Saved ${formatDateTime(research.updatedAt)}`}
             </Typography>
           )}
+          <PriceAnchors productId={productId} research={research} currency={currency} listingCurrency={listingCurrency} />
           <PriceResearchEditor
             key={`${productId}:${research?.updatedAt ?? 'none'}`}
             productId={productId}
             research={research}
             currency={currency}
-            listingCurrency={listingCurrency}
           />
         </Stack>
       )}

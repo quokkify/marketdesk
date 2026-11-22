@@ -151,7 +151,11 @@ export const hermesApi = baseApi.injectEndpoints({
     runHermes: builder.mutation<HermesEvent[], HermesRunInput>({
       query: buildProductHermesRunRequest,
       transformResponse: (res: ApiResponse<HermesEvent[]>) => unwrap(res),
-      invalidatesTags: [{ type: 'HermesEvent', id: 'LIST' }],
+      // The run refreshes the price anchors and stores the last estimate of the product.
+      invalidatesTags: (_result, _error, { productId }) => [
+        { type: 'HermesEvent', id: 'LIST' },
+        { type: 'PriceResearch', id: productId },
+      ],
     }),
   }),
 });

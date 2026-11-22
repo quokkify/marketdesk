@@ -3,7 +3,7 @@ import { Product } from '../entities/Product';
 import { Listing } from '../entities/Listing';
 import { Workspace } from '../entities/Workspace';
 import { HermesEvent } from '../entities/HermesEvent';
-import type { HermesGuardrails, PriceEstimate, PriceResearch } from '../../../shared/types';
+import type { HermesGuardrails, PriceComparable, PriceEstimate, PriceResearch } from '../../../shared/types';
 import { PRICE_ESTIMATE_UNUSABLE_MESSAGE, type AIProviderSourceAware } from '../ports/IAIProvider';
 import { ServiceUnavailableError } from '../shared/DomainError';
 import {
@@ -20,6 +20,46 @@ import {
 import type { ListingSeoOutput } from '../agents/MarketDeskAgentCatalog';
 
 const OFFLINE_NOTICE = 'Heuristic offline suggestion; Hermes was not consulted.';
+
+// The ladder caps confidence to what the comparables support, so an estimate only surfaces with
+// evidence. This repository supplies a same-model used price (far from any used range under test)
+// wherever a test stored no comparable.
+class EvidencedResearchRepository extends InMemoryPriceResearchRepository {
+  async findByProduct(workspaceId: string, productId: string): Promise<PriceResearch | null> {
+    const stored = await super.findByProduct(workspaceId, productId);
+    const evidence: PriceComparable = { price: 10000, note: 'same model, used' };
+    if (stored === null) {
+      return {
+        productId,
+        retailPrice: null,
+        retailCurrency: null,
+        retailSource: null,
+        retailCheckedAt: null,
+        comparables: [evidence],
+        specs: null,
+        dismissedUrls: [],
+        lastAttemptAt: null,
+        lastEstimate: null,
+        updatedAt: '2026-11-21T00:00:00.000Z',
+      };
+    }
+    return stored.comparables.length === 0 ? { ...stored, comparables: [evidence] } : stored;
+  }
+}
+
+// The stored estimate is display-only: a failing store must not cost the seller the price event.
+class FailingEstimateStore extends EvidencedResearchRepository {
+  async saveEstimate(): Promise<void> {
+    throw new Error('estimate store is down');
+  }
+}
+
+class RecordingLogger {
+  readonly warnings: Array<{ context: Record<string, unknown>; message: string }> = [];
+  warn(context: Record<string, unknown>, message: string): void {
+    this.warnings.push({ context, message });
+  }
+}
 
 function makeEngine(overrides?: {
   productRepo?: InMemoryProductRepository;
@@ -40,7 +80,8 @@ function makeEngine(overrides?: {
     eventRepo,
     publisher,
     ai,
-    overrides?.priceResearchRepo ?? new InMemoryPriceResearchRepository(),
+    overrides?.priceResearchRepo ?? new EvidencedResearchRepository(),
+    null,
     sequentialIdFactory(),
   );
   return { engine, productRepo, listingRepo, eventRepo, publisher, ai };
@@ -246,13 +287,14 @@ describe('HermesDecisionEngine.run', () => {
       retailSource: 'MediaMarkt',
       retailCheckedAt: '2026-11-21',
       comparables: [{ price: 250, note: 'Szczecin, used half a year' }],
+      specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
       updatedAt: '2026-11-21T00:00:00.000Z',
     };
 
     async function runWithListingIn(currency: string) {
       const ai = new StubAIProvider();
       const estimatePrice = jest.spyOn(ai, 'estimatePrice');
-      const priceResearchRepo = new InMemoryPriceResearchRepository();
+      const priceResearchRepo = new EvidencedResearchRepository();
       priceResearchRepo.items.set('w1:p1', research);
       const { engine, productRepo, listingRepo } = makeEngine({ ai, priceResearchRepo });
       seedProduct(productRepo, ['a.jpg', 'b.jpg', 'c.jpg']);
@@ -337,7 +379,8 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       eventRepo,
       publisher,
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
+      null,
       sequentialIdFactory('g'),
     );
 
@@ -499,7 +542,8 @@ describe('HermesDecisionEngine guardrails (C1 / AMENDMENT FIX #5)', () => {
       new InMemoryEventRepository(),
       new RecordingEventPublisher(),
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
+      null,
       sequentialIdFactory('s'),
     );
     const product = unwrap(
@@ -668,7 +712,8 @@ describe('HermesDecisionEngine.runProductSeo provider source', () => {
       eventRepo,
       new RecordingEventPublisher(),
       ai,
-      new InMemoryPriceResearchRepository(),
+      new EvidencedResearchRepository(),
+      null,
       sequentialIdFactory('seo'),
     );
     const product = unwrap(
@@ -811,6 +856,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       retailSource: 'MediaMarkt',
       retailCheckedAt: '2026-11-21',
       comparables: [],
+      specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
       updatedAt: '2026-11-21T00:00:00.000Z',
       ...overrides,
     };
@@ -818,13 +864,13 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
 
   async function analyse(
     answer: PriceEstimate | Error,
-    options: { price?: number; research?: PriceResearch } = {},
+    options: { price?: number; research?: PriceResearch; priceResearchRepo?: EvidencedResearchRepository; logger?: RecordingLogger } = {},
   ) {
     const price = options.price ?? 100;
     const productRepo = new InMemoryProductRepository();
     const listingRepo = new InMemoryListingRepository();
     const eventRepo = new InMemoryEventRepository();
-    const priceResearchRepo = new InMemoryPriceResearchRepository();
+    const priceResearchRepo = options.priceResearchRepo ?? new EvidencedResearchRepository();
     if (options.research) priceResearchRepo.items.set('w1:p1', options.research);
     const engine = new HermesDecisionEngine(
       productRepo,
@@ -833,7 +879,9 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
       new RecordingEventPublisher(),
       new StubAIProvider(undefined, '', undefined, undefined, answer),
       priceResearchRepo,
+      null,
       sequentialIdFactory('pe'),
+      options.logger,
     );
     const product = unwrap(
       Product.create({
@@ -859,7 +907,7 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     );
     const priceEvent = events.find((e) => e.proposedChange?.kind === 'price');
     const notice = events.find((e) => e.type === 'price_estimate_unavailable');
-    return { events, priceEvent, notice, product };
+    return { events, priceEvent, notice, product, priceResearchRepo };
   }
 
   function estimateOf(event: HermesEvent | undefined): PriceEstimate | undefined {
@@ -878,6 +926,16 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
     });
     expect(estimateOf(priceEvent)).toMatchObject({ startPrice: 90, floorPrice: 80, confidence: 'medium' });
     expect(product.sellingPrice.amount).toBe(100);
+  });
+
+  it('still surfaces the price event and logs it when storing the estimate fails', async () => {
+    const logger = new RecordingLogger();
+    const { priceEvent } = await analyse(estimate(), { priceResearchRepo: new FailingEstimateStore(), logger });
+
+    expect(priceEvent).toMatchObject({ type: 'suggested_lower_price', proposedChange: { kind: 'price', from: 100, to: 90 } });
+    expect(logger.warnings).toEqual([
+      { context: { productId: 'p1', err: new Error('estimate store is down') }, message: 'Storing the last price estimate failed' },
+    ]);
   });
 
   it('proposes no price when the difference is under 5%', async () => {
@@ -981,6 +1039,34 @@ describe('HermesDecisionEngine.runProductSeo price estimate', () => {
         { research: research({ comparables: [] }) },
       );
       expect(estimateOf(priceEvent)?.usedRange?.basis).toBe('estimated');
+    });
+  });
+
+  describe('price anchor ladder', () => {
+    const substitutes: PriceComparable[] = [280, 300, 320].map((price) => ({
+      price,
+      note: 'new substitute',
+      source: 'auto',
+      tier: 'substitute_new',
+    }));
+
+    it('caps the start price at 70 % of the new substitutes and keeps the estimate it made', async () => {
+      const { priceEvent, priceResearchRepo } = await analyse(
+        estimate({ startPrice: 299, floorPrice: 250, confidence: 'high' }),
+        { price: 400, research: research({ retailPrice: null, retailCurrency: null, comparables: substitutes }) },
+      );
+
+      expect(estimateOf(priceEvent)).toMatchObject({ startPrice: 210, floorPrice: 210, confidence: 'medium' });
+      const saved = priceResearchRepo.items.get('w1:p1')?.lastEstimate;
+      expect(saved).toMatchObject({ hiddenReason: null, researchNote: null });
+      expect(saved?.estimate.startPrice).toBe(210);
+    });
+
+    it('keeps the estimate with the reason it was hidden', async () => {
+      const { priceEvent, priceResearchRepo } = await analyse(estimate({ confidence: 'low' }));
+
+      expect(priceEvent).toBeUndefined();
+      expect(priceResearchRepo.items.get('w1:p1')?.lastEstimate?.hiddenReason).toBe('low_confidence');
     });
   });
 });

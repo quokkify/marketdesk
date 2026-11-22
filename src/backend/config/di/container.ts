@@ -92,7 +92,7 @@ import { OfflineReplyDraftAI } from '../../infrastructure/external/OfflineReplyD
 import { ReplyDraftAISelector } from '../../infrastructure/external/ReplyDraftAISelector';
 import { fanOutAiUsageSink, loggingAiUsageSink, storingAiUsageSink } from '../../application/ai/AiCallRecord';
 import { PriceResearchRepository } from '../../infrastructure/persistence/repositories/PriceResearchRepository';
-import { ComparableSearchService } from '../../application/services/ComparableSearchService';
+import { AnchorLadderService } from '../../application/services/AnchorLadderService';
 import { AiUsageRepository } from '../../infrastructure/persistence/repositories/AiUsageRepository';
 import { PublishListingHandler } from '../../infrastructure/jobQueue/JobHandlers/PublishListingHandler';
 import { SyncMarketplaceHandler } from '../../infrastructure/jobQueue/JobHandlers/SyncMarketplaceHandler';
@@ -470,15 +470,18 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   // The web-enabled research profile serves only the market search; a new probe per search keeps
   // its toolset guard from acting on a cached answer.
   const researchConfig = loadHermesResearchConfig();
-  const comparableSearchService = new ComparableSearchService(
+  const anchorLadderService = new AnchorLadderService(
     productRepo,
     listingRepo,
+    priceResearchRepo,
     researchConfig
       ? {
           client: new HermesCompletionClient(researchConfig, aiUsageSink),
           checkProfile: () => new HermesHealthProbe(researchConfig).reachability(),
         }
       : null,
+    undefined,
+    overrides.logger,
   );
   const hermesEngine = new HermesDecisionEngine(
     productRepo,
@@ -487,7 +490,9 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     eventPublisher,
     aiProvider,
     priceResearchRepo,
-    idGenerator
+    anchorLadderService,
+    idGenerator,
+    overrides.logger
   );
 
   // 7. Application use cases.
@@ -969,7 +974,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analyticsService,
     productRepo,
     priceResearchRepo,
-    comparableSearchService,
+    anchorLadderService,
     listingRepo,
     marketplaceRepo,
     marketplaceOAuthService,

@@ -8,6 +8,7 @@ import {
   hermesApi,
   hermesFeedNextOffset,
 } from './hermesApi';
+import { productsApi } from './productsApi';
 
 describe('Hermes frontend API contract', () => {
   it('builds only product-scoped analysis requests for an explicit product', () => {
@@ -205,5 +206,25 @@ describe('Hermes endpoints against the wire format', () => {
 
     await waitUntil(() => requested.length >= 2);
     expect(requested.map((url) => url.searchParams.get('offset'))).toEqual(['0', '2']);
+  });
+
+  // Regression guard: Analyze stores new anchors and an estimate; a stale research form must reload.
+  it('refetches the price research of the analysed product after a run', async () => {
+    respond = (url) => ({ success: true, data: url.pathname.endsWith('/run') ? [] : null });
+    const store = newStore();
+    const research = store.dispatch(productsApi.endpoints.getPriceResearch.initiate('product-1'));
+    try {
+      await research;
+      requested.length = 0;
+
+      await store.dispatch(hermesApi.endpoints.runHermes.initiate({ productId: 'product-1' }));
+
+      await waitUntil(() => requested.some((url) => url.pathname === '/api/products/product-1/price-research'));
+      expect(requested.map((url) => url.pathname)).toEqual(
+        expect.arrayContaining(['/api/hermes/products/product-1/run', '/api/products/product-1/price-research']),
+      );
+    } finally {
+      research.unsubscribe();
+    }
   });
 });

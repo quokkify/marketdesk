@@ -115,21 +115,26 @@ export interface PriceEstimate {
   confidence: 'high' | 'medium' | 'low';
 }
 
-export type PriceComparableSource = 'manual' | 'web';
+export type AnchorTier = 'same_model_used' | 'last_new_price' | 'substitute_new' | 'substitute_used';
+
+export type PriceComparableSource = 'manual' | 'web' | 'auto';
 
 export interface PriceComparable {
   price: number;
   note: string;
   url?: string | null;
   source?: PriceComparableSource | null;
+  tier?: AnchorTier | null;
+  seenAt?: string | null; // ISO date
 }
 
-// An OLX advert found by the market search; nothing is stored until the seller picks it.
-export interface ComparableCandidate {
-  price: number;
-  currency: string;
-  title: string;
-  url: string;
+export type EstimateHiddenReason = 'low_confidence' | 'within_threshold' | 'floor_cancels';
+
+export interface StoredPriceEstimate {
+  estimate: PriceEstimate;
+  estimatedAt: string;
+  hiddenReason: EstimateHiddenReason | null;
+  researchNote: string | null;
 }
 
 export interface PriceResearch {
@@ -139,6 +144,10 @@ export interface PriceResearch {
   retailSource: string | null;
   retailCheckedAt: string | null; // ISO date
   comparables: PriceComparable[];
+  specs: string | null;
+  dismissedUrls: string[];
+  lastAttemptAt: string | null;
+  lastEstimate: StoredPriceEstimate | null;
   updatedAt: string;
 }
 

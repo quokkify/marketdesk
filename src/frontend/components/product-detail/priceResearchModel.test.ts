@@ -1,10 +1,11 @@
-import type { ComparableCandidate, PriceEstimate, PriceResearch } from '@shared/types';
+import type { PriceComparable, PriceEstimate, PriceResearch, StoredPriceEstimate } from '@shared/types';
 import {
   discountLine,
+  MAX_COMPARABLES,
   discountVsNew,
   estimateLines,
-  mergeFoundComparables,
-  selectionFits,
+  anchorTierLines,
+  storedEstimateLines,
   editComparablePrice,
   usedRangeSourceNote,
   toPriceResearchBody,
@@ -22,6 +23,7 @@ const research: PriceResearch = {
     { price: 250, note: '' },
     { price: 285, note: 'boxed' },
   ],
+  specs: null, dismissedUrls: [], lastAttemptAt: null, lastEstimate: null,
   updatedAt: '2026-11-21T10:00:00.000Z',
 };
 
@@ -45,6 +47,7 @@ describe('priceResearchModel', () => {
         retailSource: 'MediaMarkt',
         retailCheckedAt: '2026-11-21',
         comparables: research.comparables,
+        baseUpdatedAt: '2026-11-21T10:00:00.000Z',
       },
     });
   });
@@ -62,8 +65,14 @@ describe('priceResearchModel', () => {
   it('turns an empty form into an empty body', () => {
     expect(toPriceResearchBody(toPriceResearchForm(null))).toEqual({
       ok: true,
-      body: { retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null, comparables: [] },
+      body: { retailPrice: null, retailCurrency: null, retailSource: null, retailCheckedAt: null, comparables: [], baseUpdatedAt: null },
     });
+  });
+
+  // Regression guard: a form opened before Analyze must not save over the rows Analyze stored.
+  it('sends the updatedAt the form was built from, so the server can refuse a stale save', () => {
+    const result = toPriceResearchBody({ ...toPriceResearchForm(research), retailSource: 'Ceneo' });
+    expect(result).toEqual({ ok: true, body: expect.objectContaining({ baseUpdatedAt: research.updatedAt }) });
   });
 
   it('rejects a retail price without a currency', () => {
@@ -89,7 +98,7 @@ describe('priceResearchModel', () => {
     expect(errorsOf({ comparables: [{ price: '10000000000', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '-5', note: '' }] })).toHaveProperty(['comparables.0.price']);
     expect(errorsOf({ comparables: [{ price: '5', note: 'n'.repeat(301) }] })).toHaveProperty(['comparables.0.note']);
-    expect(errorsOf({ comparables: Array.from({ length: 11 }, () => ({ price: '5', note: '' })) })).toHaveProperty('comparables');
+    expect(errorsOf({ comparables: Array.from({ length: MAX_COMPARABLES + 1 }, () => ({ price: '5', note: '' })) })).toHaveProperty('comparables');
   });
 
   it('lists the estimate with the basis of every figure', () => {
@@ -123,31 +132,8 @@ describe('priceResearchModel', () => {
 
 const OLX_URL = 'https://www.olx.pl/d/oferta/airpods-4-CID99-IDabc1.html';
 const OLX_URL_2 = 'https://www.olx.pl/d/oferta/airpods-4-bez-anc-CID99-IDabc2.html';
-const candidate = (url: string, price = 300): ComparableCandidate => ({ price, currency: 'PLN', title: `Advert ${price}`, url });
-const emptyForm = toPriceResearchForm(null, 'PLN');
-const rows = (count: number) => Array.from({ length: count }, (_, i) => ({ price: String(100 + i), note: `n${i}` }));
 
 describe('comparables found on OLX', () => {
-  it('mergeAppendsWebRows', () => {
-    const merged = mergeFoundComparables({ ...emptyForm, comparables: rows(1) }, [candidate(OLX_URL, 290)]);
-    expect(merged.comparables).toEqual([
-      { price: '100', note: 'n0' },
-      { price: '290', note: 'Advert 290', url: OLX_URL, source: 'web' },
-    ]);
-  });
-
-  it('mergeSkipsKnownUrls', () => {
-    const saved = { price: '290', note: 'old', url: `${OLX_URL}?reason=x#top`, source: 'web' as const };
-    const merged = mergeFoundComparables({ ...emptyForm, comparables: [saved] }, [candidate(OLX_URL), candidate(OLX_URL_2, 310)]);
-    expect(merged.comparables.map((c) => c.url)).toEqual([saved.url, OLX_URL_2]);
-  });
-
-  it('capBlocksOverflow', () => {
-    expect(selectionFits({ ...emptyForm, comparables: rows(9) }, 3)).toBe(false);
-    expect(selectionFits({ ...emptyForm, comparables: rows(7) }, 3)).toBe(true);
-    expect(selectionFits({ ...emptyForm, comparables: [...rows(7), { price: '', note: '' }] }, 3)).toBe(true);
-  });
-
   it('sourceNoteCountsWebRows', () => {
     const withRows = (comparables: PriceResearch['comparables']): PriceResearch => ({ ...research, comparables });
     expect(usedRangeSourceNote(withRows([
@@ -177,5 +163,85 @@ describe('editComparablePrice', () => {
     const other = { price: '10', note: 'x' };
     expect(editComparablePrice([web, other], 0, '340')).toEqual([web, other]);
     expect(editComparablePrice([web, other], 1, '11')).toEqual([web, { price: '11', note: 'x' }]);
+  });
+});
+
+describe('price anchors by tier', () => {
+  const withRows = (comparables: PriceComparable[], extra: Partial<PriceResearch> = {}): PriceResearch =>
+    ({ ...research, comparables, ...extra });
+  const at = (price: number, tier: PriceComparable['tier'], note = '') => ({ price, note, tier, source: 'auto' as const });
+
+  it('always lists four tiers in a fixed order, with not found for an empty one', () => {
+    const lines = anchorTierLines(withRows([at(280, 'substitute_new'), at(300, 'substitute_new'), at(320, 'substitute_new')]), 'PLN');
+    expect(lines.map((l) => [l.label, l.text])).toEqual([
+      ['Same model, used', 'not found'],
+      ['Last new price', 'not found'],
+      ['New substitutes', 'from 280 zł (3)'],
+      ['Used substitutes', 'not found'],
+    ]);
+    expect(anchorTierLines(null, 'PLN').map((l) => l.text)).toEqual(['not found', 'not found', 'not found', 'not found']);
+  });
+
+  it('words the used tiers as a range and the last new price with its note', () => {
+    const lines = anchorTierLines(withRows([
+      at(250, 'substitute_used'), at(300, 'substitute_used'), at(260, 'substitute_used'),
+      at(850, 'last_new_price', 'Ceneo'), at(799, 'last_new_price', 'Komputronik'),
+    ]), 'PLN');
+    expect(lines.find((l) => l.tier === 'substitute_used')?.text).toBe('250–300 zł (3)');
+    expect(lines.find((l) => l.tier === 'last_new_price')?.text).toBe('799 zł · Komputronik');
+  });
+
+  it('puts untiered rows into the same-model used tier', () => {
+    const lines = anchorTierLines(withRows([{ price: 200, note: 'a' }, { price: 250, note: '' }, { price: 285, note: 'boxed' }]), 'PLN');
+    const same = lines.find((l) => l.tier === 'same_model_used');
+    expect(same?.text).toBe('200–285 zł (3)');
+    expect(same?.rows).toHaveLength(3);
+  });
+});
+
+describe('storedEstimateLines', () => {
+  const stored = (hiddenReason: StoredPriceEstimate['hiddenReason'], researchNote: string | null): StoredPriceEstimate => ({
+    estimate, estimatedAt: '2026-11-22T10:00:00.000Z', hiddenReason, researchNote,
+  });
+
+  it('is empty without a stored estimate', () => {
+    expect(storedEstimateLines(null, 'PLN')).toEqual([]);
+  });
+
+  const last = (lines: string[]) => lines[lines.length - 1];
+
+  it('appends the hidden reason and the research note', () => {
+    const lines = storedEstimateLines(stored('within_threshold', 'Nothing found for this model'), 'PLN');
+    expect(lines.slice(0, 2)).toEqual(['Start 279 zł', 'Floor 250 zł']);
+    expect(lines.slice(-2)).toEqual(['Not suggested: within 5 % of the current price.', 'Nothing found for this model']);
+    expect(last(storedEstimateLines(stored('low_confidence', null), 'PLN'))).toBe('Not suggested: confidence is low.');
+    expect(last(storedEstimateLines(stored('floor_cancels', null), 'PLN')))
+      .toBe('Not suggested: your lowest acceptable price blocks this change.');
+    expect(last(storedEstimateLines(stored(null, null), 'PLN'))).toBe('Confidence: medium');
+  });
+});
+
+describe('automatic comparables through the form', () => {
+  // Regression guard: a save used to drop source, tier and seenAt, stripping tiers and dismissal tracking.
+  it('round-trips an auto row with source, tier and seenAt intact', () => {
+    const auto: PriceComparable = {
+      price: 280, note: 'Used phone', url: 'https://www.olx.pl/d/oferta/a-CID99-ID1a.html',
+      source: 'auto', tier: 'substitute_used', seenAt: '2026-11-22',
+    };
+    const result = toPriceResearchBody(toPriceResearchForm({ ...research, comparables: [auto] }));
+    expect(result).toEqual({ ok: true, body: expect.objectContaining({ comparables: [auto] }) });
+  });
+
+  const auto = {
+    price: '280', note: 'Phone', url: 'https://www.olx.pl/d/oferta/a-CID99-ID1a.html',
+    source: 'auto' as const, tier: 'substitute_used' as const, seenAt: '2026-11-22',
+  };
+
+  it('dropsAutoMarkersWhenPriceOfAutoRowChanges', () => {
+    expect(editComparablePrice([auto], 0, '260')).toEqual([{ price: '260', note: 'Phone', source: 'manual', tier: 'substitute_used' }]);
+  });
+
+  it('keepsAutoRowWhenPriceIsUnchanged', () => {
+    expect(editComparablePrice([auto], 0, '280')).toEqual([auto]);
   });
 });

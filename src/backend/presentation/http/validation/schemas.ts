@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { requireBelowCostConfirmation } from '../../../../shared/validation/pricing';
 import { normalizeOlxAdvertUrl } from '../../../../shared/olxAdvertUrl';
+import { normalizeAnchorUrl } from '../../../../shared/anchorUrl';
 import {
   PRODUCT_STATUS_LIST,
   AUTONOMY_LEVEL_LIST,
@@ -135,7 +136,7 @@ export const productImprovementSchema = z.object({
   listingId: z.string().trim().min(1).optional(),
 }).strict();
 
-const MAX_COMPARABLES = 10;
+const MAX_COMPARABLES = 30;
 // Largest amount a NUMERIC(12,2) column holds.
 const MAX_RESEARCH_PRICE = 9_999_999_999.99;
 const researchPriceSchema = z.number().finite().positive().max(MAX_RESEARCH_PRICE);
@@ -153,12 +154,17 @@ const priceComparableSchema = z
     price: researchPriceSchema,
     note: z.string().max(300),
     url: z.string().max(500).startsWith('https://').nullish(),
-    source: z.enum(['manual', 'web']).nullish(),
+    source: z.enum(['manual', 'web', 'auto']).nullish(),
+    tier: z.enum(['same_model_used', 'last_new_price', 'substitute_new', 'substitute_used']).nullish(),
+    seenAt: isoDateSchema.nullish(),
   })
   .strict()
   .superRefine((comparable, ctx) => {
     if (comparable.source === 'web' && (!comparable.url || normalizeOlxAdvertUrl(comparable.url) === null)) {
       ctx.addIssue({ code: 'custom', path: ['url'], message: 'A web comparable needs an OLX advert link' });
+    }
+    if (comparable.source === 'auto' && (!comparable.url || normalizeAnchorUrl(comparable.url) === null)) {
+      ctx.addIssue({ code: 'custom', path: ['url'], message: 'An auto comparable needs a link on a known shop or marketplace' });
     }
   });
 
@@ -169,6 +175,8 @@ export const priceResearchSchema = z
     retailSource: z.string().max(200).nullable(),
     retailCheckedAt: isoDateSchema.nullable(),
     comparables: z.array(priceComparableSchema).max(MAX_COMPARABLES),
+    // The updatedAt the client's form was built from; null when it saw no research. Absent skips the check.
+    baseUpdatedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
