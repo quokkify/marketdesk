@@ -150,8 +150,8 @@ describe('parseIdentification', () => {
     ).toHaveLength(1);
   });
 
-  it('rejects missing classAttributes and garbage', () => {
-    const { classAttributes: _omitted, ...rest } = valid;
+  it('rejects a missing model and garbage', () => {
+    const { model: _omitted, ...rest } = valid;
     expect(parseIdentification(JSON.stringify(rest))).toBeNull();
     expect(parseIdentification('no json here')).toBeNull();
     expect(parseIdentification('[1,2]')).toBeNull();
@@ -199,17 +199,17 @@ describe('parseIdentification', () => {
     expect(parsed?.specs).toBe('{"nativeResolution":"720p","ansiLumens":200}');
   });
 
-  it('keeps an empty classAttributes array (class unknown) and requires the key', () => {
+  it('treats missing or non-array classAttributes as empty (class unknown)', () => {
     expect(
       parseIdentification(JSON.stringify({ ...valid, classAttributes: [] }))?.classAttributes
+    ).toEqual([]);
+    expect(
+      parseIdentification(JSON.stringify({ ...valid, classAttributes: 'x' }))?.classAttributes
     ).toEqual([]);
   });
 
   it('handles the real spike answer, which lacks classAttributes', () => {
-    expect(parseIdentification(SPIKE_IDENT)).toBeNull();
-    const parsed = parseIdentification(
-      JSON.stringify({ ...JSON.parse(SPIKE_IDENT), classAttributes: [] })
-    );
+    const parsed = parseIdentification(SPIKE_IDENT);
     expect(parsed?.model).toBe('AOPEN QH11 (QH11 / MR.JT411.002)');
     expect(parsed?.classAttributes).toEqual([]);
     expect(parsed?.specs).toContain('1280');

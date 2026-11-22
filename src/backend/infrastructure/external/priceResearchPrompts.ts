@@ -114,7 +114,7 @@ export function buildIdentifyPrompt(input: ResearchItem): { system: string; prom
 }
 
 // Tolerant: arrays are clamped and invalid elements dropped, so a partly good answer still yields
-// an identification. Only the model and the classAttributes array itself are mandatory.
+// an identification. Only the model is mandatory; missing classAttributes mean the class is unknown.
 export function parseIdentification(raw: string): Identification | null {
   const value = extractObject(raw);
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
@@ -122,8 +122,7 @@ export function parseIdentification(raw: string): Identification | null {
     string,
     unknown
   >;
-  if (typeof model !== 'string' || model.trim() === '' || !Array.isArray(classAttributes))
-    return null;
+  if (typeof model !== 'string' || model.trim() === '') return null;
   const specsText =
     typeof specs === 'string'
       ? specs
@@ -143,7 +142,7 @@ export function parseIdentification(raw: string): Identification | null {
   return {
     model: model.trim(),
     specs: specsText.trim().slice(0, MAX_SPECS_LENGTH).trim(),
-    classAttributes: parseAttributes(classAttributes),
+    classAttributes: parseAttributes(Array.isArray(classAttributes) ? classAttributes : []),
     successors: (Array.isArray(successors) ? successors : [])
       .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
       .map((entry) => entry.trim().slice(0, MAX_SUCCESSOR_LENGTH).trim())
