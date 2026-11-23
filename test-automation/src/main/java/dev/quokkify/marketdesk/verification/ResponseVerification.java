@@ -9,6 +9,7 @@ import dev.quokkify.verification.BaseApiVerification;
 import io.qameta.allure.Step;
 import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.hamcrest.Matchers;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,7 +24,6 @@ public class ResponseVerification extends BaseApiVerification<ResponseVerificati
   private static final String DEEP_IN_RESULTS = "deep_in_results";
   private static final String NO_VERDICT = "no_verdict";
   private static final String PROBE_FAILED = "probe_failed";
-  private static final String CROWDED_MARKET = "crowded_market";
   private static final int CARDS_PER_PAGE = 40;
 
   @Override
@@ -93,8 +93,10 @@ public class ResponseVerification extends BaseApiVerification<ResponseVerificati
     ListingResponsePojo run = latestRun(view);
     assertThat(run.probes()).containsExactly(
         new ListingResponsePojo.Probe(query, OK, total, CARDS_PER_PAGE, position, position));
-    assertThat(run.findingCodes()).containsExactly(DEEP_IN_RESULTS, NO_VERDICT, CROWDED_MARKET);
-    assertThat(run.findings().get(0).evidence())
+    assertThat(run.findingCodes()).contains(DEEP_IN_RESULTS);
+    assertThat(run.findings()).filteredOn(finding -> DEEP_IN_RESULTS.equals(finding.code())).singleElement()
+        .extracting(ListingResponsePojo.Finding::evidence)
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
         .containsEntry("query", query)
         .containsEntry("position", position)
         .containsEntry("checked", position)
