@@ -198,6 +198,26 @@ throwaway check on real OLX for the three live listings. If ordered results are 
 stop and return to the owner: the fallback (result count and price range only, no position) is a
 weaker product and is the owner's call.
 
+### Spike result (2026-11-23)
+
+Six calls to the research profile on production, two per phrase (`airpods 4`, `projektor led hdmi`,
+`frezarka do paznokci`), each asked for the first 30 cards of the OLX search page in order; the
+three pages were also fetched once by hand for comparison.
+
+- Three of six calls answered with an empty list in 3–8 s (no page read). Cause not investigated.
+- Of the three calls that read the page, two reproduced the organic order exactly (20 of 20 and 21
+  of 21 cards) and one matched for the first 9 cards and then mislabelled a card. A fourth
+  (second run of one phrase) returned a subsequence of the page with cards skipped.
+- Promoted cards are recognisable without the model: the advert link carries
+  `reason=search%7Cpromoted` or `%7Corganic`. Promoted cards rotate between page loads.
+- `total` came back in one call of six. The page itself shows it, capped at 1000.
+- Cost of a successful call: 38–49 s, 15–21k tokens.
+- A search page holds 51 cards, about 40 of them organic, and each of these phrases has 966 to
+  1000+ adverts. A listing with a handful of views is therefore almost never on the first page, so
+  a first-page probe answers "not on the first page" and cannot give a position.
+
+Gate: not passed as written. Work stopped after Task 0 for the owner's decision.
+
 ## Left to the builder
 
 - Module layout, names of types and reason codes, zod schemas, timeouts and budgets (follow
