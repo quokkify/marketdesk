@@ -37,7 +37,7 @@ export interface ListingResponseSignal {
   /** Mean views of the last three complete UTC days. */
   viewsPerDay: number | null;
   hoursLive: number | null;
-  /** Views still needed before a silent listing can be judged; null once enough or not collecting. */
+  /** Total views a silent listing needs before it can be judged; null when not collecting. */
   viewsNeeded: number | null;
 }
 

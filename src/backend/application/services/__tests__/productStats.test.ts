@@ -289,6 +289,27 @@ describe('listingResponseSignal', () => {
     );
   });
 
+  it('is not seen just under 30 views', () => {
+    expect(listingResponseSignal(listing({ views: 29 }), quiet, at).stage).toBe('not_seen');
+  });
+
+  it('keeps collecting at exactly 30 views', () => {
+    const signal = listingResponseSignal(listing({ views: 30 }), quiet, at);
+    expect(signal).toMatchObject({ stage: 'too_early', viewsNeeded: ENOUGH_VIEWS });
+  });
+
+  it('is not "not seen" at exactly 3 views a day', () => {
+    const signal = listingResponseSignal(listing(), byDay([3, 3, 3]), at);
+    expect(signal.viewsPerDay).toBe(3);
+    expect(signal.stage).not.toBe('not_seen');
+  });
+
+  it('is responding with a conversation', () => {
+    expect(listingResponseSignal(listing({ conversations: 1 }), quiet, at).stage).toBe(
+      'responding'
+    );
+  });
+
   it('has no data for a listing that is not live', () => {
     expect(listingResponseSignal(listing({ status: 'expired' }), quiet, at).stage).toBe('no_data');
   });

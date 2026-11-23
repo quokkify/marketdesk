@@ -149,7 +149,7 @@ export function listingResponseSignal(
   }
   if ((listing.watchers ?? 0) > 0 || (listing.conversations ?? 0) > 0) return signal('responding');
   if (hoursLive * HOUR_MS < YOUNG_MS) return signal('too_early');
-  if (listing.views <= NOT_SEEN_MAX_VIEWS && viewsPerDay <= NOT_SEEN_MAX_VIEWS_PER_DAY) {
+  if (listing.views < NOT_SEEN_MAX_VIEWS && viewsPerDay < NOT_SEEN_MAX_VIEWS_PER_DAY) {
     return signal('not_seen');
   }
   if (listing.views >= ENOUGH_VIEWS) return signal('seen_not_contacted');
