@@ -121,6 +121,7 @@ import { PricesTabContainer } from '../components/product-detail/hermes/PricesTa
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
 import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
 import { buildHistory, historyQueryState } from '../components/product-detail/hermes/hermesHistory.js';
+import { responseControlTarget } from '../components/products/responseDisplay.js';
 import { hermesCardState, hermesProviderNote, responseCardState } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
@@ -914,6 +915,17 @@ const ListingDetailsPage: React.FC = () => {
     }
   };
 
+  const handleAskWhy = async () => {
+    if (!productId) return;
+    setAnalyzeError(null);
+    try {
+      await requestResponseRun(productId).unwrap();
+    } catch (err) {
+      setAnalyzeError(errorMessage(err));
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
+
   // Approves the price suggestion the card offers, as Apply does in the suggestions queue.
   const handleSetPrice = async (eventId: string) => {
     const event = recommendations.find((item) => item.id === eventId);
@@ -1418,12 +1430,12 @@ const ListingDetailsPage: React.FC = () => {
             onSetPrice={(eventId) => void handleSetPrice(eventId)}
             onOpen={setDrawerTab}
             response={responseState}
-            onAskWhy={() => void requestResponseRun(p.id)}
+            onAskWhy={() => void handleAskWhy()}
             onResponseAction={(action) => {
-              if (action === 'analyze') void handleAnalyzeWithHermes();
-              else if (action === 'review_price') setDrawerTab('checks');
-              else if (action === 'edit_title') setEditOpen(true);
-              else setDrawerTab('suggestions');
+              const target = responseControlTarget(action);
+              if (target.kind === 'analyze') void handleAnalyzeWithHermes();
+              else if (target.kind === 'edit') setEditOpen(true);
+              else setDrawerTab(target.tab);
             }}
           />
         </Stack>

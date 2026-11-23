@@ -56,6 +56,7 @@ import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
 import VerdictSummary from '../products/VerdictSummary.js';
 import { isVerdictStale } from '../products/verdictDisplay.js';
 import ResponseSummary from '../products/ResponseSummary.js';
+import { currentRowResponse } from '../products/responseDisplay.js';
 import type { RowResponseState } from '../products/responseDisplay.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
@@ -469,7 +470,7 @@ function RowVerdict({ product, props }: { product: Product; props: ProductsColle
 }
 
 function RowResponse({ product, props }: { product: Product; props: ProductsCollectionProps }) {
-  const view = props.responseByProductId?.[product.id];
+  const view = currentRowResponse(props.responseByProductId?.[product.id], product.response);
   return (
     <ResponseSummary
       signal={props.statsByProductId?.[product.id]?.response}

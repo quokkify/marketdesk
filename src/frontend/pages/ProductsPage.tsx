@@ -76,7 +76,8 @@ import {
   stateAfterPendingChange,
 } from './productsRowAnalysis.js';
 import type { RowAnalysisState } from './productsRowAnalysis.js';
-import type { RowResponseState } from '../components/products/responseDisplay.js';
+import { askChecking, askFailed, askProgress } from '../components/products/responseDisplay.js';
+import type { RowResponseMap } from '../components/products/responseDisplay.js';
 import {
   catalogueShowsSkeleton,
   hasCatalogueFilters,
@@ -192,7 +193,7 @@ const ProductsPage: React.FC = () => {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [runHermes] = useRunHermes();
   const [requestResponseRun] = useRequestResponseRun();
-  const [responseByProductId, setResponseByProductId] = useState<Record<string, RowResponseState>>({});
+  const [responseByProductId, setResponseByProductId] = useState<RowResponseMap>({});
   const hermesPrincipal = workspaceId && userId ? { workspaceId, userId } : null;
   const hermesSettings = useGetHermesSettingsQuery(hermesPrincipal ?? skipToken);
   const analyzeDisabledReason = rowAnalyzeDisabledReason({
@@ -266,9 +267,7 @@ const ProductsPage: React.FC = () => {
     const productId = product.id;
     if (inFlightRef.current.has(productId)) return;
     inFlightRef.current.add(productId);
-    const show = (state: RowResponseState) =>
-      setResponseByProductId((current) => ({ ...current, [productId]: state }));
-    show({ active: true, outOfDate: false, latest: product.response ?? null });
+    setResponseByProductId((current) => askChecking(current, productId, product.response ?? null));
     try {
       await requestResponseRun(productId).unwrap();
       const outcome = await awaitVerdictRun(
@@ -279,7 +278,7 @@ const ProductsPage: React.FC = () => {
           try {
             const view = await read.unwrap();
             if (mountedRef.current) {
-              show({ active: view.active !== null, outOfDate: view.outOfDate, latest: view.latest });
+              setResponseByProductId((current) => askProgress(current, productId, view));
             }
             return view;
           } finally {
@@ -292,10 +291,7 @@ const ProductsPage: React.FC = () => {
       if (outcome === 'failed') throw new Error('The check failed. Try again.');
     } catch (error) {
       if (mountedRef.current) {
-        setResponseByProductId((current) => {
-          const { [productId]: _dropped, ...rest } = current;
-          return rest;
-        });
+        setResponseByProductId((current) => askFailed(current, productId));
         dispatch(
           enqueueToast({
             message: error instanceof Error ? error.message : 'The check failed. Try again.',

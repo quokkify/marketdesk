@@ -1,5 +1,5 @@
 // Pure helpers behind the listing response stage shown in the catalogue row and on the product page.
-import type { ListingResponseRun, ListingResponseSignal, ResponseAction } from '@shared/types';
+import type { ListingResponseRun, ListingResponseSignal, ListingResponseView, ResponseAction } from '@shared/types';
 import { formatRelative } from '../../utils/formatters.js';
 
 export const ASK_WHY_LABEL = 'Why no response?';
@@ -78,4 +78,46 @@ export interface RowResponseState {
   active: boolean;
   outOfDate: boolean;
   latest: ListingResponseRun | null;
+}
+
+export type RowResponseMap = Record<string, RowResponseState>;
+
+export function askChecking(map: RowResponseMap, productId: string, latest: ListingResponseRun | null): RowResponseMap {
+  return { ...map, [productId]: { active: true, outOfDate: false, latest } };
+}
+
+export function askProgress(map: RowResponseMap, productId: string, view: ListingResponseView): RowResponseMap {
+  return { ...map, [productId]: { active: view.active !== null, outOfDate: view.outOfDate, latest: view.latest } };
+}
+
+// A failed request leaves the row as the list item shows it.
+export function askFailed(map: RowResponseMap, productId: string): RowResponseMap {
+  const { [productId]: _dropped, ...rest } = map;
+  return rest;
+}
+
+// A finished entry holds only until the list item carries a newer run than the entry's.
+export function currentRowResponse(
+  entry: RowResponseState | undefined,
+  listRun: ListingResponseRun | null | undefined
+): RowResponseState | undefined {
+  if (!entry || entry.active) return entry;
+  const entryAt = Date.parse(entry.latest?.completedAt ?? '');
+  const listAt = Date.parse(listRun?.completedAt ?? '');
+  return listAt > entryAt || (Number.isNaN(entryAt) && !Number.isNaN(listAt)) ? undefined : entry;
+}
+
+export type ResponseControlTarget = { kind: 'analyze' } | { kind: 'tab'; tab: 'checks' | 'suggestions' } | { kind: 'edit' };
+
+export function responseControlTarget(action: Exclude<ResponseActionKind, 'hint'>): ResponseControlTarget {
+  switch (action) {
+    case 'analyze':
+      return { kind: 'analyze' };
+    case 'review_price':
+      return { kind: 'tab', tab: 'checks' };
+    case 'edit_title':
+      return { kind: 'edit' };
+    case 'open_proposal':
+      return { kind: 'tab', tab: 'suggestions' };
+  }
 }

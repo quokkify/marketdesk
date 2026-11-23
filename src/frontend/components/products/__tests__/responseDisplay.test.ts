@@ -1,5 +1,17 @@
 import type { ListingResponseRun, ListingResponseSignal, ResponseFinding } from '@shared/types';
-import { canAskWhy, checkedLabel, responseLines, stageLabel } from '../responseDisplay.js';
+import type { ListingResponseView } from '@shared/types';
+import {
+  askChecking,
+  askFailed,
+  askProgress,
+  canAskWhy,
+  checkedLabel,
+  currentRowResponse,
+  responseActionKind,
+  responseControlTarget,
+  responseLines,
+  stageLabel,
+} from '../responseDisplay.js';
 
 function signal(patch: Partial<ListingResponseSignal>): ListingResponseSignal {
   return {
@@ -99,5 +111,62 @@ describe('checkedLabel', () => {
   it('is null without a completed run', () => {
     expect(checkedLabel(null, now)).toBeNull();
     expect(checkedLabel(run([], null), now)).toBeNull();
+  });
+});
+
+describe('row ask state', () => {
+  const old = run([finding('old')], '2026-11-23T09:00:00.000Z');
+  const fresh = run([finding('new')], '2026-11-23T11:00:00.000Z');
+  const view = (patch: Partial<ListingResponseView>): ListingResponseView => ({
+    latest: null,
+    active: null,
+    lastFailed: false,
+    outOfDate: false,
+    ...patch,
+  });
+
+  it('goes idle to checking to done', () => {
+    const checking = askChecking({}, 'p-1', old);
+    expect(checking['p-1']).toEqual({ active: true, outOfDate: false, latest: old });
+
+    const polling = askProgress(checking, 'p-1', view({ active: run([]), latest: old }));
+    expect(polling['p-1']?.active).toBe(true);
+
+    const done = askProgress(polling, 'p-1', view({ latest: fresh, outOfDate: true }));
+    expect(done['p-1']).toEqual({ active: false, outOfDate: true, latest: fresh });
+  });
+
+  it('drops the entry on error and leaves other products alone', () => {
+    const map = askChecking(askChecking({}, 'p-1', old), 'p-2', null);
+    const failed = askFailed(map, 'p-1');
+    expect(failed['p-1']).toBeUndefined();
+    expect(failed['p-2']?.active).toBe(true);
+  });
+
+  it('keeps an active entry whatever the list shows', () => {
+    const entry = { active: true, outOfDate: false, latest: old };
+    expect(currentRowResponse(entry, fresh)).toBe(entry);
+  });
+
+  it('keeps a finished entry until the list item carries a newer run', () => {
+    const entry = { active: false, outOfDate: false, latest: fresh };
+    expect(currentRowResponse(entry, old)).toBe(entry);
+    expect(currentRowResponse(entry, fresh)).toBe(entry);
+    expect(currentRowResponse(entry, run([], '2026-11-23T11:30:00.000Z'))).toBeUndefined();
+  });
+
+  it('has no entry without one', () => {
+    expect(currentRowResponse(undefined, fresh)).toBeUndefined();
+  });
+});
+
+describe('finding action to page control', () => {
+  it('maps every action to the page control or none', () => {
+    expect(responseActionKind('retry')).toBeNull();
+    expect(responseActionKind(null)).toBeNull();
+    expect(responseControlTarget('analyze')).toEqual({ kind: 'analyze' });
+    expect(responseControlTarget('review_price')).toEqual({ kind: 'tab', tab: 'checks' });
+    expect(responseControlTarget('edit_title')).toEqual({ kind: 'edit' });
+    expect(responseControlTarget('open_proposal')).toEqual({ kind: 'tab', tab: 'suggestions' });
   });
 });
