@@ -27,37 +27,89 @@ export function loadOlxSearchBaseUrl(): string {
   return raw.replace(/\/+$/, '');
 }
 
-interface Deps {
-  baseUrl: string;
-  fetch?: typeof fetch;
-  sleep?: (ms: number) => Promise<void>;
-  timeoutMs?: number;
+export interface OlxRequestGate {
+  run<T>(signal: AbortSignal, fn: () => Promise<T>): Promise<T>;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// One request at a time, with a pause after each request that was made. A caller that aborts while
+// queued is rejected at once and leaves no delay behind; a failed request never blocks the gate.
+export function createOlxRequestGate(
+  sleep: (ms: number) => Promise<void> = defaultSleep,
+  delayMs: number = PAGE_DELAY_MS
+): OlxRequestGate {
+  let busy = false;
+  const queue: Array<() => void> = [];
+
+  const release = async () => {
+    try {
+      await sleep(delayMs);
+    } catch {
+      // A failed pause must not wedge the queue.
+    }
+    const next = queue.shift();
+    if (next) next();
+    else busy = false;
+  };
+
+  return {
+    run<T>(signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        if (signal.aborted) {
+          reject(new Error('OLX search aborted'));
+          return;
+        }
+        const start = () => {
+          signal.removeEventListener('abort', onAbort);
+          Promise.resolve()
+            .then(fn)
+            .then(resolve, reject)
+            .finally(() => void release());
+        };
+        const onAbort = () => {
+          const index = queue.indexOf(start);
+          if (index >= 0) queue.splice(index, 1);
+          reject(new Error('OLX search aborted'));
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (busy) {
+          queue.push(start);
+        } else {
+          busy = true;
+          start();
+        }
+      });
+    },
+  };
+}
+
+// The limit holds for the whole process however many clients exist.
+const defaultGate = createOlxRequestGate();
+
+interface Deps {
+  baseUrl: string;
+  fetch?: typeof fetch;
+  gate?: OlxRequestGate;
+  timeoutMs?: number;
+}
+
 export class OlxSearchPageClient implements IOlxSearch {
   private readonly fetchImpl: typeof fetch;
-  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly gate: OlxRequestGate;
   private readonly timeoutMs: number;
   private readonly baseHost: string;
-  private tail: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: Deps) {
     this.fetchImpl = deps.fetch ?? fetch;
-    this.sleep = deps.sleep ?? defaultSleep;
+    this.gate = deps.gate ?? defaultGate;
     this.timeoutMs = deps.timeoutMs ?? REQUEST_TIMEOUT_MS;
     this.baseHost = new URL(deps.baseUrl).host;
   }
 
   page(query: string, page: number, signal: AbortSignal): Promise<OlxSearchPage> {
     const url = olxSearchUrl(this.deps.baseUrl, query, page);
-    const run = this.tail.then(() => this.load(url, signal));
-    this.tail = run.then(
-      () => this.sleep(PAGE_DELAY_MS),
-      () => this.sleep(PAGE_DELAY_MS)
-    );
-    return run;
+    return this.gate.run(signal, () => this.load(url, signal));
   }
 
   private async load(startUrl: string, signal: AbortSignal): Promise<OlxSearchPage> {

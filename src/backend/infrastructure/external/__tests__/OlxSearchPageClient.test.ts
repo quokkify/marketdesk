@@ -1,4 +1,10 @@
-import { OlxSearchPageClient, PAGE_DELAY_MS, MAX_PAGES, loadOlxSearchBaseUrl } from '../OlxSearchPageClient';
+import {
+  OlxSearchPageClient,
+  PAGE_DELAY_MS,
+  MAX_PAGES,
+  createOlxRequestGate,
+  loadOlxSearchBaseUrl,
+} from '../OlxSearchPageClient';
 import { olxSearchUrl } from '../olxSearchPage';
 
 const BASE = 'https://www.olx.pl';
@@ -13,7 +19,8 @@ function reply(status: number, body = '', headers: Record<string, string> = {}):
 }
 
 function build(fetchImpl: jest.Mock, sleep: jest.Mock = jest.fn().mockResolvedValue(undefined)) {
-  return { client: new OlxSearchPageClient({ baseUrl: BASE, fetch: fetchImpl, sleep }), sleep };
+  const gate = createOlxRequestGate(sleep);
+  return { client: new OlxSearchPageClient({ baseUrl: BASE, fetch: fetchImpl, gate }), sleep };
 }
 
 const signal = () => new AbortController().signal;
@@ -97,6 +104,75 @@ describe('OlxSearchPageClient', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('rejects at once when aborted while queued, without a request or a delay for it', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchImpl = jest.fn(async () => {
+      if (fetchImpl.mock.calls.length === 1) await gate;
+      return reply(200, okPage());
+    });
+    const { client, sleep } = build(fetchImpl);
+    const first = client.page('airpods 4', 1, signal());
+    const controller = new AbortController();
+    const queued = client.page('airpods 4', 2, controller.signal);
+    const third = client.page('airpods 4', 3, signal());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort();
+    await expect(queued).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    release();
+    await Promise.all([first, third]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects when aborted during a fetch and still runs the next request', async () => {
+    const controller = new AbortController();
+    const fetchImpl = jest
+      .fn()
+      .mockImplementationOnce(
+        (_url: string, init: { signal: AbortSignal }) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+          })
+      )
+      .mockResolvedValueOnce(reply(200, okPage()));
+    const { client } = build(fetchImpl);
+    const first = client.page('airpods 4', 1, controller.signal);
+    const second = client.page('airpods 4', 2, signal());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort();
+    await expect(first).rejects.toThrow();
+    await expect(second).resolves.toBeDefined();
+  });
+
+  it('shares the default gate between client instances', async () => {
+    jest.useFakeTimers();
+    try {
+      let active = 0;
+      let overlap = false;
+      const fetchImpl = jest.fn(async () => {
+        active += 1;
+        if (active > 1) overlap = true;
+        await new Promise<void>((resolve) => setTimeout(resolve, 5));
+        active -= 1;
+        return reply(200, okPage());
+      });
+      const a = new OlxSearchPageClient({ baseUrl: BASE, fetch: fetchImpl });
+      const b = new OlxSearchPageClient({ baseUrl: BASE, fetch: fetchImpl });
+      const both = Promise.all([a.page('airpods 4', 1, signal()), b.page('airpods 4', 1, signal())]);
+      await jest.advanceTimersByTimeAsync(PAGE_DELAY_MS * 3);
+      await both;
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(overlap).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('follows a redirect within the host and rejects one to another host', async () => {
     const within = jest
       .fn()
@@ -125,7 +201,7 @@ describe('OlxSearchPageClient', () => {
     const client = new OlxSearchPageClient({
       baseUrl: BASE,
       fetch: hang as unknown as typeof fetch,
-      sleep: jest.fn().mockResolvedValue(undefined),
+      gate: createOlxRequestGate(jest.fn().mockResolvedValue(undefined)),
       timeoutMs: 20,
     });
     await expect(client.page('airpods 4', 1, signal())).rejects.toThrow();
