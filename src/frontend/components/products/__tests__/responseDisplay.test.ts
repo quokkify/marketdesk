@@ -4,6 +4,7 @@ import {
   askChecking,
   askFailed,
   askProgress,
+  askReused,
   canAskWhy,
   checkedLabel,
   currentRowResponse,
@@ -134,6 +135,11 @@ describe('row ask state', () => {
 
     const done = askProgress(polling, 'p-1', view({ latest: fresh, outOfDate: true }));
     expect(done['p-1']).toEqual({ active: false, outOfDate: true, latest: fresh });
+  });
+
+  it('shows a reused run as done at once, whatever failed after it', () => {
+    const done = askReused(askChecking({}, 'p-1', null), 'p-1', fresh);
+    expect(done['p-1']).toEqual({ active: false, outOfDate: false, latest: fresh });
   });
 
   it('drops the entry on error and leaves other products alone', () => {

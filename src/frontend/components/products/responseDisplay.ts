@@ -90,6 +90,12 @@ export function askProgress(map: RowResponseMap, productId: string, view: Listin
   return { ...map, [productId]: { active: view.active !== null, outOfDate: view.outOfDate, latest: view.latest } };
 }
 
+// A reused run matches the listing as it is now and is final: nothing to poll, even when a newer
+// run failed (the view would report that failure).
+export function askReused(map: RowResponseMap, productId: string, run: ListingResponseRun): RowResponseMap {
+  return { ...map, [productId]: { active: false, outOfDate: false, latest: run } };
+}
+
 // A failed request leaves the row as the list item shows it.
 export function askFailed(map: RowResponseMap, productId: string): RowResponseMap {
   const { [productId]: _dropped, ...rest } = map;

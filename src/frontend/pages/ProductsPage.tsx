@@ -76,7 +76,12 @@ import {
   stateAfterPendingChange,
 } from './productsRowAnalysis.js';
 import type { RowAnalysisState } from './productsRowAnalysis.js';
-import { askChecking, askFailed, askProgress } from '../components/products/responseDisplay.js';
+import {
+  askChecking,
+  askFailed,
+  askProgress,
+  askReused,
+} from '../components/products/responseDisplay.js';
 import type { RowResponseMap } from '../components/products/responseDisplay.js';
 import {
   catalogueShowsSkeleton,
@@ -269,7 +274,14 @@ const ProductsPage: React.FC = () => {
     inFlightRef.current.add(productId);
     setResponseByProductId((current) => askChecking(current, productId, product.response ?? null));
     try {
-      await requestResponseRun(productId).unwrap();
+      const requested = await requestResponseRun(productId).unwrap();
+      if (requested.reused) {
+        if (mountedRef.current) {
+          setResponseByProductId((current) => askReused(current, productId, requested.run));
+        }
+        dispatch(baseApi.util.invalidateTags([{ type: 'Product', id: 'LIST' }]));
+        return;
+      }
       const outcome = await awaitVerdictRun(
         async () => {
           const read = dispatch(
