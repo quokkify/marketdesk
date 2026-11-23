@@ -23,6 +23,80 @@ export type ListingStatus = 'live' | 'draft' | 'expired' | 'error';
 // Products catalogue statistics (GET /products/stats).
 export type NeedsActionReason = 'buyer_waiting' | 'listing_problem' | 'no_view_growth';
 
+export type ResponseStage =
+  | 'no_data'
+  | 'responding'
+  | 'too_early'
+  | 'not_seen'
+  | 'seen_not_contacted';
+
+export interface ListingResponseSignal {
+  listingId: string;
+  stage: ResponseStage;
+  views: number | null;
+  /** Mean views of the last three complete UTC days. */
+  viewsPerDay: number | null;
+  hoursLive: number | null;
+  /** Total views a silent listing needs before it can be judged; null when not collecting. */
+  viewsNeeded: number | null;
+}
+
+export type ResponseFindingCode =
+  | 'verdict_reason'
+  | 'no_verdict'
+  | 'verdict_out_of_date'
+  | 'not_in_results'
+  | 'deep_in_results'
+  | 'title_misses_query_words'
+  | 'price_high_among_top'
+  | 'crowded_market'
+  | 'probe_failed';
+
+export type ResponseAction =
+  | 'open_proposal'
+  | 'run_analyze'
+  | 'edit_title'
+  | 'review_price'
+  | 'refresh_advert'
+  | 'retry'
+  | null;
+
+export interface ResponseFinding {
+  code: ResponseFindingCode;
+  /** Fixed copy built in code from the evidence; never model or OLX free text. */
+  message: string;
+  action: ResponseAction;
+  evidence: {
+    query?: string;
+    position?: number;
+    checked?: number;
+    total?: number | null;
+    missingWords?: string[];
+    ownPrice?: number;
+    lowPrice?: number;
+    highPrice?: number;
+    verdictCheck?: VerdictCheckName;
+    verdictReasonCode?: string;
+    eventIds?: string[];
+  };
+}
+
+/** A card read from an OLX search page; price is the PLN value or null. */
+export interface ProbeCard {
+  id: string;
+  price: number | null;
+  promoted: boolean;
+}
+
+/** cards are in page order across pages; firstPageSize is how many of them came from page 1. */
+export interface ResponseProbe {
+  query: string;
+  status: 'ok' | 'failed';
+  total: number | null;
+  cards: ProbeCard[];
+  firstPageSize: number;
+}
+
 export interface ProductStats {
   views: number | null;
   watchers: number | null;
@@ -36,6 +110,8 @@ export interface ProductStats {
   externalUrl: string | null;
   listingStatus: ListingStatus | null;
   needsAction: NeedsActionReason[];
+  /** Response stage of the first live listing; null without one. */
+  response: ListingResponseSignal | null;
 }
 
 export type MarketplaceCategorySource = 'provider_taxonomy' | 'remote_import' | 'user_confirmed';
@@ -391,6 +467,10 @@ export interface Product {
   verdict?: SaleVerdict | null;
   // The newest sale verdict run of the product failed; only the product list fills it.
   verdictLastFailed?: boolean;
+  // Latest completed response run of the live OLX listing; only the product list fills it.
+  response?: ListingResponseRun | null;
+  // The listing's title, price or category changed after that run; only the product list fills it.
+  responseOutOfDate?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -514,6 +594,30 @@ export interface ProductVerdictView {
   lastFailed: boolean;
   // Why the newest run failed; null unless lastFailed.
   lastFailedCode: string | null;
+}
+
+export interface ListingResponseRun {
+  id: string;
+  productId: string;
+  listingId: string;
+  graphVersion: string;
+  status: VerdictRunStatus;
+  stage: ResponseStage | null;
+  signal: ListingResponseSignal | null;
+  /** Stored without the card lists. */
+  probes: Array<Omit<ResponseProbe, 'cards'> & { position: number | null; checked: number }>;
+  findings: ResponseFinding[];
+  fingerprint: string;
+  errorCode: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ListingResponseView {
+  latest: ListingResponseRun | null;
+  active: ListingResponseRun | null;
+  lastFailed: boolean;
+  outOfDate: boolean;
 }
 
 export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';

@@ -18,4 +18,5 @@ public abstract class BaseSteps {
   protected final ProductsPageSteps productsPageSteps = new ProductsPageSteps();
   protected final VerdictSteps verdictSteps = new VerdictSteps();
   protected final HermesMockSteps hermesMockSteps = new HermesMockSteps();
+  protected final ResponseSteps responseSteps = new ResponseSteps();
 }

@@ -16,11 +16,30 @@ public class DatabaseHelper {
 
   private static final String EXPIRE_LISTING = "UPDATE listings SET status = 'expired', marketplace_listing_id = :advertId"
       + " WHERE id = :listingId";
+  // The columns are TIMESTAMP without a zone and the app reads them as UTC, so the times are written in UTC whatever
+  // zone the JDBC session has. Watchers and conversations are 0, not unknown, as after an OLX sync.
+  private static final String LIVE_LISTING = "UPDATE listings SET status = 'live', marketplace_listing_id = :advertId,"
+      + " published_at = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - make_interval(hours => :hoursLive),"
+      + " last_sync_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC', views = :views, watchers = 0, conversations = 0"
+      + " WHERE id = :listingId";
 
   public void markListingExpired(String listingId, String advertId) {
     // fromTransaction opens a session for this call only, commits or rolls back, and closes it.
     int updated = Connection.FACTORY.fromTransaction(session -> session.createNativeMutationQuery(EXPIRE_LISTING)
         .setParameter("advertId", advertId)
+        .setParameter("listingId", UUID.fromString(listingId))
+        .executeUpdate());
+    if (updated != 1) {
+      throw new IllegalStateException("Listing " + listingId + " was not found in the database");
+    }
+  }
+
+  // A live OLX advert published hoursLive hours ago and synced just now with the given total views.
+  public void markListingLive(String listingId, String advertId, int hoursLive, int views) {
+    int updated = Connection.FACTORY.fromTransaction(session -> session.createNativeMutationQuery(LIVE_LISTING)
+        .setParameter("advertId", advertId)
+        .setParameter("hoursLive", hoursLive)
+        .setParameter("views", views)
         .setParameter("listingId", UUID.fromString(listingId))
         .executeUpdate());
     if (updated != 1) {

@@ -57,9 +57,12 @@ import {
   useApproveHermesEvent,
   useRunHermes,
   useProductVerdict,
+  useResponseView,
+  useRequestResponseRun,
   VERDICT_POLL_MS,
 } from '../services/hooks/index.js';
 import { HISTORY_LIMIT, useGetProductVerdictsQuery } from '../state/api/hermesApi.js';
+import { useGetProductStatsQuery } from '../state/api/productsApi.js';
 import { useGetPriceResearchRunsQuery } from '../state/api/productsApi.js';
 import { settingsPrincipalKey, useGetHermesSettingsQuery } from '../state/api/settingsApi.js';
 import { useMarketplaceLookup } from '../hooks/useMarketplaceLookup.js';
@@ -118,7 +121,8 @@ import { PricesTabContainer } from '../components/product-detail/hermes/PricesTa
 import { SuggestionsTab } from '../components/product-detail/hermes/SuggestionsTab.js';
 import { HistoryTab } from '../components/product-detail/hermes/HistoryTab.js';
 import { buildHistory, historyQueryState } from '../components/product-detail/hermes/hermesHistory.js';
-import { hermesCardState, hermesProviderNote } from '../components/product-detail/hermes/hermesCardModel.js';
+import { responseControlTarget } from '../components/products/responseDisplay.js';
+import { hermesCardState, hermesProviderNote, responseCardState } from '../components/product-detail/hermes/hermesCardModel.js';
 import type { HermesDrawerTab } from '../components/product-detail/hermes/hermesCardModel.js';
 
 export { mainPreviewImageSx };
@@ -694,6 +698,9 @@ const ListingDetailsPage: React.FC = () => {
   const [runHermes, { isLoading: startingRun }] = useRunHermes();
   const [approveEvent, { isLoading: settingPrice }] = useApproveHermesEvent();
   const verdictView = useProductVerdict(productId).currentData;
+  const responseView = useResponseView(productId).currentData ?? null;
+  const [requestResponseRun, { isLoading: askingWhy }] = useRequestResponseRun();
+  const responseSignal = useGetProductStatsQuery().currentData?.[productId ?? '']?.response ?? null;
   const priceResearchQuery = usePriceResearchView(productId);
   const priceResearch = priceResearchQuery.currentData ?? null;
   const analyzing = startingRun || Boolean(verdictView?.active);
@@ -902,6 +909,17 @@ const ListingDetailsPage: React.FC = () => {
     try {
       // The run ends in the background; the verdict query follows it.
       await runHermes(productScopedHermesRunInput(productId)).unwrap();
+    } catch (err) {
+      setAnalyzeError(errorMessage(err));
+      dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
+    }
+  };
+
+  const handleAskWhy = async () => {
+    if (!productId) return;
+    setAnalyzeError(null);
+    try {
+      await requestResponseRun(productId).unwrap();
     } catch (err) {
       setAnalyzeError(errorMessage(err));
       dispatch(enqueueToast({ message: errorMessage(err), severity: 'error' }));
@@ -1245,6 +1263,7 @@ const ListingDetailsPage: React.FC = () => {
     now,
   });
   const fixHint = hermesFixHint(latestVerdict, runActive, verdictStale);
+  const responseState = responseCardState({ signal: responseSignal, view: responseView, now });
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/products')} sx={{ mb: 1 }}>
@@ -1406,10 +1425,18 @@ const ListingDetailsPage: React.FC = () => {
             analyzeDisabledReason={analyzeDisabledReason}
             note={hermesProviderNote(hermesStatus?.activeProvider, hermesStatus?.hermesToolsSafe, analyzing)}
             error={analyzeError}
-            busy={analyzing || settingPrice}
+            busy={analyzing || settingPrice || askingWhy}
             onAnalyze={() => void handleAnalyzeWithHermes()}
             onSetPrice={(eventId) => void handleSetPrice(eventId)}
             onOpen={setDrawerTab}
+            response={responseState}
+            onAskWhy={() => void handleAskWhy()}
+            onResponseAction={(action) => {
+              const target = responseControlTarget(action);
+              if (target.kind === 'analyze') void handleAnalyzeWithHermes();
+              else if (target.kind === 'edit') setEditOpen(true);
+              else setDrawerTab(target.tab);
+            }}
           />
         </Stack>
       </Box>

@@ -115,7 +115,7 @@ export interface AwaitVerdictRunOptions {
 // A run ends in the background. Reads the product's verdict until no run is active, then says
 // whether the last run failed. `stopped` means the caller left before the run ended.
 export async function awaitVerdictRun(
-  readView: () => Promise<ProductVerdictView>,
+  readView: () => Promise<Pick<ProductVerdictView, 'lastFailed'> & { active: unknown }>,
   options: AwaitVerdictRunOptions = {}
 ): Promise<'completed' | 'failed' | 'stopped'> {
   const { intervalMs = VERDICT_RUN_POLL_MS, shouldContinue, sleep = defaultSleep } = options;

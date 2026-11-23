@@ -22,7 +22,9 @@ public class ProductStatsTest extends BaseTest {
     marketplaceSteps.connectSandboxOlx(account);
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
     ValidatableResponse response = productSteps.getProductStats(account);
-    productSteps.verify().statsCoverProduct(response, productListing.productId());
+    productSteps.verify()
+        .statsCoverProduct(response, productListing.productId())
+        .statsHaveNoResponseStage(response, productListing.productId());
   }
 
   @Test

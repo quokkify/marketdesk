@@ -1,13 +1,15 @@
 import type { ProductStats } from '@shared/types';
 import {
+  ENOUGH_VIEWS,
   compareByStats,
   isSyncRecordedEventId,
+  listingResponseSignal,
   nonSyncViewEventIds,
   needsActionReasons,
   summarizeListingViews,
   summarizeProduct,
 } from '../productStats';
-import type { StatsListing } from '../productStats';
+import type { ResponseListing, StatsListing } from '../productStats';
 
 const now = new Date('2026-11-22T12:00:00Z');
 const ev = (id: string, listingId: string, quantity: number, iso: string) => ({
@@ -203,5 +205,124 @@ describe('baseline events', () => {
     ];
     const views = summarizeListingViews(events, nonSyncViewEventIds(events), now);
     expect(views.get('L1')!.delta7d).toBe(2);
+  });
+});
+
+describe('listingResponseSignal', () => {
+  const at = new Date('2026-11-23T12:00:00Z');
+  const hoursAgo = (hours: number) => new Date(at.getTime() - hours * 3600 * 1000);
+  const listing = (over: Partial<ResponseListing> = {}): ResponseListing => ({
+    id: 'L1',
+    productId: 'p',
+    status: 'live',
+    views: 17,
+    watchers: 0,
+    messages: 0,
+    conversations: 0,
+    lastSyncAt: hoursAgo(1),
+    publishedAt: hoursAgo(96),
+    externalUrl: 'u',
+    ...over,
+  });
+  const byDay = (lastThree: number[]) => ({
+    delta7d: 0,
+    byDay: [...Array<number>(10).fill(0), ...lastThree, 5],
+  });
+  const quiet = byDay([1, 0, 1]);
+
+  it('has no data for stale statistics', () => {
+    const signal = listingResponseSignal(
+      listing({ lastSyncAt: hoursAgo(25), watchers: 2 }),
+      quiet,
+      at
+    );
+    expect(signal.stage).toBe('no_data');
+  });
+
+  it('has no data without views', () => {
+    expect(listingResponseSignal(listing({ views: null }), quiet, at).stage).toBe('no_data');
+  });
+
+  it('has no data when both contact metrics are unknown', () => {
+    const signal = listingResponseSignal(
+      listing({ watchers: null, conversations: null }),
+      quiet,
+      at
+    );
+    expect(signal.stage).toBe('no_data');
+  });
+
+  it('is responding with a watcher', () => {
+    expect(listingResponseSignal(listing({ watchers: 1 }), quiet, at).stage).toBe('responding');
+  });
+
+  it('judges on views when only conversations are unknown', () => {
+    const signal = listingResponseSignal(listing({ conversations: null, watchers: 0 }), quiet, at);
+    expect(signal.stage).toBe('not_seen');
+  });
+
+  it('is too early for a listing younger than 48 hours', () => {
+    const signal = listingResponseSignal(listing({ publishedAt: hoursAgo(47) }), quiet, at);
+    expect(signal).toMatchObject({ stage: 'too_early', viewsNeeded: null });
+  });
+
+  it('is not seen with few views and a low daily average', () => {
+    const signal = listingResponseSignal(listing(), quiet, at);
+    expect(signal.stage).toBe('not_seen');
+    expect(signal.viewsPerDay).toBeCloseTo(0.67, 2);
+    expect(signal.hoursLive).toBe(96);
+  });
+
+  it('is too early while few views are growing', () => {
+    const signal = listingResponseSignal(listing(), byDay([4, 5, 6]), at);
+    expect(signal).toMatchObject({ stage: 'too_early', viewsNeeded: ENOUGH_VIEWS });
+  });
+
+  it('keeps collecting between the not-seen and enough-views limits', () => {
+    const signal = listingResponseSignal(listing({ views: 45 }), quiet, at);
+    expect(signal).toMatchObject({ stage: 'too_early', viewsNeeded: ENOUGH_VIEWS });
+  });
+
+  it('is seen but not contacted with enough views', () => {
+    expect(listingResponseSignal(listing({ views: 80 }), quiet, at).stage).toBe(
+      'seen_not_contacted'
+    );
+  });
+
+  it('is not seen just under 30 views', () => {
+    expect(listingResponseSignal(listing({ views: 29 }), quiet, at).stage).toBe('not_seen');
+  });
+
+  it('keeps collecting at exactly 30 views', () => {
+    const signal = listingResponseSignal(listing({ views: 30 }), quiet, at);
+    expect(signal).toMatchObject({ stage: 'too_early', viewsNeeded: ENOUGH_VIEWS });
+  });
+
+  it('is not "not seen" at exactly 3 views a day', () => {
+    const signal = listingResponseSignal(listing(), byDay([3, 3, 3]), at);
+    expect(signal.viewsPerDay).toBe(3);
+    expect(signal.stage).not.toBe('not_seen');
+  });
+
+  it('is responding with a conversation', () => {
+    expect(listingResponseSignal(listing({ conversations: 1 }), quiet, at).stage).toBe(
+      'responding'
+    );
+  });
+
+  it('has no data for a listing that is not live', () => {
+    expect(listingResponseSignal(listing({ status: 'expired' }), quiet, at).stage).toBe('no_data');
+  });
+
+  it('has no data without a publication date', () => {
+    const signal = listingResponseSignal(listing({ publishedAt: null }), quiet, at);
+    expect(signal).toMatchObject({ stage: 'no_data', hoursLive: null });
+  });
+
+  it('counts a listing without view events as zero views per day', () => {
+    expect(listingResponseSignal(listing(), undefined, at)).toMatchObject({
+      stage: 'not_seen',
+      viewsPerDay: 0,
+    });
   });
 });

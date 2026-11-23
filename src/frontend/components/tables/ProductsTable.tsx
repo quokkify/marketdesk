@@ -55,6 +55,9 @@ import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAn
 import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
 import VerdictSummary from '../products/VerdictSummary.js';
 import { isVerdictStale } from '../products/verdictDisplay.js';
+import ResponseSummary from '../products/ResponseSummary.js';
+import { currentRowResponse } from '../products/responseDisplay.js';
+import type { RowResponseState } from '../products/responseDisplay.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
@@ -434,6 +437,8 @@ export interface ProductsCollectionProps {
   onToggleReview?: (product: Product) => void;
   renderReview?: (product: Product) => React.ReactNode;
   statsByProductId?: Record<string, ProductStats>;
+  responseByProductId?: Record<string, RowResponseState>;
+  onAskWhy?: (product: Product) => void;
 }
 
 const reviewRegionId = (product: Product) => `product-review-${product.id}`;
@@ -460,6 +465,23 @@ function RowVerdict({ product, props }: { product: Product; props: ProductsColle
       running={props.analysisByProductId?.[product.id]?.status === 'running'}
       lastFailed={product.verdictLastFailed ?? false}
       stale={verdict !== null && isVerdictStale(verdict, product.updatedAt, null)}
+    />
+  );
+}
+
+// A run is shown only for the live listing the stage line describes.
+function RowResponse({ product, props }: { product: Product; props: ProductsCollectionProps }) {
+  const view = currentRowResponse(props.responseByProductId?.[product.id], product.response);
+  const signal = props.statsByProductId?.[product.id]?.response;
+  const run = view ? view.latest : (product.response ?? null);
+  const shown = run && (signal === undefined || signal?.listingId === run.listingId) ? run : null;
+  return (
+    <ResponseSummary
+      signal={signal}
+      run={shown}
+      active={view?.active ?? false}
+      outOfDate={view ? view.outOfDate : (product.responseOutOfDate ?? false)}
+      onAsk={props.onAskWhy ? () => props.onAskWhy?.(product) : undefined}
     />
   );
 }
@@ -696,6 +718,9 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                     </TableCell>
                     <TableCell>
                       <ProductViews stats={props.statsByProductId?.[product.id]} />
+                      <Box data-row-stop>
+                        <RowResponse product={product} props={props} />
+                      </Box>
                     </TableCell>
                     <TableCell data-row-stop>
                       <RowAnalysisControl product={product} props={props} />
@@ -807,6 +832,9 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                   Views · 7 days
                 </Typography>
                 <ProductViews stats={props.statsByProductId?.[product.id]} />
+                <Box data-row-stop>
+                  <RowResponse product={product} props={props} />
+                </Box>
               </Box>
             </Box>
             <ProductSignals product={product} stats={props.statsByProductId?.[product.id]} />

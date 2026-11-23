@@ -21,7 +21,7 @@ import type { AuthController } from '../http/controllers/AuthController';
 import { InMemoryAuthStore } from '../testkit/support';
 import { RecordingJobQueue } from '../../application/testkit/support';
 import { SyncMarketplaceUseCase } from '../../application/usecases/SyncMarketplaceUseCase';
-import type { SyncMarketplaceJob } from '../../application/ports/IJobQueue';
+import type { ListingResponseJob, SyncMarketplaceJob } from '../../application/ports/IJobQueue';
 import type { SyncMarketplaceDTO } from '../../application/dto/HermesDTO';
 import { Ok, Err } from '../../domain/shared/Result';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
@@ -54,7 +54,9 @@ import {
   InMemoryProductRepository,
   InMemoryListingRepository,
   InMemoryMarketplaceRepository,
+  InMemoryListingResponseRunRepository,
 } from '../../domain/testkit/support';
+import { ListingResponseRuns } from '../../application/services/response/ListingResponseRuns';
 import { InMemoryWorkspaceRepository } from '../../application/testkit/support';
 import { InMemorySettingsRepository } from '../../infrastructure/persistence/repositories/InMemorySettingsRepository';
 import { AIProviderSelector } from '../../infrastructure/external/AIProviderSelector';
@@ -436,6 +438,7 @@ async function buildTestApp(
     productRecheckService?: ProductRecheckService;
     hermesService?: HermesApplicationService;
     saleVerdictRuns?: AppDeps['saleVerdictRuns'];
+    listingResponseRuns?: boolean;
     olxTaxonomyResolver?: AppDeps['olxTaxonomyResolver'];
     marketplaceOAuthService?: (
       marketplaceRepo: InMemoryMarketplaceRepository
@@ -449,6 +452,7 @@ async function buildTestApp(
   } = {}
 ) {
   const authUserStore = new InMemoryAuthStore();
+  let responseRunCount = 0;
   const productRepo = new InMemoryProductRepository();
   const listingRepo = new InMemoryListingRepository();
   const marketplaceRepo = new InMemoryMarketplaceRepository();
@@ -475,6 +479,17 @@ async function buildTestApp(
     ),
     hermesService: options.hermesService ?? stubHermesService(),
     saleVerdictRuns: options.saleVerdictRuns,
+    listingResponseRuns: options.listingResponseRuns
+      ? new ListingResponseRuns({
+          products: productRepo,
+          listings: listingRepo,
+          marketplaces: marketplaceRepo,
+          runs: new InMemoryListingResponseRunRepository(),
+          queue: new RecordingJobQueue<ListingResponseJob>(),
+          newId: () => `resp-${++responseRunCount}`,
+          now: () => new Date(),
+        })
+      : undefined,
     hermesStatus: options.hermesStatus,
     productAssistanceGraph: options.productAssistanceGraph,
     analyticsService: stubAnalyticsService(),
@@ -541,6 +556,7 @@ async function buildTestApp(
     marketplaceRepo,
     workspaceRepo,
     listingRepo,
+    productRepo,
   };
 }
 
@@ -2129,6 +2145,72 @@ describe('Presentation API', () => {
       expect(badScope.status).toBe(400);
       expect(scheduled.status).toBe(400);
       expect(calls).toEqual([['ws-1', 'p-real', ['price'], 'manual']]);
+    });
+
+    describe('listing response', () => {
+      async function appWithLiveListing() {
+        const built = await buildTestApp({ listingResponseRuns: true });
+        const price = Money.of(20, 'PLN');
+        if (price.isErr()) throw price.error;
+        const listing = Listing.create({
+          id: 'listing-live', productId: 'p-real', marketplaceId: 'marketplace-olx', price: price.value,
+          marketplaceListingId: '900100', status: 'live',
+        });
+        if (listing.isErr()) throw listing.error;
+        await built.listingRepo.save(listing.value);
+        const cost = Money.of(10, 'PLN');
+        if (cost.isErr()) throw cost.error;
+        const foreign = Product.create({
+          id: 'p-foreign', workspaceId: 'ws-2', sku: 'S-FOREIGN', name: 'Foreign widget',
+          description: 'A widget of another workspace', costPrice: cost.value, sellingPrice: price.value,
+          condition: 'good', category: 'misc', status: 'active',
+        });
+        if (foreign.isErr()) throw foreign.error;
+        await built.productRepo.save(foreign.value);
+        return built.app;
+      }
+
+      it('answers 404 for an unknown product and for another workspace product', async () => {
+        const app = await appWithLiveListing();
+
+        const unknown = await auth(request(app).post('/api/hermes/products/p-missing/response-run'));
+        const foreign = await auth(request(app).post('/api/hermes/products/p-foreign/response-run'));
+        const foreignView = await auth(request(app).get('/api/hermes/products/p-foreign/response'));
+
+        expect(unknown.status).toBe(404);
+        expect(foreign.status).toBe(404);
+        expect(foreignView.status).toBe(404);
+      });
+
+      it('answers 401 without a token', async () => {
+        const app = await appWithLiveListing();
+
+        expect((await request(app).post('/api/hermes/products/p-real/response-run')).status).toBe(401);
+        expect((await request(app).get('/api/hermes/products/p-real/response')).status).toBe(401);
+      });
+
+      it('queues one run and answers the same run again', async () => {
+        const app = await appWithLiveListing();
+
+        const first = await auth(request(app).post('/api/hermes/products/p-real/response-run'));
+        const second = await auth(request(app).post('/api/hermes/products/p-real/response-run'));
+        const view = await auth(request(app).get('/api/hermes/products/p-real/response'));
+
+        expect(first.status).toBe(202);
+        expect(first.body.data).toMatchObject({ reused: false, run: { status: 'queued' } });
+        expect(second.status).toBe(200);
+        expect(second.body.data.run.id).toBe(first.body.data.run.id);
+        expect(view.status).toBe(200);
+        expect(view.body.data).toMatchObject({ latest: null, active: { id: first.body.data.run.id }, lastFailed: false });
+      });
+
+      it('answers 503 when the service is not wired', async () => {
+        const { app } = await buildTestApp();
+
+        const res = await auth(request(app).post('/api/hermes/products/p-real/response-run'));
+
+        expect(res.status).toBe(503);
+      });
     });
 
     it('approves a pending event (happy path)', async () => {

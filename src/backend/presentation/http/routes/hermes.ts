@@ -56,6 +56,12 @@ export function createHermesRoutes(
     validateBody(runProductHermesSchema),
     asyncHandler(controller.runForProduct)
   );
+  router.post(
+    '/products/:productId/response-run',
+    aiLimiter,
+    asyncHandler(controller.requestResponseRun)
+  );
+  router.get('/products/:productId/response', asyncHandler(controller.responseView));
   router.get('/products/:productId/verdict', asyncHandler(controller.verdict));
   router.get('/products/:productId/verdicts', asyncHandler(controller.verdicts));
   return router;

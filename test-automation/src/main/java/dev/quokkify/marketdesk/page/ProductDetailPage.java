@@ -30,6 +30,7 @@ public class ProductDetailPage implements Page {
   private static final String HERMES_LEAD = "[data-testid=\"hermes-lead\"]";
   private static final String HERMES_PRIMARY_ACTION = "[data-testid=\"hermes-primary-action\"]";
   private static final String HERMES_ROW = "[data-testid=\"hermes-row-%s\"]";
+  private static final String HERMES_RESPONSE = "[data-testid=\"hermes-response\"]";
   private static final String HERMES_HISTORY_LINK = "[data-testid=\"hermes-history-link\"]";
   // The app has a second drawer in the DOM, the phone sidebar; the Hermes one is the dialog inside its own root.
   private static final String HERMES_DRAWER = "[data-testid=\"hermes-drawer\"] [role=\"dialog\"]";
@@ -162,6 +163,10 @@ public class ProductDetailPage implements Page {
 
   public SelenideElement hermesRow(String key) {
     return Selenide.$(String.format(HERMES_ROW, key));
+  }
+
+  public SelenideElement hermesResponse() {
+    return Selenide.$(HERMES_RESPONSE);
   }
 
   public SelenideElement hermesHistoryLink() {

@@ -91,6 +91,12 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
     database.markListingExpired(listingId, "qa-olx-" + UUID.randomUUID());
   }
 
+  // The stub stack cannot age an advert or give it views, so the synced state is written in the database.
+  @Step("Listing {listingId} is live on OLX as advert {advertId}, published {hoursLive} h ago with {views} views")
+  public void markLiveOnOlx(String listingId, String advertId, int hoursLive, int views) {
+    database.markListingLive(listingId, advertId, hoursLive, views);
+  }
+
   @Step("Create the given product with an OLX listing and keep both ids")
   public ProductListingPojo createOlxProductListing(AccountPojo account, ProductRequestPojo product) {
     String productId = productService.createProduct(account.token(), product)

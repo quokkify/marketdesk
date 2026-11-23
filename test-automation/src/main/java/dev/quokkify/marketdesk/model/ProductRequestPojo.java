@@ -34,6 +34,15 @@ public record ProductRequestPojo(String name, String description, Double costPri
         150.0, 349.0, "good", "projectors", List.of(), null, null);
   }
 
+  // A product the listing response tests search for. The name is lowercase letters, digits and spaces, so it is
+  // also the buyer query the Hermes mock proposes: the title then holds every query word, and the token keeps the
+  // canned answers and search pages of one test apart from the others on the shared mock.
+  public static ProductRequestPojo responseSample() {
+    String token = "qa" + UUID.randomUUID().toString().replace("-", "").substring(0, RESEARCH_TOKEN_LENGTH);
+    return new ProductRequestPojo("test item " + token, "An item created by the listing response test.", 50.0,
+        120.0, "good", "electronics", List.of(), null, null);
+  }
+
   public ProductRequestPojo withCondition(String newCondition) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, newCondition, category, images,
         minAcceptablePrice, missingAccessories);

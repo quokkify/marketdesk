@@ -1,11 +1,23 @@
 // Per-product view statistics and "needs action" reasons for the products catalogue.
 // Pure functions: the service gathers listings, view events and awaiting counts, these decide.
-import type { ListingStatus, NeedsActionReason, ProductStats, ProductStatus } from '@shared/types';
+import type {
+  ListingResponseSignal,
+  ListingStatus,
+  NeedsActionReason,
+  ProductStats,
+  ProductStatus,
+} from '@shared/types';
+import type { Listing } from '../../domain/entities/Listing';
 
 export const STATS_DAYS = 14;
 export const GROWTH_WINDOW_MS = 7 * 24 * 3600 * 1000;
 export const STALE_AFTER_MS = 24 * 3600 * 1000;
 const DAY_MS = 24 * 3600 * 1000;
+const HOUR_MS = 3600 * 1000;
+export const YOUNG_MS = 48 * HOUR_MS;
+export const NOT_SEEN_MAX_VIEWS = 30;
+export const NOT_SEEN_MAX_VIEWS_PER_DAY = 3;
+export const ENOUGH_VIEWS = 80;
 
 export interface ViewEventInput {
   id: string;
@@ -48,7 +60,27 @@ export interface StatsListing {
   externalUrl: string | null;
 }
 
-export type ProductStatsSummary = Omit<ProductStats, 'needsAction'> & {
+export interface ResponseListing extends StatsListing {
+  id: string;
+  conversations: number | null;
+}
+
+export function toResponseListing(listing: Listing): ResponseListing {
+  return {
+    id: listing.id,
+    productId: listing.productId,
+    status: listing.status,
+    views: listing.views,
+    watchers: listing.watchers,
+    conversations: listing.conversations,
+    messages: listing.messages,
+    lastSyncAt: listing.lastSyncAt,
+    publishedAt: listing.publishedAt,
+    externalUrl: listing.externalUrl,
+  };
+}
+
+export type ProductStatsSummary = Omit<ProductStats, 'needsAction' | 'response'> & {
   oldestLivePublishedAt: Date | null;
 };
 
@@ -80,6 +112,48 @@ export function summarizeListingViews(
     result.set(event.listingId, entry);
   }
   return result;
+}
+
+export function listingResponseSignal(
+  listing: ResponseListing,
+  views: ListingViews | undefined,
+  now: Date
+): ListingResponseSignal {
+  const hoursLive = listing.publishedAt
+    ? (now.getTime() - listing.publishedAt.getTime()) / HOUR_MS
+    : null;
+  const recent = (views?.byDay ?? Array<number>(STATS_DAYS).fill(0)).slice(
+    STATS_DAYS - 4,
+    STATS_DAYS - 1
+  );
+  const viewsPerDay = recent.reduce((sum, count) => sum + count, 0) / recent.length;
+  const signal = (stage: ListingResponseSignal['stage'], viewsNeeded: number | null = null) => ({
+    listingId: listing.id,
+    stage,
+    views: listing.views,
+    viewsPerDay,
+    hoursLive,
+    viewsNeeded,
+  });
+
+  const stale =
+    !listing.lastSyncAt || now.getTime() - listing.lastSyncAt.getTime() > STALE_AFTER_MS;
+  if (
+    listing.status !== 'live' ||
+    hoursLive === null ||
+    stale ||
+    listing.views === null ||
+    (listing.watchers === null && listing.conversations === null)
+  ) {
+    return signal('no_data');
+  }
+  if ((listing.watchers ?? 0) > 0 || (listing.conversations ?? 0) > 0) return signal('responding');
+  if (hoursLive * HOUR_MS < YOUNG_MS) return signal('too_early');
+  if (listing.views < NOT_SEEN_MAX_VIEWS && viewsPerDay < NOT_SEEN_MAX_VIEWS_PER_DAY) {
+    return signal('not_seen');
+  }
+  if (listing.views >= ENOUGH_VIEWS) return signal('seen_not_contacted');
+  return signal('too_early', ENOUGH_VIEWS);
 }
 
 function sumNullable(values: Array<number | null>): number | null {

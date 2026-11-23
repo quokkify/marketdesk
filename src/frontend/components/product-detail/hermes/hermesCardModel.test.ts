@@ -5,7 +5,8 @@ import type {
   SaleVerdict,
   VerdictCheck,
 } from '@shared/types';
-import { hermesCardState, hermesProviderNote } from './hermesCardModel';
+import type { ListingResponseRun, ListingResponseSignal, ListingResponseView, ResponseAction } from '@shared/types';
+import { hermesCardState, hermesProviderNote, responseCardState } from './hermesCardModel';
 
 const NOW = new Date('2026-11-22T12:00:00.000Z');
 const T_CHECK = '2026-11-22T10:00:00.000Z'; // 2h before NOW
@@ -496,5 +497,89 @@ describe('hermesProviderNote', () => {
     expect(hermesProviderNote(undefined, undefined, true)).toBe(`Analyzing this product only. ${REVIEW_ONLY}`);
     expect(hermesProviderNote('hermes', false, false)).toBe(REVIEW_ONLY);
     expect(hermesProviderNote(undefined, undefined, false)).toBe(REVIEW_ONLY);
+  });
+});
+
+describe('responseCardState', () => {
+  const signal = (patch: Partial<ListingResponseSignal> = {}): ListingResponseSignal => ({
+    listingId: 'l-1',
+    stage: 'not_seen',
+    views: 4,
+    viewsPerDay: 1,
+    hoursLive: 80,
+    viewsNeeded: null,
+    ...patch,
+  });
+  const run = (actions: ResponseAction[]): ListingResponseRun =>
+    ({
+      id: 'r-1',
+      completedAt: T_CHECK,
+      findings: actions.map((action, index) => ({ code: 'crowded_market', message: `finding ${index}`, action, evidence: {} })),
+    }) as unknown as ListingResponseRun;
+  const view = (patch: Partial<ListingResponseView> = {}): ListingResponseView => ({
+    latest: null,
+    active: null,
+    lastFailed: false,
+    outOfDate: false,
+    ...patch,
+  });
+
+  it('is null without a signal, and for a responding listing that was never checked', () => {
+    expect(responseCardState({ signal: null, view: null, now: NOW })).toBeNull();
+    expect(responseCardState({ signal: signal({ stage: 'responding' }), view: view(), now: NOW })).toBeNull();
+  });
+
+  it('offers the question for a listing nobody sees and nothing else before a run', () => {
+    expect(responseCardState({ signal: signal(), view: view(), now: NOW })).toEqual({
+      stage: 'Not seen · day 4',
+      canAsk: true,
+      active: false,
+      checked: null,
+      outOfDate: false,
+      lastFailed: false,
+      findings: [],
+    });
+  });
+
+  it('keeps every finding in order and maps each action to a control', () => {
+    const state = responseCardState({
+      signal: signal(),
+      view: view({
+        latest: run(['run_analyze', 'review_price', 'edit_title', 'open_proposal', 'refresh_advert', 'retry', null]),
+        outOfDate: true,
+      }),
+      now: NOW,
+    });
+
+    expect(state?.checked).toBe('checked 2h ago');
+    expect(state?.outOfDate).toBe(true);
+    expect(state?.findings.map((finding) => finding.control)).toEqual([
+      'analyze',
+      'review_price',
+      'edit_title',
+      'open_proposal',
+      'hint',
+      null,
+      null,
+    ]);
+    expect(state?.findings.map((finding) => finding.message)[0]).toBe('finding 0');
+  });
+
+  it('cannot ask while a run is active', () => {
+    const state = responseCardState({ signal: signal(), view: view({ active: run([]) }), now: NOW });
+
+    expect(state?.active).toBe(true);
+    expect(state?.canAsk).toBe(false);
+  });
+
+  it('shows the last run of a listing that responds now', () => {
+    const state = responseCardState({
+      signal: signal({ stage: 'responding' }),
+      view: view({ latest: run([]) }),
+      now: NOW,
+    });
+
+    expect(state?.stage).toBe('');
+    expect(state?.checked).toBe('checked 2h ago · nothing found');
   });
 });

@@ -203,6 +203,7 @@ describe('views presentation', () => {
     externalUrl: null,
     listingStatus: 'live',
     needsAction: [],
+    response: null,
   };
   it('shows growth, no growth and stale data differently', () => {
     expect(viewsSummary({ ...base, views: 128, viewsDelta7d: 14 }).delta).toEqual({

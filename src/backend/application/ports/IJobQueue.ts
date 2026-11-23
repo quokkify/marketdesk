@@ -99,3 +99,10 @@ export interface SaleVerdictJob {
   // The queued research run recorded at request time for a forced research; the price check claims it.
   researchRunId?: string;
 }
+
+// One listing response run. Ids only: the run row holds its state.
+export interface ListingResponseJob {
+  workspaceId: string;
+  productId: string;
+  runId: string;
+}

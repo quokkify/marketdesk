@@ -133,6 +133,8 @@ services:
       HERMES_API_KEY: ${HERMES_API_KEY:?HERMES_API_KEY must match Hermes API_SERVER_KEY}
       HERMES_MODEL: ${HERMES_MODEL:-hermes-agent}
       HERMES_REQUEST_TIMEOUT_MS: ${HERMES_REQUEST_TIMEOUT_MS:-30000}
+      # Public OLX site whose search pages the listing response check reads; empty means https://www.olx.pl.
+      OLX_SEARCH_BASE_URL: ${OLX_SEARCH_BASE_URL:-}
       # Optional web-enabled research profile for the market search; empty leaves the search off.
       HERMES_RESEARCH_API_URL: ${HERMES_RESEARCH_API_URL:-}
       HERMES_RESEARCH_API_KEY: ${HERMES_RESEARCH_API_KEY:-}

@@ -1,8 +1,11 @@
-# Overlay for the test stack: a MockServer in place of the Hermes research profile only. The main profile stays
-# unreachable, so everything else keeps the offline heuristics. scripts/ci-java-api-tests.sh adds it through
-# COMPOSE_FILE and points HERMES_RESEARCH_API_URL at http://mock-server:1080/p/marketdesk-research/v1.
-# The probe answers (/models, /toolsets with only "web" enabled) load at start; the tests add the chat answers
-# per product through the control API on the host port. The image has no shell, so the script waits for
+# Overlay for the test stack: a MockServer in place of the Hermes research profile, the main Hermes profile and the
+# public OLX search pages. scripts/ci-java-api-tests.sh adds it through COMPOSE_FILE and points
+# HERMES_RESEARCH_API_URL at http://mock-server:1080/p/marketdesk-research/v1, HERMES_API_URL at
+# http://mock-server:1080/p/marketdesk/v1 and OLX_SEARCH_BASE_URL at http://mock-server:1080/olx-search.
+# The research probe answers (/models, /toolsets with only "web" enabled) load at start. The main profile gets no
+# probe answers, so it reads as unreachable and everything else keeps the offline heuristics; the listing response
+# graph calls it without a probe. The tests add the chat answers and the search pages per product through the
+# control API on the host port. The image has no shell, so the script waits for
 # PUT /mockserver/status instead of a healthcheck.
 services:
   mock-server:
