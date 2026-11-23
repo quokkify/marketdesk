@@ -41,6 +41,7 @@ describe('parseOlxSearchPage', () => {
       { id: 12, isPromoted: true, price: ppl(300) },
       { id: 13, searchReason: 'promoted', price: ppl(310) },
       { id: 14, isPromoted: false, searchReason: 'organic', price: ppl(320) },
+      { id: 15, isPromoted: true, searchReason: 'organic', price: ppl(330) },
     ];
     expect(parseOlxSearchPage(listingPage(ads))).toEqual({
       total: 966,
@@ -50,8 +51,33 @@ describe('parseOlxSearchPage', () => {
         { id: '12', price: 300, promoted: true },
         { id: '13', price: 310, promoted: true },
         { id: '14', price: 320, promoted: false },
+        { id: '15', price: 330, promoted: false },
       ],
     });
+  });
+
+  it('keeps a card whose price shape is odd, with a null price', () => {
+    const ads = [
+      { id: 1, price: { regularPrice: null } },
+      { id: 2, price: null },
+      { id: 3, price: { regularPrice: { value: 'x', currencyCode: 'PLN' } } },
+      { id: 4, isPromoted: null, searchReason: 7 },
+    ];
+    const page = parseOlxSearchPage(listingPage(ads));
+    expect(page?.cards).toEqual([
+      { id: '1', price: null, promoted: false },
+      { id: '2', price: null, promoted: false },
+      { id: '3', price: null, promoted: false },
+      { id: '4', price: null, promoted: false },
+    ]);
+  });
+
+  it('keeps both occurrences of the same advert and reads numeric string ids', () => {
+    const ads = [{ id: 9, searchReason: 'promoted' }, { id: '9', searchReason: 'organic' }, { id: 'abc' }];
+    expect(parseOlxSearchPage(listingPage(ads))?.cards).toEqual([
+      { id: '9', price: null, promoted: true },
+      { id: '9', price: null, promoted: false },
+    ]);
   });
 
   it('gives a null price for other currencies, free, exchange and a missing price', () => {

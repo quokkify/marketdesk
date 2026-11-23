@@ -10,17 +10,22 @@ import { isSafeQuery } from './listingResponsePrompts';
 const STATE_LITERAL = /__PRERENDERED_STATE__\s*=\s*("(?:[^"\\]|\\[\s\S])*")/;
 const PRICE_CURRENCY = 'PLN';
 
+// Every field but the id is optional and falls back to undefined, so an odd shape (a null price,
+// a wrong type) keeps the card with price null instead of dropping it.
+const NUMERIC_ID = /^\d+$/;
+const loose = <T extends z.ZodTypeAny>(schema: T) => schema.optional().catch(undefined);
+
 const adSchema = z.object({
-  id: z.union([z.number(), z.string()]).optional(),
-  isPromoted: z.boolean().optional(),
-  searchReason: z.string().optional(),
-  price: z
-    .object({
-      regularPrice: z.object({ value: z.number().optional(), currencyCode: z.string().optional() }).optional(),
-      free: z.boolean().optional(),
-      exchange: z.boolean().optional(),
+  id: z.union([z.number().finite(), z.string().regex(NUMERIC_ID)]),
+  isPromoted: loose(z.boolean()),
+  searchReason: loose(z.string()),
+  price: loose(
+    z.object({
+      regularPrice: loose(z.object({ value: loose(z.number()), currencyCode: loose(z.string()) })),
+      free: loose(z.boolean()),
+      exchange: loose(z.boolean()),
     })
-    .optional(),
+  ),
 });
 
 const stateSchema = z.object({
@@ -43,7 +48,7 @@ export function olxSearchUrl(baseUrl: string, query: string, page: number): stri
 
 function toCard(value: unknown): ProbeCard | null {
   const parsed = adSchema.safeParse(value);
-  if (!parsed.success || parsed.data.id === undefined) return null;
+  if (!parsed.success) return null;
   const { id, isPromoted, searchReason, price } = parsed.data;
   const regular = price?.regularPrice;
   const plain =
@@ -51,7 +56,7 @@ function toCard(value: unknown): ProbeCard | null {
   return {
     id: String(id),
     price: plain ? (regular.value as number) : null,
-    promoted: isPromoted === true || searchReason === 'promoted',
+    promoted: searchReason !== undefined ? searchReason === 'promoted' : isPromoted === true,
   };
 }
 
