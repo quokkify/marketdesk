@@ -212,6 +212,29 @@ describe('probeFindings', () => {
     expect(result.map((f) => f.code)).not.toContain('price_high_among_top');
   });
 
+  it('leaves low-priced promoted cards out of the price median', () => {
+    const cheapPromoted = (id: string): ProbeCard => ({ id, price: 10, promoted: true });
+    const cards = [
+      cheapPromoted('p1'),
+      cheapPromoted('p2'),
+      cheapPromoted('p3'),
+      organic('b', 300),
+      organic('c', 310),
+      organic('d', 320),
+      organic('own-1', 279),
+    ];
+    const result = probeFindings(probe({ cards, firstPageSize: 7 }), own);
+    expect(result.map((f) => f.code)).not.toContain('price_high_among_top');
+  });
+
+  it('does not report not_in_results when no organic card was read', () => {
+    const result = probeFindings(
+      probe({ cards: [promoted('a'), promoted('b')], firstPageSize: 2 }),
+      own
+    );
+    expect(result.map((f) => f.code)).not.toContain('not_in_results');
+  });
+
   it('does not report a price finding when own is not above the median', () => {
     const cards = [organic('b', 200), organic('c', 300), organic('d', 400), organic('own-1', 279)];
     const result = probeFindings(probe({ cards, firstPageSize: 4 }), own);

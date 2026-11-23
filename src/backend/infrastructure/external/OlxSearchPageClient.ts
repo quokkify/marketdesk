@@ -99,12 +99,14 @@ export class OlxSearchPageClient implements IOlxSearch {
   private readonly gate: OlxRequestGate;
   private readonly timeoutMs: number;
   private readonly baseHost: string;
+  private readonly baseProtocol: string;
 
   constructor(private readonly deps: Deps) {
     this.fetchImpl = deps.fetch ?? fetch;
     this.gate = deps.gate ?? defaultGate;
     this.timeoutMs = deps.timeoutMs ?? REQUEST_TIMEOUT_MS;
     this.baseHost = new URL(deps.baseUrl).host;
+    this.baseProtocol = new URL(deps.baseUrl).protocol;
   }
 
   page(query: string, page: number, signal: AbortSignal): Promise<OlxSearchPage> {
@@ -143,9 +145,10 @@ export class OlxSearchPageClient implements IOlxSearch {
         const location = response.headers.get('location');
         if (!location) throw new Error('OLX search redirect without a location');
         const next = new URL(location, url);
-        if (next.host !== this.baseHost || (next.protocol !== 'https:' && next.protocol !== 'http:')) {
+        if (next.host !== this.baseHost || next.protocol !== this.baseProtocol) {
           throw new Error('OLX search redirected outside the base host');
         }
+        await response.body?.cancel();
         url = next.toString();
         continue;
       }

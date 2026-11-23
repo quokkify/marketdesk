@@ -9,6 +9,7 @@ const RUN = { id: 'run-1', status: 'running' } as unknown as ListingResponseRun;
 function setup(options: { claimed?: boolean; graph?: () => Promise<ListingResponseRun> } = {}) {
   const failed: Array<{ runId: string; code: string }> = [];
   const inputs: unknown[] = [];
+  const logged: Array<Record<string, unknown>> = [];
   const handler = new ListingResponseHandler({
     runs: {
       claim: async () => (options.claimed === false ? null : RUN),
@@ -24,9 +25,9 @@ function setup(options: { claimed?: boolean; graph?: () => Promise<ListingRespon
       },
     },
     now: () => new Date('2026-11-23T12:00:00.000Z'),
-    logger: { error: () => {} },
+    logger: { error: (context) => logged.push(context) },
   });
-  return { handler, failed, inputs };
+  return { handler, failed, inputs, logged };
 }
 
 describe('ListingResponseHandler', () => {
@@ -49,6 +50,14 @@ describe('ListingResponseHandler', () => {
 
     await expect(handler.handle(JOB)).resolves.toEqual({ kind: 'finished', status: 'failed' });
     expect(failed).toEqual([{ runId: 'run-1', code: 'run_error' }]);
+  });
+
+  it('logs the error name only, never its message', async () => {
+    const { handler, logged } = setup({ graph: async () => { throw new TypeError('secret detail'); } });
+
+    await handler.handle(JOB);
+
+    expect(logged).toEqual([{ productId: 'p1', runId: 'run-1', errorName: 'TypeError' }]);
   });
 
   it.each([new InvalidStateError('no listing'), new NotFoundError('no product')])(

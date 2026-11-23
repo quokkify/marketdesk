@@ -42,6 +42,11 @@ describe('parseQueries', () => {
     expect(parseQueries('{"queries":["<b>x</b>"]}')).toBeNull();
   });
 
+  it('composes decomposed Polish letters before checking a query', () => {
+    const decomposed = 'ro\u0301z\u0307owe airpods';
+    expect(parseQueries(JSON.stringify({ queries: [decomposed] }))).toEqual(['r\u00f3\u017cowe airpods']);
+  });
+
   it('parses JSON wrapped in a fence', () => {
     expect(parseQueries('```json\n{"queries":["airpods 4"]}\n```')).toEqual(['airpods 4']);
   });
@@ -59,5 +64,15 @@ describe('buildQueriesPrompt', () => {
     const { system, prompt } = buildQueriesPrompt(item);
     expect(prompt).toContain('Apple AirPods 4');
     expect(`${system}\n${prompt}`).not.toContain('SECRET-NOTE');
+  });
+
+  it('asks for phrases of two to four words, never one', () => {
+    const item = researchItemFromProduct(
+      { name: 'Apple AirPods 4', condition: 'used_good', category: 'Słuchawki' },
+      { price: { currency: 'PLN' } }
+    );
+    const { prompt } = buildQueriesPrompt(item);
+    expect(prompt).toContain('two to four words');
+    expect(prompt).not.toContain('one to four words');
   });
 });

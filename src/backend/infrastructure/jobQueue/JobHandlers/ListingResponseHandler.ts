@@ -49,7 +49,10 @@ export class ListingResponseHandler {
       return { kind: 'finished', status: result.status };
     } catch (error) {
       const notApplicable = error instanceof InvalidStateError || error instanceof NotFoundError;
-      this.deps.logger?.error({ productId: job.productId, runId: job.runId, err: error }, 'Listing response run failed');
+      this.deps.logger?.error(
+        { productId: job.productId, runId: job.runId, errorName: error instanceof Error ? error.name : 'unknown' },
+        'Listing response run failed',
+      );
       await this.deps.runs.fail(job.runId, this.deps.now().toISOString(), notApplicable ? 'not_applicable' : 'run_error');
       return { kind: 'finished', status: 'failed' };
     }

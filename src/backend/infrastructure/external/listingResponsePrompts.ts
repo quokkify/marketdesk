@@ -36,7 +36,7 @@ export function buildQueriesPrompt(item: ResearchItem): { system: string; prompt
   const prompt = [
     `Give ${MAX_QUERIES - 1}-${MAX_QUERIES} short phrases a buyer in Poland would type into the marketplace search box to find this item.`,
     block,
-    `Each phrase: one to four words, ${MIN_QUERY_LENGTH}-${MAX_QUERY_LENGTH} characters, only letters, digits and single spaces, no brand-only or generic one-word phrases that match unrelated items.`,
+    `Each phrase: two to four words, ${MIN_QUERY_LENGTH}-${MAX_QUERY_LENGTH} characters, only letters, digits and single spaces, never a brand alone or generic words that match unrelated items.`,
     'Use no tools. Answer with JSON only, in this shape: {"queries": ["phrase one", "phrase two"]}',
   ].join('\n');
   return { system: SYSTEM, prompt };
@@ -51,7 +51,7 @@ export function parseQueries(raw: string): string[] | null {
   const queries: string[] = [];
   for (const entry of parsed.data.queries) {
     if (typeof entry !== 'string') continue;
-    const query = entry.trim().toLowerCase();
+    const query = entry.normalize('NFC').trim().toLowerCase();
     if (isSafeQuery(query) && !queries.includes(query)) queries.push(query);
   }
   return queries.length > 0 ? queries.slice(0, MAX_QUERIES) : null;

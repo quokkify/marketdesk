@@ -10,7 +10,6 @@ import type { IMarketplaceRepository } from '../../../domain/repositories/interf
 import type { IListingResponseRunRepository } from '../../../domain/repositories/interfaces/IListingResponseRunRepository';
 import { ConflictError, InvalidStateError, NotFoundError } from '../../../domain/shared/DomainError';
 import type { IJobQueue, ListingResponseJob } from '../../ports/IJobQueue';
-import { VERDICT_QUEUED_TTL_MS } from '../verdict/SaleVerdictRuns';
 import type { Product } from '../../../domain/entities/Product';
 import {
   LISTING_RESPONSE_GRAPH_VERSION,
@@ -22,6 +21,8 @@ import {
 // A completed run answers repeated requests for this long while the listing subject is unchanged.
 export const REUSE_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const RESPONSE_EXPIRED = 'expired';
+// Jobs run one at a time within the 4 min budget, so with few queued a 10 min wait means a lost job.
+export const RESPONSE_QUEUED_TTL_MS = 10 * 60 * 1000;
 
 // Structural, so the container can pass its logger.
 export interface ListingResponseRunsLogger {
@@ -81,7 +82,10 @@ export class ListingResponseRuns {
     try {
       await this.deps.queue.enqueue({ workspaceId, productId, runId: run.id });
     } catch (error) {
-      this.deps.logger?.error({ productId, runId: run.id, err: error }, 'Listing response run not queued');
+      this.deps.logger?.error(
+        { productId, runId: run.id, errorName: error instanceof Error ? error.name : 'unknown' },
+        'Listing response run not queued',
+      );
       await this.deps.runs.fail(run.id, this.deps.now().toISOString(), 'enqueue_failed');
       throw error;
     }
@@ -141,7 +145,7 @@ export class ListingResponseRuns {
       workspaceId,
       listingId,
       now.toISOString(),
-      new Date(now.getTime() - VERDICT_QUEUED_TTL_MS).toISOString(),
+      new Date(now.getTime() - RESPONSE_QUEUED_TTL_MS).toISOString(),
       RESPONSE_EXPIRED,
     );
   }

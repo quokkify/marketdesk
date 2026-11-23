@@ -12,9 +12,8 @@ import {
 } from '../../../../domain/testkit/support';
 import { subjectFingerprint } from '../../../../domain/services/listingResponseRules';
 import type { ListingResponseJob } from '../../../ports/IJobQueue';
-import { VERDICT_QUEUED_TTL_MS } from '../../verdict/SaleVerdictRuns';
 import { LISTING_RESPONSE_GRAPH_VERSION } from '../ListingResponseGraph';
-import { ListingResponseRuns, REUSE_WINDOW_MS } from '../ListingResponseRuns';
+import { ListingResponseRuns, RESPONSE_QUEUED_TTL_MS, REUSE_WINDOW_MS } from '../ListingResponseRuns';
 
 const WS = 'w1';
 const PID = 'p1';
@@ -138,10 +137,21 @@ describe('ListingResponseRuns.request', () => {
     expect(jobs).toHaveLength(1);
   });
 
+  it('keeps a queued run for 10 minutes', async () => {
+    const { runs, advance } = setup();
+    const first = await runs.request(WS, PID);
+    advance(9 * MINUTE);
+
+    const second = await runs.request(WS, PID);
+
+    expect(RESPONSE_QUEUED_TTL_MS).toBe(10 * MINUTE);
+    expect(second).toMatchObject({ run: { id: first.run.id }, enqueued: false });
+  });
+
   it('fails a run stuck queued past the TTL and queues a new one', async () => {
     const { runs, repo, advance } = setup();
     const first = await runs.request(WS, PID);
-    advance(VERDICT_QUEUED_TTL_MS + MINUTE);
+    advance(11 * MINUTE);
 
     const second = await runs.request(WS, PID);
 
@@ -155,7 +165,7 @@ describe('ListingResponseRuns.request', () => {
     await expect(runs.request(WS, PID)).rejects.toThrow('redis down');
 
     await expect(repo.findById(WS, 'run-1')).resolves.toMatchObject({ status: 'failed', errorCode: 'enqueue_failed' });
-    expect(errors).toHaveLength(1);
+    expect(errors).toEqual([{ productId: PID, runId: 'run-1', errorName: 'Error' }]);
   });
 
   it('rejects an unknown product with NotFoundError', async () => {

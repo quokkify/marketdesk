@@ -28,7 +28,7 @@ const RANK: readonly ResponseFindingCode[] = [
 ];
 
 function normalise(text: string): string {
-  return text.toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return text.toLowerCase().replace(/\u0142/g, 'l').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function words(text: string): string[] {
@@ -112,7 +112,7 @@ export function probeFindings(
   const { position, checked } = locateOwn(probe.cards, own.id);
   const { query, total } = probe;
 
-  if (position === null && probe.cards.some((card) => card.id !== own.id)) {
+  if (position === null && checked > 0) {
     findings.push({
       code: 'not_in_results',
       message: `Not found among the ${checked} organic results read for "${query}"`,

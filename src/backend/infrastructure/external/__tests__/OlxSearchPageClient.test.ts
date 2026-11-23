@@ -186,6 +186,24 @@ describe('OlxSearchPageClient', () => {
     expect(away).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects a redirect that drops https to http on the same host', async () => {
+    const downgrade = jest.fn().mockResolvedValue(reply(301, '', { location: 'http://www.olx.pl/oferty/q-airpods-4/' }));
+    await expect(build(downgrade).client.page('airpods 4', 1, signal())).rejects.toThrow();
+    expect(downgrade).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the body of a redirect before following it', async () => {
+    const cancel = jest.fn().mockResolvedValue(undefined);
+    const redirect = {
+      status: 302,
+      headers: new Headers({ location: '/oferty/q-airpods-4/' }),
+      body: { cancel },
+    } as unknown as Response;
+    const fetchImpl = jest.fn().mockResolvedValueOnce(redirect).mockResolvedValueOnce(reply(200, okPage()));
+    await expect(build(fetchImpl).client.page('airpods 4', 1, signal())).resolves.toBeDefined();
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects after more than three redirects', async () => {
     const loop = jest.fn().mockImplementation(async () => reply(302, '', { location: '/oferty/q-airpods-4/' }));
     await expect(build(loop).client.page('airpods 4', 1, signal())).rejects.toThrow();
