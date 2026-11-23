@@ -40,6 +40,9 @@ MARKETPLACE_CREDENTIALS_KEY=[REDACTED_BASE64_32_BYTES]
 OLX_LIVE_PUBLISH_ENABLED=false
 ```
 
+`OLX_SEARCH_BASE_URL` is optional. It is the public OLX site whose search pages the
+listing response check reads; empty means `https://www.olx.pl`.
+
 Access and refresh tokens are obtained only through OAuth, encrypted with
 AES-256-GCM, and stored per marketplace account. They must not be copied into
 environment variables or logs.

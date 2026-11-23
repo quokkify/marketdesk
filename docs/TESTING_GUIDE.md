@@ -126,6 +126,18 @@ What to check:
 
 To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a native Hermes Agent API Server that the app can reach, then run `docker compose up -d --force-recreate app`. See the [Hermes integration boundary](development.md#hermes-integration-boundary). `HERMES_PROVIDER_MODE` chooses the routing: `auto` (the default) uses Hermes while it is configured and reachable and the heuristics otherwise, `hermes` never falls back, and `offline` never calls Hermes.
 
+### 5. Check why a live listing gets no response
+
+1. In the product catalogue, a live OLX listing shows its stage under the view counts: **Too early**, **Not seen**, **Seen, no contact** or **No fresh statistics**. A listing that already has a watcher or a conversation shows no stage. **Too early** can carry progress, for example "23 of 80 views", or the day of the listing.
+2. For **Not seen** and **Seen, no contact** the row has the button **Why no response?**. It runs a check on request; nothing runs by itself. The result lists findings under the stage: what the stored sale verdict already says (a price above the fair ceiling, for example), and a hint to run **Analyze** when there is no verdict or the product changed after it. The line "checked ... ago" shows the age of the result, and **out of date** appears when the title, price or category changed after it.
+3. For **Not seen** the check also asks Hermes for one to three phrases a buyer would type, then loads the public OLX search pages for each phrase (one request a second, up to 10 pages per phrase) and reports where the advert stands, or that it is not in the pages read. If the search cannot be checked, the result says so. For **Seen, no contact** the result holds only what the stored verdict says.
+4. The check applies nothing. Actions such as **Analyze**, **Review price** or **Edit title** are shortcuts to existing controls.
+
+What to check on the default stand (OLX in stub mode, Hermes offline heuristics):
+
+- A listing you just published reads **Too early**. It has no **Why no response?** button, because **Not seen** needs 48 hours of age, fewer than 30 views and under 3 views a day.
+- You cannot produce **Not seen** by hand on this stand: it needs a listing 48 hours old, and the stand does not serve OLX search pages. The automated tests cover it with a seeded listing and a mock of the search pages; the real OLX path is checked by hand.
+
 ## What works and known limitations
 
 What works in this setup:

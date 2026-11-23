@@ -198,6 +198,10 @@ test counts below do not include them.
   | `PriceResearchGraph.ts` | `identify`, four tier nodes in parallel, `filter`, `save` | after `identify` (fan out or end), after `filter` (save or end) | up to 2 for `identify`, 1 per tier |
   | `ConversationReplyGraph.ts` | `screen`, `classify`, `draft`, `validate` | after `screen` (end or classify) | `classify`, `draft` |
   | `ProductAssistanceGraph.ts` | `route`, `draft`, `publication`, `improve`, `revive` | after `route`, by input kind | SEO and price suggestion |
+  | `response/ListingResponseGraph.ts` | `load`, `known`, `queries`, `probe`, `locate`, `compare`, `rank`, `save` | after `known` (probe or rank), after `queries` (probe or rank) | 1, the buyer queries (main profile) |
+
+  `ListingResponseGraph` was added on the branch `feat/listing-response-graph`. Its `probe` node is code: it loads
+  the public OLX search pages itself, so no research-profile call is involved.
 
 - **No checkpointer, interrupt, streaming or tool calling** inside the graphs; subgraphs appear only in the sale
   verdict graph on `main`. State is a small
@@ -215,6 +219,11 @@ test counts below do not include them.
   - Jest, with scripted fakes at the port level: `__tests__/PriceResearchGraph.test.ts` (19 cases),
     `ConversationReplyGraph.test.ts` (20), `ProductAssistanceGraph.test.ts` (8). They run in CI through
     `scripts/ci-test.sh` (`.ci/modules/node.yml`).
+  - `ListingResponseGraph` on the branch: Jest tests with fakes for the pure stage rules and for the graph
+    (`response/__tests__/ListingResponseGraph.test.ts`), and live q4j tests on the branch stand
+    (`test-automation/.../test/api/ListingResponseTest.java`, `test/ui/ListingResponseUiTest.java`). The stand's
+    MockServer stands in for the main Hermes profile (the buyer-queries call) and for the OLX search pages, which the
+    app reads from `OLX_SEARCH_BASE_URL`. The real-OLX path is checked by hand.
   - An offline experiment runner for the improvement route (`docs/sales-agent-experiments.md`).
   - q4j live tests against the Compose stack (`scripts/ci-java-api-tests.sh`). In that stack Hermes is unreachable
     and the research profile is not configured, so no graph runs through its HTTP boundary.
