@@ -4,7 +4,7 @@
 
 **Goal:** Tell the seller, per live OLX listing, whether silence is still normal, and when it is not, measure where the advert stands in OLX search and what to change.
 
-**Architecture:** A pure funnel-stage rule computed on read next to the catalogue statistics, and an on-demand LangGraph graph (`ListingResponseGraph`) that reuses the stored sale verdict and, for `not_seen` listings only, probes OLX search through the web-enabled Hermes research profile. Runs are stored and queued in the `SaleVerdictRuns` / `SaleVerdictHandler` pattern.
+**Architecture:** A pure funnel-stage rule computed on read next to the catalogue statistics, and an on-demand LangGraph graph (`ListingResponseGraph`) that reuses the stored sale verdict and, for `not_seen` listings only, asks Hermes for buyer queries and loads the OLX search pages itself to find the advert's position. Runs are stored and queued in the `SaleVerdictRuns` / `SaleVerdictHandler` pattern.
 
 **Tech Stack:** TypeScript, `@langchain/langgraph`, zod, Postgres, BullMQ queue wrapper (`IJobQueue`), React + RTK Query, q4j (`test-automation`, Java 21).
 
@@ -12,9 +12,10 @@
 
 ## Global Constraints
 
-- Seller free text never reaches the research profile; prompts are built only from `researchItemFromProduct` fields.
-- No Hermes free text in graph state, the database or logs. The only Hermes-derived strings kept are buyer queries that pass `isSafeQuery` (Task 3). Competitor titles are never requested or stored. Logs carry ids and codes.
-- MarketDesk never fetches OLX search itself; every search goes through `ComparableResearchProfile` behind the shared `ResearchCallLimiter` and the `isResearchToolsetSafe` guard.
+- The queries prompt is built only from `researchItemFromProduct` fields; seller free text never reaches a prompt. The research (web) profile is not used by this graph.
+- No Hermes free text in graph state, the database or logs. The only Hermes-derived strings kept are buyer queries that pass `isSafeQuery` (Task 3). Competitor titles, descriptions and seller data from OLX pages are never stored or logged. Logs carry ids and codes.
+- OLX search loading limits (exact values): `MAX_QUERIES = 3`, `MAX_PAGES = 10` per query, one request at a time process-wide, `PAGE_DELAY_MS = 1000` between requests, request timeout 15 s, no cookies, base URL from config `OLX_SEARCH_BASE_URL` (default `https://www.olx.pl`). The URL is built in code from a query that passed `isSafeQuery`; nothing else is interpolated into it.
+- No real OLX page is committed (pages carry other sellers' data): parser fixtures are small synthetic documents built in the test.
 - Migrations replay on every start: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, never a DROP.
 - The graph creates no `HermesEvent`s and applies nothing.
 - Graph version constant: `listing-response@1`. AI usage feature: `response`.
@@ -25,11 +26,11 @@
 
 ## Review Focus
 
-1. The advert's own URL appears in results in another form (query string, `m.olx.pl`, different slug case) → it must still be located. Pinned in Task 2 (`locateOwn`).
+1. OLX changes or withholds the page (non-200, a captcha page, no embedded data, an `ads` entry missing `id`) → that query's probe fails cleanly, bad entries are skipped, nothing throws out of the graph. Pinned in Tasks 3 and 5.
 2. Query words with Polish diacritics or other case than the title (`słuchawki` vs `Sluchawki`) → not reported as missing. Pinned in Task 2 (`missingQueryWords`).
 3. Statistics unavailable (views null, or thread metrics null with watchers null) on an old listing → `no_data`, never `not_seen`. Pinned in Task 1.
-4. A result card with no usable PLN price ("Zamienię", "Za darmo", EUR) → the card is kept for position and skipped for price comparison; the probe does not fail. Pinned in Tasks 2 and 3.
-5. The probe returns zero results, only the own advert, or `total: null` → no crash, no `price_high_among_top`, `not_in_results` only when at least one other card was returned. Pinned in Task 2.
+4. A card with no usable PLN price (free, exchange, EUR, missing price) → the card is kept for position and skipped for price comparison; the probe does not fail. Pinned in Tasks 2 and 3.
+5. The search returns zero results, only the own advert, or fewer pages than the cap → no crash, no `price_high_among_top`, `not_in_results` only when at least one other card was read; paging stops at the last page. Pinned in Tasks 2 and 5.
 
 ## File Structure
 
@@ -39,7 +40,9 @@
 | `src/backend/application/services/productStats.ts` (modify) | `listingResponseSignal` pure rule |
 | `src/backend/application/services/ProductStatsService.ts` (modify) | fills `ProductStats.response` |
 | `src/backend/domain/services/listingResponseRules.ts` (create) | `knownFindings`, `locateOwn`, `missingQueryWords`, `probeFindings`, `rankFindings`, `subjectFingerprint` |
-| `src/backend/infrastructure/external/listingResponsePrompts.ts` (create) | query and probe prompts, zod parsers, `isSafeQuery` |
+| `src/backend/infrastructure/external/listingResponsePrompts.ts` (create) | buyer-queries prompt, zod parser, `isSafeQuery` |
+| `src/backend/application/ports/IOlxSearch.ts` (create) | search port |
+| `src/backend/infrastructure/external/OlxSearchPageClient.ts` + `olxSearchPage.ts` (create) | HTTP client with the request limits; pure parser of the embedded page data |
 | `src/backend/persistence/migrations/056_listing_response_runs.sql` (create) | table and indexes |
 | `src/backend/domain/repositories/interfaces/IListingResponseRunRepository.ts` (create) | repository contract |
 | `src/backend/infrastructure/persistence/repositories/ListingResponseRunRepository.ts` (create) | Postgres implementation |
@@ -52,16 +55,9 @@
 
 ---
 
-### Task 0: Spike — can the research profile return an ordered OLX results page?
+### Task 0: Spike — DONE (2026-11-23)
 
-Throwaway. No product code, nothing committed except the note in Step 3.
-
-- [ ] **Step 1:** In the scratchpad, write a script that calls the `marketdesk-research` profile (same endpoint and auth the app uses; read them from the deploy env, never print them) with one prompt per phrase, for the three live listings (`airpods 4`, `projektor led hdmi`, `frezarka do paznokci`). The prompt: open `https://www.olx.pl/oferty/q-<phrase>/`, return JSON `{ "total": number|null, "results": [{ "url": string, "price": string|null, "promoted": boolean }] }` in page order, no other text.
-- [ ] **Step 2:** For each phrase run it twice. Record: did the JSON parse; how many results came back; is the order stable between the two runs; does it match the page opened by hand in a browser (first 10 URLs); is `promoted` right for the cards marked "Wyróżnione"; seconds and tokens per call.
-- [ ] **Step 3:** Write the outcome into the spec under "Open risk" as a dated "Spike result" paragraph: the reliable N, whether `promoted` is usable, cost per call. Commit `docs: record the search probe spike result`.
-- [ ] **Step 4: Gate.** If order is not stable or does not match the page for at least 2 of 3 phrases, STOP and report to the owner; do not start Task 1. If `promoted` is unreliable, continue with `promoted` always `false` and position counted among all cards (spec allows it); record that.
-
-**Produces:** `PROBE_RESULTS` (N), and the final wording of the probe prompt for Task 3.
+Result and the owner's decision are in the spec ("Spike result", "Decision after the spike"): Hermes as the search reader was rejected; MarketDesk loads the pages itself. Nothing to implement here.
 
 ---
 
@@ -144,30 +140,32 @@ export interface ResponseFinding {
     verdictCheck?: VerdictCheckName; verdictReasonCode?: string; eventIds?: string[];
   };
 }
-export interface ProbeCard { url: string; price: number | null; promoted: boolean }
-export interface ResponseProbe { query: string; status: 'ok' | 'failed'; total: number | null; cards: ProbeCard[] }
+export interface ProbeCard { id: string; price: number | null; promoted: boolean }   // price: PLN value or null
+// cards: every card read, in page order across pages; firstPageSize: how many of them came from page 1
+export interface ResponseProbe { query: string; status: 'ok' | 'failed'; total: number | null; cards: ProbeCard[]; firstPageSize: number }
 
 // listingResponseRules.ts
 export function knownFindings(verdict: SaleVerdict | null, changedAt: Date): ResponseFinding[];
-export function locateOwn(cards: ProbeCard[], ownUrl: string): { position: number | null; organicAbove: ProbeCard[] };
+export function locateOwn(cards: ProbeCard[], ownId: string): { position: number | null; checked: number };   // both among organic cards
 export function missingQueryWords(query: string, title: string): string[];
-export function probeFindings(probe: ResponseProbe, own: { url: string; title: string; price: number }): ResponseFinding[];
+export function probeFindings(probe: ResponseProbe, own: { id: string; title: string; price: number }): ResponseFinding[];
 export function rankFindings(findings: ResponseFinding[]): ResponseFinding[];
 export function subjectFingerprint(input: { title: string; price: number; categoryId: string | null }): string;
 ```
 
 Decisions the tests pin:
 - `knownFindings`: no verdict → one `no_verdict` (`run_analyze`). Each reason of each `fix` or `needs_human` check → one `verdict_reason` with the reason's message unchanged, `verdictCheck`, `verdictReasonCode`, `eventIds`; action `open_proposal` when `eventIds` is non-empty, else `run_analyze`. `changedAt` later than `verdict.completedAt` → additionally `verdict_out_of_date`. `changedAt` is the later of product `updatedAt` and the moment the subject fingerprint changed; the caller passes product `updatedAt`.
-- `locateOwn`: match by the advert key used in `excludedAdvertKeys` (`infrastructure/external/anchorLadderPrompt.ts`; export its key function and move it to the domain rule if the import direction forbids it). Position is 1-based among non-promoted cards; the own card is never counted as above itself.
+- `locateOwn`: match by advert id (string equality with the listing's `marketplaceListingId`). Position is 1-based among non-promoted cards; `checked` is the number of organic cards read. A promoted copy of the own advert is ignored when an organic one exists; if only a promoted one exists, position is null.
 - `missingQueryWords`: lower-case, strip diacritics (NFD + `ł→l`), words of 3+ characters, absent from the title as whole-word prefixes.
-- `probeFindings` for an `ok` probe: own not found and at least one other card → `not_in_results` (`edit_title`); found with position > `DEEP_POSITION` → `deep_in_results` (`refresh_advert`); missing words non-empty → `title_misses_query_words` (`edit_title`); at least 3 priced organic cards above and own price above their median → `price_high_among_top` (`review_price`) with `lowPrice`/`highPrice`; `total > CROWDED_TOTAL` → `crowded_market` (action null). A `failed` probe → nothing here.
+- `probeFindings` for an `ok` probe: own not found and at least one other card → `not_in_results` (`edit_title`); found with position > `DEEP_POSITION` → `deep_in_results` (`refresh_advert`); missing words non-empty → `title_misses_query_words` (`edit_title`); at least 3 priced organic cards among the first `firstPageSize` cards (the own card excluded) and own price above their median → `price_high_among_top` (`review_price`) with `lowPrice`/`highPrice` of those cards; `total > CROWDED_TOTAL` → `crowded_market` (action null). A `failed` probe → nothing here.
 - `rankFindings` order: `verdict_reason`, `not_in_results`, `deep_in_results`, `price_high_among_top`, `title_misses_query_words`, `verdict_out_of_date`, `no_verdict`, `crowded_market`, `probe_failed`; same code and same evidence deduplicated; `title_misses_query_words` across queries merged into one finding with the union of words.
 
 - [ ] **Step 1: Write failing tests**, one per decision above plus the Review Focus cases:
-  - `locateOwn` finds `https://www.olx.pl/d/oferta/apple-airpods-4-CID99-ID1aBcD.html` when the card URL is `https://m.olx.pl/d/oferta/apple-airpods-4-CID99-ID1aBcD.html?reason=extended_search`.
-  - `locateOwn([promoted, promoted, own])` → `position: 1`, `organicAbove: []`.
+  - `locateOwn([promoted, promoted, own], own.id)` → `position: 1`, `checked: 1`.
+  - `locateOwn` with the own id present only as a promoted card → `position: null`.
+  - `locateOwn` over 90 organic cards with the own id 57th → `position: 57`, `checked: 90`.
   - `missingQueryWords('słuchawki airpods', 'Apple AirPods 4 Sluchawki')` → `[]`; `('słuchawki bezprzewodowe', 'Apple AirPods 4')` → `['sluchawki', 'bezprzewodowe']`.
-  - `probeFindings` with cards priced `[null, 200, 210, 220]` above own at 279 → `price_high_among_top`, `lowPrice: 200`, `highPrice: 220`; with two priced cards → no price finding.
+  - `probeFindings` with first-page organic cards priced `[null, 200, 210, 220]` and own at 279 → `price_high_among_top`, `lowPrice: 200`, `highPrice: 220`; with two priced cards → no price finding; cards beyond `firstPageSize` are not used for the price.
   - `probeFindings` with `cards: []` → `[]`; with only the own card → `[]`; with `total: null` and own at position 25 → `deep_in_results` whose evidence `total` is null.
   - `knownFindings` on a verdict whose price check is `fix` with `above_ceiling` and event id `e1` → `verdict_reason`, `open_proposal`, `eventIds: ['e1']`.
   - `subjectFingerprint` is equal for the same input and differs when the price differs.
@@ -178,34 +176,53 @@ Decisions the tests pin:
 
 ---
 
-### Task 3: Prompts and parsers
+### Task 3: Buyer-queries prompt and the OLX search reader
 
 **Files:**
-- Create: `src/backend/infrastructure/external/listingResponsePrompts.ts`
-- Test: `src/backend/infrastructure/external/__tests__/listingResponsePrompts.test.ts`
+- Create: `src/backend/infrastructure/external/listingResponsePrompts.ts`, `src/backend/application/ports/IOlxSearch.ts`, `src/backend/infrastructure/external/olxSearchPage.ts`, `src/backend/infrastructure/external/OlxSearchPageClient.ts`, the config loader entry for `OLX_SEARCH_BASE_URL`
+- Test: `src/backend/infrastructure/external/__tests__/listingResponsePrompts.test.ts`, `__tests__/olxSearchPage.test.ts`, `__tests__/OlxSearchPageClient.test.ts`
 
 **Interfaces:**
-- Consumes: `ResearchItem`, `researchItemFromProduct` from `priceResearchPrompts.ts`; `ProbeCard` (Task 2); `PROBE_RESULTS` and the probe wording from Task 0.
+- Consumes: `ResearchItem`, `researchItemFromProduct` from `priceResearchPrompts.ts`; `ProbeCard` (Task 2).
 - Produces:
 
 ```ts
+// listingResponsePrompts.ts
 export const MAX_QUERIES = 3;
 export function isSafeQuery(value: string): boolean;        // 2–40 chars, 1–4 words, only letters, digits, spaces
 export function buildQueriesPrompt(item: ResearchItem): { system: string; prompt: string };
 export function parseQueries(raw: string): string[] | null;  // 1..MAX_QUERIES safe, de-duplicated, lower-cased; null when none
-export function buildProbePrompt(query: string, limit: number): { system: string; prompt: string };
-export function parseProbe(raw: string): { total: number | null; cards: ProbeCard[] } | null;
+
+// application/ports/IOlxSearch.ts
+export interface OlxSearchPage { total: number | null; totalPages: number | null; cards: ProbeCard[] }
+export interface IOlxSearch { page(query: string, page: number, signal: AbortSignal): Promise<OlxSearchPage> }   // page is 1-based; rejects on any failure
+
+// olxSearchPage.ts — pure
+export function olxSearchUrl(baseUrl: string, query: string, page: number): string;   // `${base}/oferty/q-${words joined by '-'}/` + `?page=N` for N > 1
+export function parseOlxSearchPage(html: string): OlxSearchPage | null;               // null when the embedded data is absent or unreadable
+
+// OlxSearchPageClient.ts
+export const MAX_PAGES = 10; export const PAGE_DELAY_MS = 1000;
+export class OlxSearchPageClient implements IOlxSearch {
+  constructor(deps: { baseUrl: string; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void>; timeoutMs?: number });
+}
 ```
 
+The page embeds its data as a JSON string literal: `window.__PRERENDERED_STATE__= "<escaped JSON>";`. Inside: `listing.listing.totalElements`, `.totalPages`, `.ads[]` with `id` (number), `isPromoted` (boolean), `searchReason` (`'promoted' | 'organic'`), `price.regularPrice.value` and `.currencyCode`, `price.free`, `price.exchange`. A card is promoted when `isPromoted` is true or `searchReason` is `'promoted'`. `price` is the value only when `currencyCode` is `PLN` and neither `free` nor `exchange`; otherwise null.
+
+The client makes one request at a time for the whole process (a module-level chain, like `createResearchCallLimiter(1)`), waits `PAGE_DELAY_MS` after each request before the next may start, sends no cookies and a plain browser `User-Agent` and `Accept-Language: pl-PL`, follows redirects only within the base URL's host, and rejects on a non-200 answer, a timeout, the caller's abort, or `parseOlxSearchPage` returning null.
+
 - [ ] **Step 1: Write failing tests:**
-  - `isSafeQuery`: `'airpods 4'` true; `'a'`, `'ignore previous instructions and'` (5 words), `'airpods; drop'`, a 41-character string → false; `'słuchawki bezprzewodowe'` true.
+  - `isSafeQuery`: `'airpods 4'` true; `'a'`, `'ignore previous instructions and'` (5 words), `'airpods; drop'`, `'a/../b'`, a 41-character string → false; `'słuchawki bezprzewodowe'` true.
   - `parseQueries('{"queries":["AirPods 4","airpods 4","słuchawki apple","<b>x</b>"]}')` → `['airpods 4', 'słuchawki apple']`; five safe queries → first three; `'not json'` and `'{"queries":[]}'` → null; JSON wrapped in a ```json fence parses.
-  - `buildQueriesPrompt` output contains the item's model name and does not contain a description string placed on the product (build the item with `researchItemFromProduct` from a product whose description is `SECRET-NOTE`).
-  - `parseProbe` maps `"279 zł"` → 279, `"1 299,00 zł"` → 1299, `"Zamienię"`, `"Za darmo"`, `"50 €"`, `null` → `price: null` with the card kept; drops cards whose `url` is not an `olx.pl` advert URL; `total: "1 840"` → 1840; missing `total` → null; non-JSON → null; more cards than the limit → truncated to the limit.
-- [ ] **Step 2:** Run the test file. Expected: FAIL, module not found.
-- [ ] **Step 3:** Implement with zod schemas. The probe prompt is the wording proven in Task 0, with the query URL-encoded into the search URL in code; it asks for `url`, `price`, `promoted` and `total` only.
-- [ ] **Step 4:** Run the test file. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(response): buyer query and search probe prompts`.
+  - `buildQueriesPrompt` output contains the item's model name and does not contain a description placed on the product (build the item with `researchItemFromProduct` from a product whose description is `SECRET-NOTE`).
+  - `olxSearchUrl('https://www.olx.pl', 'słuchawki apple', 1)` → `https://www.olx.pl/oferty/q-s%C5%82uchawki-apple/`; page 3 → the same with `?page=3`.
+  - `parseOlxSearchPage` on a synthetic document built in the test (a helper that embeds a given state object the way the page does): three ads → cards in order with string ids; `isPromoted: true` and `searchReason: 'promoted'` each give `promoted: true`; prices: PLN 279 → 279, EUR → null, `free: true` → null, `exchange: true` → null, missing `price` → null with the card kept; an ad without `id` is skipped; `totalElements: 966, totalPages: 25` are returned; a document without the state, with broken JSON, or with `listing.listing.ads` not an array → null.
+  - `OlxSearchPageClient` with a fake `fetch` and a fake `sleep`: requests the URL from `olxSearchUrl`; 403 → rejects; a 200 captcha-like page without the state → rejects; two concurrent `page()` calls do not overlap (the second `fetch` starts after the first resolved and `sleep(1000)` was awaited); an aborted signal → rejects without calling `fetch`; a redirect to another host → rejects.
+- [ ] **Step 2:** Run the three test files. Expected: FAIL, modules not found.
+- [ ] **Step 3:** Implement with zod schemas for the queries answer and for the embedded state (only the fields named above; unknown fields ignored).
+- [ ] **Step 4:** Run the three test files. Expected: PASS.
+- [ ] **Step 5:** Commit `feat(response): buyer queries prompt and OLX search page reader`.
 
 ---
 
@@ -263,7 +280,7 @@ Table `listing_response_runs`: the columns of `product_sale_verdicts` minus `sco
 - Test: `src/backend/application/services/response/__tests__/ListingResponseGraph.test.ts`
 
 **Interfaces:**
-- Consumes: Tasks 1–4; `ComparableResearchProfile`, `ResearchCallLimiter`, `isResearchToolsetSafe`, `withAiUsageScope`, `withAiOperation`, `AITextCompletionClient`.
+- Consumes: Tasks 1–4; `IOlxSearch`, `MAX_PAGES`, `withAiUsageScope`, `withAiOperation`, `AITextCompletionClient`.
 - Produces:
 
 ```ts
@@ -277,9 +294,8 @@ export interface ListingResponseGraphDeps {
   verdicts: Pick<ISaleVerdictRepository, 'findLatestCompleted'>;
   runs: Pick<IListingResponseRunRepository, 'complete' | 'findById'>;
   queryClient: AITextCompletionClient | null;      // no-tools marketplace profile
-  profile: ComparableResearchProfile | null;       // web research profile
-  limiter: ResearchCallLimiter;
-  probeResults: number;
+  search: IOlxSearch;
+  maxPages: number;
   now: () => Date;
   observe?: (t: ResponseTransition) => void;
   logger?: { warn(context: Record<string, unknown>, message: string): void };
@@ -289,24 +305,27 @@ export class ListingResponseGraph {
 }
 ```
 
-Behaviour: `load` picks the first `live` listing of the product and throws `NotFoundError` (product) or `InvalidStateError` (no live listing, marketplace key not `olx`, no `externalUrl`). The signal is computed with `listingResponseSignal` from the same inputs the stats service uses. State holds the signal, the queries, the probes and the findings — no raw Hermes answers. `route` sends only `not_seen` to `queries`; anything else goes to `rank`. A missing `queryClient` or `profile`, an unparsable queries answer, or every probe failing → one `probe_failed` finding and the run still completes. One failed probe is stored with `status: 'failed'` and dropped from findings. Probes run in parallel through `limiter`, each behind the reachability and toolset guard exactly as `PriceResearchGraph.call` does (extract that method's guard into a shared helper rather than copying it).
+Behaviour: `load` picks the first `live` listing of the product and throws `NotFoundError` (product) or `InvalidStateError` (no live listing, marketplace key not `olx`, no `externalUrl`). The signal is computed with `listingResponseSignal` from the same inputs the stats service uses. State holds the signal, the queries, the probes and the findings — no raw Hermes answers. `route` sends only `not_seen` to `queries`; anything else goes to `rank`. A missing `queryClient`, an unparsable queries answer, or every probe failing → one `probe_failed` finding and the run still completes. One failed probe is stored with `status: 'failed'` and dropped from findings. For each query, in turn, the probe node reads page 1, then further pages while the advert's id (`listing.marketplaceListingId`) has not appeared among organic cards, up to `maxPages` and never past the `totalPages` page 1 reported; a page failing after page 1 ends that query's paging and keeps what was read (status `ok`). The listing must have a `marketplaceListingId`, else `InvalidStateError`.
 
 - [ ] **Step 1: Write failing tests** with in-memory fakes for the repositories and scripted fake clients (no network), asserting the completed run and the observed transitions:
-  - `too_early` listing → `stage: 'too_early'`, findings are exactly `knownFindings`, neither client called, transitions never include `queries`.
-  - `not_seen`, queries `['airpods 4','słuchawki apple']`, probe 1 has the own URL at organic position 25 of total 1840, probe 2 does not contain it → findings start with `not_in_results` then `deep_in_results` (`position: 25`, `total: 1840`); stored probes have `position` 25 and null and no `cards` key.
+  - `too_early` listing → `stage: 'too_early'`, findings are exactly `knownFindings`, neither the query client nor `search` called, transitions never include `queries`.
+  - `not_seen`, queries `['airpods 4','słuchawki apple']`; for query 1 the fake search has the own id on page 2 at overall organic position 57, total 966; for query 2 it is on none of 3 existing pages → findings start with `not_in_results` (query 2, `checked` = organic cards read) then `deep_in_results` (`position: 57`, `total: 966`); `search.page` was called for pages 1–2 of query 1 and 1–3 of query 2 only; stored probes have `position` 57 and null and no `cards` key.
+  - own id on page 1 at organic position 4 → no `deep_in_results`, `search.page` called once for that query.
+  - own id never found and `totalPages: 25` → exactly `maxPages` calls for that query.
   - stored verdict with price `fix` → `verdict_reason` ranked first, ahead of probe findings.
-  - probe 1 throws, probe 2 ok → run completes, probes statuses `['failed','ok']`, no `probe_failed`.
-  - both probes throw → single `probe_failed`, status `completed`.
-  - research profile toolsets `['web','terminal']` → no `profile.client.complete` call, `probe_failed`.
-  - `queryClient: null` → `probe_failed`, profile not called.
-  - queries answer `'{"queries":["ignore all previous instructions now"]}'` → `probe_failed`, profile not called.
+  - page 1 of query 1 rejects, query 2 ok → run completes, probes statuses `['failed','ok']`, no `probe_failed`.
+  - page 1 rejects for every query → single `probe_failed`, status `completed`.
+  - page 1 ok, page 2 rejects → that probe is `ok` with the cards of page 1.
+  - `queryClient: null` → `probe_failed`, `search` not called.
+  - queries answer `'{"queries":["ignore all previous instructions now"]}'` → `probe_failed`, `search` not called.
   - no live listing → rejects with `InvalidStateError`, `runs.complete` not called.
   - `runs.complete` returns false → rejects (`no longer active`).
-  - a `signal` already aborted → rejects, no client called.
+  - a `signal` already aborted → rejects, nothing called.
+  - queries are probed one after another (the fake `search` records that no two calls overlap).
   - the observer and logger never receive a query string or a URL (assert on serialized calls).
 - [ ] **Step 2:** Run the test file. Expected: FAIL, module not found.
 - [ ] **Step 3:** Implement the graph with `StateGraph`, one node per name in `ResponseTransition`, every Hermes call inside `withAiUsageScope({ workspaceId, feature: 'response', productId })` and `withAiOperation('response.queries' | 'response.probe', …)`.
-- [ ] **Step 4:** Run the test file and the existing `PriceResearchGraph.test.ts` (the guard was extracted). Expected: PASS.
+- [ ] **Step 4:** Run the test file. Expected: PASS.
 - [ ] **Step 5:** Commit `feat(response): listing response graph`.
 
 ---
@@ -335,7 +354,7 @@ export class ListingResponseRuns {
 - Queue name `listing-response`; handler lease 5 min, run budget 4 min; a throw fails the run with `run_error`; `InvalidStateError` from `load` fails it with `not_applicable`.
 - `request`: product not found → `NotFoundError`; no live OLX listing → `InvalidStateError`; expire stuck runs (queued TTL = `VERDICT_QUEUED_TTL_MS`); a completed run younger than `REUSE_WINDOW_MS` with the same `subjectFingerprint` (listing title, listing price, category id) → returned with `reused: true`; an active run → returned with `enqueued: false`; enqueue failure → run failed with `enqueue_failed`, error rethrown.
 - `view.outOfDate`: latest completed run's fingerprint differs from the current one.
-- Container: `queryClient` is the existing main-profile `HermesCompletionClient`; `profile` and `limiter` are the same instances `PriceResearchGraph` gets (hoist them into constants); `probeResults` from Task 0.
+- Container: `queryClient` is the existing main-profile `HermesCompletionClient`; `search` is one `OlxSearchPageClient` built with `OLX_SEARCH_BASE_URL`; `maxPages` is `MAX_PAGES`.
 
 - [ ] **Step 1: Write failing tests** for `ListingResponseRuns` with fakes: reuse within 6 h and same fingerprint (no enqueue); no reuse after 6 h 1 min; no reuse when the listing price changed; second request while active → same run id, `enqueued: false`; queue throws → run failed `enqueue_failed` and the error propagates; `view` reports `lastFailed` when the newest run failed and still returns the older `latest`; `view.outOfDate` true after a price change. Handler tests: a run no longer queued → `skipped`; graph throws → failed `run_error`; `InvalidStateError` → failed `not_applicable`.
 - [ ] **Step 2:** Run both test files. Expected: FAIL, modules not found.
@@ -376,14 +395,14 @@ Exact copy: `too_early` young → `Too early · day ${ceil(hoursLive/24)}`; coll
 
 **Files:**
 - Create: `test-automation/src/main/java/dev/quokkify/marketdesk/{model/ListingResponsePojo,service/ResponseService,step/ResponseSteps,verification/ResponseVerification}.java`, `test-automation/src/test/java/dev/quokkify/marketdesk/test/api/ListingResponseTest.java`, `test/ui/ListingResponseUiTest.java`
-- Modify: `HermesMockSteps` / `HermesMockService` (expectations for the queries call and the probe calls), `ProductStatsTest` (the new `response` field)
+- Modify: `HermesMockSteps` / `HermesMockService` (expectation for the queries call), the stand's compose/env so `OLX_SEARCH_BASE_URL` points at the MockServer, a small helper that serves synthetic search pages from MockServer, `ProductStatsTest` (the new `response` field)
 
 Follow `SaleVerdictTest`, `PriceResearchRunTest` and `SaleVerdictUiTest` for structure, and the isolated Compose stand with the Hermes mock for both profiles.
 
 - [ ] **Step 1:** Write `ListingResponseTest`:
-  - `tooEarlyListingAnswersWithoutSearching` — a freshly published listing; POST response-run; poll the view to `completed`; stage `too_early`; the mock received no call on the research profile.
-  - `notSeenListingReportsItsSearchPosition` — a listing seeded as live for 72 h with 10 views (seed through the OLX stub the stand uses; if `published_at` cannot be set through any existing test seam, add a test-only seam in the stub, not in production code paths); mock queries → `["test item"]`, mock probe → 30 organic cards with the listing's own URL 25th, total 1840; expect a `deep_in_results` finding with position 25 and total 1840.
-  - `failedSearchIsReportedAsNotChecked` — mock probe answers 500; run `completed`, a single `probe_failed` finding.
+  - `tooEarlyListingAnswersWithoutSearching` — a freshly published listing; POST response-run; poll the view to `completed`; stage `too_early`; the mock received no queries call and no search request.
+  - `notSeenListingReportsItsSearchPosition` — a listing seeded as live for 72 h with 10 views (seed through the OLX stub the stand uses; if `published_at` cannot be set through any existing test seam, add a test-only seam in the stub, not in production code paths); mock queries → `["test item"]`, mock search page 1 → 40 organic cards without the listing, page 2 → the listing's own advert id 17th organic, total 966, 25 pages; expect a `deep_in_results` finding with position 57 and total 966, and exactly two search requests.
+  - `failedSearchIsReportedAsNotChecked` — mock search answers 403; run `completed`, a single `probe_failed` finding.
   - `secondRequestReturnsTheSameRun` — two POSTs; same run id, second `reused` or not enqueued.
   - `responseRunOfAnotherWorkspaceIsNotFound` — 404.
 - [ ] **Step 2:** Write `ListingResponseUiTest`: the `not_seen` product's row shows `Not seen`, clicking `Why no response?` ends with the position line in the row and in the Hermes card.
@@ -394,6 +413,6 @@ Follow `SaleVerdictTest`, `PriceResearchRunTest` and `SaleVerdictUiTest` for str
 
 ### Task 9: Real-OLX check and docs
 
-- [ ] **Step 1:** On a stand pointed at the real research profile, run "Why no response?" for the three live listings. Compare each reported position with the OLX page opened by hand. Record the three results in the PR description. A mismatch on more than one listing is a blocker: stop and report.
+- [ ] **Step 1:** On a stand with the real OLX search base URL and the real main Hermes profile, run "Why no response?" for the three live listings. Compare each reported position with the OLX page opened by hand. Record the three results in the PR description. A mismatch on more than one listing is a blocker: stop and report.
 - [ ] **Step 2:** Add the graph to `docs/graph-testing-plan.md`'s list of graphs and add a short "Listing response" section to the user-facing docs where the sale verdict is described.
 - [ ] **Step 3:** Commit `docs: listing response graph`.

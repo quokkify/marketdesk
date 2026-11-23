@@ -43,7 +43,9 @@ with a "Not ready" verdict.
 - Seller free text reaching the web-enabled Hermes profile, or Hermes free text in graph state,
   storage or logs. The one exception is the buyer queries: short phrases that pass a strict shape
   check (a few words, letters and digits only). Competitor titles are neither requested nor kept.
-- MarketDesk fetching OLX search pages itself. Search goes only through the research profile.
+- Loading OLX search pages without limits. Direct loading (owner's decision of 2026-11-23, see
+  "Decision after the spike") is bounded: only on the button, sequential, with a pause between
+  pages, a page cap per query and the 6-hour reuse window.
 
 ## Approaches considered
 
@@ -97,13 +99,14 @@ START → load → known ─→ route ─┬─ not_seen ──→ queries → p
   known findings, so the button always answers.
 - **queries** (Hermes, no-tools `marketdesk` profile, sanitized item fields only as in
   `researchItemFromProduct`): two or three short phrases a buyer would type for this item.
-- **probe** (Hermes, `marketdesk-research` profile, one call per query, parallel): open OLX
-  search for the phrase and report the first results in order — advert URL, title, price,
-  promoted or not — and the total count. The toolsets check that guards price research applies.
-- **locate** (code): find the listing's own URL in each result list → position, or "not in the
-  first N". Own-advert URL matching already exists in price research.
-- **compare** (code): against the non-promoted cards above the advert: where its price falls, and
-  which query words its title lacks.
+- **probe** (code, no AI): MarketDesk loads the public OLX search page for the phrase and reads
+  the structured data embedded in it (advert id, price, promoted or organic, total, page count).
+  It pages forward until the advert is found or the page cap is reached. Queries run one after
+  another.
+- **locate** (code): find the listing by its OLX advert id → position among organic cards across
+  the pages read, or "not in the first N".
+- **compare** (code): against the organic cards of the first page (what a buyer sees first):
+  where the advert's price falls, and which query words its title lacks.
 - **rank** (code): order findings by how directly they are measured; attach an action to each.
 - **save** (code): one row per run.
 
@@ -178,25 +181,21 @@ Not seen · checked 5 min ago
   A "Ready to sell" verdict gives an empty list. No verdict at all → finding `no_verdict` with the
   action "run Analyze". "Out of date" is the rule the verdict UI already uses (product or listing
   `updatedAt` later than the verdict's `completed_at`).
-- **Cost and limits.** Probe calls go through the shared `ResearchCallLimiter`, like price
-  research. A second click while a run is active returns the active run. A completed run younger
+- **Cost and limits.** See "Decision after the spike" for the request limits. A second click while a run is active returns the active run. A completed run younger
   than 6 hours is returned instead of starting a new one unless the listing changed after it.
   "Changed" means its title, price or category differ (a stored fingerprint); `updated_at` is not
   used because every sync writes it. The same fingerprint decides "out of date" in the UI.
 - **Promoted cards.** Position is counted among organic (non-promoted) cards only and the total
-  is reported next to it. Promoted cards are excluded from the price comparison. If the profile
-  cannot tell promoted from organic in the spike, position is counted among all cards and the UI
-  says so. No organic card above the advert → no `price_high_among_top` finding.
+  is reported next to it. Promoted cards are excluded from the price comparison. Fewer than three
+  priced organic cards on the first page → no `price_high_among_top` finding.
 - **Scope.** Backend, the frontend API slice, the catalogue row and the product page card, and
   their tests. The AI usage feature value is added to its type if the type is closed.
 
 ## Open risk, first task of the plan
 
-Whether the research profile can return an ordered OLX results page for a phrase is unproven
-(today it is prompted to collect advert links and extract each advert). The plan starts with a
-throwaway check on real OLX for the three live listings. If ordered results are not obtainable,
-stop and return to the owner: the fallback (result count and price range only, no position) is a
-weaker product and is the owner's call.
+Whether the research profile can return an ordered OLX results page for a phrase was unproven,
+so the plan started with a throwaway check on real OLX for the three live listings. Result and
+the decision that followed are below.
 
 ### Spike result (2026-11-23)
 
@@ -218,6 +217,24 @@ three pages were also fetched once by hand for comparison.
 
 Gate: not passed as written. Work stopped after Task 0 for the owner's decision.
 
+### Decision after the spike (owner, 2026-11-23)
+
+MarketDesk loads the OLX search pages itself and pages through them. Hermes only proposes the
+buyer queries (no-tools profile); the research profile is not used by this graph.
+
+What the saved pages showed: each page embeds its data as JSON (`window.__PRERENDERED_STATE__`,
+`listing.listing`): `totalElements`, `totalPages` (25 at most), and per advert a numeric `id` (the
+same id MarketDesk stores as the marketplace listing id), `isPromoted`, `searchReason`, `price`
+with value and currency, `lastRefreshTime`. So the advert is located by id, not by URL.
+
+Limits (Claude's calls): at most 3 queries per run, at most 10 pages per query, one request at a
+time for the whole process, 1 s between requests, no cookies, base URL from configuration. A page
+that does not answer 200 or carries no embedded data fails that query's probe; nothing is guessed.
+
+Accepted risk: this is automated reading of OLX pages. OLX terms on it were not checked, and OLX
+can change the page or block the requests at any time; the probe then reports "search could not
+be checked".
+
 ## Left to the builder
 
 - Module layout, names of types and reason codes, zod schemas, timeouts and budgets (follow
@@ -231,6 +248,7 @@ Gate: not passed as written. Work stopped after Task 0 for the owner's decision.
 
 - The problem: a live listing with no reaction; find what may be wrong.
 - Approach 2: a search probe on top of a code funnel.
+- After the spike: the probe loads OLX search pages directly instead of asking Hermes.
 
 ## Claude's calls (not discussed, correct them when reading)
 
