@@ -135,8 +135,8 @@ To try a real Hermes instead, set `HERMES_API_KEY` in `.env` to the key of a nat
 
 What to check on the default stand (OLX in stub mode, Hermes offline heuristics):
 
-- A listing you just published reads **Too early**. It has no **Why no response?** button, because **Not seen** needs 48 hours of age, fewer than 30 views and under 3 views a day.
-- You cannot produce **Not seen** by hand on this stand: it needs a listing 48 hours old, and the stand does not serve OLX search pages. The automated tests cover it with a seeded listing and a mock of the search pages; the real OLX path is checked by hand.
+- A listing you just published reads **Too early**, or **No fresh statistics** while it has no fresh statistics. It has no **Why no response?** button, because **Not seen** needs 48 hours of age, fewer than 30 views and under 3 views a day.
+- You cannot produce **Not seen** by hand on this stand: it needs a listing 48 hours old, and the default stand points at the public OLX site (`OLX_SEARCH_BASE_URL` is empty), not at a mock of the search pages. The automated tests cover it with a seeded listing and a mock of the search pages; the real OLX path is checked by hand.
 
 ## What works and known limitations
 

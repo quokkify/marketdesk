@@ -191,14 +191,14 @@ test counts below do not include them.
 - **The graphs are TypeScript, not Java.** `package.json` declares `@langchain/langgraph ^1.4.18` and
   `@langchain/core ^1.1.48`; the installed versions are 1.7.5 and 1.5.0 (`node_modules/@langchain/*/package.json`).
   Java exists only in `test-automation/` (q4j 0.16.0, TestNG 7.12.0, `test-automation/gradle/libs.versions.toml`).
-- **Three graphs**, all in `src/backend/application/services/`:
+- **Four graphs**, all in `src/backend/application/services/`:
 
   | Graph | Nodes | Conditional edges | Model calls |
   | --- | --- | --- | --- |
   | `PriceResearchGraph.ts` | `identify`, four tier nodes in parallel, `filter`, `save` | after `identify` (fan out or end), after `filter` (save or end) | up to 2 for `identify`, 1 per tier |
   | `ConversationReplyGraph.ts` | `screen`, `classify`, `draft`, `validate` | after `screen` (end or classify) | `classify`, `draft` |
   | `ProductAssistanceGraph.ts` | `route`, `draft`, `publication`, `improve`, `revive` | after `route`, by input kind | SEO and price suggestion |
-  | `response/ListingResponseGraph.ts` | `load`, `known`, `queries`, `probe`, `locate`, `compare`, `rank`, `save` | after `known` (probe or rank), after `queries` (probe or rank) | 1, the buyer queries (main profile) |
+  | `response/ListingResponseGraph.ts` | `load`, `known`, `queries`, `probe`, `locate`, `compare`, `rank`, `save` | after `known` (queries or rank), after `queries` (probe or rank) | 1, the buyer queries (main profile) |
 
   `ListingResponseGraph` was added on the branch `feat/listing-response-graph`. Its `probe` node is code: it loads
   the public OLX search pages itself, so no research-profile call is involved.
