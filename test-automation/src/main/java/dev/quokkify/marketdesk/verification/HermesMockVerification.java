@@ -19,7 +19,7 @@ public class HermesMockVerification extends BaseApiVerification<HermesMockVerifi
   }
 
   // MockServer answers 202 when the count matches and 406, with the requests it received, when it does not.
-  @Step("The mock received the expected number of research calls")
+  @Step("The mock received the expected number of calls")
   public HermesMockVerification receivedExpectedCalls(ValidatableResponse response) {
     return verifyResponseStatusCode(response, HttpStatus.SC_ACCEPTED);
   }

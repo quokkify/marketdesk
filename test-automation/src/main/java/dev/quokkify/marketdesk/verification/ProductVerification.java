@@ -50,6 +50,15 @@ public class ProductVerification extends BaseApiVerification<ProductVerification
     return self();
   }
 
+  // The response stage belongs to a live listing; a product whose listing is still a draft has none.
+  @Step("Statistics of product {productId} carry no response stage")
+  public ProductVerification statsHaveNoResponseStage(ValidatableResponse response, String productId) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body(BY_PRODUCT.formatted(productId), Matchers.hasKey("response"));
+    response.body(BY_PRODUCT.formatted(productId) + ".response", Matchers.nullValue());
+    return self();
+  }
+
   @Step("Statistics of product {productId} list the needs-action reason {reason}")
   public ProductVerification statsNeedAction(ValidatableResponse response, String productId, String reason) {
     verifyResponseStatusCode(response, HttpStatus.SC_OK);

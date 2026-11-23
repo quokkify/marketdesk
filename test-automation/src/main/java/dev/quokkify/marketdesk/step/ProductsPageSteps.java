@@ -124,6 +124,12 @@ public class ProductsPageSteps
     return this;
   }
 
+  @Step("Ask why {productName} gets no response from its row")
+  public ProductsPageSteps askWhyNoResponse(String productName) {
+    page.responseAskButton(productName).shouldBe(Condition.enabled).click();
+    return this;
+  }
+
   @Step("Click the row of {productName}")
   public ProductsPageSteps clickRow(String productName) {
     page.priceCell(productName).click();

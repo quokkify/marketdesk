@@ -125,6 +125,12 @@ public class ProductDetailPageVerification
     return this;
   }
 
+  @Step("The response section of the Hermes card says {text}")
+  public ProductDetailPageVerification showsHermesResponse(String text) {
+    page.hermesResponse().shouldHave(Condition.text(text), getTimeout());
+    return this;
+  }
+
   @Step("The Hermes card offers {label} as its primary action")
   public ProductDetailPageVerification offersHermesPrimaryAction(String label) {
     page.hermesPrimaryAction().shouldHave(Condition.exactText(label), getTimeout());

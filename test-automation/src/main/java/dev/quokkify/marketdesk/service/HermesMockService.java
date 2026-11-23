@@ -11,7 +11,7 @@ import io.restassured.http.ContentType;
 import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
 
-// The control API of the MockServer that stands in for the Hermes research profile.
+// The control API of the stand's MockServer, which stands in for the Hermes profiles and the OLX search pages.
 public class HermesMockService extends ApiService {
 
   private static final String EXPECTATION = "/mockserver/expectation";

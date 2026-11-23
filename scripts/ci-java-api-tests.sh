@@ -16,9 +16,13 @@ export SELENIUM_PORT="$selenium_port"
 mock_server_port="${MOCK_SERVER_PORT:-1080}"
 export MOCK_SERVER_PORT="$mock_server_port"
 export COMPOSE_FILE="docker-compose.yml:docker/selenium-grid/docker-compose.yml:docker/mock-server/docker-compose.yml"
-# A MockServer stands in for the Hermes research profile only; the main profile stays unreachable, so the
-# rest of the stack keeps the offline heuristics. The tests give the research answers per product.
+# A MockServer stands in for the Hermes research profile, the main profile and the public OLX search pages. The
+# tests give the answers per product. The main profile has no /models answer, so its health probe fails and the
+# rest of the stack keeps the offline heuristics; only the listing response graph's buyer-queries call, which
+# skips the probe, reaches the answers the tests register.
 export HERMES_RESEARCH_API_URL=http://mock-server:1080/p/marketdesk-research/v1
+export HERMES_API_URL=http://mock-server:1080/p/marketdesk/v1
+export OLX_SEARCH_BASE_URL=http://mock-server:1080/olx-search
 
 cd "$repo_root"
 
@@ -91,7 +95,7 @@ done
 if [[ "$mock_ready" != true ]]; then
   docker compose ps || true
   docker compose logs --no-color mock-server || true
-  echo "The research profile mock did not become ready" >&2
+  echo "The Hermes and OLX search mock did not become ready" >&2
   exit 1
 fi
 
