@@ -1,0 +1,1 @@
+{"id":"0cbb49014f2eb414eb9eb3a02e4e9ef7.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#validatePriceEstimate rejects floor above start","name":"rejects floor above start","status":"passed","testResultsByEnv":{"default":"888c345d1848c3a2f07d33f8e66648e6"}}

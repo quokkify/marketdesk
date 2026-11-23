@@ -1,0 +1,1 @@
+{"id":"c48ec7f8a0cec456c1ffd21844ab28ab.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/researchCallLimiter.test.ts#createResearchCallLimiter refuses a max below one","name":"refuses a max below one","status":"passed","testResultsByEnv":{"default":"849db1cfa28753a1c07d68fba474ce0c"}}

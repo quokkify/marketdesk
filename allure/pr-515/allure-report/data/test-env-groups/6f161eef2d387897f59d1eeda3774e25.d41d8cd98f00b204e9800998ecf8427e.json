@@ -1,0 +1,1 @@
+{"id":"6f161eef2d387897f59d1eeda3774e25.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/shared/__tests__/anchorUrl.test.ts#normalizeAnchorUrl drops query and hash on other allowed hosts","name":"drops query and hash on other allowed hosts","status":"passed","testResultsByEnv":{"default":"3c5fcbaae8a94a791d11ccdf74f34a73"}}
