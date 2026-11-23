@@ -58,6 +58,7 @@ import type { CategoryCorrectionOperationService } from '../../application/servi
 import type { ListingReactivationService } from '../../application/services/ListingReactivationService';
 import type { ListingRevivalService } from '../../application/services/ListingRevivalService';
 import type { SaleVerdictRuns } from '../../application/services/verdict/SaleVerdictRuns';
+import type { ListingResponseRuns } from '../../application/services/response/ListingResponseRuns';
 import { createApiRouter } from './routes';
 import { createErrorHandler, type ErrorLogger } from './middleware/ErrorHandlingMiddleware';
 import { createRequestLoggingMiddleware, type RequestLogger } from './middleware/RequestLoggingMiddleware';
@@ -96,6 +97,7 @@ export interface AppDeps {
   // Whether a research profile is configured (POST /api/products/:id/price-research/refresh).
   researchConfigured?: boolean;
   saleVerdictRuns?: SaleVerdictRuns;
+  listingResponseRuns?: ListingResponseRuns;
   productStatsService?: ProductStatsService;
   listingRepo: IListingRepository;
   marketplaceRepo: IMarketplaceRepository;
@@ -246,6 +248,7 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.productStatsService,
       deps.saleVerdictRuns,
       deps.researchConfigured,
+      deps.listingResponseRuns,
     ),
     listings: new ListingController(deps.listingService, deps.listingRepo, {
       priceHistoryReader: deps.priceHistoryReader,
@@ -278,7 +281,8 @@ export function buildApp(deps: AppDeps, options: AppOptions = {}): Express {
       deps.hermesStatus,
       deps.aiUsageReport,
       deps.hermesLimits,
-      deps.saleVerdictRuns
+      deps.saleVerdictRuns,
+      deps.listingResponseRuns
     ),
     analytics: new AnalyticsController(deps.analyticsService),
     workspaces: new WorkspaceController(deps.workspaceRepo),

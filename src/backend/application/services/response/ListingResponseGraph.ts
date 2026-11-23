@@ -112,6 +112,30 @@ const PROBE_FAILED: ResponseFinding = {
   evidence: {},
 };
 
+// The listing the graph works on: the product's first live listing, which must be on OLX and carry
+// its marketplace id. InvalidStateError otherwise.
+export async function findLiveOlxListing(
+  deps: Pick<ListingResponseGraphDeps, 'listings' | 'marketplaces'>,
+  workspaceId: string,
+  productId: string,
+): Promise<{ listing: Listing; ownId: string }> {
+  const listing = (await deps.listings.findByProduct(productId)).find((l) => l.status === 'live');
+  if (!listing) throw new InvalidStateError('The product has no live listing');
+  const marketplace = await deps.marketplaces.findByIdForWorkspace(listing.marketplaceId, workspaceId);
+  if (marketplace?.key !== OLX_MARKETPLACE_KEY) throw new InvalidStateError('The live listing is not on OLX');
+  const ownId = listing.marketplaceListingId;
+  if (!ownId) throw new InvalidStateError('The live listing has no marketplace listing id');
+  return { listing, ownId };
+}
+
+export function responseFingerprint(product: Product, listing: Listing): string {
+  return subjectFingerprint({
+    title: product.name,
+    price: listing.price.amount,
+    categoryId: listing.marketplaceCategory?.providerCategoryId ?? null,
+  });
+}
+
 export class ListingResponseGraph {
   constructor(private readonly deps: ListingResponseGraphDeps) {}
 
@@ -183,12 +207,7 @@ export class ListingResponseGraph {
     const { workspaceId, productId } = input;
     const product = await this.deps.products.findByIdForWorkspace(productId, workspaceId);
     if (!product) throw new NotFoundError(`Product not found: ${productId}`);
-    const listing = (await this.deps.listings.findByProduct(product.id)).find((l) => l.status === 'live');
-    if (!listing) throw new InvalidStateError('The product has no live listing');
-    const marketplace = await this.deps.marketplaces.findByIdForWorkspace(listing.marketplaceId, workspaceId);
-    if (marketplace?.key !== OLX_MARKETPLACE_KEY) throw new InvalidStateError('The live listing is not on OLX');
-    const ownId = listing.marketplaceListingId;
-    if (!ownId) throw new InvalidStateError('The live listing has no marketplace listing id');
+    const { listing, ownId } = await findLiveOlxListing(this.deps, workspaceId, product.id);
 
     const now = this.deps.now();
     const events = await this.deps.analytics.findByRange({
@@ -309,11 +328,7 @@ export class ListingResponseGraph {
         graphVersion: LISTING_RESPONSE_GRAPH_VERSION,
         status: 'completed',
         ...fields,
-        fingerprint: subjectFingerprint({
-          title: product.name,
-          price: listing.price.amount,
-          categoryId: listing.marketplaceCategory?.providerCategoryId ?? null,
-        }),
+        fingerprint: responseFingerprint(product, listing),
         errorCode: null,
         createdAt: fields.completedAt,
       },

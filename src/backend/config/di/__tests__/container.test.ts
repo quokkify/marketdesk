@@ -117,6 +117,7 @@ describe('buildContainer (composition root)', () => {
 
   it('runs a sale verdict job once: a failed run is recorded on the run, not retried', () => {
     expect(buildBullAddOptions('sale-verdict')).toMatchObject({ attempts: 1 });
+    expect(buildBullAddOptions('listing-response')).toMatchObject({ attempts: 1 });
     expect(buildBullAddOptions('sale-verdict')).not.toHaveProperty('backoff');
   });
 
@@ -203,7 +204,7 @@ describe('buildContainer (composition root)', () => {
     expect('subscriber' in build()).toBe(false);
   });
 
-  it('creates exactly the publish, sync, conversation-retention, conversation-reply and sale-verdict queues', () => {
+  it('creates exactly the publish, sync, conversation-retention, conversation-reply, sale-verdict and listing-response queues', () => {
     const names: string[] = [];
     const scheduled: Array<{ name: string; options: unknown }> = [];
     buildContainer({
@@ -226,7 +227,7 @@ describe('buildContainer (composition root)', () => {
         };
       },
     });
-    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'sale-verdict']);
+    expect(names).toEqual(['publish-listing', 'sync-marketplace', 'conversation-retention', 'conversation-reply', 'sale-verdict', 'listing-response']);
     expect(scheduled).toEqual([
       {
         name: 'conversation-retention',
@@ -240,7 +241,7 @@ describe('buildContainer (composition root)', () => {
     expect(container.pool).toBe(fakePool);
     expect(container.redis).toBe(fakeRedis);
     expect('cache' in container).toBe(false);
-    expect(container.queues).toHaveLength(5);
+    expect(container.queues).toHaveLength(6);
     await expect(container.shutdown()).resolves.toBeUndefined();
     for (const q of container.queues) {
       expect(q.close).toHaveBeenCalled();

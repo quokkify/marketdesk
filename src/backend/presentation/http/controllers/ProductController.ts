@@ -9,6 +9,7 @@ import type { ListingApplicationService } from '../../../application/services/Li
 import type { ProductAIDraftService } from '../../../application/services/ProductAIDraftService';
 import type { ProductRecheckService } from '../../../application/services/ProductRecheckService';
 import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
+import type { ListingResponseRuns } from '../../../application/services/response/ListingResponseRuns';
 import type { ProductAssistanceGraph } from '../../../application/services/ProductAssistanceGraph';
 import { SEARCH_CURRENCY, SEARCH_NEEDS_PLN, SEARCH_NOT_CONFIGURED } from '../../../application/services/PriceResearchGraph';
 import type { IPriceResearchRuns } from '../../../domain/ports/IPriceResearchRuns';
@@ -110,6 +111,7 @@ export class ProductController {
     private readonly saleVerdictRuns?: SaleVerdictRuns,
     // Whether a research profile is configured.
     private readonly researchConfigured = false,
+    private readonly listingResponseRuns?: ListingResponseRuns,
   ) {}
 
   stats = async (req: Request, res: Response): Promise<void> => {
@@ -143,13 +145,20 @@ export class ProductController {
     const verdicts = this.saleVerdictRuns
       ? await this.saleVerdictRuns.viewsFor(query.workspaceId, page.items.map((item) => item.id))
       : undefined;
-    const items = verdicts
-      ? page.items.map((item) => ({
-          ...item,
-          verdict: verdicts.latest.get(item.id) ?? null,
-          verdictLastFailed: verdicts.failed.has(item.id),
-        }))
-      : page.items;
+    const responses = this.listingResponseRuns
+      ? await this.listingResponseRuns.latestFor(query.workspaceId, page.items.map((item) => item.id))
+      : undefined;
+    const items =
+      verdicts || responses
+        ? page.items.map((item) => ({
+            ...item,
+            ...(verdicts && {
+              verdict: verdicts.latest.get(item.id) ?? null,
+              verdictLastFailed: verdicts.failed.has(item.id),
+            }),
+            ...(responses && { response: responses.get(item.id) ?? null }),
+          }))
+        : page.items;
     paginated(res, items, {
       page: page.page,
       limit: page.limit,

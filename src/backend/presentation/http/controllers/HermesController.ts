@@ -15,6 +15,7 @@ import { NotFoundError, ServiceUnavailableError } from '../../../domain/shared/D
 import { parseHistoryLimit } from './historyLimit';
 import { ok, paginated } from '../formatters/ResponseFormatter';
 import type { SaleVerdictRuns } from '../../../application/services/verdict/SaleVerdictRuns';
+import type { ListingResponseRuns } from '../../../application/services/response/ListingResponseRuns';
 import type { CategoryCorrectionOperationService } from '../../../application/services/CategoryCorrectionOperationService';
 
 // Parse a comma-separated multi-value query param (e.g. ?status=a,b) into a
@@ -39,7 +40,8 @@ export class HermesController {
     private readonly hermesStatus?: () => Promise<HermesStatusView>,
     private readonly aiUsageReport?: (workspaceId: string) => Promise<AiUsageReport>,
     private readonly hermesLimits?: () => Promise<HermesLimits>,
-    private readonly saleVerdictRuns?: SaleVerdictRuns
+    private readonly saleVerdictRuns?: SaleVerdictRuns,
+    private readonly listingResponseRuns?: ListingResponseRuns
   ) {}
 
   status = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -189,6 +191,20 @@ export class HermesController {
   verdict = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
     ok(res, await this.saleVerdictRuns.view(req.user!.workspaceId!, routeParam(req.params.productId)));
+  };
+
+  requestResponseRun = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.listingResponseRuns) return next(new ServiceUnavailableError('Listing response is unavailable'));
+    const { run, enqueued, reused } = await this.listingResponseRuns.request(
+      req.user!.workspaceId!,
+      routeParam(req.params.productId)
+    );
+    ok(res, { run, reused }, enqueued ? 202 : 200);
+  };
+
+  responseView = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!this.listingResponseRuns) return next(new ServiceUnavailableError('Listing response is unavailable'));
+    ok(res, await this.listingResponseRuns.view(req.user!.workspaceId!, routeParam(req.params.productId)));
   };
 
   verdicts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

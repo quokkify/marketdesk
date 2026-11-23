@@ -120,6 +120,11 @@ import { buildPhotosCheck } from '../../application/services/verdict/photosCheck
 import { RecordedResearchRun } from '../../application/services/recordedResearchRun';
 import { SaleVerdictRepository } from '../../infrastructure/persistence/repositories/SaleVerdictRepository';
 import { SaleVerdictHandler } from '../../infrastructure/jobQueue/JobHandlers/SaleVerdictHandler';
+import { ListingResponseGraph } from '../../application/services/response/ListingResponseGraph';
+import { ListingResponseRuns } from '../../application/services/response/ListingResponseRuns';
+import { ListingResponseRunRepository } from '../../infrastructure/persistence/repositories/ListingResponseRunRepository';
+import { ListingResponseHandler } from '../../infrastructure/jobQueue/JobHandlers/ListingResponseHandler';
+import { MAX_PAGES, OlxSearchPageClient, loadOlxSearchBaseUrl } from '../../infrastructure/external/OlxSearchPageClient';
 import { PriceEstimateService } from '../../domain/services/PriceEstimateService';
 import type { IAIProvider } from '../../domain/ports/IAIProvider';
 
@@ -171,6 +176,7 @@ import type {
   IJobQueue,
   JobEnqueueOptions,
   SaleVerdictJob,
+  ListingResponseJob,
   PublishListingJob,
   SyncMarketplaceJob,
 } from '../../application/ports/IJobQueue';
@@ -221,10 +227,11 @@ const CONVERSATION_RETENTION_JOB_ID = 'conversation-retention';
 const CONVERSATION_RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
 const SALE_VERDICT_QUEUE = 'sale-verdict';
+const LISTING_RESPONSE_QUEUE = 'listing-response';
 
 export function buildBullAddOptions(name: string, options?: JobEnqueueOptions) {
   // A failed run is recorded on the run and retried by its schedule or a new request, never by the queue.
-  if (name === SALE_VERDICT_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
+  if (name === SALE_VERDICT_QUEUE || name === LISTING_RESPONSE_QUEUE) return { delay: options?.delayMs, jobId: options?.jobId, attempts: 1 };
   return {
     delay: options?.delayMs,
     jobId: options?.jobId,
@@ -474,6 +481,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const conversationRetentionQueue = createQueue<Record<string, never>>('conversation-retention');
   const conversationReplyQueue = createQueue<ConversationReplyJob>('conversation-reply');
   const saleVerdictQueue = createQueue<SaleVerdictJob>(SALE_VERDICT_QUEUE);
+  const listingResponseQueue = createQueue<ListingResponseJob>(LISTING_RESPONSE_QUEUE);
 
   // 6. Domain services.
   const productDomainService = new ProductService(productRepo, eventPublisher);
@@ -691,6 +699,33 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analytics: analyticsEventRepo,
     awaitingReplyCounts: (workspaceId) =>
       new ConversationRepository(pool).awaitingReplyCounts(workspaceId),
+  });
+  const hermesQueryConfig = loadHermesConfig();
+  const listingResponseRunRepo = new ListingResponseRunRepository(pool);
+  const listingResponseGraph = new ListingResponseGraph({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    analytics: analyticsEventRepo,
+    verdicts: saleVerdictRepo,
+    runs: listingResponseRunRepo,
+    queryClient: new HermesHealthProbe(hermesQueryConfig).isConfigured()
+      ? new HermesCompletionClient(hermesQueryConfig, aiUsageSink)
+      : null,
+    search: new OlxSearchPageClient({ baseUrl: loadOlxSearchBaseUrl() }),
+    maxPages: MAX_PAGES,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  const listingResponseRuns = new ListingResponseRuns({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    runs: listingResponseRunRepo,
+    queue: listingResponseQueue,
+    newId: idGenerator,
+    now: () => new Date(),
+    logger: overrides.logger,
   });
   const analyticsService = new AnalyticsApplicationService(
     productRepo,
@@ -993,6 +1028,14 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   });
   saleVerdictQueue.registerHandler((data) => saleVerdictHandler.handle(data));
 
+  const listingResponseHandler = new ListingResponseHandler({
+    runs: listingResponseRunRepo,
+    graph: listingResponseGraph,
+    now: () => new Date(),
+    logger: overrides.logger,
+  });
+  listingResponseQueue.registerHandler((data) => listingResponseHandler.handle(data));
+
   const conversationRetention = new ConversationRetentionService(new ConversationRepository(pool));
   conversationRetentionQueue.registerHandler(() => conversationRetention.purge(new Date()));
   void conversationRetentionQueue
@@ -1070,6 +1113,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceResearchRuns,
     researchConfigured: researchConfig !== null,
     saleVerdictRuns,
+    listingResponseRuns,
     productStatsService,
     listingRepo,
     marketplaceRepo,
@@ -1101,6 +1145,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     conversationRetentionQueue as ManagedQueue<unknown>,
     conversationReplyQueue as ManagedQueue<unknown>,
     saleVerdictQueue as ManagedQueue<unknown>,
+    listingResponseQueue as ManagedQueue<unknown>,
   ];
 
   const shutdown = async (): Promise<void> => {

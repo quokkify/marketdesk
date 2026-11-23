@@ -44,6 +44,12 @@ import type {
   IPriceResearchRunRepository,
   NewResearchRun,
 } from '../repositories/interfaces/IPriceResearchRunRepository';
+import type { ListingResponseRun } from '../../../shared/types';
+import type {
+  CompletedListingResponseFields,
+  IListingResponseRunRepository,
+  NewListingResponseRun,
+} from '../repositories/interfaces/IListingResponseRunRepository';
 import type { IEventPublisher, DomainEvent } from '../ports/IEventPublisher';
 import type {
   IAIProvider,
@@ -432,6 +438,95 @@ export class InMemoryPriceResearchRunRepository implements IPriceResearchRunRepo
     if (!run) return false;
     Object.assign(run, { ...fields, status: 'finished', leaseUntil: null });
     return true;
+  }
+}
+
+// Mirrors the partial unique index: one queued or running run per listing.
+export class InMemoryListingResponseRunRepository implements IListingResponseRunRepository {
+  readonly runs: ListingResponseRun[] = [];
+  private readonly workspaces = new Map<string, string>();
+  private readonly leases = new Map<string, string>();
+
+  private isActive(run: ListingResponseRun): boolean {
+    return run.status === 'queued' || run.status === 'running';
+  }
+  async insertQueued(run: NewListingResponseRun): Promise<ListingResponseRun | null> {
+    if (this.runs.some((r) => r.listingId === run.listingId && this.isActive(r))) return null;
+    const stored: ListingResponseRun = {
+      id: run.id,
+      productId: run.productId,
+      listingId: run.listingId,
+      graphVersion: run.graphVersion,
+      status: 'queued',
+      stage: null,
+      signal: null,
+      probes: [],
+      findings: [],
+      fingerprint: run.fingerprint,
+      errorCode: null,
+      createdAt: run.queuedAt,
+      completedAt: null,
+    };
+    this.runs.push(stored);
+    this.workspaces.set(run.id, run.workspaceId);
+    return { ...stored };
+  }
+  async findActive(workspaceId: string, listingId: string): Promise<ListingResponseRun | null> {
+    const run = this.runs.find((r) => this.workspaces.get(r.id) === workspaceId && r.listingId === listingId && this.isActive(r));
+    return run ? { ...run } : null;
+  }
+  async claim(runId: string, _startedAt: string, leaseUntil: string): Promise<ListingResponseRun | null> {
+    const run = this.runs.find((r) => r.id === runId && r.status === 'queued');
+    if (!run) return null;
+    run.status = 'running';
+    this.leases.set(runId, leaseUntil);
+    return { ...run };
+  }
+  async complete(runId: string, fields: CompletedListingResponseFields): Promise<boolean> {
+    const run = this.runs.find((r) => r.id === runId && this.isActive(r));
+    if (!run) return false;
+    Object.assign(run, { status: 'completed', ...fields });
+    return true;
+  }
+  async fail(runId: string, completedAt: string, errorCode: string): Promise<boolean> {
+    const run = this.runs.find((r) => r.id === runId && this.isActive(r));
+    if (!run) return false;
+    Object.assign(run, { status: 'failed', completedAt, errorCode });
+    return true;
+  }
+  async failExpired(workspaceId: string, listingId: string, now: string, queuedBefore: string, errorCode: string): Promise<boolean> {
+    const run = this.runs.find(
+      (r) =>
+        this.workspaces.get(r.id) === workspaceId &&
+        r.listingId === listingId &&
+        ((r.status === 'running' && (this.leases.get(r.id) ?? '') < now) ||
+          (r.status === 'queued' && r.createdAt < queuedBefore)),
+    );
+    return run ? this.fail(run.id, now, errorCode) : false;
+  }
+  async findById(workspaceId: string, runId: string): Promise<ListingResponseRun | null> {
+    const run = this.runs.find((r) => r.id === runId && this.workspaces.get(r.id) === workspaceId);
+    return run ? { ...run } : null;
+  }
+  private sorted(workspaceId: string, match: (r: ListingResponseRun) => boolean): ListingResponseRun[] {
+    return this.runs
+      .filter((r) => this.workspaces.get(r.id) === workspaceId && match(r))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async findLatestCompleted(workspaceId: string, listingId: string): Promise<ListingResponseRun | null> {
+    const run = this.sorted(workspaceId, (r) => r.listingId === listingId && r.status === 'completed')[0];
+    return run ? { ...run } : null;
+  }
+  async findNewest(workspaceId: string, listingId: string): Promise<ListingResponseRun | null> {
+    const run = this.sorted(workspaceId, (r) => r.listingId === listingId)[0];
+    return run ? { ...run } : null;
+  }
+  async findLatestCompletedForProducts(workspaceId: string, productIds: string[]): Promise<Map<string, ListingResponseRun>> {
+    const out = new Map<string, ListingResponseRun>();
+    for (const run of this.sorted(workspaceId, (r) => r.status === 'completed' && productIds.includes(r.productId))) {
+      if (!out.has(run.productId)) out.set(run.productId, { ...run });
+    }
+    return out;
   }
 }
 

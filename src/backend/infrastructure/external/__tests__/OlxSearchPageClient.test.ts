@@ -222,6 +222,8 @@ describe('loadOlxSearchBaseUrl', () => {
   it('defaults, trims the trailing slash and rejects non-http URLs', () => {
     delete process.env.OLX_SEARCH_BASE_URL;
     expect(loadOlxSearchBaseUrl()).toBe('https://www.olx.pl');
+    process.env.OLX_SEARCH_BASE_URL = '';
+    expect(loadOlxSearchBaseUrl()).toBe('https://www.olx.pl');
     process.env.OLX_SEARCH_BASE_URL = 'http://localhost:9000/';
     expect(loadOlxSearchBaseUrl()).toBe('http://localhost:9000');
     process.env.OLX_SEARCH_BASE_URL = 'ftp://x';
