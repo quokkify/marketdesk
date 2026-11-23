@@ -200,8 +200,8 @@ test counts below do not include them.
   | `ProductAssistanceGraph.ts` | `route`, `draft`, `publication`, `improve`, `revive` | after `route`, by input kind | SEO and price suggestion |
   | `response/ListingResponseGraph.ts` | `load`, `known`, `queries`, `probe`, `locate`, `compare`, `rank`, `save` | after `known` (queries or rank), after `queries` (probe or rank) | 1, the buyer queries (main profile) |
 
-  `ListingResponseGraph` was added on the branch `feat/listing-response-graph`. Its `probe` node is code: it loads
-  the public OLX search pages itself, so no research-profile call is involved.
+  The `probe` node of `ListingResponseGraph` is code: it loads the public OLX search pages itself, so no
+  research-profile call is involved.
 
 - **No checkpointer, interrupt, streaming or tool calling** inside the graphs; subgraphs appear only in the sale
   verdict graph on `main`. State is a small

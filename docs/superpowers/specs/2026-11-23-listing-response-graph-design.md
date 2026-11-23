@@ -179,8 +179,9 @@ Not seen · checked 5 min ago
   one finding per reason, carrying the verdict's own reason code and message unchanged, plus the
   check's event ids so the UI can open the proposal. `needs_human` checks are passed the same way.
   A "Ready to sell" verdict gives an empty list. No verdict at all → finding `no_verdict` with the
-  action "run Analyze". "Out of date" is the rule the verdict UI already uses (product or listing
-  `updatedAt` later than the verdict's `completed_at`).
+  action "run Analyze". "Out of date" (`verdict_out_of_date`) is decided by the product's `updatedAt`
+  only, later than the verdict's `completed_at`: sync writes the listing's `updated_at` on every
+  pass, so the listing's timestamp would mark every verdict out of date.
 - **Cost and limits.** See "Decision after the spike" for the request limits. A second click while a run is active returns the active run. A completed run younger
   than 6 hours is returned instead of starting a new one unless the listing changed after it.
   "Changed" means its title, price or category differ (a stored fingerprint); `updated_at` is not
