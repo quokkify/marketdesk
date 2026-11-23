@@ -40,8 +40,9 @@ with a "Not ready" verdict.
 - An alarm in the first days, when silence is normal.
 - A stated cause with no measurement behind it ("the title is weak") — the probe failing must read
   as "could not check", never as a guess.
-- Seller free text reaching the web-enabled Hermes profile, or Hermes text in graph state or logs
-  (same rule as the existing graphs).
+- Seller free text reaching the web-enabled Hermes profile, or Hermes free text in graph state,
+  storage or logs. The one exception is the buyer queries: short phrases that pass a strict shape
+  check (a few words, letters and digits only). Competitor titles are neither requested nor kept.
 - MarketDesk fetching OLX search pages itself. Search goes only through the research profile.
 
 ## Approaches considered
@@ -180,6 +181,8 @@ Not seen · checked 5 min ago
 - **Cost and limits.** Probe calls go through the shared `ResearchCallLimiter`, like price
   research. A second click while a run is active returns the active run. A completed run younger
   than 6 hours is returned instead of starting a new one unless the listing changed after it.
+  "Changed" means its title, price or category differ (a stored fingerprint); `updated_at` is not
+  used because every sync writes it. The same fingerprint decides "out of date" in the UI.
 - **Promoted cards.** Position is counted among organic (non-promoted) cards only and the total
   is reported next to it. Promoted cards are excluded from the price comparison. If the profile
   cannot tell promoted from organic in the spike, position is counted among all cards and the UI
