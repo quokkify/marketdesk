@@ -6,6 +6,8 @@ import type {
   HermesStatusView,
   PaginatedResponse,
   ApiResponse,
+  ListingResponseRun,
+  ListingResponseView,
   ProductVerdictView,
   SaleVerdict,
 } from '@shared/types';
@@ -48,6 +50,13 @@ export function buildProductHermesRunRequest(input: HermesRunInput) {
     url: `/hermes/products/${encodeURIComponent(productId)}/run`,
     method: 'POST' as const,
     body: scope ? { trigger, scope } : { trigger },
+  };
+}
+
+export function buildResponseRunRequest(productId: string) {
+  return {
+    url: `/hermes/products/${encodeURIComponent(productId)}/response-run`,
+    method: 'POST' as const,
   };
 }
 
@@ -182,6 +191,19 @@ export const hermesApi = baseApi.injectEndpoints({
       transformResponse: (res: ApiResponse<SaleVerdict[]>) => unwrap(res),
       providesTags: (_result, _error, productId) => [{ type: 'SaleVerdict', id: productId }],
     }),
+
+    // The run ends in the background; getResponseView reports its progress.
+    requestResponseRun: builder.mutation<{ run: ListingResponseRun; reused: boolean }, string>({
+      query: buildResponseRunRequest,
+      transformResponse: (res: ApiResponse<{ run: ListingResponseRun; reused: boolean }>) => unwrap(res),
+      invalidatesTags: (_result, _error, productId) => [{ type: 'ListingResponse', id: productId }],
+    }),
+
+    getResponseView: builder.query<ListingResponseView, string>({
+      query: (productId) => `/hermes/products/${encodeURIComponent(productId)}/response`,
+      transformResponse: (res: ApiResponse<ListingResponseView>) => unwrap(res),
+      providesTags: (_result, _error, productId) => [{ type: 'ListingResponse', id: productId }],
+    }),
   }),
 });
 
@@ -198,5 +220,7 @@ export const {
   useRunHermesMutation,
   useGetProductVerdictQuery,
   useGetProductVerdictsQuery,
+  useRequestResponseRunMutation,
+  useGetResponseViewQuery,
   useGetHermesPendingCountsQuery,
 } = hermesApi;

@@ -55,6 +55,8 @@ import { canStartRowAnalysis, rowAnalysisLabel } from '../../pages/productsRowAn
 import type { RowAnalysisState } from '../../pages/productsRowAnalysis.js';
 import VerdictSummary from '../products/VerdictSummary.js';
 import { isVerdictStale } from '../products/verdictDisplay.js';
+import ResponseSummary from '../products/ResponseSummary.js';
+import type { RowResponseState } from '../products/responseDisplay.js';
 
 const SKU_FONT = '"JetBrains Mono", ui-monospace, monospace';
 
@@ -434,6 +436,8 @@ export interface ProductsCollectionProps {
   onToggleReview?: (product: Product) => void;
   renderReview?: (product: Product) => React.ReactNode;
   statsByProductId?: Record<string, ProductStats>;
+  responseByProductId?: Record<string, RowResponseState>;
+  onAskWhy?: (product: Product) => void;
 }
 
 const reviewRegionId = (product: Product) => `product-review-${product.id}`;
@@ -460,6 +464,19 @@ function RowVerdict({ product, props }: { product: Product; props: ProductsColle
       running={props.analysisByProductId?.[product.id]?.status === 'running'}
       lastFailed={product.verdictLastFailed ?? false}
       stale={verdict !== null && isVerdictStale(verdict, product.updatedAt, null)}
+    />
+  );
+}
+
+function RowResponse({ product, props }: { product: Product; props: ProductsCollectionProps }) {
+  const view = props.responseByProductId?.[product.id];
+  return (
+    <ResponseSummary
+      signal={props.statsByProductId?.[product.id]?.response}
+      run={view ? view.latest : (product.response ?? null)}
+      active={view?.active ?? false}
+      outOfDate={view?.outOfDate ?? false}
+      onAsk={props.onAskWhy ? () => props.onAskWhy?.(product) : undefined}
     />
   );
 }
@@ -696,6 +713,9 @@ export const ProductsTable: React.FC<ProductsCollectionProps> = (props) => {
                     </TableCell>
                     <TableCell>
                       <ProductViews stats={props.statsByProductId?.[product.id]} />
+                      <Box data-row-stop>
+                        <RowResponse product={product} props={props} />
+                      </Box>
                     </TableCell>
                     <TableCell data-row-stop>
                       <RowAnalysisControl product={product} props={props} />
@@ -807,6 +827,9 @@ export const ProductsCards: React.FC<ProductsCollectionProps> = (props) => {
                   Views · 7 days
                 </Typography>
                 <ProductViews stats={props.statsByProductId?.[product.id]} />
+                <Box data-row-stop>
+                  <RowResponse product={product} props={props} />
+                </Box>
               </Box>
             </Box>
             <ProductSignals product={product} stats={props.statsByProductId?.[product.id]} />

@@ -55,6 +55,8 @@ import {
   useExecuteCategoryRecreationOperationMutation,
   useRunHermesMutation,
   useGetProductVerdictQuery,
+  useGetResponseViewQuery,
+  useRequestResponseRunMutation,
   useGetAnalyticsOverviewQuery,
   useGetPriceHistoryQuery,
   useGetWorkspaceQuery,
@@ -163,6 +165,7 @@ export const useApproveHermesEvent = useApproveHermesEventMutation;
 export const useDismissHermesEvent = useDismissHermesEventMutation;
 export const useExecuteCategoryRecreationOperation = useExecuteCategoryRecreationOperationMutation;
 export const useRunHermes = useRunHermesMutation;
+export const useRequestResponseRun = useRequestResponseRunMutation;
 
 export const VERDICT_POLL_MS = 3000;
 
@@ -187,6 +190,31 @@ export function useProductVerdict(productId: string | undefined) {
           { type: 'SaleVerdict', id: productId },
         ])
       );
+    }
+    mark.current = next;
+  }, [view, productId, dispatch]);
+  return result;
+}
+
+// The listing response view of one product; polls only while a run is active. When the run ends
+// the catalogue row, which carries the latest run, is read again.
+export function useResponseView(productId: string | undefined) {
+  const dispatch = useAppDispatch();
+  const [pollingInterval, setPollingInterval] = useState(0);
+  const result = useGetResponseViewQuery(productId ?? skipToken, { pollingInterval });
+  const view = result.currentData;
+  const mark = useRef<VerdictMark | null>(null);
+  useEffect(() => {
+    if (!productId || !view) return;
+    const next: VerdictMark = {
+      productId,
+      latestId: view.latest?.id ?? null,
+      completedAt: view.latest?.completedAt ?? null,
+      active: view.active !== null,
+    };
+    setPollingInterval(next.active ? VERDICT_POLL_MS : 0);
+    if (verdictSettled(mark.current, next)) {
+      dispatch(baseApi.util.invalidateTags([{ type: 'Product', id: 'LIST' }]));
     }
     mark.current = next;
   }, [view, productId, dispatch]);

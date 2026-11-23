@@ -250,6 +250,73 @@ describe('views, reasons and the listing link', () => {
     expect(html).toContain('target="_blank"');
   });
 
+  const signal = (over: Partial<NonNullable<ProductStats['response']>> = {}): NonNullable<ProductStats['response']> => ({
+    listingId: 'l-1',
+    stage: 'not_seen',
+    views: 4,
+    viewsPerDay: 1,
+    hoursLive: 80,
+    viewsNeeded: null,
+    ...over,
+  });
+
+  it('shows the response stage and the Why no response? button for a listing nobody sees', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAskWhy={() => undefined}
+        statsByProductId={{ 'p-1': stats({ response: signal() }) }}
+      />
+    );
+    expect(html).toContain('Not seen · day 4');
+    expect(html).toContain('Why no response?');
+  });
+
+  it('shows neither the stage nor the button for a responding listing', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAskWhy={() => undefined}
+        statsByProductId={{ 'p-1': stats({ response: signal({ stage: 'responding' }) }) }}
+      />
+    );
+    expect(html).not.toContain('Not seen');
+    expect(html).not.toContain('Why no response?');
+  });
+
+  it('shows Checking… instead of the button while a run is active', () => {
+    const html = markup(
+      <ProductsTable
+        products={[product]}
+        onAskWhy={() => undefined}
+        responseByProductId={{ 'p-1': { active: true, outOfDate: false, latest: null } }}
+        statsByProductId={{ 'p-1': stats({ response: signal() }) }}
+      />
+    );
+    expect(html).toContain('Checking…');
+    expect(html).not.toContain('Why no response?');
+  });
+
+  it('shows when the run was made, its first two findings and the out of date mark', () => {
+    const run = {
+      id: 'r-1',
+      completedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+      findings: ['first', 'second', 'third'].map((message) => ({ code: 'crowded_market', message, action: null, evidence: {} })),
+    } as unknown as NonNullable<Product['response']>;
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, response: run }]}
+        responseByProductId={{ 'p-1': { active: false, outOfDate: true, latest: run } }}
+        statsByProductId={{ 'p-1': stats({ response: signal() }) }}
+      />
+    );
+    expect(html).toContain('checked 3h ago');
+    expect(html).toContain('first');
+    expect(html).toContain('second');
+    expect(html).not.toContain('third');
+    expect(html).toContain('out of date');
+  });
+
   it('labels the AI column for screen readers only', () => {
     const html = markup(<ProductsTable products={[product]} />);
     expect(html).not.toMatch(/<th[^>]*>AI<\/th>/);

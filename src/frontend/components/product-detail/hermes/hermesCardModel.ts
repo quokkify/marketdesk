@@ -1,6 +1,8 @@
 // What the Hermes card on the product page shows, computed from API data so the component has no logic.
 import type {
   HermesEvent,
+  ListingResponseSignal,
+  ListingResponseView,
   HermesStatusView,
   PriceResearchView,
   ProductVerdictView,
@@ -18,6 +20,13 @@ import {
   overallColor,
   overallLabel,
 } from '../../products/verdictDisplay.js';
+import {
+  canAskWhy,
+  checkedLabel,
+  responseActionKind,
+  stageLabel,
+} from '../../products/responseDisplay.js';
+import type { ResponseActionKind } from '../../products/responseDisplay.js';
 import { anchorsUpdatedAt, runProgressText, verdictErrorReason } from '../priceResearchModel.js';
 
 export type HermesDrawerTab = 'prices' | 'checks' | 'suggestions' | 'history';
@@ -289,5 +298,48 @@ export function hermesCardState(input: HermesCardInput): HermesCardState {
       suggestionsRow(input),
     ],
     footer: footerText(input, running),
+  };
+}
+
+export interface ResponseCardFinding {
+  message: string;
+  control: ResponseActionKind | null;
+}
+
+export interface ResponseCardState {
+  stage: string;
+  canAsk: boolean;
+  active: boolean;
+  checked: string | null;
+  outOfDate: boolean;
+  lastFailed: boolean;
+  findings: ResponseCardFinding[];
+}
+
+export interface ResponseCardInput {
+  signal: ListingResponseSignal | null;
+  view: ListingResponseView | null;
+  now: Date;
+}
+
+// The listing response block of the card; null when there is nothing to say or ask.
+export function responseCardState(input: ResponseCardInput): ResponseCardState | null {
+  const { signal, view, now } = input;
+  if (!signal) return null;
+  const active = (view?.active ?? null) !== null;
+  const latest = view?.latest ?? null;
+  const stage = stageLabel(signal);
+  if (!stage && !latest && !active) return null;
+  return {
+    stage,
+    canAsk: canAskWhy(signal, active),
+    active,
+    checked: checkedLabel(latest, now),
+    outOfDate: view?.outOfDate ?? false,
+    lastFailed: view?.lastFailed ?? false,
+    findings: (latest?.findings ?? []).map((finding) => ({
+      message: finding.message,
+      control: responseActionKind(finding.action),
+    })),
   };
 }

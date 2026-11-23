@@ -3,7 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { lightTheme } from '../../../theme/lightTheme';
 import { HermesCard } from './HermesCard';
-import type { HermesCardRow, HermesCardState } from './hermesCardModel';
+import type { HermesCardRow, HermesCardState, ResponseCardState } from './hermesCardModel';
 
 const ROWS: HermesCardRow[] = [
   { key: 'prices', tab: 'prices', title: 'Market prices', status: 'ok', value: 'Start 169 zł', detail: 'Floor 155 zł · 4 prices' },
@@ -137,5 +137,65 @@ describe('HermesCard', () => {
     expect(tagOf(html, 'hermes-analyze-error')).toContain('role="alert"');
     expect(html).toContain('Hermes settings are switched off.');
     expect(render()).not.toContain('hermes-analyze-error');
+  });
+
+  describe('listing response section', () => {
+    const response = (patch: Partial<ResponseCardState> = {}): ResponseCardState => ({
+      stage: 'Not seen · day 4',
+      canAsk: true,
+      active: false,
+      checked: null,
+      outOfDate: false,
+      lastFailed: false,
+      findings: [],
+      ...patch,
+    });
+    const noop = { onAskWhy: () => undefined, onResponseAction: () => undefined };
+
+    it('renders nothing without a response state', () => {
+      expect(render()).not.toContain('hermes-response');
+    });
+
+    it('shows the stage and the Why no response? button', () => {
+      const html = render({ response: response(), ...noop });
+
+      expect(html).toContain('Not seen · day 4');
+      expect(html).toMatch(/data-testid="hermes-response-ask"[^>]*>Why no response\?</);
+    });
+
+    it('shows Checking… and no button while a run is active', () => {
+      const html = render({ response: response({ active: true, canAsk: false }), ...noop });
+
+      expect(html).toContain('Checking…');
+      expect(html).not.toContain('hermes-response-ask');
+    });
+
+    it('lists every finding with its control, the hint as plain text, and the out of date mark', () => {
+      const html = render({
+        response: response({
+          checked: 'checked 2h ago',
+          outOfDate: true,
+          findings: [
+            { message: 'one', control: 'analyze' },
+            { message: 'two', control: 'review_price' },
+            { message: 'three', control: 'edit_title' },
+            { message: 'four', control: 'open_proposal' },
+            { message: 'five', control: 'hint' },
+            { message: 'six', control: null },
+          ],
+        }),
+        ...noop,
+      });
+
+      for (const text of ['one', 'two', 'three', 'four', 'five', 'six', 'checked 2h ago', 'out of date']) {
+        expect(html).toContain(text);
+      }
+      expect(html).toMatch(/data-testid="hermes-response-action-analyze"[^>]*>Analyze</);
+      expect(html).toMatch(/data-testid="hermes-response-action-review_price"[^>]*>Review price</);
+      expect(html).toMatch(/data-testid="hermes-response-action-edit_title"[^>]*>Edit title</);
+      expect(html).toMatch(/data-testid="hermes-response-action-open_proposal"[^>]*>Open suggestion</);
+      expect(html).toMatch(/data-testid="hermes-response-hint"[^>]*>Refresh the advert on OLX</);
+      expect(html).not.toContain('hermes-response-action-hint');
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   HERMES_FEED_PAGE_SIZE,
   buildHermesEventsUrl,
   buildProductHermesRunRequest,
+  buildResponseRunRequest,
   hermesApi,
   hermesFeedNextOffset,
 } from './hermesApi';
@@ -34,6 +35,15 @@ describe('Hermes frontend API contract', () => {
       body: { trigger: 'manual' },
     });
     expect(request.url).not.toBe('/hermes/run');
+  });
+});
+
+describe('Listing response requests', () => {
+  it('starts a response run with a bodyless POST to the product-scoped route', () => {
+    expect(buildResponseRunRequest('product/with space')).toEqual({
+      url: '/hermes/products/product%2Fwith%20space/response-run',
+      method: 'POST',
+    });
   });
 });
 
@@ -235,6 +245,34 @@ describe('Hermes endpoints against the wire format', () => {
       );
     } finally {
       verdict.unsubscribe();
+    }
+  });
+
+  it('refetches the response view after a response run is requested', async () => {
+    respond = (url) => ({
+      success: true,
+      data: url.pathname.endsWith('/response-run')
+        ? { run: { id: 'r-1' }, reused: false }
+        : { latest: null, active: null, lastFailed: false, outOfDate: false },
+    });
+    const store = newStore();
+    const view = store.dispatch(hermesApi.endpoints.getResponseView.initiate('product-1'));
+    try {
+      await view;
+      requested.length = 0;
+
+      const started = await store.dispatch(hermesApi.endpoints.requestResponseRun.initiate('product-1'));
+
+      expect(started).toEqual({ data: { run: { id: 'r-1' }, reused: false } });
+      await waitUntil(() => requested.some((url) => url.pathname === '/api/hermes/products/product-1/response'));
+      expect(requested.map((url) => url.pathname)).toEqual(
+        expect.arrayContaining([
+          '/api/hermes/products/product-1/response-run',
+          '/api/hermes/products/product-1/response',
+        ]),
+      );
+    } finally {
+      view.unsubscribe();
     }
   });
 });

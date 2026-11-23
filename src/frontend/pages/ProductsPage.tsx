@@ -42,6 +42,7 @@ import {
   useMarketplaces,
   useProducts,
   useRunHermes,
+  useRequestResponseRun,
 } from '../services/hooks/index.js';
 import {
   useGetAwaitingCountsQuery,
@@ -75,6 +76,7 @@ import {
   stateAfterPendingChange,
 } from './productsRowAnalysis.js';
 import type { RowAnalysisState } from './productsRowAnalysis.js';
+import type { RowResponseState } from '../components/products/responseDisplay.js';
 import {
   catalogueShowsSkeleton,
   hasCatalogueFilters,
@@ -189,6 +191,8 @@ const ProductsPage: React.FC = () => {
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [runHermes] = useRunHermes();
+  const [requestResponseRun] = useRequestResponseRun();
+  const [responseByProductId, setResponseByProductId] = useState<Record<string, RowResponseState>>({});
   const hermesPrincipal = workspaceId && userId ? { workspaceId, userId } : null;
   const hermesSettings = useGetHermesSettingsQuery(hermesPrincipal ?? skipToken);
   const analyzeDisabledReason = rowAnalyzeDisabledReason({
@@ -257,6 +261,51 @@ const ProductsPage: React.FC = () => {
   const runOptions = {
     skip: (id: string) => inFlightRef.current.has(id),
     shouldContinue: () => mountedRef.current,
+  };
+  const askWhy = async (product: Product) => {
+    const productId = product.id;
+    if (inFlightRef.current.has(productId)) return;
+    inFlightRef.current.add(productId);
+    const show = (state: RowResponseState) =>
+      setResponseByProductId((current) => ({ ...current, [productId]: state }));
+    show({ active: true, outOfDate: false, latest: product.response ?? null });
+    try {
+      await requestResponseRun(productId).unwrap();
+      const outcome = await awaitVerdictRun(
+        async () => {
+          const read = dispatch(
+            hermesApi.endpoints.getResponseView.initiate(productId, { forceRefetch: true })
+          );
+          try {
+            const view = await read.unwrap();
+            if (mountedRef.current) {
+              show({ active: view.active !== null, outOfDate: view.outOfDate, latest: view.latest });
+            }
+            return view;
+          } finally {
+            read.unsubscribe();
+          }
+        },
+        { shouldContinue: () => mountedRef.current }
+      );
+      dispatch(baseApi.util.invalidateTags([{ type: 'Product', id: 'LIST' }]));
+      if (outcome === 'failed') throw new Error('The check failed. Try again.');
+    } catch (error) {
+      if (mountedRef.current) {
+        setResponseByProductId((current) => {
+          const { [productId]: _dropped, ...rest } = current;
+          return rest;
+        });
+        dispatch(
+          enqueueToast({
+            message: error instanceof Error ? error.message : 'The check failed. Try again.',
+            severity: 'error',
+          })
+        );
+      }
+    } finally {
+      inFlightRef.current.delete(productId);
+    }
   };
   const analyzeProduct = async (product: Product) => {
     await runSequentially(
@@ -1081,6 +1130,8 @@ const ProductsPage: React.FC = () => {
             awaitingByProductId={awaitingByProductId}
             analysisByProductId={rowAnalysis}
             statsByProductId={statsByProductId}
+            responseByProductId={responseByProductId}
+            onAskWhy={askWhy}
             onAnalyze={analyzeProduct}
             analyzeDisabledReason={analyzeDisabledReason}
             expandedProductId={expandedProductId}
@@ -1113,6 +1164,8 @@ const ProductsPage: React.FC = () => {
             awaitingByProductId={awaitingByProductId}
             analysisByProductId={rowAnalysis}
             statsByProductId={statsByProductId}
+            responseByProductId={responseByProductId}
+            onAskWhy={askWhy}
             onAnalyze={analyzeProduct}
             analyzeDisabledReason={analyzeDisabledReason}
             expandedProductId={expandedProductId}
