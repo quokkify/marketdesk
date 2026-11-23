@@ -7,6 +7,7 @@ import type {
   ProductStats,
   ProductStatus,
 } from '@shared/types';
+import type { Listing } from '../../domain/entities/Listing';
 
 export const STATS_DAYS = 14;
 export const GROWTH_WINDOW_MS = 7 * 24 * 3600 * 1000;
@@ -62,6 +63,21 @@ export interface StatsListing {
 export interface ResponseListing extends StatsListing {
   id: string;
   conversations: number | null;
+}
+
+export function toResponseListing(listing: Listing): ResponseListing {
+  return {
+    id: listing.id,
+    productId: listing.productId,
+    status: listing.status,
+    views: listing.views,
+    watchers: listing.watchers,
+    conversations: listing.conversations,
+    messages: listing.messages,
+    lastSyncAt: listing.lastSyncAt,
+    publishedAt: listing.publishedAt,
+    externalUrl: listing.externalUrl,
+  };
 }
 
 export type ProductStatsSummary = Omit<ProductStats, 'needsAction' | 'response'> & {

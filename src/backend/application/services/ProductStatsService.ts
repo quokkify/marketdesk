@@ -12,8 +12,9 @@ import {
   nonSyncViewEventIds,
   summarizeListingViews,
   summarizeProduct,
+  toResponseListing,
 } from './productStats';
-import type { ProductStatsSummary, ResponseListing } from './productStats';
+import type { ProductStatsSummary } from './productStats';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -23,21 +24,6 @@ export interface ProductStatsDeps {
   analytics: Pick<IAnalyticsEventRepository, 'findByRange'>;
   awaitingReplyCounts?: (workspaceId: string) => Promise<Record<string, number>>;
   now?: () => Date;
-}
-
-function statsListing(listing: Listing): ResponseListing {
-  return {
-    id: listing.id,
-    productId: listing.productId,
-    status: listing.status,
-    views: listing.views,
-    watchers: listing.watchers,
-    conversations: listing.conversations,
-    messages: listing.messages,
-    lastSyncAt: listing.lastSyncAt,
-    publishedAt: listing.publishedAt,
-    externalUrl: listing.externalUrl,
-  };
 }
 
 export class ProductStatsService {
@@ -66,7 +52,7 @@ export class ProductStatsService {
       const group = listingsByProduct.get(product.id);
       const summary: ProductStatsSummary | undefined = group
         ? summarizeProduct(
-            group.map(statsListing),
+            group.map(toResponseListing),
             views,
             group.map((listing) => listing.id),
             now
@@ -93,7 +79,7 @@ export class ProductStatsService {
       };
       const liveListing = group?.find((listing) => listing.status === 'live');
       const response = liveListing
-        ? listingResponseSignal(statsListing(liveListing), views.get(liveListing.id), now)
+        ? listingResponseSignal(toResponseListing(liveListing), views.get(liveListing.id), now)
         : null;
       result[product.id] = { ...stats, needsAction: reasons, response };
     }
