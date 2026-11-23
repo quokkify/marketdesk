@@ -23,6 +23,24 @@ export type ListingStatus = 'live' | 'draft' | 'expired' | 'error';
 // Products catalogue statistics (GET /products/stats).
 export type NeedsActionReason = 'buyer_waiting' | 'listing_problem' | 'no_view_growth';
 
+export type ResponseStage =
+  | 'no_data'
+  | 'responding'
+  | 'too_early'
+  | 'not_seen'
+  | 'seen_not_contacted';
+
+export interface ListingResponseSignal {
+  listingId: string;
+  stage: ResponseStage;
+  views: number | null;
+  /** Mean views of the last three complete UTC days. */
+  viewsPerDay: number | null;
+  hoursLive: number | null;
+  /** Views still needed before a silent listing can be judged; null once enough or not collecting. */
+  viewsNeeded: number | null;
+}
+
 export interface ProductStats {
   views: number | null;
   watchers: number | null;
@@ -36,6 +54,8 @@ export interface ProductStats {
   externalUrl: string | null;
   listingStatus: ListingStatus | null;
   needsAction: NeedsActionReason[];
+  /** Response stage of the first live listing; null without one. */
+  response: ListingResponseSignal | null;
 }
 
 export type MarketplaceCategorySource = 'provider_taxonomy' | 'remote_import' | 'user_confirmed';

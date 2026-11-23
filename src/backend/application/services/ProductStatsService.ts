@@ -7,12 +7,13 @@ import type { IAnalyticsEventRepository } from '../ports/IAnalyticsEventReposito
 import type { Listing } from '../../domain/entities/Listing';
 import {
   STATS_DAYS,
+  listingResponseSignal,
   needsActionReasons,
   nonSyncViewEventIds,
   summarizeListingViews,
   summarizeProduct,
 } from './productStats';
-import type { ProductStatsSummary, StatsListing } from './productStats';
+import type { ProductStatsSummary, ResponseListing } from './productStats';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -24,12 +25,14 @@ export interface ProductStatsDeps {
   now?: () => Date;
 }
 
-function statsListing(listing: Listing): StatsListing {
+function statsListing(listing: Listing): ResponseListing {
   return {
+    id: listing.id,
     productId: listing.productId,
     status: listing.status,
     views: listing.views,
     watchers: listing.watchers,
+    conversations: listing.conversations,
     messages: listing.messages,
     lastSyncAt: listing.lastSyncAt,
     publishedAt: listing.publishedAt,
@@ -88,7 +91,11 @@ export class ProductStatsService {
         listingStatus: null,
         oldestLivePublishedAt: null,
       };
-      result[product.id] = { ...stats, needsAction: reasons };
+      const liveListing = group?.find((listing) => listing.status === 'live');
+      const response = liveListing
+        ? listingResponseSignal(statsListing(liveListing), views.get(liveListing.id), now)
+        : null;
+      result[product.id] = { ...stats, needsAction: reasons, response };
     }
     return result;
   }

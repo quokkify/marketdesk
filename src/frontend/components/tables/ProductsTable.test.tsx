@@ -194,6 +194,7 @@ describe('views, reasons and the listing link', () => {
     externalUrl: null,
     listingStatus: 'live',
     needsAction: [],
+    response: null,
     ...over,
   });
   const other = { ...product, id: 'p-2', name: 'Other' };
