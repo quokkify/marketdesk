@@ -1,5 +1,84 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-11-23)
+
+<!-- project-toolkit:release-notes v2 -->
+**At a glance:** ⚠️ 4 breaking · 16 new · 4 fixed · 1 internal
+
+### ⚠️ Breaking changes
+
+> [!WARNING]
+> create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/pull/458))
+
+> [!WARNING]
+> cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/pull/447))
+>
+> The Dashboard, Analytics and Listings pages, the notifications control, the bulk-action placeholders, the Notifications, API Keys, Telegram, Security and Hermes AI settings sections, the roadmap marketplace cards and the import panel are no longer part of the interface. The listing SEO agent and its creativity preset keep their stored values and can still be changed through `PATCH /api/settings/hermes`; no screen edits them.
+
+> [!WARNING]
+> remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/pull/448))
+>
+> These endpoints no longer exist and answer 404 with the error code `NOT_FOUND`: `GET` and `PATCH /api/settings/notifications`, `GET /api/analytics/revenue`, `GET /api/analytics/listings`, `POST /api/hermes/run`, `POST /api/marketplaces/:id/import-preview`, `POST /api/marketplaces/:id/import`. `GET /api/settings/integrations` no longer returns the `telegram` and `api_keys` items.
+>
+> An API client that analysed the whole catalogue with `POST /api/hermes/run` calls `POST /api/hermes/products/:productId/run` once per product instead. The other removed endpoints have no replacement at this stage.
+
+> [!WARNING]
+> **security:** refuse a Hermes agent that has tools enabled — MarketDesk now refuses a Hermes Agent whose API server has any tool enabled (terminal, files, browser, memory), so seller text can no longer steer an agent that acts on your server. In `auto` mode AI falls back to offline heuristics, in `hermes` mode AI requests fail until Hermes runs without tools. ([#467](https://github.com/quokkify/marketdesk/pull/467))
+>
+> 1. Create a Hermes profile without tools as described in `docs/deployment/caddy-cloudflare-vps.md` ("Hermes profile without tools"), with its own `API_SERVER_KEY`.
+> 2. Confirm with `GET /p/<profile>/v1/toolsets` that no toolset is enabled.
+> 3. Set `HERMES_API_URL` to `http://<hermes-host>:8642/p/<profile>/v1` and `HERMES_API_KEY` to that profile's key, then restart MarketDesk.
+> 4. On a production instance also set `REGISTRATION_ENABLED=false`.
+
+### ✨ New
+
+- reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) — - MarketDesk runs end to end without OLX credentials: an OLX sandbox account, stub categories and simulated metrics, all labelled Sandbox. - Hermes AI degrades to labelled, review-only offline heuristics when the Hermes server is unreachable. - Boot refuses placeholder secrets and explains how to fix them; `npm run env:init` generates them. ([#434](https://github.com/quokkify/marketdesk/pull/434))
+
+  > **Migration**
+  >
+  > - Migrations 042 (`hermes_events.source`) and 043 (`category_correction_operations.listing_id` nullable, `ON DELETE SET NULL`) run through the Compose `migrate` service or `npm run db:migrate`; both are idempotent.
+  > - Run `npm run env:init` (or set `JWT_SECRET` ≥ 32 chars and a base64 32-byte `MARKETPLACE_CREDENTIALS_KEY`) before the first boot.
+  > - For a real OLX deployment set `OLX_ADAPTER_MODE=real` and a publicly reachable `PUBLIC_BASE_URL`; the default `stub` mode labels everything Sandbox.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+  >
+  > https://claude.ai/code/session_01G7RDWHiEDE7j584o2tQQSL
+- **ai:** show tokens per analysis, AI usage and Hermes limits — See what AI analyses use: each analysis on the product page shows its tokens, and the Hermes page shows AI usage for today and the last 7 days plus the AI provider's account limits (5-hour and weekly windows, reset times). Unknown values are shown as unknown, never as 0. ([#479](https://github.com/quokkify/marketdesk/pull/479))
+- **conversations:** draft OLX buyer replies for the seller to send — The product page now lists OLX buyer conversations with a Hermes-drafted reply: edit it and press Send, nothing goes out without you. Scam, spam and injection messages are flagged, and a reply never offers less than the new "Lowest price you accept". ([#489](https://github.com/quokkify/marketdesk/pull/489))
+- **olx:** import adverts already live on OLX — A connected OLX account can import the adverts already live on OLX again: "Import from OLX" on the Marketplaces page previews every advert with its status, then imports the new and changed ones as products. Nothing is written to OLX. ([#469](https://github.com/quokkify/marketdesk/pull/469))
+- **olx:** reactivate expired OLX adverts instead of duplicating them — An expired OLX advert can be brought back from its product page with "Reactivate on OLX": the same advert, link and history return instead of a duplicate. If OLX's free limit for the category is used up, MarketDesk says so and buys nothing. ([#478](https://github.com/quokkify/marketdesk/pull/478))
+- **olx:** revive an expired OLX advert with Hermes proposals — Bring an expired OLX advert back in better shape: "Revive on OLX" on the product page shows what is missing (condition, cost price), Hermes's proposed title, description and price with checkboxes, and one button that applies the ticked changes, updates the advert on OLX and reactivates it. Publishing to OLX now asks for the product's condition instead of sending "used" silently. ([#483](https://github.com/quokkify/marketdesk/pull/483))
+- **pricing:** find comparable used prices on OLX and pick them — A new "Find comparables on OLX" button in Price research looks up current OLX adverts for the item and lists them with prices and links. Untick what does not match and add the rest; the next price analysis treats them as observed market prices. ([#491](https://github.com/quokkify/marketdesk/pull/491))
+- **pricing:** propose a justified start and floor price for used items — The product analysis now proposes a start and floor price for a used item, built from the new-store price and comparable prices you enter on the product page. Each figure says whether it is observed or estimated, and the price shows how far it sits below new. ([#488](https://github.com/quokkify/marketdesk/pull/488))
+- **pricing:** research prices in the background with class checks — Price research now runs in the background and finds real substitutes: Find prices returns at once, the page shows progress, and the estimate appears when the search finishes. Offers of another class are dropped by code, and a new Missing accessories field lowers the estimate. ([#502](https://github.com/quokkify/marketdesk/pull/502))
+- **pricing:** send manual price changes to OLX — Changing a price yourself now updates OLX too. A new price set in the listing price dialog or in Edit product reaches the product, every listing and the live OLX advert, like an approved AI price, and the message says whether it was sent to OLX. ([#493](https://github.com/quokkify/marketdesk/pull/493))
+- **pricing:** suggest a start price for items no longer sold new — Items no longer sold new now get a start price. The agent looks up the same model used, the last new price and today's new and used substitutes, saves them by tier, and keeps the start price at or below 70 % of the cheapest new substitutes. Use Find prices on the product page. ([#494](https://github.com/quokkify/marketdesk/pull/494))
+- **product-page:** one Hermes card with prices, checks and run history — The product page now has one Hermes card under Statistics instead of four AI cards. It shows the verdict, the reason and one next action; click a row to open a side panel with market prices, checks, suggestions, and a log and history of every run. Add prices you found yourself under Your prices. ([#514](https://github.com/quokkify/marketdesk/pull/514))
+- **products:** analyze and review AI suggestions from the catalogue row — The Products page drops the empty Markets, Cost, Profit and Tags columns. Each row has an Analyze with AI button, and the suggestions open under the row with Approve and Dismiss, so you stay on the Active tab. You can also analyze several selected products in one go. ([#495](https://github.com/quokkify/marketdesk/pull/495))
+- **products:** show view growth and a needs-action tab in the catalogue — Each product row now shows its views with 7-day growth and a 14-day trend, and the Needs action tab lists active products where a buyer is waiting, the OLX listing expired or failed, or views stopped growing for a week. Pending AI suggestions stay counted after a reload. ([#497](https://github.com/quokkify/marketdesk/pull/497))
+- **products:** show whether a product is ready to sell — Analyze now gives a sale verdict per product (Ready to sell / Not ready / Needs you) with reasons for info, price and photos, shown in the catalogue row and on the product page. Review price re-checks only the price against the market ceiling. The Suggest improvements button is gone. ([#504](https://github.com/quokkify/marketdesk/pull/504))
+- **products:** show why a live listing gets no response — The catalogue now says whether a silent OLX listing is still too early to judge or is not being seen. For a listing that is not seen, "Why no response?" reports where the advert stands in OLX search for buyer phrases and what to change. Nothing is applied automatically. ([#515](https://github.com/quokkify/marketdesk/pull/515))
+
+### 🐛 Fixed
+
+- **olx:** give imported OLX adverts their category and status — Importing from OLX no longer marks every advert as unsupported: MarketDesk now reads the category OLX actually sends (`category_id`), and expired, removed and moderation-blocked OLX adverts get the matching MarketDesk status on import and sync. ([#475](https://github.com/quokkify/marketdesk/pull/475))
+- **olx:** show an empty condition field in the revival dialog when the condition is unknown — The revival dialog now shows an empty condition field with "Choose condition" when the product's condition is unknown, instead of a value that looked already chosen. ([#486](https://github.com/quokkify/marketdesk/pull/486))
+- **products:** keep typed prices when scrolling over the price field — Scrolling the page or the edit form while a price field is focused no longer changes the price. Before, each wheel or trackpad tick lowered or raised it by 0.01 (279 was saved as 278.84) and the changed price was sent to OLX. ([#506](https://github.com/quokkify/marketdesk/pull/506))
+- **security:** sign out every device and expire idle sessions — Sign out now ends the session on every device, Settings has a Change password card that signs out your other devices, and operators can revoke a user's sessions with `npm run auth:revoke -- <email>`. Sessions expire after 24 h of inactivity and renew while in use. ([#468](https://github.com/quokkify/marketdesk/pull/468))
+
+  > **Migration**
+  >
+  > 1. If your `.env` still has `JWT_EXPIRATION=7d` (copied from the old example), change it to `24h`; the app keeps 7d but logs a warning at boot.
+  > 2. `JWT_EXPIRATION` and the new `JWT_RENEW_AFTER` (default `12h`) accept `<integer><unit>` with `s`, `m`, `h` or `d` only; rewrite values such as `2 days` as `2d`, or the app refuses to start and names the variable.
+
+<details><summary>Internal changes (1 PR)</summary>
+
+**Maintenance**
+
+- **deps:** remove Playwright ([#500](https://github.com/quokkify/marketdesk/pull/500))
+
+</details>
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
