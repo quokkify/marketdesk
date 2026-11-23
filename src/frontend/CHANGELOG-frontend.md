@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.22.0](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.1...frontend-v0.22.0) (2026-11-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467))
+* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448))
+* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447))
+
+### ✨ Features
+
+* **ai:** show tokens per analysis, AI usage and Hermes limits ([#479](https://github.com/quokkify/marketdesk/issues/479)) ([2faac88](https://github.com/quokkify/marketdesk/commit/2faac88e7e68190f7f05063233ea6fd517abab15))
+* **conversations:** draft OLX buyer replies for the seller to send ([#489](https://github.com/quokkify/marketdesk/issues/489)) ([1464b1b](https://github.com/quokkify/marketdesk/commit/1464b1b0c46cd3bb1e6ebceb016c599db8fbccaa))
+* create and publish a product from two wizard screens ([#458](https://github.com/quokkify/marketdesk/issues/458)) ([ca0eb69](https://github.com/quokkify/marketdesk/commit/ca0eb697cf0b34feaba4317bc82b5638b7f06f25))
+* **olx:** import adverts already live on OLX ([#469](https://github.com/quokkify/marketdesk/issues/469)) ([81194c0](https://github.com/quokkify/marketdesk/commit/81194c0d09f1406420833df50db50b046e3bcc7b))
+* **olx:** reactivate expired OLX adverts instead of duplicating them ([#478](https://github.com/quokkify/marketdesk/issues/478)) ([a43bcaf](https://github.com/quokkify/marketdesk/commit/a43bcaf39d3cfa054b1e8f4bb128a4199bdac930))
+* **olx:** revive an expired OLX advert with Hermes proposals ([#483](https://github.com/quokkify/marketdesk/issues/483)) ([87dd9f1](https://github.com/quokkify/marketdesk/commit/87dd9f1bdbdcadee52fc96a8780054ed23c8e0dd))
+* **pricing:** find comparable used prices on OLX and pick them ([#491](https://github.com/quokkify/marketdesk/issues/491)) ([9b80836](https://github.com/quokkify/marketdesk/commit/9b80836a3dc8a5de94228fb62c9aaa6bbfb8f202))
+* **pricing:** propose a justified start and floor price for used items ([#488](https://github.com/quokkify/marketdesk/issues/488)) ([4ad4ef3](https://github.com/quokkify/marketdesk/commit/4ad4ef315daf658b2dde2c1cb62025a5c15b9d0f))
+* **pricing:** research prices in the background with class checks ([#502](https://github.com/quokkify/marketdesk/issues/502)) ([8cdb0cf](https://github.com/quokkify/marketdesk/commit/8cdb0cf0ef5f1399eba9855d23961b387fa00789))
+* **pricing:** send manual price changes to OLX ([#493](https://github.com/quokkify/marketdesk/issues/493)) ([aae722d](https://github.com/quokkify/marketdesk/commit/aae722dc2f287cc216a8263930d7f7a0785e928d))
+* **pricing:** suggest a start price for items no longer sold new ([#494](https://github.com/quokkify/marketdesk/issues/494)) ([b444ae1](https://github.com/quokkify/marketdesk/commit/b444ae1ad87f5231a91f3a008c4afd0ca8bd6746))
+* **product-page:** one Hermes card with prices, checks and run history ([#514](https://github.com/quokkify/marketdesk/issues/514)) ([aa81092](https://github.com/quokkify/marketdesk/commit/aa81092df32ee08d59702ad9fb2cebcf9829d141))
+* **products:** analyze and review AI suggestions from the catalogue row ([#495](https://github.com/quokkify/marketdesk/issues/495)) ([d5354aa](https://github.com/quokkify/marketdesk/commit/d5354aa7773e19400548388b44029f74d65a7424))
+* **products:** show view growth and a needs-action tab in the catalogue ([#497](https://github.com/quokkify/marketdesk/issues/497)) ([fe23bae](https://github.com/quokkify/marketdesk/commit/fe23baee0e7dedabafcc8e5cea9d82c482c5a657))
+* **products:** show whether a product is ready to sell ([#504](https://github.com/quokkify/marketdesk/issues/504)) ([3f571b7](https://github.com/quokkify/marketdesk/commit/3f571b76b42743fed91f171487d64e9f294a7a5e))
+* **products:** show why a live listing gets no response ([#515](https://github.com/quokkify/marketdesk/issues/515)) ([408c2e1](https://github.com/quokkify/marketdesk/commit/408c2e106bc79e194c1a3d32c112a18e5867e979))
+* reanimate marketdesk into a tester-ready mvp (sandbox olx, offline hermes, prd ui) ([#434](https://github.com/quokkify/marketdesk/issues/434)) ([f3042e7](https://github.com/quokkify/marketdesk/commit/f3042e7557e6589bdf35624a47b7aa1cf3335c08))
+
+
+### 🐛 Bug Fixes
+
+* **olx:** give imported OLX adverts their category and status ([#475](https://github.com/quokkify/marketdesk/issues/475)) ([f57264c](https://github.com/quokkify/marketdesk/commit/f57264c255a3b8414d8e42a521368865a6eb6323))
+* **olx:** show an empty condition field in the revival dialog when the condition is unknown ([#486](https://github.com/quokkify/marketdesk/issues/486)) ([2284602](https://github.com/quokkify/marketdesk/commit/2284602ae218666d80c712c1973a89fba7788ac0))
+* **products:** keep typed prices when scrolling over the price field ([#506](https://github.com/quokkify/marketdesk/issues/506)) ([c16372c](https://github.com/quokkify/marketdesk/commit/c16372c41ede7735fc042a5427533dbbcda54f9b))
+* **security:** refuse a Hermes agent that has tools enabled ([#467](https://github.com/quokkify/marketdesk/issues/467)) ([5a9157d](https://github.com/quokkify/marketdesk/commit/5a9157dba98d9307b3d6054397452a9d663b78af))
+* **security:** sign out every device and expire idle sessions ([#468](https://github.com/quokkify/marketdesk/issues/468)) ([217e377](https://github.com/quokkify/marketdesk/commit/217e377dd5a493a466a543c2e6c296342da53c11))
+
+
+### ♻️ Refactoring
+
+* cut the shell to the autopilot core ([#447](https://github.com/quokkify/marketdesk/issues/447)) ([2112b0a](https://github.com/quokkify/marketdesk/commit/2112b0aad98f52a9d26d9d928e0f23c2416e6996))
+* remove endpoints that lost their callers ([#448](https://github.com/quokkify/marketdesk/issues/448)) ([8c3feea](https://github.com/quokkify/marketdesk/commit/8c3feea0b9f5d8a365a050ea4c5fda180462fc97))
+
 ## [0.21.1](https://github.com/quokkify/marketdesk/compare/frontend-v0.21.0...frontend-v0.21.1) (2026-10-03)
 
 <!-- project-toolkit:rich-block:start -->
