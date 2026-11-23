@@ -43,6 +43,18 @@ function setup(options: { enqueue?: () => Promise<void>; status?: 'live' | 'draf
       status: options.status ?? 'live', views: 0, watchers: 0, conversations: 0, messages: 0,
     })));
   setPrice(200);
+  const endListing = () =>
+    listings.items.set('l1', unwrap(Listing.create({
+      id: 'l1', productId: PID, marketplaceId: 'm1', price: money(200), marketplaceListingId: '900100',
+      status: 'expired', views: 0, watchers: 0, conversations: 0, messages: 0,
+    })));
+  const relist = () => {
+    endListing();
+    listings.items.set('l2', unwrap(Listing.create({
+      id: 'l2', productId: PID, marketplaceId: 'm1', price: money(200), marketplaceListingId: '900200',
+      status: 'live', views: 0, watchers: 0, conversations: 0, messages: 0,
+    })));
+  };
 
   const repo = new InMemoryListingResponseRunRepository();
   const jobs: ListingResponseJob[] = [];
@@ -72,7 +84,7 @@ function setup(options: { enqueue?: () => Promise<void>; status?: 'live' | 'draf
     });
     await repo.complete(id, { stage: 'not_seen', signal: null, probes: [], findings: [], completedAt: completedAt.toISOString() });
   };
-  return { runs, repo, jobs, errors, setPrice, seedCompleted, advance: (ms: number) => { now = new Date(now.getTime() + ms); } };
+  return { runs, repo, jobs, errors, setPrice, relist, endListing, seedCompleted, advance: (ms: number) => { now = new Date(now.getTime() + ms); } };
 }
 
 describe('ListingResponseRuns.request', () => {
@@ -200,13 +212,48 @@ describe('ListingResponseRuns.view', () => {
 });
 
 describe('ListingResponseRuns.latestFor', () => {
-  it('maps each product to its latest completed run', async () => {
+  const page = [{ id: PID, name: 'AirPods 4 Apple' }, { id: 'p2', name: 'Other' }];
+
+  it('maps each product to the latest completed run of its live OLX listing', async () => {
     const { runs, seedCompleted } = setup();
     await seedCompleted('done-1', new Date(NOW.getTime() - MINUTE), fingerprint(200));
 
-    const latest = await runs.latestFor(WS, [PID, 'p2']);
+    const latest = await runs.latestFor(WS, page);
 
     expect([...latest.keys()]).toEqual([PID]);
-    expect(latest.get(PID)?.id).toBe('done-1');
+    expect(latest.get(PID)).toMatchObject({ run: { id: 'done-1' }, outOfDate: false });
+  });
+
+  it('marks the run out of date when the listing price changed after it', async () => {
+    const { runs, seedCompleted, setPrice } = setup();
+    await seedCompleted('done-1', new Date(NOW.getTime() - MINUTE), fingerprint(200));
+    setPrice(180);
+
+    const latest = await runs.latestFor(WS, page);
+
+    expect(latest.get(PID)).toMatchObject({ run: { id: 'done-1' }, outOfDate: true });
+  });
+
+  it('drops a run made for an earlier listing after a relist', async () => {
+    const { runs, seedCompleted, relist } = setup();
+    await seedCompleted('done-1', new Date(NOW.getTime() - MINUTE), fingerprint(200));
+    relist();
+
+    expect((await runs.latestFor(WS, page)).has(PID)).toBe(false);
+  });
+
+  it('drops the run when the product has no live listing', async () => {
+    const { runs, seedCompleted, endListing } = setup();
+    await seedCompleted('done-1', new Date(NOW.getTime() - MINUTE), fingerprint(200));
+    endListing();
+
+    expect((await runs.latestFor(WS, page)).has(PID)).toBe(false);
+  });
+
+  it('drops the run when the live listing is not on OLX', async () => {
+    const { runs, seedCompleted } = setup({ marketplaceKey: 'allegro' });
+    await seedCompleted('done-1', new Date(NOW.getTime() - MINUTE), fingerprint(200));
+
+    expect((await runs.latestFor(WS, page)).has(PID)).toBe(false);
   });
 });

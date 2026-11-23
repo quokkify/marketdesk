@@ -48,7 +48,7 @@ import {
 export const LISTING_RESPONSE_GRAPH_VERSION = 'listing-response@1';
 const AI_FEATURE = 'response';
 const DAY_MS = 24 * 3600 * 1000;
-const OLX_MARKETPLACE_KEY = 'olx';
+export const OLX_MARKETPLACE_KEY = 'olx';
 
 export interface ResponseTransition {
   node: 'load' | 'known' | 'route' | 'queries' | 'probe' | 'locate' | 'compare' | 'rank' | 'save';
@@ -128,7 +128,7 @@ export async function findLiveOlxListing(
   return { listing, ownId };
 }
 
-export function responseFingerprint(product: Product, listing: Listing): string {
+export function responseFingerprint(product: Pick<Product, 'name'>, listing: Listing): string {
   return subjectFingerprint({
     title: product.name,
     price: listing.price.amount,

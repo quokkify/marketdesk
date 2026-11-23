@@ -148,10 +148,10 @@ describe('row ask state', () => {
     expect(currentRowResponse(entry, fresh)).toBe(entry);
   });
 
-  it('keeps a finished entry until the list item carries a newer run', () => {
+  it('keeps a finished entry until the list item carries its run or a newer one', () => {
     const entry = { active: false, outOfDate: false, latest: fresh };
     expect(currentRowResponse(entry, old)).toBe(entry);
-    expect(currentRowResponse(entry, fresh)).toBe(entry);
+    expect(currentRowResponse(entry, fresh)).toBeUndefined();
     expect(currentRowResponse(entry, run([], '2026-11-23T11:30:00.000Z'))).toBeUndefined();
   });
 

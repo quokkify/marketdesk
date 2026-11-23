@@ -297,16 +297,19 @@ describe('views, reasons and the listing link', () => {
     expect(html).not.toContain('Why no response?');
   });
 
-  it('shows when the run was made, its first two findings and the out of date mark', () => {
-    const run = {
+  const responseRun = (over: Partial<NonNullable<Product['response']>> = {}) =>
+    ({
       id: 'r-1',
+      listingId: 'l-1',
       completedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
       findings: ['first', 'second', 'third'].map((message) => ({ code: 'crowded_market', message, action: null, evidence: {} })),
-    } as unknown as NonNullable<Product['response']>;
+      ...over,
+    }) as unknown as NonNullable<Product['response']>;
+
+  it('shows when the run was made, its first two findings and the out of date mark of the list item', () => {
     const html = markup(
       <ProductsTable
-        products={[{ ...product, response: run }]}
-        responseByProductId={{ 'p-1': { active: false, outOfDate: true, latest: run } }}
+        products={[{ ...product, response: responseRun(), responseOutOfDate: true }]}
         statsByProductId={{ 'p-1': stats({ response: signal() }) }}
       />
     );
@@ -315,6 +318,40 @@ describe('views, reasons and the listing link', () => {
     expect(html).toContain('second');
     expect(html).not.toContain('third');
     expect(html).toContain('out of date');
+  });
+
+  it('takes the out of date mark from the list item once it carries the pressed run', () => {
+    const run = responseRun();
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, response: run, responseOutOfDate: true }]}
+        responseByProductId={{ 'p-1': { active: false, outOfDate: false, latest: run } }}
+        statsByProductId={{ 'p-1': stats({ response: signal() }) }}
+      />
+    );
+    expect(html).toContain('out of date');
+  });
+
+  it('shows no findings made for another listing than the live one', () => {
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, response: responseRun({ listingId: 'l-old' }) }]}
+        statsByProductId={{ 'p-1': stats({ response: signal({ stage: 'too_early', hoursLive: 10 }) }) }}
+      />
+    );
+    expect(html).toContain('Too early');
+    expect(html).not.toContain('first');
+    expect(html).not.toContain('checked 3h ago');
+  });
+
+  it('shows no findings without a live listing', () => {
+    const html = markup(
+      <ProductsTable
+        products={[{ ...product, response: responseRun() }]}
+        statsByProductId={{ 'p-1': stats({ response: null }) }}
+      />
+    );
+    expect(html).not.toContain('first');
   });
 
   it('labels the AI column for screen readers only', () => {

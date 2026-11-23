@@ -146,7 +146,7 @@ export class ProductController {
       ? await this.saleVerdictRuns.viewsFor(query.workspaceId, page.items.map((item) => item.id))
       : undefined;
     const responses = this.listingResponseRuns
-      ? await this.listingResponseRuns.latestFor(query.workspaceId, page.items.map((item) => item.id))
+      ? await this.listingResponseRuns.latestFor(query.workspaceId, page.items)
       : undefined;
     const items =
       verdicts || responses
@@ -156,7 +156,10 @@ export class ProductController {
               verdict: verdicts.latest.get(item.id) ?? null,
               verdictLastFailed: verdicts.failed.has(item.id),
             }),
-            ...(responses && { response: responses.get(item.id) ?? null }),
+            ...(responses && {
+              response: responses.get(item.id)?.run ?? null,
+              responseOutOfDate: responses.get(item.id)?.outOfDate ?? false,
+            }),
           }))
         : page.items;
     paginated(res, items, {

@@ -11,7 +11,13 @@ import type { IListingResponseRunRepository } from '../../../domain/repositories
 import { ConflictError, InvalidStateError, NotFoundError } from '../../../domain/shared/DomainError';
 import type { IJobQueue, ListingResponseJob } from '../../ports/IJobQueue';
 import { VERDICT_QUEUED_TTL_MS } from '../verdict/SaleVerdictRuns';
-import { LISTING_RESPONSE_GRAPH_VERSION, findLiveOlxListing, responseFingerprint } from './ListingResponseGraph';
+import type { Product } from '../../../domain/entities/Product';
+import {
+  LISTING_RESPONSE_GRAPH_VERSION,
+  OLX_MARKETPLACE_KEY,
+  findLiveOlxListing,
+  responseFingerprint,
+} from './ListingResponseGraph';
 
 // A completed run answers repeated requests for this long while the listing subject is unchanged.
 export const REUSE_WINDOW_MS = 6 * 60 * 60 * 1000;
@@ -24,8 +30,8 @@ export interface ListingResponseRunsLogger {
 
 export interface ListingResponseRunsDeps {
   products: Pick<IProductRepository, 'findByIdForWorkspace'>;
-  listings: Pick<IListingRepository, 'findByProduct'>;
-  marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>;
+  listings: Pick<IListingRepository, 'findByProduct' | 'findByWorkspace'>;
+  marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace' | 'findByWorkspace'>;
   runs: IListingResponseRunRepository;
   queue: IJobQueue<ListingResponseJob>;
   newId: () => string;
@@ -106,8 +112,27 @@ export class ListingResponseRuns {
     };
   }
 
-  latestFor(workspaceId: string, productIds: string[]): Promise<Map<string, ListingResponseRun>> {
-    return this.deps.runs.findLatestCompletedForProducts(workspaceId, productIds);
+  // Per product, the latest completed run of the listing a new run would check (the first live
+  // listing, on OLX, with a marketplace id), with the same out-of-date rule as view().
+  async latestFor(
+    workspaceId: string,
+    products: ReadonlyArray<Pick<Product, 'id' | 'name'>>,
+  ): Promise<Map<string, { run: ListingResponseRun; outOfDate: boolean }>> {
+    const [listings, marketplaces, runs] = await Promise.all([
+      this.deps.listings.findByWorkspace(workspaceId),
+      this.deps.marketplaces.findByWorkspace(workspaceId),
+      this.deps.runs.findLatestCompletedForProducts(workspaceId, products.map((product) => product.id)),
+    ]);
+    const olx = new Set(marketplaces.filter((m) => m.key === OLX_MARKETPLACE_KEY).map((m) => m.id));
+    const result = new Map<string, { run: ListingResponseRun; outOfDate: boolean }>();
+    for (const product of products) {
+      const run = runs.get(product.id);
+      const live = listings.find((l) => l.productId === product.id && l.status === 'live');
+      if (!run || !live || !olx.has(live.marketplaceId) || !live.marketplaceListingId) continue;
+      if (run.listingId !== live.id) continue;
+      result.set(product.id, { run, outOfDate: run.fingerprint !== responseFingerprint(product, live) });
+    }
+    return result;
   }
 
   // A run stuck for good would block the listing: written as failed before anything reads or inserts.

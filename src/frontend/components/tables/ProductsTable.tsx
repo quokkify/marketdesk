@@ -469,14 +469,18 @@ function RowVerdict({ product, props }: { product: Product; props: ProductsColle
   );
 }
 
+// A run is shown only for the live listing the stage line describes.
 function RowResponse({ product, props }: { product: Product; props: ProductsCollectionProps }) {
   const view = currentRowResponse(props.responseByProductId?.[product.id], product.response);
+  const signal = props.statsByProductId?.[product.id]?.response;
+  const run = view ? view.latest : (product.response ?? null);
+  const shown = run && (signal === undefined || signal?.listingId === run.listingId) ? run : null;
   return (
     <ResponseSummary
-      signal={props.statsByProductId?.[product.id]?.response}
-      run={view ? view.latest : (product.response ?? null)}
+      signal={signal}
+      run={shown}
       active={view?.active ?? false}
-      outOfDate={view?.outOfDate ?? false}
+      outOfDate={view ? view.outOfDate : (product.responseOutOfDate ?? false)}
       onAsk={props.onAskWhy ? () => props.onAskWhy?.(product) : undefined}
     />
   );

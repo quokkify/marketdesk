@@ -96,7 +96,8 @@ export function askFailed(map: RowResponseMap, productId: string): RowResponseMa
   return rest;
 }
 
-// A finished entry holds only until the list item carries a newer run than the entry's.
+// A finished entry holds only until the list item carries the entry's run or a newer one; from
+// then on the list item's out-of-date mark is current and the entry's is frozen.
 export function currentRowResponse(
   entry: RowResponseState | undefined,
   listRun: ListingResponseRun | null | undefined
@@ -104,7 +105,7 @@ export function currentRowResponse(
   if (!entry || entry.active) return entry;
   const entryAt = Date.parse(entry.latest?.completedAt ?? '');
   const listAt = Date.parse(listRun?.completedAt ?? '');
-  return listAt > entryAt || (Number.isNaN(entryAt) && !Number.isNaN(listAt)) ? undefined : entry;
+  return listAt >= entryAt || (Number.isNaN(entryAt) && !Number.isNaN(listAt)) ? undefined : entry;
 }
 
 export type ResponseControlTarget = { kind: 'analyze' } | { kind: 'tab'; tab: 'checks' | 'suggestions' } | { kind: 'edit' };

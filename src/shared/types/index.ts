@@ -467,8 +467,10 @@ export interface Product {
   verdict?: SaleVerdict | null;
   // The newest sale verdict run of the product failed; only the product list fills it.
   verdictLastFailed?: boolean;
-  // Latest completed listing response run; only the product list fills it.
+  // Latest completed response run of the live OLX listing; only the product list fills it.
   response?: ListingResponseRun | null;
+  // The listing's title, price or category changed after that run; only the product list fills it.
+  responseOutOfDate?: boolean;
   createdAt: string;
   updatedAt: string;
 }
