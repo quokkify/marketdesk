@@ -21,6 +21,7 @@ import type {
 import {
   LISTING_RESPONSE_GRAPH_VERSION,
   ListingResponseGraph,
+  PROBE_DEADLINE_MS,
   type ListingResponseGraphDeps,
   type ResponseTransition,
 } from '../ListingResponseGraph';
@@ -50,14 +51,19 @@ class FakeSearch implements IOlxSearch {
   overlapped = false;
   private inFlight = 0;
 
+  // Runs while a page is in flight, for example to abort a signal mid-request.
+  onPage?: (query: string, pageNumber: number) => void;
+
   constructor(private readonly script: Record<string, Scripted[]>) {}
 
-  async page(query: string, pageNumber: number, _signal: AbortSignal): Promise<OlxSearchPage> {
+  async page(query: string, pageNumber: number, signal: AbortSignal): Promise<OlxSearchPage> {
     this.calls.push({ query, page: pageNumber });
     this.inFlight += 1;
     if (this.inFlight > 1) this.overlapped = true;
+    this.onPage?.(query, pageNumber);
     await new Promise((resolve) => setImmediate(resolve));
     this.inFlight -= 1;
+    signal.throwIfAborted();
     const entry = this.script[query]?.[pageNumber - 1];
     if (!entry) throw new Error('no scripted page');
     if (entry instanceof Error) throw entry;
@@ -110,6 +116,7 @@ interface SetupOptions {
   queryClient?: AITextCompletionClient | null;
   completeResult?: boolean;
   signal?: AbortSignal;
+  probeDeadline?: AbortSignal;
 }
 
 function setup(opts: SetupOptions = {}) {
@@ -164,6 +171,7 @@ function setup(opts: SetupOptions = {}) {
     search,
     maxPages: MAX_PAGES,
     now: () => NOW,
+    ...(opts.probeDeadline && { probeDeadline: () => opts.probeDeadline! }),
     observe: (t) => transitions.push(t),
     logger: { warn: (context, message) => warnings.push({ context, message }) },
   };
@@ -380,16 +388,60 @@ describe('ListingResponseGraph', () => {
 
   it('rejects instead of recording probe_failed when the signal aborts while probing', async () => {
     const controller = new AbortController();
-    const { run, completed } = setup({
+    const { run, search, completed } = setup({
       ...notSeen,
       signal: controller.signal,
-      search: { 'airpods 4': [new Error('x')], 'słuchawki apple': [new Error('y')] },
+      search: { 'airpods 4': [page(organic('a', 40), 966, 5)], 'słuchawki apple': [page(organic('b', 40), 966, 5)] },
     });
-    const pending = run();
-    controller.abort();
+    search.onPage = () => controller.abort();
 
-    await expect(pending).rejects.toBeDefined();
+    await expect(run()).rejects.toMatchObject({ name: 'AbortError' });
+    expect(search.calls).toEqual([{ query: 'airpods 4', page: 1 }]);
     expect(completed).toHaveLength(0);
+  });
+
+  it('gives probing a deadline of 180 s inside the run budget', () => {
+    expect(PROBE_DEADLINE_MS).toBe(180_000);
+  });
+
+  it('completes with what was read when the probe deadline passes mid-query', async () => {
+    const deadline = new AbortController();
+    const { run, search, completed } = setup({
+      ...notSeen,
+      probeDeadline: deadline.signal,
+      search: {
+        'airpods 4': [page(organic('a', 40), 966, 5), page(organic('b', 40), 966, 5)],
+        'słuchawki apple': [page(organic('c', 40), 966, 5)],
+      },
+    });
+    search.onPage = (_query, pageNumber) => {
+      if (pageNumber === 2) deadline.abort();
+    };
+
+    const result = await run();
+
+    expect(result.status).toBe('completed');
+    expect(search.pagesOf('słuchawki apple')).toEqual([]);
+    expect(completed[0]?.fields.probes).toEqual([
+      expect.objectContaining({ query: 'airpods 4', status: 'ok', checked: 40 }),
+      expect.objectContaining({ query: 'słuchawki apple', status: 'failed' }),
+    ]);
+    expect(result.findings.map((f) => f.code)).not.toContain('probe_failed');
+  });
+
+  it('completes with probe_failed when the probe deadline passes before any page was read', async () => {
+    const deadline = new AbortController();
+    const { run, search } = setup({
+      ...notSeen,
+      probeDeadline: deadline.signal,
+      search: { 'airpods 4': [page(organic('a', 40), 966, 5)], 'słuchawki apple': [page(organic('b', 40), 966, 5)] },
+    });
+    search.onPage = () => deadline.abort();
+
+    const result = await run();
+
+    expect(result.status).toBe('completed');
+    expect(result.findings.map((f) => f.code)).toContain('probe_failed');
   });
 
   it('shows neither a query nor a URL to the observer or the logger', async () => {

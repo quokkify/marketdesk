@@ -49,6 +49,8 @@ export const LISTING_RESPONSE_GRAPH_VERSION = 'listing-response@1';
 const AI_FEATURE = 'response';
 const DAY_MS = 24 * 3600 * 1000;
 export const OLX_MARKETPLACE_KEY = 'olx';
+// Probing stops here, inside the 4 min run budget, so the run still completes with what was read.
+export const PROBE_DEADLINE_MS = 180 * 1000;
 
 export interface ResponseTransition {
   node: 'load' | 'known' | 'route' | 'queries' | 'probe' | 'locate' | 'compare' | 'rank' | 'save';
@@ -72,6 +74,8 @@ export interface ListingResponseGraphDeps {
   search: IOlxSearch;
   maxPages: number;
   now: () => Date;
+  // Defaults to AbortSignal.timeout(PROBE_DEADLINE_MS); injectable for tests.
+  probeDeadline?: () => AbortSignal;
   observe?: (transition: ResponseTransition) => void;
   logger?: ListingResponseGraphLogger;
 }
@@ -111,6 +115,10 @@ const PROBE_FAILED: ResponseFinding = {
   action: null,
   evidence: {},
 };
+
+function failedProbe(query: string): ResponseProbe {
+  return { query, status: 'failed', total: null, cards: [], firstPageSize: 0 };
+}
 
 // The listing the graph works on: the product's first live listing, which must be on OLX and carry
 // its marketplace id. InvalidStateError otherwise.
@@ -246,24 +254,36 @@ export class ListingResponseGraph {
     }
   }
 
+  // Past the probe deadline a page fails like any other and later queries are not requested; only
+  // the run's own signal rejects the run.
   private async probe(input: ListingResponseRunInput, state: ResponseGraphState): Promise<Partial<ResponseGraphState>> {
     const { ownId } = this.subject(state);
+    const deadline = this.deps.probeDeadline?.() ?? AbortSignal.timeout(PROBE_DEADLINE_MS);
+    const signal = AbortSignal.any([input.signal, deadline]);
     const probes: ResponseProbe[] = [];
     for (const query of state.queryList) {
-      probes.push(await withAiOperation('response.probe', () => this.probeQuery(input, query, ownId)));
+      if (deadline.aborted) {
+        probes.push(failedProbe(query));
+        continue;
+      }
+      probes.push(await withAiOperation('response.probe', () => this.probeQuery(input, signal, query, ownId)));
     }
     return { probes };
   }
 
-  private async probeQuery(input: ListingResponseRunInput, query: string, ownId: string): Promise<ResponseProbe> {
-    const { signal } = input;
+  private async probeQuery(
+    input: ListingResponseRunInput,
+    signal: AbortSignal,
+    query: string,
+    ownId: string,
+  ): Promise<ResponseProbe> {
     let first;
     try {
       first = await this.deps.search.page(query, 1, signal);
     } catch (error) {
-      if (signal.aborted) throw error;
+      if (input.signal.aborted) throw error;
       this.warn(input, 'probe', error);
-      return { query, status: 'failed', total: null, cards: [], firstPageSize: 0 };
+      return failedProbe(query);
     }
     const cards = [...first.cards];
     const lastPage = Math.min(this.deps.maxPages, first.totalPages ?? 1);
@@ -271,7 +291,7 @@ export class ListingResponseGraph {
       try {
         cards.push(...(await this.deps.search.page(query, pageNumber, signal)).cards);
       } catch (error) {
-        if (signal.aborted) throw error;
+        if (input.signal.aborted) throw error;
         this.warn(input, 'probe', error);
         break;
       }
