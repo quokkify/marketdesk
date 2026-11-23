@@ -3,6 +3,7 @@
 import type { ProductStats } from '@shared/types';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
+import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { IAnalyticsEventRepository } from '../ports/IAnalyticsEventRepository';
 import type { Listing } from '../../domain/entities/Listing';
 import {
@@ -21,6 +22,7 @@ const DAY_MS = 24 * 3600 * 1000;
 export interface ProductStatsDeps {
   products: Pick<IProductRepository, 'findByWorkspace'>;
   listings: Pick<IListingRepository, 'findByWorkspace'>;
+  marketplaces: Pick<IMarketplaceRepository, 'findByWorkspace'>;
   analytics: Pick<IAnalyticsEventRepository, 'findByRange'>;
   awaitingReplyCounts?: (workspaceId: string) => Promise<Record<string, number>>;
   now?: () => Date;
@@ -32,13 +34,15 @@ export class ProductStatsService {
   async statsByProduct(workspaceId: string): Promise<Record<string, ProductStats>> {
     const now = this.deps.now?.() ?? new Date();
     const from = new Date(now.getTime() - (STATS_DAYS + 1) * DAY_MS);
-    const [products, listings, events, awaiting] = await Promise.all([
+    const [products, listings, marketplaces, events, awaiting] = await Promise.all([
       this.deps.products.findByWorkspace(workspaceId),
       this.deps.listings.findByWorkspace(workspaceId),
+      this.deps.marketplaces.findByWorkspace(workspaceId),
       this.deps.analytics.findByRange({ workspaceId, from, to: new Date(now.getTime() + 1) }),
       this.deps.awaitingReplyCounts?.(workspaceId) ?? Promise.resolve<Record<string, number>>({}),
     ]);
     const views = summarizeListingViews(events, nonSyncViewEventIds(events), now);
+    const olx = new Set(marketplaces.filter((m) => m.key === 'olx').map((m) => m.id));
 
     const listingsByProduct = new Map<string, Listing[]>();
     for (const listing of listings) {
@@ -77,10 +81,12 @@ export class ProductStatsService {
         listingStatus: null,
         oldestLivePublishedAt: null,
       };
+      // No stage for a live listing a response run would refuse (not on OLX or no OLX id).
       const liveListing = group?.find((listing) => listing.status === 'live');
-      const response = liveListing
-        ? listingResponseSignal(toResponseListing(liveListing), views.get(liveListing.id), now)
-        : null;
+      const response =
+        liveListing && olx.has(liveListing.marketplaceId) && liveListing.marketplaceListingId
+          ? listingResponseSignal(toResponseListing(liveListing), views.get(liveListing.id), now)
+          : null;
       result[product.id] = { ...stats, needsAction: reasons, response };
     }
     return result;

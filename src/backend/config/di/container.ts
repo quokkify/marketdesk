@@ -696,6 +696,7 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
   const productStatsService = new ProductStatsService({
     products: productRepo,
     listings: listingRepo,
+    marketplaces: marketplaceRepo,
     analytics: analyticsEventRepo,
     awaitingReplyCounts: (workspaceId) =>
       new ConversationRepository(pool).awaitingReplyCounts(workspaceId),
