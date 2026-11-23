@@ -592,6 +592,30 @@ export interface ProductVerdictView {
   lastFailedCode: string | null;
 }
 
+export interface ListingResponseRun {
+  id: string;
+  productId: string;
+  listingId: string;
+  graphVersion: string;
+  status: VerdictRunStatus;
+  stage: ResponseStage | null;
+  signal: ListingResponseSignal | null;
+  /** Stored without the card lists. */
+  probes: Array<Omit<ResponseProbe, 'cards'> & { position: number | null; checked: number }>;
+  findings: ResponseFinding[];
+  fingerprint: string;
+  errorCode: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ListingResponseView {
+  latest: ListingResponseRun | null;
+  active: ListingResponseRun | null;
+  lastFailed: boolean;
+  outOfDate: boolean;
+}
+
 export type AiCostStatus = 'included' | 'not_applicable' | 'unknown';
 
 export type AiUsageReportCostStatus = AiCostStatus | 'mixed';
