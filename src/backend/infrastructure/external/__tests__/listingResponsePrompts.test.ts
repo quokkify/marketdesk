@@ -68,7 +68,7 @@ describe('buildQueriesPrompt', () => {
 
   it('asks for phrases of two to four words, never one', () => {
     const item = researchItemFromProduct(
-      { name: 'Apple AirPods 4', condition: 'used_good', category: 'Słuchawki' },
+      { name: 'Apple AirPods 4', condition: 'good', category: 'Słuchawki' },
       { price: { currency: 'PLN' } }
     );
     const { prompt } = buildQueriesPrompt(item);
