@@ -1,0 +1,1 @@
+{"id":"371b5afdaa998ce802262faac80e9dd0.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/shared/__tests__/anchorUrl.test.ts#normalizeAnchorUrlForTier refuses non-shop hosts and non-https links on every tier","name":"refuses non-shop hosts and non-https links on every tier","status":"passed","testResultsByEnv":{"default":"1981a93af1e245d8cc9862ca915d72e3"}}

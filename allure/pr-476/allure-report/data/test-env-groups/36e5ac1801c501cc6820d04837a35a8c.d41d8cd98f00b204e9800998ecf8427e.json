@@ -1,0 +1,1 @@
+{"id":"36e5ac1801c501cc6820d04837a35a8c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#locateOwn ignores promoted cards when counting position","name":"ignores promoted cards when counting position","status":"passed","testResultsByEnv":{"default":"23a79bd44e188333a1e83d8fb25ac57c"}}

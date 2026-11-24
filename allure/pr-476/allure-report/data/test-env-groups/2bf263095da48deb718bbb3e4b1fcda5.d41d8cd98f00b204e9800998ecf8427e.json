@@ -1,0 +1,1 @@
+{"id":"2bf263095da48deb718bbb3e4b1fcda5.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/PriceResearchRuns.test.ts#PriceResearchRuns.latest writes an expired lease as a failed run","name":"writes an expired lease as a failed run","status":"passed","testResultsByEnv":{"default":"037a150e959fb0e15c0ee4d778216876"}}

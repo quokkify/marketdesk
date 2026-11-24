@@ -1,0 +1,1 @@
+{"id":"c44961e418487d8a6f8dca0ded3fe280.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/olxSearchPage.test.ts#parseOlxSearchPage returns null totals when the page omits them","name":"returns null totals when the page omits them","status":"passed","testResultsByEnv":{"default":"bdd687e60fc908b3924e4cac89f746ae"}}

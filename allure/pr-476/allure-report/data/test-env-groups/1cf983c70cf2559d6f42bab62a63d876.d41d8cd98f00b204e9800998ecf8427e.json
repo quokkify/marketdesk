@@ -1,0 +1,1 @@
+{"id":"1cf983c70cf2559d6f42bab62a63d876.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/HermesLimitsReader.test.ts#HermesLimitsReader drops a reset time that is not a date","name":"drops a reset time that is not a date","status":"passed","testResultsByEnv":{"default":"def28643b7773a6f505f2a627f113f4b"}}
