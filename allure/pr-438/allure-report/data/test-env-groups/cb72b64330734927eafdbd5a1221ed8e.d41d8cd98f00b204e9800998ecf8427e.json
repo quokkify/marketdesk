@@ -1,0 +1,1 @@
+{"id":"cb72b64330734927eafdbd5a1221ed8e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.threads.test.ts#OLXAdapter sendThreadMessage encodes a slash in the thread id","name":"encodes a slash in the thread id","status":"passed","testResultsByEnv":{"default":"43dfa0c6604dcf0d81c5284ab4d1c9ec"}}

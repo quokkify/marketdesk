@@ -1,0 +1,1 @@
+{"id":"b795a8257b2c713799ca33bf43c16489.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#substituteNewReference averages two rows and keeps a single row as it is","name":"averages two rows and keeps a single row as it is","status":"passed","testResultsByEnv":{"default":"6ccea1e23d87f3638d97d33395b7bc01"}}

@@ -1,0 +1,1 @@
+{"id":"962e17228a0e05d9f1fa67cf858879d0.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/saleVerdictRules.test.ts#priceCheckFromEstimate needs a human when the estimate is unavailable","name":"needs a human when the estimate is unavailable","status":"passed","testResultsByEnv":{"default":"b63c9c90a96e333c16c1995fd5107131"}}
