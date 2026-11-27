@@ -1,0 +1,1 @@
+{"id":"1f4d1063d0265f2f00fa2a3b62e6aeaf.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#probeFindings does not report deep_in_results at the threshold","name":"does not report deep_in_results at the threshold","status":"passed","testResultsByEnv":{"default":"f21a2214ee9be111ddcc8fc1a3453d27"}}

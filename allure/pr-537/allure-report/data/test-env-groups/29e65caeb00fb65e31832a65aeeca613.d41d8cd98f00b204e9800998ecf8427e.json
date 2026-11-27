@@ -1,0 +1,1 @@
+{"id":"29e65caeb00fb65e31832a65aeeca613.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/priceEstimatePrompt.test.ts#parsePriceEstimate roundsEveryAmountToCents","name":"roundsEveryAmountToCents","status":"passed","testResultsByEnv":{"default":"fc751bd6388704a9b05f53566f0e3e5c"}}

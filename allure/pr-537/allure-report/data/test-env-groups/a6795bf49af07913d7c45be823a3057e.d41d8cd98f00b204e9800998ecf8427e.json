@@ -1,0 +1,1 @@
+{"id":"a6795bf49af07913d7c45be823a3057e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product missing accessories accepts exactly 200 characters and refuses 201","name":"accepts exactly 200 characters and refuses 201","status":"passed","testResultsByEnv":{"default":"aa5c187220b087f25e9379fed952a905"}}

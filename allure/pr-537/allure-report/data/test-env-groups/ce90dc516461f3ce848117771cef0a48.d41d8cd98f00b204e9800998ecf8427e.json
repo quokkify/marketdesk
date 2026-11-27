@@ -1,0 +1,1 @@
+{"id":"ce90dc516461f3ce848117771cef0a48.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/priceEstimatePrompt.test.ts#parsePriceEstimate returnsNullForAMissingKey","name":"returnsNullForAMissingKey","status":"passed","testResultsByEnv":{"default":"1d08305de8a4dd76007d3b4edf62ac81"}}

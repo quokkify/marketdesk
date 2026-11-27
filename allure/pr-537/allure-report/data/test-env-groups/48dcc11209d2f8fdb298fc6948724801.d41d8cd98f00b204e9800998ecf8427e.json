@@ -1,0 +1,1 @@
+{"id":"48dcc11209d2f8fdb298fc6948724801.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/conversations/__tests__/draftValidation.test.ts#validateDraft rejectsSoftHyphenatedLink","name":"rejectsSoftHyphenatedLink","status":"passed","testResultsByEnv":{"default":"a0981684c6d2a59a80432ffd108b842f"}}

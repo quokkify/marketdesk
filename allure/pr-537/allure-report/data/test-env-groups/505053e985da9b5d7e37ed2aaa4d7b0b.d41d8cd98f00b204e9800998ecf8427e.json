@@ -1,0 +1,1 @@
+{"id":"505053e985da9b5d7e37ed2aaa4d7b0b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/PriceChangeService.test.ts#PriceChangeService refusesBelowMinimum","name":"refusesBelowMinimum","status":"passed","testResultsByEnv":{"default":"838ca56a083f4f9a36ec316c59865096"}}

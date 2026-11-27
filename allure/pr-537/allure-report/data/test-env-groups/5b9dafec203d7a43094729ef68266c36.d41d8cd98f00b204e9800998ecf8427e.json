@@ -1,0 +1,1 @@
+{"id":"5b9dafec203d7a43094729ef68266c36.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/PriceResearchRuns.test.ts#PriceResearchRuns.history lists an expired active run as failed","name":"lists an expired active run as failed","status":"passed","testResultsByEnv":{"default":"374337b4f36c0307e7386a3aa9111223"}}
