@@ -26,7 +26,9 @@ import { withAiUsageScope } from '../../ai/aiUsageScope';
 
 export const SALE_VERDICT_GRAPH_VERSION = 'sale-verdict@1';
 const AI_FEATURE = 'verdict';
-const CHECK_NAMES: VerdictCheckName[] = ['info', 'price', 'photos'];
+// Until the new checks get graph nodes, the graph runs only these three.
+type GraphCheckName = 'info' | 'price' | 'photos';
+const CHECK_NAMES: GraphCheckName[] = ['info', 'price', 'photos'];
 
 export interface CheckOptions {
   // Research even when the schedule says it is not due.
@@ -68,7 +70,7 @@ export interface SaleVerdictGraphDeps {
   marketplaces: Pick<IMarketplaceRepository, 'findByIdForWorkspace'>;
   workspaces: Pick<IWorkspaceRepository, 'findById'>;
   verdicts: ISaleVerdictRepository;
-  checks: Record<VerdictCheckName, CheckGraph>;
+  checks: Record<GraphCheckName, CheckGraph>;
   now: () => Date;
   observe?: (transition: VerdictTransition) => void;
   logger?: SaleVerdictGraphLogger;
@@ -133,8 +135,8 @@ export class SaleVerdictGraph {
     };
   }
 
-  private build(ctx: CheckContext, scope: VerdictCheckName[], runId: string) {
-    const checkNode = (name: VerdictCheckName) => async (): Promise<Partial<VerdictGraphState>> => {
+  private build(ctx: CheckContext, scope: GraphCheckName[], runId: string) {
+    const checkNode = (name: GraphCheckName) => async (): Promise<Partial<VerdictGraphState>> => {
       this.observe(name, 'started');
       try {
         const check = await this.deps.checks[name](ctx);

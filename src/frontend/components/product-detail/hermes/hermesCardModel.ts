@@ -78,8 +78,15 @@ const CHECK_COUNT = 3;
 const RESEARCH_TOTAL = RESEARCH_NODES + CHECK_COUNT;
 const NODE_OVER = new Set(['done', 'failed', 'timeout']);
 // The order the verdict graph works through its checks.
-const STEP_ORDER: readonly VerdictCheckName[] = ['price', 'info', 'photos'];
-const STEP_NAMES: Record<VerdictCheckName, string> = { price: 'Price', info: 'Info', photos: 'Photos' };
+const STEP_ORDER: readonly VerdictCheckName[] = ['price', 'info', 'photos', 'category', 'attributes', 'delivery'];
+const STEP_NAMES: Record<VerdictCheckName, string> = {
+  price: 'Price',
+  info: 'Info',
+  photos: 'Photos',
+  category: 'Category',
+  attributes: 'Attributes',
+  delivery: 'Delivery',
+};
 const CHECK_ROWS = [
   { key: 'price', title: 'Price' },
   { key: 'info', title: 'Info' },

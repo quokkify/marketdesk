@@ -25,6 +25,9 @@ const CHECKS: ReadonlyArray<{ name: VerdictCheckName; title: string }> = [
   { name: 'price', title: 'Price' },
   { name: 'info', title: 'Info' },
   { name: 'photos', title: 'Photos' },
+  { name: 'category', title: 'Category' },
+  { name: 'attributes', title: 'Attributes' },
+  { name: 'delivery', title: 'Delivery' },
 ];
 
 export const ChecksTab: React.FC<ChecksTabProps> = ({

@@ -58,8 +58,11 @@ const CHECK_LABELS: Record<VerdictCheckName, string> = {
   price: 'Price check',
   info: 'Info check',
   photos: 'Photos check',
+  category: 'Category check',
+  attributes: 'Attributes check',
+  delivery: 'Delivery check',
 };
-const CHECK_ORDER: VerdictCheckName[] = ['price', 'info', 'photos'];
+const CHECK_ORDER: VerdictCheckName[] = ['price', 'info', 'photos', 'category', 'attributes', 'delivery'];
 
 const CHECK_STATUS: Record<Exclude<VerdictCheckStatus, 'pending'>, StepStatus> = {
   ready: 'ok',

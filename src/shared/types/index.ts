@@ -543,7 +543,7 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
-export type VerdictCheckName = 'info' | 'price' | 'photos';
+export type VerdictCheckName = 'info' | 'price' | 'photos' | 'category' | 'attributes' | 'delivery';
 export type VerdictCheckStatus = 'ready' | 'fix' | 'needs_human' | 'pending';
 export type VerdictOverall = 'ready' | 'fix' | 'needs_human';
 
@@ -566,6 +566,8 @@ export interface VerdictCheck {
     proposedPrice?: number | null;
     currency?: string;
     photoCount?: number;
+    missingAttributes?: string[];
+    deliveryMode?: string | null;
   };
 }
 

@@ -8,12 +8,15 @@ import type {
   VerdictOverall,
 } from '@shared/types';
 
-export const VERDICT_CHECK_ORDER: readonly VerdictCheckName[] = ['info', 'price', 'photos'];
+export const VERDICT_CHECK_ORDER: readonly VerdictCheckName[] = ['info', 'price', 'photos', 'category', 'attributes', 'delivery'];
 
 const CHECK_NAMES: Record<VerdictCheckName, string> = {
   info: 'Info',
   price: 'Price',
   photos: 'Photos',
+  category: 'Category',
+  attributes: 'Attributes',
+  delivery: 'Delivery',
 };
 
 const OVERALL_LABELS: Record<VerdictOverall, string> = {
