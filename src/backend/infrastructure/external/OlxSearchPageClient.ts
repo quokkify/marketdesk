@@ -1,7 +1,8 @@
 // Loads public OLX search pages: one request at a time for the whole process, a pause after each,
 // no cookies, redirects only within the base host. Rejects on any failure; the caller decides.
 
-import type { IOlxSearch, OlxSearchPage } from '../../application/ports/IOlxSearch';
+import type { IOlxAdvertPage, IOlxSearch, OlxSearchPage } from '../../application/ports/IOlxSearch';
+import { parseOlxAdvertDelivery } from './olxAdvertPage';
 import { olxSearchUrl, parseOlxSearchPage } from './olxSearchPage';
 
 export const MAX_PAGES = 10;
@@ -94,7 +95,7 @@ interface Deps {
   timeoutMs?: number;
 }
 
-export class OlxSearchPageClient implements IOlxSearch {
+export class OlxSearchPageClient implements IOlxSearch, IOlxAdvertPage {
   private readonly fetchImpl: typeof fetch;
   private readonly gate: OlxRequestGate;
   private readonly timeoutMs: number;
@@ -112,6 +113,40 @@ export class OlxSearchPageClient implements IOlxSearch {
   page(query: string, page: number, signal: AbortSignal): Promise<OlxSearchPage> {
     const url = olxSearchUrl(this.deps.baseUrl, query, page);
     return this.gate.run(signal, () => this.load(url, signal));
+  }
+
+  // The public advert page is fetched as given (host www.olx.pl only). When the base URL is not the
+  // default, the path and query are rebased onto it, so the stand's mock serves the page.
+  deliveryMode(advertUrl: string, signal: AbortSignal): Promise<string | null> {
+    let target: URL;
+    try {
+      const advert = new URL(advertUrl);
+      if (this.deps.baseUrl.replace(/\/+$/, '') === DEFAULT_BASE_URL) {
+        if (advert.protocol !== 'https:' || advert.host !== new URL(DEFAULT_BASE_URL).host) return Promise.resolve(null);
+        target = advert;
+      } else {
+        target = new URL(`${advert.pathname}${advert.search}`, `${this.deps.baseUrl.replace(/\/+$/, '')}/`);
+      }
+    } catch {
+      return Promise.resolve(null);
+    }
+    return this.gate
+      .run(signal, () => this.loadDelivery(target.toString(), signal))
+      .catch(() => null);
+  }
+
+  private async loadDelivery(url: string, signal: AbortSignal): Promise<string | null> {
+    if (signal.aborted) throw new Error('OLX search aborted');
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal.addEventListener('abort', abort);
+    const timer = setTimeout(abort, this.timeoutMs);
+    try {
+      return parseOlxAdvertDelivery(await this.fetchHtml(url, controller.signal));
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+    }
   }
 
   private async load(startUrl: string, signal: AbortSignal): Promise<OlxSearchPage> {

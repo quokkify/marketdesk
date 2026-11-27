@@ -53,6 +53,21 @@ public class VerdictSteps extends ApiSteps<VerdictVerification> {
     return view.extract().jsonPath().getList("data.latest.checks." + check + ".refs.eventIds", String.class);
   }
 
+  @Step("Get the Hermes events of product {productId}")
+  public ValidatableResponse getProductEvents(AccountPojo account, String productId) {
+    return service.getProductEvents(account.token(), productId);
+  }
+
+  @Step("Read the id of the {type} event")
+  public String eventId(ValidatableResponse events, String type) {
+    return events.extract().path("data.find { it.type == '%s' }.id".formatted(type));
+  }
+
+  @Step("Approve Hermes event {eventId}")
+  public ValidatableResponse approveEvent(AccountPojo account, String eventId) {
+    return service.approveEvent(account.token(), eventId);
+  }
+
   @Step("Analyze product {productId} without authentication")
   public ValidatableResponse runAnalyzeUnauthenticated(String productId) {
     return service.runAnalyze(productId);

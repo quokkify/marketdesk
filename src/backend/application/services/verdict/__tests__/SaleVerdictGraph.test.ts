@@ -130,6 +130,9 @@ function setup(fakes: Partial<Record<VerdictCheckName, CheckGraph>> = {}) {
       info: fakes.info ?? fake('info', 'ready'),
       price: fakes.price ?? fake('price', 'ready'),
       photos: fakes.photos ?? fake('photos', 'ready'),
+      category: fakes.category ?? fake('category', 'ready'),
+      attributes: fakes.attributes ?? fake('attributes', 'ready'),
+      delivery: fakes.delivery ?? fake('delivery', 'ready'),
     },
     now: () => NOW,
   });

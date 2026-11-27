@@ -43,6 +43,20 @@ public record ProductRequestPojo(String name, String description, Double costPri
         120.0, "good", "electronics", List.of(), null, null);
   }
 
+  // Headphones for the advert completeness checks. The stub OLX suggests its headphones category for this title, and
+  // "nauszne" is the one value of the stub category's "type" attribute the title holds. The token keeps the canned
+  // answers of one test apart from the others on the shared mock.
+  public static ProductRequestPojo headphonesSample() {
+    return new ProductRequestPojo("Apple AirPods nauszne sandbox " + token(), "Headphones created by the advert test.",
+        50.0, 120.0, "good", "electronics", List.of(), null, null);
+  }
+
+  // A projector: the stub OLX suggests its projector category for every title with "projektor".
+  public static ProductRequestPojo projectorAdvertSample() {
+    return new ProductRequestPojo("AOPEN projektor sandbox " + token(), "A projector created by the advert test.",
+        150.0, 349.0, "good", "electronics", List.of(), null, null);
+  }
+
   public ProductRequestPojo withCondition(String newCondition) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, newCondition, category, images,
         minAcceptablePrice, missingAccessories);
@@ -61,5 +75,9 @@ public record ProductRequestPojo(String name, String description, Double costPri
   public ProductRequestPojo withMissingAccessories(String newMissingAccessories) {
     return new ProductRequestPojo(name, description, costPrice, sellingPrice, condition, category, images,
         minAcceptablePrice, newMissingAccessories);
+  }
+
+  private static String token() {
+    return "qa" + UUID.randomUUID().toString().replace("-", "").substring(0, RESEARCH_TOKEN_LENGTH);
   }
 }

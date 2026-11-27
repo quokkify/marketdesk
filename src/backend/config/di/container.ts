@@ -117,6 +117,9 @@ import { SaleVerdictRuns } from '../../application/services/verdict/SaleVerdictR
 import { buildInfoCheck } from '../../application/services/verdict/infoCheckGraph';
 import { buildPriceCheck } from '../../application/services/verdict/priceCheckGraph';
 import { buildPhotosCheck } from '../../application/services/verdict/photosCheckGraph';
+import { buildCategoryCheck } from '../../application/services/verdict/categoryCheckGraph';
+import { buildAttributesCheck } from '../../application/services/verdict/attributesCheckGraph';
+import { buildDeliveryCheck } from '../../application/services/verdict/deliveryCheckGraph';
 import { RecordedResearchRun } from '../../application/services/recordedResearchRun';
 import { SaleVerdictRepository } from '../../infrastructure/persistence/repositories/SaleVerdictRepository';
 import { SaleVerdictHandler } from '../../infrastructure/jobQueue/JobHandlers/SaleVerdictHandler';
@@ -165,6 +168,8 @@ import {
 } from '../../application/services/ProductCategorySyncService';
 import { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import { ListingReactivationService } from '../../application/services/ListingReactivationService';
+import { AdvertFieldsService } from '../../application/services/AdvertFieldsService';
+import { CategoryMismatchProposals } from '../../application/services/CategoryMismatchProposals';
 import { ListingRevivalService } from '../../application/services/ListingRevivalService';
 import type { Marketplace } from '../../domain/entities/Marketplace';
 import { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
@@ -572,6 +577,35 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     undefined,
     priceChangeService
   );
+  // Authenticated OLX adapter for actions on an existing advert; creating adverts stays blocked.
+  // While the OLX adapter is not real, the stub transport answers: a sandbox token must never reach OLX.
+  const existingAdvertAdapters = {
+    resolve: async (marketplace: Marketplace) => {
+      if (env.marketplaces.olx.adapterMode !== 'real') return adapterFactory.create(marketplace.key);
+      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
+      return adapterFactory.create(
+        marketplace.key,
+        new FetchMarketplaceHttpClient({
+          logger: overrides.logger,
+          defaultHeaders: buildOlxHeaders(accessToken),
+          timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+          livePublishEnabled: false,
+        })
+      );
+    },
+  };
+  const advertFieldsService = new AdvertFieldsService({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    adapters: existingAdvertAdapters,
+  });
+  const categoryMismatchProposals = new CategoryMismatchProposals(idGenerator, {
+    eventRepo,
+    correctionOperations: categoryCorrectionOperationRepo,
+    activityLog: activityLogRepo,
+    accounts: marketplaceAccountRepo,
+  });
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
@@ -585,7 +619,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceChangeService,
     marketplaceUpdateEnqueuer,
     marketplaceAccountRepo,
-    olxPublicationQuotaService
+    olxPublicationQuotaService,
+    advertFieldsService
   );
   const dismissEventUC = new DismissHermesEventUseCase(
     eventRepo,
@@ -639,12 +674,19 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     ai: aiProvider,
     idFactory: idGenerator,
   });
+  // The no-tools Hermes profile, shared by the verdict's advert checks and the response graph.
+  const hermesQueryConfig = loadHermesConfig();
+  const hermesQueryClient = new HermesHealthProbe(hermesQueryConfig).isConfigured()
+    ? new HermesCompletionClient(hermesQueryConfig, aiUsageSink)
+    : null;
+  const olxSearchPageClient = new OlxSearchPageClient({ baseUrl: loadOlxSearchBaseUrl() });
   const saleVerdictGraph = new SaleVerdictGraph({
     products: productRepo,
     listings: listingRepo,
     marketplaces: marketplaceRepo,
     workspaces: workspaceRepo,
     verdicts: saleVerdictRepo,
+    adapters: existingAdvertAdapters,
     checks: {
       info: buildInfoCheck({ recheck: productRecheckService, seo: listingSeoProposals, logger: overrides.logger }),
       price: buildPriceCheck({
@@ -663,6 +705,25 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         newId: idGenerator,
       }),
       photos: buildPhotosCheck(),
+      category: buildCategoryCheck({
+        proposals: categoryMismatchProposals,
+        events: eventRepo,
+        taxonomy: olxTaxonomyResolver,
+      }),
+      attributes: buildAttributesCheck({
+        fields: advertFieldsService,
+        events: eventRepo,
+        hermes: hermesQueryClient,
+        idFactory: idGenerator,
+        logger: overrides.logger,
+      }),
+      delivery: buildDeliveryCheck({
+        page: olxSearchPageClient,
+        events: eventRepo,
+        hermes: hermesQueryClient,
+        idFactory: idGenerator,
+        logger: overrides.logger,
+      }),
     },
     now: () => new Date(),
     logger: overrides.logger,
@@ -701,7 +762,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     awaitingReplyCounts: (workspaceId) =>
       new ConversationRepository(pool).awaitingReplyCounts(workspaceId),
   });
-  const hermesQueryConfig = loadHermesConfig();
   const listingResponseRunRepo = new ListingResponseRunRepository(pool);
   const listingResponseGraph = new ListingResponseGraph({
     products: productRepo,
@@ -710,10 +770,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     analytics: analyticsEventRepo,
     verdicts: saleVerdictRepo,
     runs: listingResponseRunRepo,
-    queryClient: new HermesHealthProbe(hermesQueryConfig).isConfigured()
-      ? new HermesCompletionClient(hermesQueryConfig, aiUsageSink)
-      : null,
-    search: new OlxSearchPageClient({ baseUrl: loadOlxSearchBaseUrl() }),
+    queryClient: hermesQueryClient,
+    search: olxSearchPageClient,
     maxPages: MAX_PAGES,
     now: () => new Date(),
     logger: overrides.logger,
@@ -765,21 +823,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     idGenerator,
     publishAttemptRepo
   );
-  // Authenticated OLX adapter for actions on an existing advert; creating adverts stays blocked.
-  const existingAdvertAdapters = {
-    resolve: async (marketplace: Marketplace) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
-      return adapterFactory.create(
-        marketplace.key,
-        new FetchMarketplaceHttpClient({
-          logger: overrides.logger,
-          defaultHeaders: buildOlxHeaders(accessToken),
-          timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-          livePublishEnabled: false,
-        })
-      );
-    },
-  };
   const listingReactivationService = new ListingReactivationService({
     listingRepo,
     marketplaceRepo,
@@ -852,7 +895,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       ),
     eventRepo,
     categoryCorrectionOperationRepo,
-    productCategorySyncService
+    productCategorySyncService,
+    categoryMismatchProposals
   );
 
   // 9. Register job handlers now that their collaborators exist. The publish

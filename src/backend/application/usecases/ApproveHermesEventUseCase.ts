@@ -33,6 +33,7 @@ import type { IdGenerator } from '../ports/IdGenerator';
 import type { ApproveEventDTO } from '../dto/ApproveEventDTO';
 import type { MarketplaceAccountRepository } from '../services/MarketplaceOAuthService';
 import type { MarketplaceUpdateEnqueuer } from '../services/MarketplaceUpdateEnqueuer';
+import type { AdvertFieldsService } from '../services/AdvertFieldsService';
 import type { PriceChangeService } from '../services/PriceChangeService';
 import type { OlxPublicationQuotaService } from '../services/OlxPublicationQuotaService';
 import {
@@ -60,7 +61,8 @@ export class ApproveHermesEventUseCase {
     private readonly priceChange: PriceChangeService,
     private readonly marketplaceUpdates: MarketplaceUpdateEnqueuer,
     private readonly marketplaceAccountRepo?: MarketplaceAccountRepository,
-    private readonly olxQuota?: OlxPublicationQuotaService
+    private readonly olxQuota?: OlxPublicationQuotaService,
+    private readonly advertFields?: AdvertFieldsService
   ) {}
 
   async execute(input: ApproveEventDTO): Promise<Result<HermesEvent>> {
@@ -211,9 +213,30 @@ export class ApproveHermesEventUseCase {
             'Category correction cannot be applied as one operation; review and execute the audited delist and quota-guarded recreate intents separately'
           )
         );
+      case 'attributes':
+      case 'delivery':
+        return this.applyAdvertFields(event.workspaceId, change);
       default:
         return Ok({ marketplaceUpdates: [] });
     }
+  }
+
+  // The service throws a provider failure; execute() marks the event failed and rethrows.
+  private async applyAdvertFields(
+    workspaceId: string,
+    change: Extract<ProposedChange, { kind: 'attributes' | 'delivery' }>
+  ): Promise<Result<ApplyChangeOutcome>> {
+    if (!this.advertFields) {
+      return Err(new InvalidStateError('Advert field changes are not available'));
+    }
+    await this.advertFields.apply(
+      workspaceId,
+      change.listingId,
+      change.kind === 'attributes'
+        ? { attributes: change.values.map(({ code, value }) => ({ code, value })) }
+        : { deliveryPackageIds: change.packageIds }
+    );
+    return Ok({ marketplaceUpdates: [] });
   }
 
   private async findListingSeoRecommendation(

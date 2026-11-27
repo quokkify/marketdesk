@@ -2,6 +2,8 @@
 // workspace) → route fans out to the checks in the run's scope, which run in parallel as
 // self-contained subgraphs → combine folds the fresh checks over the latest stored verdict, so a
 // check outside the scope keeps its stored result and checkedAt → save completes the run.
+// The category, attributes and delivery checks need a live OLX advert: without one they leave the
+// scope and their stored results are dropped. They share one OLX snapshot per run.
 // A check that throws becomes check_failed and does not fail the verdict. Every AI call inside is
 // attributed to the 'verdict' feature. State holds only check results; the observer sees node
 // lifecycle only.
@@ -11,6 +13,7 @@ import type { SaleVerdict, VerdictCheck, VerdictCheckName } from '../../../../sh
 import type { Product } from '../../../domain/entities/Product';
 import type { Listing } from '../../../domain/entities/Listing';
 import type { Marketplace } from '../../../domain/entities/Marketplace';
+import type { IMarketplaceAdapter } from '../../../domain/services/MarketplaceAdapter';
 import type { Workspace } from '../../../domain/entities/Workspace';
 import type { IProductRepository } from '../../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../../domain/repositories/interfaces/IListingRepository';
@@ -21,12 +24,19 @@ import type {
   ISaleVerdictRepository,
 } from '../../../domain/repositories/interfaces/ISaleVerdictRepository';
 import { NotFoundError } from '../../../domain/shared/DomainError';
-import { checkFailed, combineVerdict } from '../../../domain/services/saleVerdictRules';
+import {
+  checkFailed,
+  combineVerdict,
+  LIVE_OLX_CHECKS,
+  liveOlxScope,
+} from '../../../domain/services/saleVerdictRules';
 import { withAiUsageScope } from '../../ai/aiUsageScope';
+import { olxAdvertSnapshotLoader, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
 
 export const SALE_VERDICT_GRAPH_VERSION = 'sale-verdict@1';
 const AI_FEATURE = 'verdict';
-const CHECK_NAMES: VerdictCheckName[] = ['info', 'price', 'photos'];
+const OLX_MARKETPLACE_KEY = 'olx';
+const CHECK_NAMES: VerdictCheckName[] = ['info', 'price', 'photos', 'category', 'attributes', 'delivery'];
 
 export interface CheckOptions {
   // Research even when the schedule says it is not due.
@@ -48,6 +58,8 @@ export interface CheckContext {
   runId?: string;
   // The verdict run's budget.
   signal: AbortSignal;
+  // The run's OLX snapshot, read once; null without a live OLX advert.
+  olx: (() => Promise<OlxAdvertSnapshot>) | null;
 }
 
 export type CheckGraph = (ctx: CheckContext) => Promise<VerdictCheck>;
@@ -69,6 +81,8 @@ export interface SaleVerdictGraphDeps {
   workspaces: Pick<IWorkspaceRepository, 'findById'>;
   verdicts: ISaleVerdictRepository;
   checks: Record<VerdictCheckName, CheckGraph>;
+  // The authenticated adapter for an existing advert; without it the OLX checks never run.
+  adapters?: { resolve(marketplace: Marketplace): Promise<IMarketplaceAdapter> };
   now: () => Date;
   observe?: (transition: VerdictTransition) => void;
   logger?: SaleVerdictGraphLogger;
@@ -101,8 +115,11 @@ export class SaleVerdictGraph {
   // A missing product or workspace, or a run no longer active, is thrown: the caller fails the run.
   async run(input: SaleVerdictRunInput): Promise<SaleVerdict> {
     const { workspaceId, productId, runId } = input;
-    const scope = CHECK_NAMES.filter((name) => input.scope.includes(name));
     const ctx = await this.step('load', () => this.load(input));
+    const scope = liveOlxScope(
+      CHECK_NAMES.filter((name) => input.scope.includes(name)),
+      ctx.olx !== null,
+    );
     await this.deps.verdicts.setListing(runId, ctx.listing?.id ?? null);
 
     const { value: state } = await withAiUsageScope({ workspaceId, feature: AI_FEATURE, productId }, () =>
@@ -130,7 +147,18 @@ export class SaleVerdictGraph {
       options: { forceResearch: false, infoCodeOnly: false, ...input.options },
       runId: input.runId,
       signal: input.signal,
+      olx: this.olxSnapshot(product, listing, marketplace),
     };
+  }
+
+  // A live OLX advert gets a lazy loader: a failed adapter lookup then rejects it, and each OLX
+  // check is recorded as check_failed instead of silently leaving the verdict.
+  private olxSnapshot(product: Product, listing: Listing | null, marketplace: Marketplace | null): CheckContext['olx'] {
+    const adapters = this.deps.adapters;
+    const externalListingId = listing?.marketplaceListingId;
+    if (!adapters || !listing || !marketplace || marketplace.key !== OLX_MARKETPLACE_KEY) return null;
+    if (!listing.isLive() || !externalListingId) return null;
+    return olxAdvertSnapshotLoader(() => adapters.resolve(marketplace), listing, externalListingId, product.name);
   }
 
   private build(ctx: CheckContext, scope: VerdictCheckName[], runId: string) {
@@ -151,6 +179,9 @@ export class SaleVerdictGraph {
       .addNode('info', checkNode('info'))
       .addNode('price', checkNode('price'))
       .addNode('photos', checkNode('photos'))
+      .addNode('category', checkNode('category'))
+      .addNode('attributes', checkNode('attributes'))
+      .addNode('delivery', checkNode('delivery'))
       .addNode('combine', (state: VerdictGraphState) => this.step('combine', () => this.combine(ctx, state)))
       .addNode('save', (state: VerdictGraphState) => this.step('save', () => this.save(ctx, runId, scope, state)))
       .addConditionalEdges(
@@ -168,7 +199,7 @@ export class SaleVerdictGraph {
 
   private async combine(ctx: CheckContext, state: VerdictGraphState): Promise<Partial<VerdictGraphState>> {
     const previous = (await this.deps.verdicts.findLatestCompleted(ctx.workspace.id, ctx.product.id))?.checks ?? {};
-    const { checks, overall } = combineVerdict(state.fresh, previous);
+    const { checks, overall } = combineVerdict(state.fresh, previous, ctx.olx === null ? LIVE_OLX_CHECKS : []);
     return { combined: { checks, overall, completedAt: this.deps.now().toISOString() } };
   }
 

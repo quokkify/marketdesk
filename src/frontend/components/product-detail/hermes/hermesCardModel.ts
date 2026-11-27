@@ -74,12 +74,17 @@ const STALE_LEAD = 'The product changed since this check.';
 const NO_REASON_LEAD = 'Hermes found something to look at.';
 const NO_PRICES_DETAIL = 'No market prices yet';
 const RESEARCH_NODES = 5;
-const CHECK_COUNT = 3;
-const RESEARCH_TOTAL = RESEARCH_NODES + CHECK_COUNT;
 const NODE_OVER = new Set(['done', 'failed', 'timeout']);
 // The order the verdict graph works through its checks.
-const STEP_ORDER: readonly VerdictCheckName[] = ['price', 'info', 'photos'];
-const STEP_NAMES: Record<VerdictCheckName, string> = { price: 'Price', info: 'Info', photos: 'Photos' };
+const STEP_ORDER: readonly VerdictCheckName[] = ['price', 'info', 'photos', 'category', 'attributes', 'delivery'];
+const STEP_NAMES: Record<VerdictCheckName, string> = {
+  price: 'Price',
+  info: 'Info',
+  photos: 'Photos',
+  category: 'Category',
+  attributes: 'Attributes',
+  delivery: 'Delivery',
+};
 const CHECK_ROWS = [
   { key: 'price', title: 'Price' },
   { key: 'info', title: 'Info' },
@@ -120,7 +125,8 @@ function searchingState(input: HermesCardInput): Pick<HermesCardState, 'chip' | 
 function runningState(input: HermesCardInput, researchActive: boolean): Pick<HermesCardState, 'chip' | 'lead'> {
   const active = input.verdict?.active ?? null;
   const linked = researchActive || (active?.researchRunId ?? null) !== null;
-  const total = linked ? RESEARCH_TOTAL : CHECK_COUNT;
+  const checkCount = STEP_ORDER.filter((name) => active?.scope.includes(name)).length;
+  const total = checkCount + (linked ? RESEARCH_NODES : 0);
   const done = finishedChecks(active) + (linked ? finishedNodes(input.research) : 0);
   const step = STEP_ORDER.find((name) => {
     const check = active?.checks[name];

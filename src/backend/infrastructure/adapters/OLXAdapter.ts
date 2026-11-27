@@ -31,6 +31,7 @@ import { evaluateOlxCategory, OLX_CONDITION_REQUIRED_MESSAGE } from '../../domai
 import { ValidationError } from '../../domain/shared/DomainError';
 import { OlxTaxonomyResolver, type OlxTrustedTaxonomyResolver } from './OlxTaxonomyResolver';
 import type { MarketplaceCategoryMetadata } from '../../../shared/types';
+import type { AdvertAttribute, OlxCategoryAttribute } from '../../domain/services/advertCompletenessRules';
 
 const OLX_PARTNER_BASE_URL = 'https://www.olx.pl/api/partner';
 const OLX_THREAD_PAGE_SIZE = 100;
@@ -53,6 +54,87 @@ const STUB_CATEGORY_MAP: Record<string, number> = {
 const STUB_VIEWS_PER_READ = 7;
 const STUB_FAVORITES_PER_READ = 1;
 const stubAdvertReads = new Map<string, number>();
+
+// OLX returns both `value` and `values`; a remote attribute is passed through as read.
+export type OlxAttribute = { code: string; value?: string | null; values?: unknown[] | null };
+
+// Stub transport only: like OLX, a PUT replaces the stored attributes and packages, so
+// a test can tell whether an update kept what the seller set. Module scope for the same
+// reason as the read counts.
+const stubAdverts = new Map<string, { attributes: OlxAttribute[]; deliveryPackageIds: string[] }>();
+// The advert's category for advertFields on the stub; the single-advert GET never carries it (sync reads it there).
+const stubAdvertCategories = new Map<string, string>();
+const STUB_DEFAULT_CATEGORY_ID = '5091';
+const STUB_PROJECTOR_CATEGORY_ID = '1984';
+const stubPackage = (code: string, size: 'S' | 'M', n: number) => ({
+  code,
+  label: `InPost Paczkomat® 24/7 ${size}${n > 1 ? ` (${n})` : ''}`,
+});
+const STUB_CATEGORY_ATTRIBUTES: OlxCategoryAttribute[] = [
+  {
+    code: 'state',
+    label: 'Stan',
+    required: true,
+    multiple: false,
+    values: [{ code: 'used', label: 'Używane' }, { code: 'new', label: 'Nowe' }],
+  },
+  {
+    code: 'brand',
+    label: 'Marka',
+    required: false,
+    multiple: false,
+    values: ['Apple', 'AOPEN', 'sandbox-seller-brand'].map((code) => ({ code, label: code })),
+  },
+  {
+    code: 'type',
+    label: 'Typ',
+    required: false,
+    multiple: false,
+    values: ['dokanalowe', 'nauszne', 'LED'].map((code) => ({ code, label: code })),
+  },
+  { code: 'bdo', label: 'BDO', required: false, multiple: false, values: [] },
+  {
+    code: 'delivery',
+    label: 'Przesyłka',
+    required: false,
+    multiple: true,
+    values: [
+      stubPackage('a1111111-0000-4000-8000-000000000001', 'S', 1),
+      stubPackage('a1111111-0000-4000-8000-000000000002', 'S', 2),
+      stubPackage('a1111111-0000-4000-8000-000000000003', 'S', 3),
+      stubPackage('a1111111-0000-4000-8000-000000000004', 'S', 4),
+      stubPackage('b2222222-0000-4000-8000-000000000001', 'M', 1),
+      stubPackage('b2222222-0000-4000-8000-000000000002', 'M', 2),
+    ],
+  },
+];
+const STUB_ADVERT_DEFAULT_ATTRIBUTES: OlxAttribute[] = [
+  { code: 'state', value: 'used' },
+  { code: 'brand', value: 'sandbox-seller-brand' },
+];
+
+// A remote attribute holds a seller value: a non-null value or a non-empty values list.
+function isSetAttribute(attribute: OlxAttribute): boolean {
+  const value = attribute.value as unknown;
+  return (value !== null && value !== undefined) || (Array.isArray(attribute.values) && attribute.values.length > 0);
+}
+
+function isScalar(value: unknown): value is string | number {
+  return typeof value === 'string' || typeof value === 'number';
+}
+
+const ADVERT_DRIFTED_MESSAGE = 'The advert changed on OLX since the last sync; sync the listing first';
+
+// Keeps the remote order; an owned code replaces the remote value in place and new owned codes are appended.
+export function mergeAdvertAttributes(remote: OlxAttribute[], owned: OlxAttribute[]): OlxAttribute[] {
+  const ownedByCode = new Map(owned.map((attribute) => [attribute.code, attribute]));
+  const merged = remote.map((attribute) => ownedByCode.get(attribute.code) ?? attribute);
+  const remoteCodes = new Set(remote.map((attribute) => attribute.code));
+  for (const attribute of owned) {
+    if (!remoteCodes.has(attribute.code)) merged.push(attribute);
+  }
+  return merged;
+}
 
 const OLX_CONDITION_MAP: Record<string, string> = {
   new: 'new',
@@ -125,6 +207,7 @@ interface OlxAdvertResponse {
   updated_at?: string | null;
   // Przesyłka OLX packages chosen by the seller; Poland only, see the Advert schema.
   ad_delivery?: { delivery_package_ids?: unknown } | null;
+  attributes?: unknown;
   metrics?: { views?: unknown; favorites?: unknown; favourites?: unknown; watchers?: unknown; messages?: unknown };
   statistics?: Record<string, unknown>;
   stats?: Record<string, unknown>;
@@ -188,8 +271,7 @@ interface OlxResponseEnvelope<T> {
 export class OLXAdapter extends BaseMarketplaceAdapter {
   private readonly baseUrl: string;
   private readonly publicBaseUrl: string | undefined;
-  // Sandbox adverts never carry delivery packages, and every stub read grows their metrics.
-  private readonly usesStubTransport: boolean;
+  private readonly onStubTransport: boolean;
 
   constructor(
     http?: MarketplaceHttpClient,
@@ -203,7 +285,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     super(http ?? new StubMarketplaceHttpClient(OLXAdapter.stubResponder), 'olx', options);
     this.baseUrl = (config.baseUrl ?? OLX_PARTNER_BASE_URL).replace(/\/$/, '');
     this.publicBaseUrl = config.publicBaseUrl?.replace(/\/+$/, '');
-    this.usesStubTransport = !http;
+    this.onStubTransport = http === undefined;
   }
 
   protected async doPublish(input: ListingPublishInput): Promise<PublishResult> {
@@ -255,10 +337,33 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const updated = { ...current, ...changes };
     const categoryId = this.resolvePublishCategory(updated);
     this.assertPublishDetails(categoryId);
-    const body = this.buildAdvertPayload(updated, categoryId, { configuredDelivery: false });
-    // PUT replaces the whole advert: without ad_delivery OLX drops the seller's Przesyłka OLX packages.
-    const packageIds = await this.fetchDeliveryPackageIds(externalListingId);
-    if (packageIds.length > 0) body.ad_delivery = { delivery_package_ids: packageIds };
+    await this.putAdvert(externalListingId, updated, categoryId, {}, { guardDrift: false });
+  }
+
+  // PUT replaces the whole advert: without the remote attributes and ad_delivery OLX drops what the seller set.
+  // The single write boundary: it reads the advert fresh, writes nothing after an unreadable read, never
+  // replaces an attribute that is set on OLX, and with guardDrift writes nothing when OLX holds another
+  // title or price than the one it would send.
+  private async putAdvert(
+    externalListingId: string,
+    input: ListingPublishInput,
+    categoryId: number,
+    fields: { attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] },
+    { guardDrift }: { guardDrift: boolean },
+  ): Promise<void> {
+    const body = this.buildAdvertPayload(input, categoryId, { configuredDelivery: false });
+    const remote = await this.fetchRemoteAdvertState(externalListingId);
+    if (guardDrift && this.drifted(remote, { title: input.productName, price: input.price })) {
+      throw new Error(ADVERT_DRIFTED_MESSAGE);
+    }
+    const setRemotely = new Set(remote.attributes.filter(isSetAttribute).map((attribute) => attribute.code));
+    const attributes = mergeAdvertAttributes(remote.attributes, [
+      ...((body.attributes as OlxAttribute[] | undefined) ?? []),
+      ...(fields.attributes ?? []).filter((attribute) => !setRemotely.has(attribute.code)),
+    ]);
+    if (attributes.length > 0) body.attributes = attributes;
+    const packages = fields.deliveryPackageIds ?? remote.deliveryPackageIds;
+    if (packages.length > 0) body.ad_delivery = { delivery_package_ids: packages };
     await this.http.request({
       method: 'PUT',
       url: `${this.baseUrl}/adverts/${externalListingId}`,
@@ -266,18 +371,145 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     });
   }
 
-  private async fetchDeliveryPackageIds(externalListingId: string): Promise<Array<string | number>> {
-    if (this.usesStubTransport) return [];
+  updateAdvertFields(
+    externalListingId: string,
+    current: ListingPublishInput,
+    fields: { attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] },
+  ): Promise<void> {
+    return this.execute('updateAdvertFields', async () => {
+      const categoryId = this.resolvePublishCategory(current);
+      this.assertPublishDetails(categoryId);
+      await this.putAdvert(externalListingId, current, categoryId, fields, { guardDrift: true });
+    });
+  }
+
+  categorySuggestions(title: string): Promise<string[]> {
+    return this.execute('categorySuggestions', async () => {
+      const res = await this.http.request<unknown>({
+        method: 'GET',
+        url: `${this.baseUrl}/categories/suggestion`,
+        query: { q: title },
+      });
+      const items = this.unwrapList(res.data);
+      const ids: string[] = [];
+      for (const item of items) {
+        const id = (item as { id?: unknown } | null)?.id;
+        if (typeof id === 'number' || (typeof id === 'string' && id !== '')) ids.push(String(id));
+      }
+      return ids;
+    });
+  }
+
+  categoryAttributes(categoryId: string): Promise<OlxCategoryAttribute[]> {
+    return this.execute('categoryAttributes', async () => {
+      const res = await this.http.request<unknown>({
+        method: 'GET',
+        url: `${this.baseUrl}/categories/${encodeURIComponent(categoryId)}/attributes`,
+      });
+      const attributes: OlxCategoryAttribute[] = [];
+      for (const raw of this.unwrapList(res.data)) {
+        const item = raw as {
+          code?: unknown;
+          label?: unknown;
+          validation?: { required?: unknown; allow_multiple_values?: unknown } | null;
+          values?: unknown;
+        } | null;
+        if (!item || typeof item.code !== 'string') continue;
+        const values = Array.isArray(item.values)
+          ? item.values.flatMap((v: { code?: unknown; label?: unknown } | null) =>
+              v && typeof v.code === 'string'
+                ? [{ code: v.code, label: typeof v.label === 'string' ? v.label : v.code }]
+                : [],
+            )
+          : [];
+        attributes.push({
+          code: item.code,
+          label: typeof item.label === 'string' ? item.label : item.code,
+          required: item.validation?.required === true,
+          multiple: item.validation?.allow_multiple_values === true,
+          values,
+        });
+      }
+      return attributes;
+    });
+  }
+
+  advertFields(
+    externalListingId: string,
+    sent: { title: string; price: number },
+  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[]; drifted: boolean }> {
+    return this.execute('advertFields', async () => {
+      const remote = await this.fetchRemoteAdvertState(externalListingId);
+      const categoryId =
+        remote.categoryId ??
+        (this.onStubTransport ? (stubAdvertCategories.get(externalListingId) ?? STUB_DEFAULT_CATEGORY_ID) : null);
+      if (categoryId === null) throw new Error(`OLX advert ${externalListingId} has no category`);
+      return {
+        categoryId,
+        // A multi-value attribute has no string `value`; it is passed on with its values joined so the checks count it as set and never fill it.
+        attributes: remote.attributes.map((attribute) => ({
+          code: attribute.code,
+          value: isScalar(attribute.value)
+            ? String(attribute.value)
+            : (attribute.values ?? []).filter(isScalar).map(String).join(','),
+        })),
+        deliveryPackageIds: remote.deliveryPackageIds.map(String),
+        drifted: this.drifted(remote, sent),
+      };
+    });
+  }
+
+  // OLX holds another title or price than MarketDesk would send. A value OLX did not report counts as
+  // drift, except on the stub transport, whose advert read carries neither.
+  private drifted(
+    remote: { title: string | null; price: number | null },
+    sent: { title: string; price: number },
+  ): boolean {
+    const differs = <T>(value: T | null, expected: T) => (value === null ? !this.onStubTransport : value !== expected);
+    return differs(remote.title, sent.title) || differs(remote.price, sent.price);
+  }
+
+  private unwrapList(data: unknown): unknown[] {
+    if (Array.isArray(data)) return data;
+    const inner = (data as { data?: unknown } | null)?.data;
+    return Array.isArray(inner) ? inner : [];
+  }
+
+  // An advert read without an advert id is unreadable: it throws, so nothing is written after it.
+  private async fetchRemoteAdvertState(externalListingId: string): Promise<{
+    attributes: OlxAttribute[];
+    deliveryPackageIds: Array<string | number>;
+    categoryId: string | null;
+    title: string | null;
+    price: number | null;
+  }> {
     const res = await this.http.request<unknown>({
       method: 'GET',
       url: `${this.baseUrl}/adverts/${externalListingId}`,
     });
-    if (!res.data || typeof res.data !== 'object') return [];
-    const advert = this.unwrapAdvert(res.data as OlxAdvertResponse | OlxResponseEnvelope<OlxAdvertResponse>);
-    const ids = advert?.ad_delivery?.delivery_package_ids;
-    return Array.isArray(ids)
-      ? ids.filter((id): id is string | number => (typeof id === 'string' && id !== '') || typeof id === 'number')
-      : [];
+    const unwrapped =
+      res.data && typeof res.data === 'object'
+        ? (this.unwrapAdvert(res.data as OlxAdvertResponse | OlxResponseEnvelope<OlxAdvertResponse>) as unknown)
+        : null;
+    const advert = unwrapped && typeof unwrapped === 'object' ? (unwrapped as OlxAdvertResponse) : null;
+    if (!advert || !isScalar(advert.id) || String(advert.id) === '') {
+      throw new Error(`OLX returned an unreadable advert ${externalListingId}`);
+    }
+    const ids = advert.ad_delivery?.delivery_package_ids;
+    const rawAttributes = advert.attributes;
+    return {
+      categoryId: this.categoryId(advert) ?? null,
+      title: typeof advert.title === 'string' ? advert.title : null,
+      price: this.extractPrice(advert.price).value,
+      attributes: Array.isArray(rawAttributes)
+        ? rawAttributes.filter(
+            (a): a is OlxAttribute => !!a && typeof a === 'object' && typeof (a as OlxAttribute).code === 'string',
+          )
+        : [],
+      deliveryPackageIds: Array.isArray(ids)
+        ? ids.filter((id): id is string | number => (typeof id === 'string' && id !== '') || typeof id === 'number')
+        : [],
+    };
   }
 
   private buildAdvertPayload(
@@ -877,6 +1109,26 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
       }
       return { status: 200, data: [...known] };
     }
+    if (config.method === 'GET' && config.url.endsWith('/categories/suggestion')) {
+      const title = String(config.query?.q ?? '').toLowerCase();
+      return {
+        status: 200,
+        data: { data: [{ id: title.includes('projektor') ? STUB_PROJECTOR_CATEGORY_ID : STUB_DEFAULT_CATEGORY_ID }] },
+      };
+    }
+    if (config.method === 'GET' && /\/categories\/[^/?]+\/attributes$/.test(config.url)) {
+      return {
+        status: 200,
+        data: {
+          data: STUB_CATEGORY_ATTRIBUTES.map((a) => ({
+            code: a.code,
+            label: a.label,
+            validation: { required: a.required, allow_multiple_values: a.multiple },
+            values: a.values,
+          })),
+        },
+      };
+    }
     const idMatch = config.url.match(/\/adverts\/([^/?]+)/);
     // The random part keeps two publishes in one millisecond apart, so they never share metrics.
     const externalId = idMatch ? idMatch[1] : `olx-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -884,7 +1136,20 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     if (config.method === 'POST') {
       return { status: 201, data: { id: externalId, status: 'active' } };
     }
-    if (config.method === 'PUT' || config.method === 'DELETE') {
+    if (config.method === 'PUT') {
+      const body = (config.body ?? {}) as {
+        category_id?: number | string;
+        attributes?: OlxAttribute[];
+        ad_delivery?: { delivery_package_ids?: string[] };
+      };
+      if (body.category_id !== undefined) stubAdvertCategories.set(externalId, String(body.category_id));
+      stubAdverts.set(externalId, {
+        attributes: body.attributes ?? [],
+        deliveryPackageIds: body.ad_delivery?.delivery_package_ids ?? [],
+      });
+      return { status: 204, data: {} };
+    }
+    if (config.method === 'DELETE') {
       return { status: 204, data: {} };
     }
     if (config.method === 'GET' && config.url.endsWith('/threads')) {
@@ -922,11 +1187,14 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const advertId = idMatch?.[1];
     const reads = advertId ? (stubAdvertReads.get(advertId) ?? 0) + 1 : 0;
     if (advertId) stubAdvertReads.set(advertId, reads);
+    const stored = stubAdverts.get(externalId);
     return {
       status: 200,
       data: {
         id: externalId,
         status: 'active',
+        attributes: stored?.attributes ?? STUB_ADVERT_DEFAULT_ATTRIBUTES,
+        ad_delivery: { delivery_package_ids: stored?.deliveryPackageIds ?? [] },
         metrics: {
           views: reads * STUB_VIEWS_PER_READ,
           favorites: reads * STUB_FAVORITES_PER_READ,

@@ -40,6 +40,9 @@ export const HERMES_TYPE_LABELS: Record<HermesEventType, string> = {
   product_category_conflict: 'Product category conflict',
   relist: 'Relist',
   price_estimate_unavailable: 'Price estimate unavailable',
+  filled_advert_attributes: 'Advert attributes filled',
+  suggested_advert_attributes: 'Suggested advert attributes',
+  suggested_delivery: 'Suggested delivery',
 };
 
 export function conditionLabel(condition: ProductCondition): string {

@@ -178,7 +178,7 @@ export class HermesController {
 
   runForProduct = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!this.saleVerdictRuns) return next(new ServiceUnavailableError('Sale verdicts are unavailable'));
-    const scope = req.body?.scope ?? ['info', 'price', 'photos'];
+    const scope = req.body?.scope ?? ['info', 'price', 'photos', 'category', 'attributes', 'delivery'];
     const { run } = await this.saleVerdictRuns.request(
       req.user!.workspaceId!,
       routeParam(req.params.productId),

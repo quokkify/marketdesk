@@ -2,6 +2,7 @@ package dev.quokkify.marketdesk.verification;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import dev.quokkify.verification.BaseApiVerification;
@@ -57,6 +58,56 @@ public class VerdictVerification extends BaseApiVerification<VerdictVerification
   public VerdictVerification checkStatusIs(ValidatableResponse view, String check, String status) {
     verifyResponseStatusCode(view, HttpStatus.SC_OK);
     view.body(CHECKS + check + ".status", Matchers.equalTo(status));
+    return self();
+  }
+
+  @Step("The check {check} is {status} without the reason {code}")
+  public VerdictVerification checkIsWithout(ValidatableResponse view, String check, String status, String code) {
+    verifyResponseStatusCode(view, HttpStatus.SC_OK);
+    view.body(CHECKS + check + ".status", Matchers.equalTo(status));
+    view.body(CHECKS + check + ".reasons.code", Matchers.not(Matchers.hasItem(code)));
+    return self();
+  }
+
+  @Step("The attributes check does not count the OLX attribute {code} as empty")
+  public VerdictVerification attributeIsNotMissing(ValidatableResponse view, String code) {
+    verifyResponseStatusCode(view, HttpStatus.SC_OK);
+    view.body(CHECKS + "attributes.refs.missingAttributes", Matchers.not(Matchers.hasItem(code)));
+    return self();
+  }
+
+  @Step("The product has {count} {type} events")
+  public VerdictVerification hasEvents(ValidatableResponse events, String type, int count) {
+    verifyResponseStatusCode(events, HttpStatus.SC_OK);
+    events.body("data.findAll { it.type == '%s' }".formatted(type), Matchers.hasSize(count));
+    return self();
+  }
+
+  @Step("The {type} event is {status} with the title {title}")
+  public VerdictVerification eventIs(ValidatableResponse events, String type, String status, String title) {
+    verifyResponseStatusCode(events, HttpStatus.SC_OK);
+    events.body("data.find { it.type == '%s' }.status".formatted(type), Matchers.equalTo(status));
+    events.body("data.find { it.type == '%s' }.title".formatted(type), Matchers.equalTo(title));
+    return self();
+  }
+
+  @Step("No event changes the OLX attribute {code}")
+  public VerdictVerification noEventChangesAttribute(ValidatableResponse events, String code) {
+    verifyResponseStatusCode(events, HttpStatus.SC_OK);
+    List<Map<String, Object>> changes = events.extract().jsonPath().getList("data.proposedChange");
+    List<Object> codes = changes.stream()
+        .filter(change -> change != null && change.get("values") instanceof List<?>)
+        .flatMap(change -> ((List<?>) change.get("values")).stream())
+        .<Object>map(value -> ((Map<?, ?>) value).get("code"))
+        .toList();
+    MatcherAssert.assertThat(codes, Matchers.not(Matchers.hasItem(code)));
+    return self();
+  }
+
+  @Step("The event is approved and applied")
+  public VerdictVerification isApplied(ValidatableResponse response) {
+    verifyResponseStatusCode(response, HttpStatus.SC_OK);
+    response.body("data.status", Matchers.equalTo("applied"));
     return self();
   }
 

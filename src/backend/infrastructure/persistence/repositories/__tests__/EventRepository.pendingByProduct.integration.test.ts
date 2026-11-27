@@ -13,9 +13,17 @@ const OTHER_WS = '00000000-0000-4000-8000-0000000000a2';
 const P1 = '00000000-0000-4000-8000-0000000000b1';
 const P2 = '00000000-0000-4000-8000-0000000000b2';
 const P3 = '00000000-0000-4000-8000-0000000000b3';
+const P4 = '00000000-0000-4000-8000-0000000000b4';
 const PRICE_TYPES: HermesEventType[] = ['suggested_lower_price', 'suggested_higher_price', 'price_estimate_unavailable'];
 
-function event(id: string, workspaceId: string, productId: string, type: HermesEventType, status: HermesEventStatus = 'pending_review'): HermesEvent {
+function event(
+  id: string,
+  workspaceId: string,
+  productId: string,
+  type: HermesEventType,
+  status: HermesEventStatus = 'pending_review',
+  createdAt?: Date,
+): HermesEvent {
   return unwrap(HermesEvent.create({
     id: `00000000-0000-4000-8000-0000000000${id}`,
     workspaceId,
@@ -27,6 +35,7 @@ function event(id: string, workspaceId: string, productId: string, type: HermesE
       ? { kind: 'title', field: 'title', from: 'Widget', to: 'Widget X' }
       : type === 'price_estimate_unavailable' ? null : { kind: 'price', field: 'price', from: 100, to: 90 },
     status,
+    createdAt,
     resolvedAt: status === 'dismissed' ? new Date() : null,
   }));
 }
@@ -96,6 +105,21 @@ describeDb('EventRepository pending price events by product (PostgreSQL integrat
     const found = await repo.findPendingByProduct(WS, P1, PRICE_TYPES);
 
     expect(found.map((e) => e.id.slice(-2)).sort()).toEqual(['01', '02']);
+  });
+
+  it("returns the product's events of the given types in any status, newest first", async () => {
+    if (!ready) return;
+    const repo = new EventRepository(pool, client);
+    await repo.saveAll([
+      event('21', WS, P4, 'suggested_lower_price', 'dismissed', new Date('2020-01-01T10:00:00.000Z')),
+      event('22', WS, P4, 'suggested_lower_price', 'pending_review', new Date('2020-01-01T11:00:00.000Z')),
+      event('23', WS, P4, 'suggested_better_title'),
+      event('24', OTHER_WS, P4, 'suggested_lower_price'),
+    ]);
+
+    const found = await repo.findByProduct(WS, P4, ['suggested_lower_price']);
+
+    expect(found.map((e) => e.id.slice(-2))).toEqual(['22', '21']);
   });
 
   it('dismisses only events still pending when the write runs, so a decision made meanwhile stands', async () => {

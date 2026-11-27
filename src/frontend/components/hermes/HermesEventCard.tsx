@@ -69,6 +69,9 @@ const EVENT_ICONS: Record<HermesEvent['type'], React.ElementType> = {
   product_category_conflict: RuleIcon,
   relist: ReplayIcon,
   price_estimate_unavailable: CompareArrowsIcon,
+  filled_advert_attributes: RuleIcon,
+  suggested_advert_attributes: RuleIcon,
+  suggested_delivery: StorefrontIcon,
 };
 
 export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'>> = ({ type, severity }) => {
@@ -109,11 +112,15 @@ function marketplaceSyncNote(
 export function hermesLifecycleCopy(
   status: HermesEvent['status'],
   marketplaceSync?: HermesEventExtras['marketplaceSync'],
+  autonomyDecision?: AutonomyDecision | null,
 ): string {
   switch (status) {
     case 'pending_decision': return 'Hermes is evaluating whether this change requires review.';
     case 'pending_review': return 'A recorded decision is required before MarketDesk can continue.';
-    case 'applying': return 'The approved change is queued or applying; provider completion is not yet confirmed.';
+    case 'applying':
+      return autonomyDecision === 'auto_apply'
+        ? 'Applying on OLX…'
+        : 'The approved change is queued or applying; provider completion is not yet confirmed.';
     case 'applied': {
       const note = marketplaceSyncNote(marketplaceSync);
       return note ? `Applied in MarketDesk · ${note.text}` : 'Applied in MarketDesk';
@@ -128,7 +135,8 @@ export function hermesLifecycleCopy(
 export const HermesLifecycleCaption: React.FC<{
   status: HermesEvent['status'];
   marketplaceSync?: HermesEventExtras['marketplaceSync'];
-}> = ({ status, marketplaceSync }) => {
+  autonomyDecision?: AutonomyDecision | null;
+}> = ({ status, marketplaceSync, autonomyDecision }) => {
   const needsAttention =
     status === 'applied' && marketplaceSyncNote(marketplaceSync)?.needsAttention === true;
   return (
@@ -145,7 +153,7 @@ export const HermesLifecycleCaption: React.FC<{
           : theme.palette.text.secondary,
       })}
     >
-      {hermesLifecycleCopy(status, marketplaceSync)}
+      {hermesLifecycleCopy(status, marketplaceSync, autonomyDecision)}
     </Typography>
   );
 };
@@ -392,6 +400,23 @@ export const ProposedChangeDiff: React.FC<{
           ))}
         </Stack>,
       );
+    case 'attributes':
+      return wrap(
+        <Stack spacing={0.5}>
+          {change.values.map((item) => (
+            <Typography key={item.code} variant="body2">
+              {item.label}: <strong>{item.valueLabel}</strong>
+            </Typography>
+          ))}
+        </Stack>,
+      );
+    case 'delivery':
+      return wrap(
+        <Typography variant="body2">
+          Parcel size <strong>{change.size}</strong> · {change.packageIds.length} carrier
+          {change.packageIds.length === 1 ? '' : 's'}
+        </Typography>,
+      );
     case 'category_recreation':
       return <CategoryRecreationReview change={change} onAction={onCategoryAction} />;
   }
@@ -535,7 +560,11 @@ export const HermesEventCard: React.FC<HermesEventCardProps> = ({
           {event.detail && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{event.detail}</Typography>
           )}
-          <HermesLifecycleCaption status={event.status} marketplaceSync={event.marketplaceSync} />
+          <HermesLifecycleCaption
+            status={event.status}
+            marketplaceSync={event.marketplaceSync}
+            autonomyDecision={event.autonomyDecision}
+          />
           {event.autonomyDecision && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               {AUTONOMY_DECISION_COPY[event.autonomyDecision]}

@@ -2,6 +2,7 @@
 // (OLXAdapter) are implemented in infrastructure.
 // The domain stays completely agnostic to marketplace specifics.
 
+import type { AdvertAttribute, OlxCategoryAttribute } from './advertCompletenessRules';
 import type { MarketplaceKey, ListingStatus, MarketplaceCategoryMetadata } from '../../../shared/types';
 
 export interface ListingPublishInput {
@@ -125,4 +126,20 @@ export interface IMarketplaceAdapter {
   listThreadMessages?(externalThreadId: string): Promise<MarketplaceThreadMessages>;
   // Not retried: the marketplace has no idempotency key, so a retry could double-send.
   sendThreadMessage?(externalThreadId: string, text: string): Promise<{ externalMessageId: string | null }>;
+
+  // Advert completeness: the marketplace catalogue and the advert's own category, attributes and delivery.
+  categorySuggestions?(title: string): Promise<string[]>;
+  categoryAttributes?(categoryId: string): Promise<OlxCategoryAttribute[]>;
+  // `drifted`: OLX holds another title or price than `sent`, the ones MarketDesk would write.
+  advertFields?(
+    externalListingId: string,
+    sent: { title: string; price: number },
+  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[]; drifted: boolean }>;
+  // Keeps every other attribute and the delivery packages the seller set; only the given fields change, and
+  // never an attribute already set on the advert. Writes nothing when the advert drifted.
+  updateAdvertFields?(
+    externalListingId: string,
+    current: ListingPublishInput,
+    fields: { attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] },
+  ): Promise<void>;
 }

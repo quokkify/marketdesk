@@ -1,4 +1,4 @@
-import { OLXAdapter, type OlxAdapterConfig } from '../OLXAdapter';
+import { OLXAdapter, mergeAdvertAttributes, type OlxAdapterConfig } from '../OLXAdapter';
 import { FetchMarketplaceHttpClient } from '../FetchMarketplaceHttpClient';
 import {
   MarketplaceHttpClient,
@@ -116,6 +116,7 @@ describe('OLXAdapter', () => {
     const bodies: unknown[] = [];
     const http = mockClient((config) => {
       if (config.method !== 'GET') bodies.push(config.body);
+      if (config.method === 'GET') return { status: 200, data: { id: 123, status: 'active' } };
       return config.method === 'POST'
         ? { status: 201, data: { id: 123, status: 'active' } }
         : { status: 204, data: {} };
@@ -814,7 +815,9 @@ describe('OLXAdapter', () => {
     const adapter = new OLXAdapter(
       mockClient((config) => {
         captured = config;
-        return { status: 204, data: {} };
+        return config.method === 'GET'
+          ? { status: 200, data: { id: 'olx-1', status: 'active' } }
+          : { status: 204, data: {} };
       }),
       fastOptions,
       realConfig,
@@ -834,7 +837,9 @@ describe('OLXAdapter', () => {
     const adapter = new OLXAdapter(
       mockClient((config) => {
         captured = config;
-        return { status: 204, data: {} };
+        return config.method === 'GET'
+          ? { status: 200, data: { id: 'olx-1', status: 'active' } }
+          : { status: 204, data: {} };
       }),
       fastOptions,
       realConfig,
@@ -888,6 +893,81 @@ describe('OLXAdapter', () => {
     const body = requests[1].body as Record<string, unknown>;
     expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1', 'pkg-s-2'] });
     expect(body.attributes).toEqual([{ code: 'state', value: 'used' }]);
+  });
+
+  it('keeps attributes the seller set on OLX when updating an advert', async () => {
+    // Regression guard: PUT replaces the whole advert, so an update sending only the condition wiped every attribute the seller set on OLX.
+    let put: HttpRequestConfig | undefined;
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        if (config.method === 'PUT') {
+          put = config;
+          return { status: 204, data: {} };
+        }
+        return {
+          status: 200,
+          data: {
+            data: {
+              id: 'olx-1',
+              status: 'active',
+              attributes: [
+                { code: 'state', value: 'new' },
+                { code: 'brand', value: 'apple' },
+                { code: 'type', value: 'dokanalowe' },
+              ],
+              ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+            },
+          },
+        };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    const body = put?.body as Record<string, unknown>;
+    expect(body.attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'brand', value: 'apple' },
+      { code: 'type', value: 'dokanalowe' },
+    ]);
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1'] });
+  });
+
+  it('passes a multi-value remote attribute through an update unchanged', async () => {
+    // Regression guard: dropping a remote attribute without a string value wiped it on the full-replace PUT.
+    let put: HttpRequestConfig | undefined;
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        if (config.method === 'PUT') {
+          put = config;
+          return { status: 204, data: {} };
+        }
+        return {
+          status: 200,
+          data: {
+            data: {
+              id: 'olx-1',
+              status: 'active',
+              attributes: [
+                { code: 'state', value: 'used', values: null },
+                { code: 'features', value: null, values: ['a', 'b'] },
+              ],
+            },
+          },
+        };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    expect((put?.body as Record<string, unknown>).attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'features', value: null, values: ['a', 'b'] },
+    ]);
   });
 
   it('sends no OLX delivery packages when the advert has none', async () => {
@@ -1075,5 +1155,261 @@ describe('OLXAdapter', () => {
 
     expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 3, messages: 3 });
     expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 3, messages: 3 });
+  });
+});
+
+describe('mergeAdvertAttributes', () => {
+  it('replaces an owned code in place and keeps the remote order', () => {
+    expect(
+      mergeAdvertAttributes(
+        [{ code: 'state', value: 'new' }, { code: 'brand', value: 'apple' }],
+        [{ code: 'state', value: 'used' }],
+      ),
+    ).toEqual([{ code: 'state', value: 'used' }, { code: 'brand', value: 'apple' }]);
+  });
+
+  it('appends an owned code the remote does not have', () => {
+    expect(mergeAdvertAttributes([{ code: 'brand', value: 'apple' }], [{ code: 'state', value: 'used' }])).toEqual([
+      { code: 'brand', value: 'apple' },
+      { code: 'state', value: 'used' },
+    ]);
+  });
+
+  it('returns the owned attributes when the remote has none', () => {
+    expect(mergeAdvertAttributes([], [{ code: 'state', value: 'used' }])).toEqual([{ code: 'state', value: 'used' }]);
+  });
+});
+
+describe('OLX catalogue and advert field update', () => {
+  it('maps category attributes, reading validation.required and allow_multiple_values', async () => {
+    const adapter = new OLXAdapter(
+      mockClient(() => ({
+        status: 200,
+        data: {
+          data: [
+            {
+              code: 'type',
+              label: 'Typ',
+              validation: { required: true, allow_multiple_values: true },
+              values: [{ code: 'LED', label: 'LED' }],
+            },
+            { code: 'bdo', label: 'BDO', validation: {} },
+          ],
+        },
+      })),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.categoryAttributes?.('1984')).toEqual([
+      { code: 'type', label: 'Typ', required: true, multiple: true, values: [{ code: 'LED', label: 'LED' }] },
+      { code: 'bdo', label: 'BDO', required: false, multiple: false, values: [] },
+    ]);
+  });
+
+  it('returns leaf category suggestions as strings in OLX order', async () => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        return { status: 200, data: { data: [{ id: 1984 }, { id: 5091 }] } };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.categorySuggestions?.('projektor')).toEqual(['1984', '5091']);
+    expect(requests[0].url).toContain('/categories/suggestion');
+  });
+
+  function updateAdapter(requests: HttpRequestConfig[]) {
+    return new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        if (config.method === 'GET') {
+          return {
+            status: 200,
+            data: {
+              data: {
+                id: 'olx-1',
+                status: 'active',
+                title: publishInput.productName,
+                price: { value: publishInput.price, currency: 'PLN' },
+                attributes: [{ code: 'state', value: 'used' }, { code: 'brand', value: 'apple' }],
+                ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+              },
+            },
+          };
+        }
+        return { status: 204, data: {} };
+      }),
+      fastOptions,
+      realConfig,
+    );
+  }
+
+  it('sends the chosen delivery packages and keeps the remote brand', async () => {
+    const requests: HttpRequestConfig[] = [];
+    await updateAdapter(requests).updateAdvertFields?.('olx-1', publishInput, { deliveryPackageIds: ['pkg-m-1'] });
+
+    const put = requests.find((r) => r.method === 'PUT');
+    const body = put?.body as { attributes: Array<{ code: string }>; ad_delivery: unknown };
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-m-1'] });
+    expect(body.attributes).toContainEqual({ code: 'brand', value: 'apple' });
+  });
+
+  it('appends a filled attribute after the remote attributes', async () => {
+    const requests: HttpRequestConfig[] = [];
+    await updateAdapter(requests).updateAdvertFields?.('olx-1', publishInput, {
+      attributes: [{ code: 'type', value: 'LED' }],
+    });
+
+    const body = requests.find((r) => r.method === 'PUT')?.body as {
+      attributes: unknown[];
+      ad_delivery: unknown;
+    };
+    expect(body.attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'brand', value: 'apple' },
+      { code: 'type', value: 'LED' },
+    ]);
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1'] });
+  });
+
+  it('reads the category, attributes and packages of an advert', async () => {
+    const adapter = new OLXAdapter(
+      mockClient(() => ({
+        status: 200,
+        data: {
+          data: {
+            id: 'olx-1',
+            category_id: 1984,
+            title: 'Camera',
+            price: { value: 100, currency: 'PLN' },
+            attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: null, values: ['LED', 'x'] }],
+            ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+          },
+        },
+      })),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.advertFields?.('olx-1', { title: 'Camera', price: 100 })).toEqual({
+      categoryId: '1984',
+      attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: 'LED,x' }],
+      deliveryPackageIds: ['pkg-s-1'],
+      drifted: false,
+    });
+  });
+
+  it('serves a catalogue fixture on the stub transport', async () => {
+    const adapter = new OLXAdapter(undefined, fastOptions);
+    expect(await adapter.categorySuggestions?.('Projektor LED')).toEqual(['1984']);
+    expect(await adapter.categorySuggestions?.('Kabel')).toEqual(['5091']);
+    const attributes = (await adapter.categoryAttributes?.('5091')) ?? [];
+    expect(attributes.map((a) => a.code)).toEqual(['state', 'brand', 'type', 'bdo', 'delivery']);
+    expect(attributes.find((a) => a.code === 'delivery')?.values).toHaveLength(6);
+    await adapter.updateAdvertFields?.('stub-1', publishInput, { deliveryPackageIds: ['x'] });
+    expect(await adapter.advertFields?.('stub-1', { title: publishInput.productName, price: publishInput.price })).toMatchObject({
+      deliveryPackageIds: ['x'],
+      drifted: false,
+    });
+  });
+});
+
+describe('OLX advert write guards', () => {
+  const SENT = { title: publishInput.productName, price: publishInput.price };
+
+  function advertAdapter(advert: unknown, requests: HttpRequestConfig[] = []) {
+    return new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        return config.method === 'GET' ? { status: 200, data: advert } : { status: 204, data: {} };
+      }),
+      fastOptions,
+      realConfig,
+    );
+  }
+
+  const current = (over: Record<string, unknown> = {}) => ({
+    data: { id: 'olx-1', status: 'active', title: SENT.title, price: { value: SENT.price, currency: 'PLN' }, ...over },
+  });
+
+  // Regression guard: the requested value replaced what the seller set on OLX after the check had read the advert.
+  it('never overwrites an attribute that is set on OLX by the time of the write', async () => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(
+      current({
+        attributes: [
+          { code: 'brand', value: 'samsung' },
+          { code: 'features', value: null, values: ['a'] },
+          { code: 'type', value: null, values: [] },
+        ],
+      }),
+      requests,
+    );
+
+    await adapter.updateAdvertFields?.('olx-1', publishInput, {
+      attributes: [
+        { code: 'brand', value: 'apple' },
+        { code: 'features', value: 'b' },
+        { code: 'type', value: 'LED' },
+      ],
+    });
+
+    const body = requests.find((r) => r.method === 'PUT')?.body as { attributes: unknown[] };
+    expect(body.attributes).toEqual([
+      { code: 'brand', value: 'samsung' },
+      { code: 'features', value: null, values: ['a'] },
+      { code: 'type', value: 'LED' },
+      { code: 'state', value: 'used' },
+    ]);
+  });
+
+  it('reads a numeric attribute value as set', async () => {
+    const adapter = advertAdapter(current({ category_id: 1984, attributes: [{ code: 'year', value: 2020 }] }));
+
+    const fields = await adapter.advertFields?.('olx-1', SENT);
+
+    expect(fields?.attributes).toEqual([{ code: 'year', value: '2020' }]);
+  });
+
+  // Regression guard: an unreadable 200 read gave empty attributes and packages, and the full-replace PUT wiped both.
+  it.each([
+    ['an empty body', ''],
+    ['a null advert', { data: null }],
+    ['an advert without an id', { data: { status: 'active', attributes: [] } }],
+  ])('writes nothing after %s', async (_label, advert) => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(advert, requests);
+
+    await expect(
+      adapter.updateAdvertFields?.('olx-1', publishInput, { deliveryPackageIds: ['pkg-m-1'] }),
+    ).rejects.toThrow();
+    await expect(adapter.updateListing('olx-1', { price: 299 }, publishInput)).rejects.toThrow();
+
+    expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
+  });
+
+  it.each([
+    ['the title', { title: 'Camera edited on OLX' }],
+    ['the price', { price: { value: 300, currency: 'PLN' } }],
+    ['a missing title', { title: undefined }],
+    ['a missing price', { price: null }],
+  ])('reports drift and writes no advert fields when OLX changed %s', async (_label, over) => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(current({ category_id: 1984, ...over }), requests);
+
+    expect(await adapter.advertFields?.('olx-1', SENT)).toMatchObject({ drifted: true });
+    await expect(
+      adapter.updateAdvertFields?.('olx-1', publishInput, { attributes: [{ code: 'type', value: 'LED' }] }),
+    ).rejects.toThrow('The advert changed on OLX since the last sync');
+    expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
+  });
+
+  it('reports no drift when the title and price match', async () => {
+    const adapter = advertAdapter(current({ category_id: 1984 }));
+    expect(await adapter.advertFields?.('olx-1', SENT)).toMatchObject({ drifted: false });
   });
 });

@@ -377,7 +377,11 @@ export const registerSchema = z.object({
 
 export const runProductHermesSchema = z.object({
   trigger: z.literal('manual').optional(),
-  scope: z.array(z.enum(['info', 'price', 'photos'])).min(1).max(3).optional(),
+  scope: z
+    .array(z.enum(['info', 'price', 'photos', 'category', 'attributes', 'delivery']))
+    .min(1)
+    .max(6)
+    .optional(),
 }).strict();
 
 export const dismissEventSchema = z.object({

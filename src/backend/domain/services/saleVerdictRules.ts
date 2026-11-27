@@ -38,7 +38,15 @@ export type PriceCheckInput =
 // The price check exists only for PLN listings.
 const PRICE_CHECK_CURRENCY = 'PLN';
 
-type VerdictChecks = Partial<Record<VerdictCheckName, VerdictCheck>>;
+export type VerdictChecks = Partial<Record<VerdictCheckName, VerdictCheck>>;
+
+// The checks that read a live OLX advert.
+export const LIVE_OLX_CHECKS: readonly VerdictCheckName[] = ['category', 'attributes', 'delivery'];
+
+// Without a live OLX advert the advert checks have nothing to judge, so they leave the run's scope.
+export function liveOlxScope(scope: VerdictCheckName[], hasLiveOlx: boolean): VerdictCheckName[] {
+  return hasLiveOlx ? scope : scope.filter((name) => !LIVE_OLX_CHECKS.includes(name));
+}
 
 function makeCheck(
   check: VerdictCheckName,
@@ -155,8 +163,11 @@ function estimatedPriceCheck(
 export function combineVerdict(
   fresh: VerdictCheck[],
   previous: VerdictChecks,
+  drop: readonly VerdictCheckName[] = [],
 ): { checks: VerdictChecks; overall: VerdictOverall } {
   const checks: VerdictChecks = { ...previous };
+  // A dropped check no longer applies, so its stored result must not weigh on the overall.
+  for (const name of drop) delete checks[name];
   for (const check of fresh) checks[check.check] = check;
 
   // A pending check is not judged yet, so the overall cannot be ready: it counts as needs_human.

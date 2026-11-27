@@ -10,3 +10,8 @@ export interface IOlxSearch {
   /** page is 1-based; rejects on any failure. */
   page(query: string, page: number, signal: AbortSignal): Promise<OlxSearchPage>;
 }
+
+export interface IOlxAdvertPage {
+  /** The delivery mode shown on the public advert page; null on any failure. */
+  deliveryMode(advertUrl: string, signal: AbortSignal): Promise<string | null>;
+}

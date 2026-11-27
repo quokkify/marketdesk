@@ -17,7 +17,7 @@ import type { IWorkspaceRepository } from '../../../domain/repositories/interfac
 import type { ISaleVerdictRepository } from '../../../domain/repositories/interfaces/ISaleVerdictRepository';
 import type { IPriceResearchRunRepository } from '../../../domain/repositories/interfaces/IPriceResearchRunRepository';
 import { ConflictError, NotFoundError } from '../../../domain/shared/DomainError';
-import { combineVerdict } from '../../../domain/services/saleVerdictRules';
+import { combineVerdict, LIVE_OLX_CHECKS } from '../../../domain/services/saleVerdictRules';
 import { nextAutoAt } from '../../../domain/services/researchSchedule';
 import type { IJobQueue, SaleVerdictJob } from '../../ports/IJobQueue';
 import type { ProductRecheckService } from '../ProductRecheckService';
@@ -255,6 +255,7 @@ export class SaleVerdictRuns {
       now: this.deps.now,
       options: { forceResearch: false, infoCodeOnly: true },
       signal: new AbortController().signal,
+      olx: null,
     });
 
     const now = this.deps.now().toISOString();
@@ -274,7 +275,9 @@ export class SaleVerdictRuns {
       await this.deps.verdicts.claim(id, now, new Date(this.deps.now().getTime() + RECHECK_LEASE_MS).toISOString());
       await this.deps.verdicts.setListing(id, listingId);
       const previous = (await this.deps.verdicts.findLatestCompleted(workspaceId, productId))?.checks ?? {};
-      const { checks, overall } = combineVerdict([info], previous);
+      // Without a live advert the stored OLX advert checks no longer apply.
+      const live = listing?.status === 'live' && Boolean(listing.marketplaceListingId);
+      const { checks, overall } = combineVerdict([info], previous, live ? [] : LIVE_OLX_CHECKS);
       await this.deps.verdicts.complete(id, { checks, overall, completedAt: now });
     } catch (error) {
       await this.deps.verdicts.fail(id, this.deps.now().toISOString(), 'store_failed');

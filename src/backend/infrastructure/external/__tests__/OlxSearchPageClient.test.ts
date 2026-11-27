@@ -250,3 +250,44 @@ describe('loadOlxSearchBaseUrl', () => {
     expect(() => loadOlxSearchBaseUrl()).toThrow();
   });
 });
+
+describe('OlxSearchPageClient.deliveryMode', () => {
+  const advertPage = (mode: string) =>
+    `<script>window.__PRERENDERED_STATE__= ${JSON.stringify(
+      JSON.stringify({ ad: { ad: { delivery: { rock: { mode } } } } })
+    )};</script>`;
+
+  it('reads the mode of an olx.pl advert without cookies', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(reply(200, advertPage('BuyWithDelivery')));
+    const { client } = build(fetchImpl);
+    const mode = await client.deliveryMode('https://www.olx.pl/d/oferta/x-CID99.html', signal());
+    expect(mode).toBe('BuyWithDelivery');
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://www.olx.pl/d/oferta/x-CID99.html');
+    expect(fetchImpl.mock.calls[0][1].credentials).toBe('omit');
+  });
+
+  it('rejects another host without a request', async () => {
+    const fetchImpl = jest.fn();
+    const { client } = build(fetchImpl);
+    expect(await client.deliveryMode('https://evil.example/d/oferta/x.html', signal())).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rebases the path onto a non-default base URL', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(reply(200, advertPage('NotEligible')));
+    const client = new OlxSearchPageClient({
+      baseUrl: 'http://olx-mock:1080',
+      fetch: fetchImpl,
+      gate: createOlxRequestGate(jest.fn().mockResolvedValue(undefined)),
+    });
+    expect(await client.deliveryMode('https://www.olx.pl/d/oferta/x-CID99.html?a=1', signal())).toBe('NotEligible');
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://olx-mock:1080/d/oferta/x-CID99.html?a=1');
+  });
+
+  it('returns null on a failed request or an unreadable page', async () => {
+    const failing = build(jest.fn().mockResolvedValue(reply(500))).client;
+    expect(await failing.deliveryMode('https://www.olx.pl/d/oferta/x.html', signal())).toBeNull();
+    const blank = build(jest.fn().mockResolvedValue(reply(200, '<html></html>'))).client;
+    expect(await blank.deliveryMode('https://www.olx.pl/d/oferta/x.html', signal())).toBeNull();
+  });
+});

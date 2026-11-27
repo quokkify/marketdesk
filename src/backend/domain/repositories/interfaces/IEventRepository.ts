@@ -9,6 +9,8 @@ export interface IEventRepository {
   findByWorkspace(workspaceId: string): Promise<HermesEvent[]>;
   findByStatus(workspaceId: string, status: HermesEventStatus): Promise<HermesEvent[]>;
   findPendingReview(workspaceId: string): Promise<HermesEvent[]>;
+  // Every event of these types for the product, newest first.
+  findByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
   /** The product's pending_review events of the given types. */
   findPendingByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
   /**
@@ -22,6 +24,8 @@ export interface IEventRepository {
     resolvedAt: Date,
   ): Promise<number>;
   save(event: HermesEvent): Promise<void>;
+  /** The event inserted with this idempotency key, or null. */
+  findByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<HermesEvent | null>;
   /** Atomically inserts a semantic recommendation once. */
   saveRecommendationIfAbsent(event: HermesEvent, idempotencyKey: string): Promise<boolean>;
   /** Atomically inserts a review event and its structured agent provenance once. */

@@ -23,6 +23,9 @@ public class SaleVerdictTest extends BaseTest {
   private static final String CHECK_FAILED = "check_failed";
   // The mock answered but refused the call; an unreachable mock or a wrong toolset answer gives another code.
   private static final String HERMES_UNAVAILABLE = "hermes_unavailable";
+  // A run without a scope asks for every check; the advert checks then leave it when the product has no live OLX
+  // advert, so the verdict holds only the first three.
+  private static final String[] DEFAULT_SCOPE = {INFO, PRICE, PHOTOS, "category", "attributes", "delivery"};
 
   private AccountPojo accountWithSandbox() {
     AccountPojo account = authSteps.registerNewAccount();
@@ -31,7 +34,7 @@ public class SaleVerdictTest extends BaseTest {
   }
 
   private ValidatableResponse analyzeAndAwait(AccountPojo account, String productId) {
-    verdictSteps.verify().isAccepted(verdictSteps.runAnalyze(account, productId), INFO, PRICE, PHOTOS);
+    verdictSteps.verify().isAccepted(verdictSteps.runAnalyze(account, productId), DEFAULT_SCOPE);
     return verdictSteps.awaitVerdict(account, productId);
   }
 
@@ -39,7 +42,8 @@ public class SaleVerdictTest extends BaseTest {
   public void analyzeQueuesARunAndCompletes() {
     AccountPojo account = accountWithSandbox();
     ProductListingPojo productListing = listingSteps.createOlxProductListing(account);
-    verdictSteps.verify().isAccepted(verdictSteps.runAnalyze(account, productListing.productId()), INFO, PRICE, PHOTOS);
+    verdictSteps.verify().isAccepted(verdictSteps.runAnalyze(account, productListing.productId()),
+        DEFAULT_SCOPE);
     verdictSteps.verify().isCompletedWithChecks(
         verdictSteps.awaitVerdict(account, productListing.productId()), INFO, PRICE, PHOTOS);
   }

@@ -181,7 +181,10 @@ export type HermesEventType =
   | 'olx_category_mismatch'
   | 'product_category_conflict'
   | 'relist'
-  | 'price_estimate_unavailable';
+  | 'price_estimate_unavailable'
+  | 'filled_advert_attributes'
+  | 'suggested_advert_attributes'
+  | 'suggested_delivery';
 
 export type ChangedBy = 'user' | 'hermes';
 
@@ -395,6 +398,21 @@ export interface CategoryRecreationChangePayload {
   ];
 }
 
+export type ParcelSize = 'S' | 'M' | 'L' | 'XL';
+
+export interface AdvertAttributesChangePayload {
+  kind: 'attributes';
+  listingId: string;
+  values: Array<{ code: string; value: string; label: string; valueLabel: string }>;
+}
+
+export interface DeliveryChangePayload {
+  kind: 'delivery';
+  listingId: string;
+  size: ParcelSize;
+  packageIds: string[];
+}
+
 export type ProposedChange =
   | PriceChangePayload
   | TitleChangePayload
@@ -403,6 +421,8 @@ export type ProposedChange =
   | CreateListingChangePayload
   | ProductCategoryConflictChangePayload
   | CategoryRecreationChangePayload
+  | AdvertAttributesChangePayload
+  | DeliveryChangePayload
   | null;
 
 // ============================================================================
@@ -543,7 +563,7 @@ export interface ProductRecheckResult {
   category: ProductRecheckCategoryResult;
 }
 
-export type VerdictCheckName = 'info' | 'price' | 'photos';
+export type VerdictCheckName = 'info' | 'price' | 'photos' | 'category' | 'attributes' | 'delivery';
 export type VerdictCheckStatus = 'ready' | 'fix' | 'needs_human' | 'pending';
 export type VerdictOverall = 'ready' | 'fix' | 'needs_human';
 
@@ -566,6 +586,8 @@ export interface VerdictCheck {
     proposedPrice?: number | null;
     currency?: string;
     photoCount?: number;
+    missingAttributes?: string[];
+    deliveryMode?: string | null;
   };
 }
 
