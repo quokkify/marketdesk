@@ -1,0 +1,1 @@
+{"id":"2a98c04cb8ffbbaeda9a8cdf0ae9b77a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/__tests__/Product.test.ts#Product missing accessories stores a blank text as null","name":"stores a blank text as null","status":"passed","testResultsByEnv":{"default":"35c638ec42c1f7acfa6bfe025c54020a"}}

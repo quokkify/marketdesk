@@ -1,0 +1,1 @@
+{"id":"52b6054bd69e4d190bed50660d3f3f36.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/FileRunRecorder.test.ts#FileRunRecorder keeps unwritten held events when a flush fails","name":"keeps unwritten held events when a flush fails","status":"passed","testResultsByEnv":{"default":"5db51e1064a4b514d612ba32564e3894"}}
