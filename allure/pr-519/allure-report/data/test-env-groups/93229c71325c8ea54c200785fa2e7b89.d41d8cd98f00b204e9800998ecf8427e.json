@@ -1,0 +1,1 @@
+{"id":"93229c71325c8ea54c200785fa2e7b89.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/conversations/__tests__/draftValidation.test.ts#validateDraft rejectsFilledPriceBelowFloor","name":"rejectsFilledPriceBelowFloor","status":"passed","testResultsByEnv":{"default":"38e7da79fc2a92580aa976a72acc0938"}}

@@ -1,0 +1,1 @@
+{"id":"ae04191c14b862c4b248e5367ac6dc1b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#knownFindings does not flag staleness without a completion time","name":"does not flag staleness without a completion time","status":"passed","testResultsByEnv":{"default":"279eacc78cf0e77bda241577a8bf9221"}}

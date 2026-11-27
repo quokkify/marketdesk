@@ -1,0 +1,1 @@
+{"id":"297fb0c8d09afe6120bb8105dc2db815.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/saleVerdictRules.test.ts#priceCheckFromEstimate asks to raise a price below the floor","name":"asks to raise a price below the floor","status":"passed","testResultsByEnv":{"default":"caa9c898eb7d1e8e61859bf0bbccdcf3"}}

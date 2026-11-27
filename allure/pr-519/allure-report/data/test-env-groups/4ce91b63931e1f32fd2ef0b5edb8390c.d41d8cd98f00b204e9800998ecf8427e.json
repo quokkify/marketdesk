@@ -1,0 +1,1 @@
+{"id":"4ce91b63931e1f32fd2ef0b5edb8390c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/runRecorder.test.ts#createRunRecorder gives the no-op recorder when disabled","name":"gives the no-op recorder when disabled","status":"passed","testResultsByEnv":{"default":"0afa696c0f1544cddeb6648f0a041049"}}

@@ -1,0 +1,1 @@
+{"id":"e1e88d3fa77d1202bd0be2f9e0acd324.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/api/baseApi.test.ts#password change returns the unwrapped token of the new session","name":"returns the unwrapped token of the new session","status":"passed","testResultsByEnv":{"default":"335844773d0d6782160029d8e738fbf4"}}

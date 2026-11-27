@@ -1,0 +1,1 @@
+{"id":"eb623e3c4f01975c7c1177c71029caca.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/__tests__/PriceChangeService.test.ts#PriceChangeService reportsSkippedWhenAccountDisconnected","name":"reportsSkippedWhenAccountDisconnected","status":"passed","testResultsByEnv":{"default":"98f262249b6209a67c2abc009407197a"}}
