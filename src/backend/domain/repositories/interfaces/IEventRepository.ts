@@ -9,6 +9,8 @@ export interface IEventRepository {
   findByWorkspace(workspaceId: string): Promise<HermesEvent[]>;
   findByStatus(workspaceId: string, status: HermesEventStatus): Promise<HermesEvent[]>;
   findPendingReview(workspaceId: string): Promise<HermesEvent[]>;
+  // Every event of these types for the product, newest first.
+  findByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
   /** The product's pending_review events of the given types. */
   findPendingByProduct(workspaceId: string, productId: string, types: readonly HermesEventType[]): Promise<HermesEvent[]>;
   /**

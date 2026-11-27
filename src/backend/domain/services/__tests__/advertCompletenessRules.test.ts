@@ -1,6 +1,9 @@
 import {
+  ADVERT_DRIFTED,
+  CATEGORY_OUT_OF_SYNC,
   attributeIdempotencyKey,
   attributesCheck,
+  blockedCheck,
   categoryCheck,
   containsWholeWord,
   deliveryCheck,
@@ -138,6 +141,36 @@ describe('categoryCheck', () => {
     const check = categoryCheck({ listingCategoryId: '1984', suggestionIds: ['1234', '1984'], now: NOW, eventIds: [] });
     expect(check.status).toBe('ready');
   });
+
+  it('needs a human when OLX gave no suggestion', () => {
+    const check = categoryCheck({ listingCategoryId: '1984', suggestionIds: [], now: NOW, eventIds: [] });
+    expect(check.status).toBe('needs_human');
+    expect(check.reasons).toEqual([
+      { code: 'category_unknown', message: 'OLX gave no category suggestion for this title' },
+    ]);
+  });
+
+  it('is ready on a mismatch the owner kept', () => {
+    const check = categoryCheck({
+      listingCategoryId: '5091', suggestionIds: ['1234'], keptByOwner: true, now: NOW, eventIds: [],
+    });
+    expect(check.status).toBe('ready');
+    expect(check.reasons).toEqual([{ code: 'category_kept_by_owner', message: 'You kept this OLX category' }]);
+  });
+});
+
+describe('blockedCheck', () => {
+  it('needs a human for the given check with the given reason', () => {
+    expect(blockedCheck('delivery', CATEGORY_OUT_OF_SYNC, NOW)).toMatchObject({
+      check: 'delivery',
+      status: 'needs_human',
+      reasons: [{ code: 'category_out_of_sync', message: 'The OLX category changed since the last sync; sync the listing first' }],
+    });
+    expect(ADVERT_DRIFTED).toEqual({
+      code: 'advert_drifted',
+      message: 'The advert changed on OLX since the last sync; sync the listing first',
+    });
+  });
 });
 
 describe('deliveryCheck', () => {
@@ -163,6 +196,14 @@ describe('deliveryCheck', () => {
     const check = deliveryCheck({ ...base, mode: 'NotEligible', categoryOffersDelivery: false });
     expect(check.status).toBe('fix');
     expect(check.reasons[0].code).toBe('delivery_unavailable_in_category');
+  });
+
+  it.each(['', 'Unknown', 'notEligible'])('needs a human for the unknown delivery mode %p', (mode) => {
+    const check = deliveryCheck({ ...base, mode });
+    expect(check.status).toBe('needs_human');
+    expect(check.reasons).toEqual([
+      { code: 'delivery_mode_unknown', message: 'OLX reports an unknown delivery state for this advert; check it in OLX' },
+    ]);
   });
 
   it('is ready with BuyWithDelivery', () => {

@@ -123,6 +123,8 @@ function isScalar(value: unknown): value is string | number {
   return typeof value === 'string' || typeof value === 'number';
 }
 
+const ADVERT_DRIFTED_MESSAGE = 'The advert changed on OLX since the last sync; sync the listing first';
+
 // Keeps the remote order; an owned code replaces the remote value in place and new owned codes are appended.
 export function mergeAdvertAttributes(remote: OlxAttribute[], owned: OlxAttribute[]): OlxAttribute[] {
   const ownedByCode = new Map(owned.map((attribute) => [attribute.code, attribute]));
@@ -335,20 +337,25 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const updated = { ...current, ...changes };
     const categoryId = this.resolvePublishCategory(updated);
     this.assertPublishDetails(categoryId);
-    await this.putAdvert(externalListingId, updated, categoryId, {});
+    await this.putAdvert(externalListingId, updated, categoryId, {}, { guardDrift: false });
   }
 
   // PUT replaces the whole advert: without the remote attributes and ad_delivery OLX drops what the seller set.
-  // The single write boundary: it reads the advert fresh, writes nothing after an unreadable read, and
-  // never replaces an attribute that is set on OLX.
+  // The single write boundary: it reads the advert fresh, writes nothing after an unreadable read, never
+  // replaces an attribute that is set on OLX, and with guardDrift writes nothing when OLX holds another
+  // title or price than the one it would send.
   private async putAdvert(
     externalListingId: string,
     input: ListingPublishInput,
     categoryId: number,
     fields: { attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] },
+    { guardDrift }: { guardDrift: boolean },
   ): Promise<void> {
     const body = this.buildAdvertPayload(input, categoryId, { configuredDelivery: false });
     const remote = await this.fetchRemoteAdvertState(externalListingId);
+    if (guardDrift && this.drifted(remote, { title: input.productName, price: input.price })) {
+      throw new Error(ADVERT_DRIFTED_MESSAGE);
+    }
     const setRemotely = new Set(remote.attributes.filter(isSetAttribute).map((attribute) => attribute.code));
     const attributes = mergeAdvertAttributes(remote.attributes, [
       ...((body.attributes as OlxAttribute[] | undefined) ?? []),
@@ -372,7 +379,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     return this.execute('updateAdvertFields', async () => {
       const categoryId = this.resolvePublishCategory(current);
       this.assertPublishDetails(categoryId);
-      await this.putAdvert(externalListingId, current, categoryId, fields);
+      await this.putAdvert(externalListingId, current, categoryId, fields, { guardDrift: true });
     });
   }
 
@@ -429,7 +436,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
 
   advertFields(
     externalListingId: string,
-  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[] }> {
+    sent: { title: string; price: number },
+  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[]; drifted: boolean }> {
     return this.execute('advertFields', async () => {
       const remote = await this.fetchRemoteAdvertState(externalListingId);
       const categoryId =
@@ -446,8 +454,19 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
             : (attribute.values ?? []).filter(isScalar).map(String).join(','),
         })),
         deliveryPackageIds: remote.deliveryPackageIds.map(String),
+        drifted: this.drifted(remote, sent),
       };
     });
+  }
+
+  // OLX holds another title or price than MarketDesk would send. A value OLX did not report counts as
+  // drift, except on the stub transport, whose advert read carries neither.
+  private drifted(
+    remote: { title: string | null; price: number | null },
+    sent: { title: string; price: number },
+  ): boolean {
+    const differs = <T>(value: T | null, expected: T) => (value === null ? !this.onStubTransport : value !== expected);
+    return differs(remote.title, sent.title) || differs(remote.price, sent.price);
   }
 
   private unwrapList(data: unknown): unknown[] {
@@ -461,6 +480,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     attributes: OlxAttribute[];
     deliveryPackageIds: Array<string | number>;
     categoryId: string | null;
+    title: string | null;
+    price: number | null;
   }> {
     const res = await this.http.request<unknown>({
       method: 'GET',
@@ -478,6 +499,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     const rawAttributes = advert.attributes;
     return {
       categoryId: this.categoryId(advert) ?? null,
+      title: typeof advert.title === 'string' ? advert.title : null,
+      price: this.extractPrice(advert.price).value,
       attributes: Array.isArray(rawAttributes)
         ? rawAttributes.filter(
             (a): a is OlxAttribute => !!a && typeof a === 'object' && typeof (a as OlxAttribute).code === 'string',

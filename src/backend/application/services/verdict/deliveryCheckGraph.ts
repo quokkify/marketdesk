@@ -1,8 +1,9 @@
-// The delivery check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category
-// mismatch stops the check. page: the delivery mode buyers see on the public advert page (null
+// The delivery check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category out
+// of sync with OLX or a category mismatch the owner has not kept stops the check. page: the delivery mode buyers see on the public advert page (null
 // when the page cannot be read). propose (only when delivery is off in a category that offers it):
-// a pending suggested_delivery proposal is linked as it is; without one, Hermes (when configured)
-// picks a parcel size, and every package of that size becomes one pending proposal.
+// a pending suggested_delivery proposal is linked as it is; a drifted advert gets no proposal;
+// otherwise Hermes (when configured) picks a parcel size, and every package of that size becomes one
+// pending proposal.
 // result: the check. Nothing is written to OLX here.
 // State holds only the delivery mode and event ids, never seller or Hermes text.
 
@@ -10,14 +11,21 @@ import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import type { HermesEventType, ParcelSize, VerdictCheck } from '../../../../shared/types';
 import { HermesEvent } from '../../../domain/entities/HermesEvent';
 import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
-import { categoryFirstCheck, deliveryCheck, packagesForSize } from '../../../domain/services/advertCompletenessRules';
+import {
+  ADVERT_DRIFTED,
+  CATEGORY_OUT_OF_SYNC,
+  blockedCheck,
+  categoryFirstCheck,
+  deliveryCheck,
+  packagesForSize,
+} from '../../../domain/services/advertCompletenessRules';
 import type { IdFactory } from '../../../domain/services/proposalSupport';
 import type { AITextCompletionClient } from '../../../infrastructure/external/HermesAI';
 import { buildParcelSizePrompt, parseParcelSize } from '../../../infrastructure/external/advertFieldPrompts';
 import { researchItemFromProduct } from '../../../infrastructure/external/priceResearchPrompts';
 import { withAiOperation } from '../../ai/aiUsageScope';
 import type { IOlxAdvertPage } from '../../ports/IOlxSearch';
-import { requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
+import { categoryBlocks, requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
 import type { CheckContext, CheckGraph } from './SaleVerdictGraph';
 
 const PROPOSAL_TYPE: HermesEventType = 'suggested_delivery';
@@ -80,6 +88,7 @@ export function buildDeliveryCheck(deps: DeliveryCheckDeps): CheckGraph {
       // An open proposal waits for the owner: no new Hermes call and no replacement.
       const pending = await deps.events.findPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE]);
       if (pending.length > 0) return { eventIds: pending.map((event) => event.id) };
+      if (snapshot.drifted) return { check: blockedCheck('delivery', ADVERT_DRIFTED, ctx.now()) };
       const attribute = deliveryAttribute();
       const size = await askSize();
       if (!attribute || !size || !ctx.listing) return {};
@@ -112,7 +121,10 @@ export function buildDeliveryCheck(deps: DeliveryCheckDeps): CheckGraph {
         snapshot = await requireOlxSnapshot(ctx);
         return {};
       })
-      .addNode('categoryGate', () => (snapshot.categoryMismatch ? { check: categoryFirstCheck('delivery', ctx.now()) } : {}))
+      .addNode('categoryGate', async () => {
+        if (snapshot.outOfSync) return { check: blockedCheck('delivery', CATEGORY_OUT_OF_SYNC, ctx.now()) };
+        return (await categoryBlocks(deps.events, ctx, snapshot)) ? { check: categoryFirstCheck('delivery', ctx.now()) } : {};
+      })
       .addNode('page', page)
       .addNode('propose', propose)
       .addNode('result', result)

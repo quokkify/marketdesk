@@ -1,11 +1,12 @@
 // Writes attributes and delivery packages onto a live OLX advert, then re-reads the advert to tell
-// which of the requested attributes OLX actually kept.
+// which of the requested attributes OLX actually kept. An advert whose title or price changed on OLX
+// since the last sync is never written.
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IMarketplaceRepository } from '../../domain/repositories/interfaces/IMarketplaceRepository';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { Marketplace } from '../../domain/entities/Marketplace';
 import type { IMarketplaceAdapter } from '../../domain/services/MarketplaceAdapter';
-import type { AdvertAttribute } from '../../domain/services/advertCompletenessRules';
+import { ADVERT_DRIFTED, type AdvertAttribute } from '../../domain/services/advertCompletenessRules';
 import { InvalidStateError, NotFoundError } from '../../domain/shared/DomainError';
 import { buildListingPublishInput } from '../usecases/PublishListingUseCase';
 
@@ -50,10 +51,15 @@ export class AdvertFieldsService {
     if (!adapter.updateAdvertFields || !adapter.advertFields) {
       throw new InvalidStateError('This marketplace cannot change advert fields');
     }
-    await adapter.updateAdvertFields(externalListingId, buildListingPublishInput(product, listing), fields);
+    const current = buildListingPublishInput(product, listing);
+    const sent = { title: current.productName, price: current.price };
+    if ((await adapter.advertFields(externalListingId, sent)).drifted) {
+      throw new InvalidStateError(ADVERT_DRIFTED.message);
+    }
+    await adapter.updateAdvertFields(externalListingId, current, fields);
 
     const requested = fields.attributes ?? [];
-    const reread = await adapter.advertFields(externalListingId);
+    const reread = await adapter.advertFields(externalListingId, sent);
     const present = new Set(reread.attributes.map((a) => JSON.stringify([a.code, a.value])));
     const kept: AdvertAttribute[] = [];
     const dropped: AdvertAttribute[] = [];

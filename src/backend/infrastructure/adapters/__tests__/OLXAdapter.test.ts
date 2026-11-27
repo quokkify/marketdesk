@@ -1233,6 +1233,8 @@ describe('OLX catalogue and advert field update', () => {
               data: {
                 id: 'olx-1',
                 status: 'active',
+                title: publishInput.productName,
+                price: { value: publishInput.price, currency: 'PLN' },
                 attributes: [{ code: 'state', value: 'used' }, { code: 'brand', value: 'apple' }],
                 ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
               },
@@ -1282,6 +1284,8 @@ describe('OLX catalogue and advert field update', () => {
           data: {
             id: 'olx-1',
             category_id: 1984,
+            title: 'Camera',
+            price: { value: 100, currency: 'PLN' },
             attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: null, values: ['LED', 'x'] }],
             ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
           },
@@ -1291,10 +1295,11 @@ describe('OLX catalogue and advert field update', () => {
       realConfig,
     );
 
-    expect(await adapter.advertFields?.('olx-1')).toEqual({
+    expect(await adapter.advertFields?.('olx-1', { title: 'Camera', price: 100 })).toEqual({
       categoryId: '1984',
       attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: 'LED,x' }],
       deliveryPackageIds: ['pkg-s-1'],
+      drifted: false,
     });
   });
 
@@ -1306,7 +1311,10 @@ describe('OLX catalogue and advert field update', () => {
     expect(attributes.map((a) => a.code)).toEqual(['state', 'brand', 'type', 'bdo', 'delivery']);
     expect(attributes.find((a) => a.code === 'delivery')?.values).toHaveLength(6);
     await adapter.updateAdvertFields?.('stub-1', publishInput, { deliveryPackageIds: ['x'] });
-    expect(await adapter.advertFields?.('stub-1')).toMatchObject({ deliveryPackageIds: ['x'] });
+    expect(await adapter.advertFields?.('stub-1', { title: publishInput.productName, price: publishInput.price })).toMatchObject({
+      deliveryPackageIds: ['x'],
+      drifted: false,
+    });
   });
 });
 
@@ -1362,7 +1370,7 @@ describe('OLX advert write guards', () => {
   it('reads a numeric attribute value as set', async () => {
     const adapter = advertAdapter(current({ category_id: 1984, attributes: [{ code: 'year', value: 2020 }] }));
 
-    const fields = await adapter.advertFields?.('olx-1');
+    const fields = await adapter.advertFields?.('olx-1', SENT);
 
     expect(fields?.attributes).toEqual([{ code: 'year', value: '2020' }]);
   });
@@ -1382,5 +1390,26 @@ describe('OLX advert write guards', () => {
     await expect(adapter.updateListing('olx-1', { price: 299 }, publishInput)).rejects.toThrow();
 
     expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
+  });
+
+  it.each([
+    ['the title', { title: 'Camera edited on OLX' }],
+    ['the price', { price: { value: 300, currency: 'PLN' } }],
+    ['a missing title', { title: undefined }],
+    ['a missing price', { price: null }],
+  ])('reports drift and writes no advert fields when OLX changed %s', async (_label, over) => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(current({ category_id: 1984, ...over }), requests);
+
+    expect(await adapter.advertFields?.('olx-1', SENT)).toMatchObject({ drifted: true });
+    await expect(
+      adapter.updateAdvertFields?.('olx-1', publishInput, { attributes: [{ code: 'type', value: 'LED' }] }),
+    ).rejects.toThrow('The advert changed on OLX since the last sync');
+    expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
+  });
+
+  it('reports no drift when the title and price match', async () => {
+    const adapter = advertAdapter(current({ category_id: 1984 }));
+    expect(await adapter.advertFields?.('olx-1', SENT)).toMatchObject({ drifted: false });
   });
 });

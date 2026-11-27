@@ -1,5 +1,6 @@
-// The attributes check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category
-// mismatch stops the check before any write. match: empty single-choice attributes whose one
+// The attributes check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category out
+// of sync with OLX, a drifted advert, or a category mismatch the owner has not kept stops the check
+// before any write or proposal. match: empty single-choice attributes whose one
 // allowed value appears as a whole word in the product's name or description. write (only with such
 // values): one advert update, guarded by an idempotency key on the listing and the values, recorded
 // as an applied auto_apply event; a failed or abandoned keyed write is retried on its own event.
@@ -13,10 +14,13 @@ import type { AdvertAttributesChangePayload, HermesEventType, VerdictCheck } fro
 import { HermesEvent } from '../../../domain/entities/HermesEvent';
 import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
 import {
+  ADVERT_DRIFTED,
   ATTRIBUTES_WRITE_IN_PROGRESS,
+  CATEGORY_OUT_OF_SYNC,
   attributeDroppedReason,
   attributeIdempotencyKey,
   attributesCheck,
+  blockedCheck,
   categoryFirstCheck,
   containsWholeWord,
   fillableAttributes,
@@ -30,7 +34,7 @@ import { buildAttributeChoicePrompt, parseAttributeChoices } from '../../../infr
 import { researchItemFromProduct } from '../../../infrastructure/external/priceResearchPrompts';
 import { withAiOperation } from '../../ai/aiUsageScope';
 import type { AdvertFieldsService } from '../AdvertFieldsService';
-import { requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
+import { categoryBlocks, requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
 import type { CheckContext, CheckGraph } from './SaleVerdictGraph';
 
 const PROPOSAL_TYPE: HermesEventType = 'suggested_advert_attributes';
@@ -210,9 +214,12 @@ export function buildAttributesCheck(deps: AttributesCheckDeps): CheckGraph {
         snapshot = await requireOlxSnapshot(ctx);
         return {};
       })
-      .addNode('categoryGate', () =>
-        snapshot.categoryMismatch ? { check: categoryFirstCheck('attributes', ctx.now()) } : {},
-      )
+      .addNode('categoryGate', async () => {
+        if (snapshot.outOfSync) return { check: blockedCheck('attributes', CATEGORY_OUT_OF_SYNC, ctx.now()) };
+        if (await categoryBlocks(deps.events, ctx, snapshot)) return { check: categoryFirstCheck('attributes', ctx.now()) };
+        if (snapshot.drifted) return { check: blockedCheck('attributes', ADVERT_DRIFTED, ctx.now()) };
+        return {};
+      })
       .addNode('match', () => ({
         verifiable: verifiableValues(fillableAttributes(snapshot.categoryAttributes, snapshot.attributes), {
           name: product.name,

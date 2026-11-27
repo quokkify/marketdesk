@@ -130,10 +130,13 @@ export interface IMarketplaceAdapter {
   // Advert completeness: the marketplace catalogue and the advert's own category, attributes and delivery.
   categorySuggestions?(title: string): Promise<string[]>;
   categoryAttributes?(categoryId: string): Promise<OlxCategoryAttribute[]>;
+  // `drifted`: OLX holds another title or price than `sent`, the ones MarketDesk would write.
   advertFields?(
     externalListingId: string,
-  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[] }>;
-  // Keeps every other attribute and the delivery packages the seller set; only the given fields change.
+    sent: { title: string; price: number },
+  ): Promise<{ categoryId: string; attributes: AdvertAttribute[]; deliveryPackageIds: string[]; drifted: boolean }>;
+  // Keeps every other attribute and the delivery packages the seller set; only the given fields change, and
+  // never an attribute already set on the advert. Writes nothing when the advert drifted.
   updateAdvertFields?(
     externalListingId: string,
     current: ListingPublishInput,

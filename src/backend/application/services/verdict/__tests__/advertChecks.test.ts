@@ -25,6 +25,7 @@ import type {
   VerdictCheckName,
 } from '../../../../../shared/types';
 import type { AICompletionRequest } from '../../../../infrastructure/external/HermesAI';
+import { InvalidStateError } from '../../../../domain/shared/DomainError';
 import { AdvertFieldsService } from '../../AdvertFieldsService';
 import { CategoryMismatchProposals } from '../../CategoryMismatchProposals';
 import { SALE_VERDICT_GRAPH_VERSION, SaleVerdictGraph, type CheckGraph } from '../SaleVerdictGraph';
@@ -77,6 +78,9 @@ class FakeOlxAdapter {
   dropOnUpdate = new Set<string>();
   // The next update fails before OLX applies it.
   failNextUpdate = false;
+  // OLX holds another title or price than MarketDesk would send.
+  drifted = false;
+  readonly reads: Array<{ title: string; price: number }> = [];
   readonly updates: Array<{ attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] }> = [];
 
   async categorySuggestions(): Promise<string[]> {
@@ -85,11 +89,13 @@ class FakeOlxAdapter {
   async categoryAttributes(): Promise<OlxCategoryAttribute[]> {
     return CATEGORY_ATTRIBUTES;
   }
-  async advertFields() {
+  async advertFields(_externalListingId: string, sent: { title: string; price: number }) {
+    this.reads.push(sent);
     return {
       categoryId: this.categoryId,
       attributes: this.attributes.map((a) => ({ ...a })),
       deliveryPackageIds: [...this.deliveryPackageIds],
+      drifted: this.drifted,
     };
   }
   async updateAdvertFields(
@@ -148,6 +154,8 @@ function setup(opts: {
   mode?: string | null;
   hermes?: FakeHermes | null;
   previous?: SaleVerdict | null;
+  // The OLX category stored on the listing at its last sync.
+  storedCategoryId?: string;
 } = {}) {
   const products = new InMemoryProductRepository();
   products.items.set(PID, unwrap(Product.create({
@@ -159,6 +167,7 @@ function setup(opts: {
   listings.items.set('l1', unwrap(Listing.create({
     id: 'l1', productId: PID, marketplaceId: 'm1', price: money(400),
     status: opts.live === false ? 'draft' : 'live', marketplaceListingId: 'ext-1', externalUrl: ADVERT_URL,
+    marketplaceCategory: opts.storedCategoryId ? category(opts.storedCategoryId) : null,
   })));
   const marketplaces = new InMemoryMarketplaceRepository();
   marketplaces.items.set('m1', unwrap(Marketplace.create({ id: 'm1', workspaceId: WS, key: 'olx', name: 'OLX', connected: true })));
@@ -216,7 +225,8 @@ function setup(opts: {
   const run = (scope: VerdictCheckName[] = ALL) =>
     graph.run({ workspaceId: WS, productId: PID, runId: `run-${++runs}`, scope, signal: new AbortController().signal });
   const eventsOfType = (type: string) => [...events.items.values()].filter((event) => event.type === type);
-  return { run, adapter, events, eventsOfType, pageCalls, resolve };
+  const fields = new AdvertFieldsService({ products, listings, marketplaces, adapters });
+  return { run, adapter, events, eventsOfType, pageCalls, resolve, fields };
 }
 
 describe('advert completeness checks in the sale verdict', () => {
@@ -328,7 +338,104 @@ describe('advert completeness checks in the sale verdict', () => {
     expect(pageCalls).toEqual([]);
   });
 
+  // Regression guard: an empty suggestion list read as a mismatch and raised a critical recreation recommendation.
+  it('asks a human about the category when OLX gives no suggestion, and lets the other checks run', async () => {
+    const { run, adapter, eventsOfType } = setup();
+    adapter.suggestions = [];
+
+    const verdict = await run();
+
+    expect(verdict.checks.category).toMatchObject({
+      status: 'needs_human',
+      reasons: [{ code: 'category_unknown', message: 'OLX gave no category suggestion for this title' }],
+      refs: { eventIds: [] },
+    });
+    expect(eventsOfType('olx_category_mismatch')).toEqual([]);
+    expect(verdict.checks.attributes?.status).toBe('ready');
+    expect(adapter.updates).toEqual([{ attributes: [{ code: 'brand', value: 'apple' }] }]);
+    expect(verdict.checks.delivery?.status).toBe('ready');
+  });
+
+  // Regression guard: the stored category was judged although OLX had moved the advert to another one.
+  it('stops all three checks when the stored category differs from the one on OLX', async () => {
+    const hermes = new FakeHermes({ size: '{"size": "M"}', attributes: '{"values": {"type": "in_ear"}}' });
+    const { run, adapter, events, pageCalls } = setup({ storedCategoryId: '2000', mode: 'NotEligible', hermes });
+    adapter.suggestions = ['2000'];
+
+    const verdict = await run();
+
+    const outOfSync = {
+      status: 'needs_human',
+      reasons: [{ code: 'category_out_of_sync', message: 'The OLX category changed since the last sync; sync the listing first' }],
+    };
+    expect(verdict.checks.category).toMatchObject(outOfSync);
+    expect(verdict.checks.attributes).toMatchObject(outOfSync);
+    expect(verdict.checks.delivery).toMatchObject(outOfSync);
+    expect(events.items.size).toBe(0);
+    expect(adapter.updates).toEqual([]);
+    expect(pageCalls).toEqual([]);
+    expect(hermes.prompts).toEqual([]);
+  });
+
+  it('judges the OLX category when the stored one matches it', async () => {
+    const { run, adapter } = setup({ storedCategoryId: '1973' });
+
+    const verdict = await run();
+
+    expect(verdict.checks.category?.status).toBe('ready');
+    expect(adapter.updates).toHaveLength(1);
+  });
+
+  // Regression guard: the auto-fill PUT replayed MarketDesk's title and price over the ones the seller changed on OLX.
+  it('writes nothing and proposes nothing on an advert that drifted on OLX', async () => {
+    const hermes = new FakeHermes({ size: '{"size": "M"}', attributes: '{"values": {"type": "in_ear"}}' });
+    const { run, adapter, events } = setup({ mode: 'NotEligible', hermes });
+    adapter.drifted = true;
+
+    const verdict = await run();
+
+    const drifted = {
+      status: 'needs_human',
+      reasons: [{ code: 'advert_drifted', message: 'The advert changed on OLX since the last sync; sync the listing first' }],
+    };
+    expect(verdict.checks.attributes).toMatchObject(drifted);
+    expect(verdict.checks.delivery).toMatchObject(drifted);
+    expect(adapter.reads[0]).toEqual({ title: 'Słuchawki Apple AirPods 4', price: 400 });
+    expect(adapter.updates).toEqual([]);
+    expect(events.items.size).toBe(0);
+    expect(hermes.prompts).toEqual([]);
+  });
+
+  it('refuses an advert field write on a drifted advert with a clear message', async () => {
+    const { adapter, fields } = setup();
+    adapter.drifted = true;
+
+    const error = await fields.apply(WS, 'l1', { deliveryPackageIds: ['p-m-inpost'] }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(InvalidStateError);
+    expect((error as Error).message).toBe('The advert changed on OLX since the last sync; sync the listing first');
+    expect(adapter.updates).toEqual([]);
+  });
+
   describe('across runs', () => {
+    it('accepts a category whose mismatch recommendation the owner dismissed', async () => {
+      const { run, adapter, eventsOfType } = setup();
+      adapter.suggestions = ['2000'];
+      await run();
+      unwrap(eventsOfType('olx_category_mismatch')[0]!.dismiss(NOW));
+
+      const verdict = await run();
+
+      expect(verdict.checks.category).toMatchObject({
+        status: 'ready',
+        reasons: [{ code: 'category_kept_by_owner', message: 'You kept this OLX category' }],
+      });
+      expect(eventsOfType('olx_category_mismatch')).toHaveLength(1);
+      expect(verdict.checks.attributes?.status).toBe('ready');
+      expect(adapter.updates).toHaveLength(1);
+      expect(verdict.checks.delivery?.status).toBe('ready');
+    });
+
     const resetAdvert = (adapter: FakeOlxAdapter) => {
       adapter.attributes = [{ code: 'state', value: 'used' }];
     };

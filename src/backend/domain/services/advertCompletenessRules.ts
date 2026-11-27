@@ -114,11 +114,31 @@ export function attributesCheck(input: {
 export function categoryCheck(input: {
   listingCategoryId: string;
   suggestionIds: string[];
+  // The owner dismissed the mismatch recommendation for this listing and category.
+  keptByOwner?: boolean;
   now: Date;
   eventIds: string[];
 }): VerdictCheck {
-  const { listingCategoryId, suggestionIds, now, eventIds } = input;
+  const { listingCategoryId, suggestionIds, keptByOwner = false, now, eventIds } = input;
   if (suggestionIds.includes(listingCategoryId)) return makeCheck('category', 'ready', [], now, { eventIds });
+  if (suggestionIds.length === 0) {
+    return makeCheck(
+      'category',
+      'needs_human',
+      [{ code: 'category_unknown', message: 'OLX gave no category suggestion for this title' }],
+      now,
+      { eventIds },
+    );
+  }
+  if (keptByOwner) {
+    return makeCheck(
+      'category',
+      'ready',
+      [{ code: 'category_kept_by_owner', message: 'You kept this OLX category' }],
+      now,
+      { eventIds },
+    );
+  }
   return makeCheck(
     'category',
     'fix',
@@ -151,6 +171,12 @@ export function deliveryCheck(input: {
       message: 'OLX does not offer delivery on this advert although packages are set; check it in OLX',
     });
   }
+  if (mode !== DELIVERY_OFF) {
+    return done('needs_human', {
+      code: 'delivery_mode_unknown',
+      message: 'OLX reports an unknown delivery state for this advert; check it in OLX',
+    });
+  }
   if (!categoryOffersDelivery) {
     return done('fix', {
       code: 'delivery_unavailable_in_category',
@@ -171,6 +197,21 @@ export function categoryFirstCheck(check: 'attributes' | 'delivery', now: Date):
   return makeCheck(check, 'needs_human', [{ code: 'category_first', message: 'Fix the OLX category first' }], now, {
     eventIds: [],
   });
+}
+
+export const CATEGORY_OUT_OF_SYNC: VerdictReason = {
+  code: 'category_out_of_sync',
+  message: 'The OLX category changed since the last sync; sync the listing first',
+};
+
+export const ADVERT_DRIFTED: VerdictReason = {
+  code: 'advert_drifted',
+  message: 'The advert changed on OLX since the last sync; sync the listing first',
+};
+
+// A check that stops before any write or proposal and waits for the owner.
+export function blockedCheck(check: VerdictCheckName, reason: VerdictReason, now: Date): VerdictCheck {
+  return makeCheck(check, 'needs_human', [{ ...reason }], now, { eventIds: [] });
 }
 
 // The reason for a value MarketDesk wrote that OLX did not keep.

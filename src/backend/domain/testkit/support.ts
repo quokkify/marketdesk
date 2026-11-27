@@ -217,6 +217,15 @@ export class InMemoryEventRepository implements IEventRepository {
   async findPendingReview(workspaceId: string): Promise<HermesEvent[]> {
     return this.findByStatus(workspaceId, 'pending_review');
   }
+  async findByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+  ): Promise<HermesEvent[]> {
+    return (await this.findByWorkspace(workspaceId))
+      .filter((e) => e.productId === productId && types.includes(e.type))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   async findPendingByProduct(
     workspaceId: string,
     productId: string,

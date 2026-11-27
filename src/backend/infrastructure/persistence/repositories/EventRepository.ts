@@ -78,6 +78,20 @@ export class EventRepository implements IEventRepository {
     return this.findByStatus(workspaceId, 'pending_review');
   }
 
+  async findByProduct(
+    workspaceId: string,
+    productId: string,
+    types: readonly HermesEventType[],
+  ): Promise<HermesEvent[]> {
+    const { rows } = await query<HermesEventRow>(
+      `${EVENT_SELECT} WHERE workspace_id = $1 AND product_id = $2 AND type = ANY($3::text[])
+       ORDER BY created_at DESC`,
+      [workspaceId, productId, [...types]],
+      this.queryClient,
+    );
+    return rows.map((row) => EventMapper.toDomain(row));
+  }
+
   async findPendingByProduct(
     workspaceId: string,
     productId: string,
