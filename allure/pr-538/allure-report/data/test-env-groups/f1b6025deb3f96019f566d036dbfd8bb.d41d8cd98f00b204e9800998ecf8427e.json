@@ -1,0 +1,1 @@
+{"id":"f1b6025deb3f96019f566d036dbfd8bb.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/olxSearchPage.test.ts#olxSearchUrl throws on an unsafe query and on a page below 1","name":"throws on an unsafe query and on a page below 1","status":"passed","testResultsByEnv":{"default":"fd379ce29ed4c4d5c92c1cd58ef635e3"}}

@@ -1,0 +1,1 @@
+{"id":"8f07a72a37f1fd16f4f068ef46fba2a8.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#probeFindings skips the price finding with only two priced cards","name":"skips the price finding with only two priced cards","status":"passed","testResultsByEnv":{"default":"de74aecccfe3047c70991c6dbbd02cac"}}

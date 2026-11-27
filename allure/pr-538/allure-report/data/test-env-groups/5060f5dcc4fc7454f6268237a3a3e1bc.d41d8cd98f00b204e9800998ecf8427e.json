@@ -1,0 +1,1 @@
+{"id":"5060f5dcc4fc7454f6268237a3a3e1bc.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#validatePriceEstimate rejects non-finite or non-positive numbers","name":"rejects non-finite or non-positive numbers","status":"passed","testResultsByEnv":{"default":"8426213ac60b23c2e2cced03a610cdc7"}}
