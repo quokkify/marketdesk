@@ -113,6 +113,16 @@ const STUB_ADVERT_DEFAULT_ATTRIBUTES: OlxAttribute[] = [
   { code: 'brand', value: 'sandbox-seller-brand' },
 ];
 
+// A remote attribute holds a seller value: a non-null value or a non-empty values list.
+function isSetAttribute(attribute: OlxAttribute): boolean {
+  const value = attribute.value as unknown;
+  return (value !== null && value !== undefined) || (Array.isArray(attribute.values) && attribute.values.length > 0);
+}
+
+function isScalar(value: unknown): value is string | number {
+  return typeof value === 'string' || typeof value === 'number';
+}
+
 // Keeps the remote order; an owned code replaces the remote value in place and new owned codes are appended.
 export function mergeAdvertAttributes(remote: OlxAttribute[], owned: OlxAttribute[]): OlxAttribute[] {
   const ownedByCode = new Map(owned.map((attribute) => [attribute.code, attribute]));
@@ -329,6 +339,8 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   }
 
   // PUT replaces the whole advert: without the remote attributes and ad_delivery OLX drops what the seller set.
+  // The single write boundary: it reads the advert fresh, writes nothing after an unreadable read, and
+  // never replaces an attribute that is set on OLX.
   private async putAdvert(
     externalListingId: string,
     input: ListingPublishInput,
@@ -337,9 +349,10 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
   ): Promise<void> {
     const body = this.buildAdvertPayload(input, categoryId, { configuredDelivery: false });
     const remote = await this.fetchRemoteAdvertState(externalListingId);
+    const setRemotely = new Set(remote.attributes.filter(isSetAttribute).map((attribute) => attribute.code));
     const attributes = mergeAdvertAttributes(remote.attributes, [
       ...((body.attributes as OlxAttribute[] | undefined) ?? []),
-      ...(fields.attributes ?? []),
+      ...(fields.attributes ?? []).filter((attribute) => !setRemotely.has(attribute.code)),
     ]);
     if (attributes.length > 0) body.attributes = attributes;
     const packages = fields.deliveryPackageIds ?? remote.deliveryPackageIds;
@@ -428,10 +441,9 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         // A multi-value attribute has no string `value`; it is passed on with its values joined so the checks count it as set and never fill it.
         attributes: remote.attributes.map((attribute) => ({
           code: attribute.code,
-          value:
-            typeof attribute.value === 'string'
-              ? attribute.value
-              : (attribute.values ?? []).filter((v): v is string => typeof v === 'string').join(','),
+          value: isScalar(attribute.value)
+            ? String(attribute.value)
+            : (attribute.values ?? []).filter(isScalar).map(String).join(','),
         })),
         deliveryPackageIds: remote.deliveryPackageIds.map(String),
       };
@@ -444,19 +456,28 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     return Array.isArray(inner) ? inner : [];
   }
 
-  private async fetchRemoteAdvertState(
-    externalListingId: string,
-  ): Promise<{ attributes: OlxAttribute[]; deliveryPackageIds: Array<string | number>; categoryId: string | null }> {
+  // An advert read without an advert id is unreadable: it throws, so nothing is written after it.
+  private async fetchRemoteAdvertState(externalListingId: string): Promise<{
+    attributes: OlxAttribute[];
+    deliveryPackageIds: Array<string | number>;
+    categoryId: string | null;
+  }> {
     const res = await this.http.request<unknown>({
       method: 'GET',
       url: `${this.baseUrl}/adverts/${externalListingId}`,
     });
-    if (!res.data || typeof res.data !== 'object') return { attributes: [], deliveryPackageIds: [], categoryId: null };
-    const advert = this.unwrapAdvert(res.data as OlxAdvertResponse | OlxResponseEnvelope<OlxAdvertResponse>);
-    const ids = advert?.ad_delivery?.delivery_package_ids;
-    const rawAttributes = advert?.attributes;
+    const unwrapped =
+      res.data && typeof res.data === 'object'
+        ? (this.unwrapAdvert(res.data as OlxAdvertResponse | OlxResponseEnvelope<OlxAdvertResponse>) as unknown)
+        : null;
+    const advert = unwrapped && typeof unwrapped === 'object' ? (unwrapped as OlxAdvertResponse) : null;
+    if (!advert || !isScalar(advert.id) || String(advert.id) === '') {
+      throw new Error(`OLX returned an unreadable advert ${externalListingId}`);
+    }
+    const ids = advert.ad_delivery?.delivery_package_ids;
+    const rawAttributes = advert.attributes;
     return {
-      categoryId: advert ? (this.categoryId(advert) ?? null) : null,
+      categoryId: this.categoryId(advert) ?? null,
       attributes: Array.isArray(rawAttributes)
         ? rawAttributes.filter(
             (a): a is OlxAttribute => !!a && typeof a === 'object' && typeof (a as OlxAttribute).code === 'string',

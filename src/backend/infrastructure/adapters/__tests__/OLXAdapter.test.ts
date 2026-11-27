@@ -116,6 +116,7 @@ describe('OLXAdapter', () => {
     const bodies: unknown[] = [];
     const http = mockClient((config) => {
       if (config.method !== 'GET') bodies.push(config.body);
+      if (config.method === 'GET') return { status: 200, data: { id: 123, status: 'active' } };
       return config.method === 'POST'
         ? { status: 201, data: { id: 123, status: 'active' } }
         : { status: 204, data: {} };
@@ -814,7 +815,9 @@ describe('OLXAdapter', () => {
     const adapter = new OLXAdapter(
       mockClient((config) => {
         captured = config;
-        return { status: 204, data: {} };
+        return config.method === 'GET'
+          ? { status: 200, data: { id: 'olx-1', status: 'active' } }
+          : { status: 204, data: {} };
       }),
       fastOptions,
       realConfig,
@@ -834,7 +837,9 @@ describe('OLXAdapter', () => {
     const adapter = new OLXAdapter(
       mockClient((config) => {
         captured = config;
-        return { status: 204, data: {} };
+        return config.method === 'GET'
+          ? { status: 200, data: { id: 'olx-1', status: 'active' } }
+          : { status: 204, data: {} };
       }),
       fastOptions,
       realConfig,
@@ -1302,5 +1307,80 @@ describe('OLX catalogue and advert field update', () => {
     expect(attributes.find((a) => a.code === 'delivery')?.values).toHaveLength(6);
     await adapter.updateAdvertFields?.('stub-1', publishInput, { deliveryPackageIds: ['x'] });
     expect(await adapter.advertFields?.('stub-1')).toMatchObject({ deliveryPackageIds: ['x'] });
+  });
+});
+
+describe('OLX advert write guards', () => {
+  const SENT = { title: publishInput.productName, price: publishInput.price };
+
+  function advertAdapter(advert: unknown, requests: HttpRequestConfig[] = []) {
+    return new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        return config.method === 'GET' ? { status: 200, data: advert } : { status: 204, data: {} };
+      }),
+      fastOptions,
+      realConfig,
+    );
+  }
+
+  const current = (over: Record<string, unknown> = {}) => ({
+    data: { id: 'olx-1', status: 'active', title: SENT.title, price: { value: SENT.price, currency: 'PLN' }, ...over },
+  });
+
+  // Regression guard: the requested value replaced what the seller set on OLX after the check had read the advert.
+  it('never overwrites an attribute that is set on OLX by the time of the write', async () => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(
+      current({
+        attributes: [
+          { code: 'brand', value: 'samsung' },
+          { code: 'features', value: null, values: ['a'] },
+          { code: 'type', value: null, values: [] },
+        ],
+      }),
+      requests,
+    );
+
+    await adapter.updateAdvertFields?.('olx-1', publishInput, {
+      attributes: [
+        { code: 'brand', value: 'apple' },
+        { code: 'features', value: 'b' },
+        { code: 'type', value: 'LED' },
+      ],
+    });
+
+    const body = requests.find((r) => r.method === 'PUT')?.body as { attributes: unknown[] };
+    expect(body.attributes).toEqual([
+      { code: 'brand', value: 'samsung' },
+      { code: 'features', value: null, values: ['a'] },
+      { code: 'type', value: 'LED' },
+      { code: 'state', value: 'used' },
+    ]);
+  });
+
+  it('reads a numeric attribute value as set', async () => {
+    const adapter = advertAdapter(current({ category_id: 1984, attributes: [{ code: 'year', value: 2020 }] }));
+
+    const fields = await adapter.advertFields?.('olx-1');
+
+    expect(fields?.attributes).toEqual([{ code: 'year', value: '2020' }]);
+  });
+
+  // Regression guard: an unreadable 200 read gave empty attributes and packages, and the full-replace PUT wiped both.
+  it.each([
+    ['an empty body', ''],
+    ['a null advert', { data: null }],
+    ['an advert without an id', { data: { status: 'active', attributes: [] } }],
+  ])('writes nothing after %s', async (_label, advert) => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = advertAdapter(advert, requests);
+
+    await expect(
+      adapter.updateAdvertFields?.('olx-1', publishInput, { deliveryPackageIds: ['pkg-m-1'] }),
+    ).rejects.toThrow();
+    await expect(adapter.updateListing('olx-1', { price: 299 }, publishInput)).rejects.toThrow();
+
+    expect(requests.filter((r) => r.method === 'PUT')).toEqual([]);
   });
 });
