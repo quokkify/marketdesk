@@ -9,7 +9,7 @@
 # PUT /mockserver/status instead of a healthcheck.
 services:
   mock-server:
-    image: mockserver/mockserver:7.6.0@sha256:80b3b1a26f3553d0c81a3f3896b5b7274c17b2a2e52f0fd2b28e246bc9efa290
+    image: mockserver/mockserver:9.4.0@sha256:b54cb4aa72605b43ff9b728e5750d7beceb8f2d203d77ad9cb47743c5446ded6
     command: -serverPort 1080
     environment:
       MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations/*.json
