@@ -1,0 +1,1 @@
+{"id":"a3bea50f44190f01aa87e1dd078a14c6.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#applyLadderRules lowers start and floor to the ceiling","name":"lowers start and floor to the ceiling","status":"passed","testResultsByEnv":{"default":"b34591914e971bfd6d7ad96e0b07c619"}}

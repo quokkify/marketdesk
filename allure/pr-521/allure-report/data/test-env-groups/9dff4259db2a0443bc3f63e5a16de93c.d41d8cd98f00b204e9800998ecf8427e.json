@@ -1,0 +1,1 @@
+{"id":"9dff4259db2a0443bc3f63e5a16de93c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/olxSearchPage.test.ts#parseOlxSearchPage skips an ad without an id","name":"skips an ad without an id","status":"passed","testResultsByEnv":{"default":"3f331986dee5badaeeb29968f332450b"}}

@@ -1,0 +1,1 @@
+{"id":"a6408969fe92518dbb2196389e218c03.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/sanitize.test.ts#sanitize ignores registered values shorter than 8 characters","name":"ignores registered values shorter than 8 characters","status":"passed","testResultsByEnv":{"default":"a5f84e98bde3a309a4c31af9c30a8e20"}}

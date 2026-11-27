@@ -1,0 +1,1 @@
+{"id":"ec7edfe1894d0000ba7e2a206ea70c25.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/persistence/__tests__/revokeTokens.test.ts#revokeTokens revokes the sessions of a known e-mail, whatever its case","name":"revokes the sessions of a known e-mail, whatever its case","status":"passed","testResultsByEnv":{"default":"08a876f452840ac4821e07bea6591705"}}
