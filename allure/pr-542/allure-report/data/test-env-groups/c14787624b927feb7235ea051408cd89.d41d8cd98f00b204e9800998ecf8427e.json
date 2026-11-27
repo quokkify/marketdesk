@@ -1,0 +1,1 @@
+{"id":"c14787624b927feb7235ea051408cd89.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.test.ts#OLX advert write guards writes nothing after an advert without an id","name":"writes nothing after an advert without an id","status":"passed","testResultsByEnv":{"default":"f699235ec5a74040922bf8d2a1ebd6d9"}}

@@ -1,0 +1,1 @@
+{"id":"fced7c4adf27bcd0f74c423a8688a435.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/advertFieldPrompts.test.ts#parseAttributeChoices returns [] for non-JSON or a wrong shape","name":"returns [] for non-JSON or a wrong shape","status":"passed","testResultsByEnv":{"default":"3114b50d11ec32233309f50f1a83f73a"}}

@@ -1,0 +1,1 @@
+{"id":"6091ca50c11b1a4fb998f6c325191e76.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/olxAdvertPage.test.ts#parseOlxAdvertDelivery returns null for a page without state","name":"returns null for a page without state","status":"passed","testResultsByEnv":{"default":"c298804c45c41add708c9c03cf562aad"}}

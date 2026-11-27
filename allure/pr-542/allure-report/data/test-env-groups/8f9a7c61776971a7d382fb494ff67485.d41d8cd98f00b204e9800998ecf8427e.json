@@ -1,0 +1,1 @@
+{"id":"8f9a7c61776971a7d382fb494ff67485.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.threads.test.ts#OLXAdapter thread id guard rejects thread id \"\" before any request","name":"rejects thread id \"\" before any request","status":"passed","testResultsByEnv":{"default":"8389f1af9880296ae434d51ad2b8a74d"}}

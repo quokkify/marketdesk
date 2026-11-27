@@ -1,0 +1,1 @@
+{"id":"aed9e618f775c498bfcd3f26829612b1.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#missingQueryWords skips short words and duplicates","name":"skips short words and duplicates","status":"passed","testResultsByEnv":{"default":"6287674a472052ce2b22a85bfce94e17"}}

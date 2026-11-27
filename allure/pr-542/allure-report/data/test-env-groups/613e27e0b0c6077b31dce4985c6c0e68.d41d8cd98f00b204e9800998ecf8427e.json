@@ -1,0 +1,1 @@
+{"id":"613e27e0b0c6077b31dce4985c6c0e68.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/__tests__/api.integration.test.ts#Presentation API sign out refuses sign-out with a revoked token","name":"refuses sign-out with a revoked token","status":"passed","testResultsByEnv":{"default":"4835712f62f9cc8d97f6a2f784d2a75b"}}

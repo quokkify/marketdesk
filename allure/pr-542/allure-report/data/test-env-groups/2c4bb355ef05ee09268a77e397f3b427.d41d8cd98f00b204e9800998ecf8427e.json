@@ -1,0 +1,1 @@
+{"id":"2c4bb355ef05ee09268a77e397f3b427.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#missingQueryWords returns normalised absent words in query order","name":"returns normalised absent words in query order","status":"passed","testResultsByEnv":{"default":"a6c438d441d3b360864ff6cd1b4afffe"}}

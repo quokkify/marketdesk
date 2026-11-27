@@ -1,0 +1,1 @@
+{"id":"5d7af24f1b025828bb55448269a5efc2.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/advertCompletenessRules.test.ts#attributeIdempotencyKey does not depend on the order of the values","name":"does not depend on the order of the values","status":"passed","testResultsByEnv":{"default":"5e1ce4a7613390ba969d4e127740c9a6"}}
