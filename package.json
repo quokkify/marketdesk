@@ -97,7 +97,7 @@
     "@typescript-eslint/parser": "8.72.0",
     "@vitejs/plugin-react": "6.1.2",
     "allure-jest": "3.14.0",
-    "concurrently": "10.0.6",
+    "concurrently": "10.0.7",
     "eslint": "10.13.0",
     "jest": "30.5.2",
     "prettier": "3.9.10",
