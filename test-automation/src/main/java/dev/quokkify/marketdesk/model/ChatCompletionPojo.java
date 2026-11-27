@@ -25,10 +25,18 @@ public record ChatCompletionPojo(String object, List<Choice> choices) {
     return answering(JsonConverter.toJson(new QueriesAnswer(queries)));
   }
 
+  // The parcel size answer the delivery check expects: {"size": "S|M|L|XL"}.
+  public static ChatCompletionPojo parcelSize(String size) {
+    return answering(JsonConverter.toJson(new ParcelSizeAnswer(size)));
+  }
+
   public String toJson() {
     return JsonConverter.toJson(this);
   }
 
   private record QueriesAnswer(List<String> queries) {
+  }
+
+  private record ParcelSizeAnswer(String size) {
   }
 }

@@ -9,6 +9,7 @@ import java.util.List;
 import dev.quokkify.marketdesk.model.ChatCompletionPojo;
 import dev.quokkify.marketdesk.model.MockServerExpectationPojo;
 import dev.quokkify.marketdesk.model.MockServerVerificationPojo;
+import dev.quokkify.marketdesk.model.OlxAdvertPagePojo;
 import dev.quokkify.marketdesk.model.OlxSearchPagePojo;
 import dev.quokkify.marketdesk.service.HermesMockService;
 import dev.quokkify.marketdesk.verification.HermesMockVerification;
@@ -19,9 +20,10 @@ import io.restassured.response.ValidatableResponse;
 import org.apache.http.HttpStatus;
 
 // Canned answers of the stand's MockServer: the Hermes research profile, addressed per product name and graph node;
-// the buyer-queries call of the main profile, addressed per product name; and synthetic OLX search pages, addressed
-// per query. Each test uses its own product name and query, so parallel tests never share an answer. Nothing here
-// clears the mock: other tests' answers stay in place.
+// the buyer-queries and parcel size calls of the main profile, addressed per product name; synthetic OLX search pages,
+// addressed per query; and synthetic OLX advert pages, addressed per advert slug. Each test uses its own product name,
+// query and slug, so parallel tests never share an answer. Nothing here clears the mock: other tests' answers stay in
+// place.
 public class HermesMockSteps extends ApiSteps<HermesMockVerification> {
 
   private static final String ANSWERS = "hermes/research/";
@@ -33,6 +35,8 @@ public class HermesMockSteps extends ApiSteps<HermesMockVerification> {
   private static final int OTHERS_BEFORE_OWN_ON_PAGE_2 = 16;
   private static final long FIRST_OTHER_ADVERT_ID = 100_000_001L;
   private static final String NO_PAGE = "";
+  private static final int FIRST_ADVERT_PAGE = 0;
+  private static final int SWITCHED_ADVERT_PAGE = 1;
 
   private final HermesMockService service = new HermesMockService();
 
@@ -106,6 +110,31 @@ public class HermesMockSteps extends ApiSteps<HermesMockVerification> {
   @Step("Ask the mock whether the OLX search for {query} was requested {count} times")
   public ValidatableResponse checkSearchRequests(String query, int count) {
     return service.verify(MockServerVerificationPojo.searchRequests(query, count));
+  }
+
+  @Step("Hermes picks the parcel size {size} for {productName}")
+  public void answerParcelSize(String productName, String size) {
+    register(MockServerExpectationPojo.parcelSizeAnswer(productName, HttpStatus.SC_OK,
+        ChatCompletionPojo.parcelSize(size).toJson()));
+  }
+
+  @Step("The OLX advert page {slug} shows the delivery mode {mode}")
+  public void showAdvertPage(String slug, String mode) {
+    register(MockServerExpectationPojo.advertPageAnswer(OlxAdvertPagePojo.advertPath(slug), HttpStatus.SC_OK,
+        OlxAdvertPagePojo.withDeliveryMode(mode).toHtml(), FIRST_ADVERT_PAGE));
+  }
+
+  // The new answer has a higher priority, so it replaces the one showAdvertPage registered.
+  @Step("The OLX advert page {slug} now shows the delivery mode {mode}")
+  public void switchAdvertPage(String slug, String mode) {
+    register(MockServerExpectationPojo.advertPageAnswer(OlxAdvertPagePojo.advertPath(slug), HttpStatus.SC_OK,
+        OlxAdvertPagePojo.withDeliveryMode(mode).toHtml(), SWITCHED_ADVERT_PAGE));
+  }
+
+  @Step("The OLX advert page {slug} answers {statusCode}")
+  public void failAdvertPage(String slug, int statusCode) {
+    register(MockServerExpectationPojo.advertPageAnswer(OlxAdvertPagePojo.advertPath(slug), statusCode, NO_PAGE,
+        FIRST_ADVERT_PAGE));
   }
 
   private void register(MockServerExpectationPojo expectation) {

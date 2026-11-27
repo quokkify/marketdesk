@@ -22,6 +22,9 @@ public class DatabaseHelper {
       + " published_at = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - make_interval(hours => :hoursLive),"
       + " last_sync_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC', views = :views, watchers = 0, conversations = 0"
       + " WHERE id = :listingId";
+  // The public page URL and the verified category a live advert's sync would have stored.
+  private static final String ADVERT_PAGE = "UPDATE listings SET external_url = :externalUrl,"
+      + " marketplace_category = CAST(:category AS jsonb) WHERE id = :listingId";
 
   public void markListingExpired(String listingId, String advertId) {
     // fromTransaction opens a session for this call only, commits or rolls back, and closes it.
@@ -40,6 +43,18 @@ public class DatabaseHelper {
         .setParameter("advertId", advertId)
         .setParameter("hoursLive", hoursLive)
         .setParameter("views", views)
+        .setParameter("listingId", UUID.fromString(listingId))
+        .executeUpdate());
+    if (updated != 1) {
+      throw new IllegalStateException("Listing " + listingId + " was not found in the database");
+    }
+  }
+
+  // The category is the JSON of a MarketplaceCategoryMetadata.
+  public void setListingAdvertPage(String listingId, String externalUrl, String categoryJson) {
+    int updated = Connection.FACTORY.fromTransaction(session -> session.createNativeMutationQuery(ADVERT_PAGE)
+        .setParameter("externalUrl", externalUrl)
+        .setParameter("category", categoryJson)
         .setParameter("listingId", UUID.fromString(listingId))
         .executeUpdate());
     if (updated != 1) {

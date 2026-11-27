@@ -18,6 +18,8 @@ public record MockServerExpectationPojo(HttpRequest httpRequest, HttpResponse ht
   private static final String OLX_SEARCH = "/olx-search/oferty/q-%s/";
   // The fixed wording of the buyer-queries prompt (listingResponsePrompts.ts); no other main-profile prompt has it.
   private static final String QUERIES_PROMPT = "would type into the marketplace search box";
+  // The fixed wording of the parcel size prompt (advertFieldPrompts.ts); no other main-profile prompt has it.
+  private static final String PARCEL_SIZE_PROMPT = "Pick the OLX parcel size this item fits in";
   private static final String POST = "POST";
   private static final String GET = "GET";
   private static final String REGEX = "REGEX";
@@ -40,6 +42,17 @@ public record MockServerExpectationPojo(HttpRequest httpRequest, HttpResponse ht
     public static HttpRequest queriesCall(String productName) {
       String regex = ".*" + Pattern.quote(QUERIES_PROMPT) + ".*" + Pattern.quote(productName) + ".*";
       return new HttpRequest(POST, MAIN_COMPLETIONS, null, new RequestBody(REGEX, regex));
+    }
+
+    // The parcel size call of the verdict's delivery check for one product.
+    public static HttpRequest parcelSizeCall(String productName) {
+      String regex = ".*" + Pattern.quote(PARCEL_SIZE_PROMPT) + ".*" + Pattern.quote(productName) + ".*";
+      return new HttpRequest(POST, MAIN_COMPLETIONS, null, new RequestBody(REGEX, regex));
+    }
+
+    // One public OLX advert page: the app asks the stand's OLX_SEARCH_BASE_URL host for the advert URL's path.
+    public static HttpRequest advertPage(String path) {
+      return new HttpRequest(GET, path, null, null);
     }
 
     // Every page of the OLX search for one query: the app joins the query words with hyphens.
@@ -74,6 +87,17 @@ public record MockServerExpectationPojo(HttpRequest httpRequest, HttpResponse ht
   public static MockServerExpectationPojo queriesAnswer(String productName, int statusCode, String completion) {
     return new MockServerExpectationPojo(HttpRequest.queriesCall(productName),
         new HttpResponse(statusCode, new ResponseBody(STRING, completion, JSON)), null, null);
+  }
+
+  public static MockServerExpectationPojo parcelSizeAnswer(String productName, int statusCode, String completion) {
+    return new MockServerExpectationPojo(HttpRequest.parcelSizeCall(productName),
+        new HttpResponse(statusCode, new ResponseBody(STRING, completion, JSON)), null, null);
+  }
+
+  // A higher priority wins over an earlier answer for the same page.
+  public static MockServerExpectationPojo advertPageAnswer(String path, int statusCode, String html, int priority) {
+    return new MockServerExpectationPojo(HttpRequest.advertPage(path),
+        new HttpResponse(statusCode, new ResponseBody(STRING, html, HTML)), null, priority);
   }
 
   // Page 1 carries no ?page= parameter, so its expectation matches the path whatever the query string; a later

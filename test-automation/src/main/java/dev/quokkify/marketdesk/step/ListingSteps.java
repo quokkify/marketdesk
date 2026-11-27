@@ -6,7 +6,9 @@ import java.util.UUID;
 import dev.quokkify.marketdesk.helper.DatabaseHelper;
 import dev.quokkify.marketdesk.model.AccountPojo;
 import dev.quokkify.marketdesk.model.ListingRequestPojo;
+import dev.quokkify.marketdesk.model.MarketplaceCategoryPojo;
 import dev.quokkify.marketdesk.model.MarketplaceCategoryRequestPojo;
+import dev.quokkify.marketdesk.model.OlxAdvertPagePojo;
 import dev.quokkify.marketdesk.model.ProductListingPojo;
 import dev.quokkify.marketdesk.model.ProductRequestPojo;
 import dev.quokkify.marketdesk.model.RevivalRequestPojo;
@@ -27,6 +29,8 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   private static final String LIVE = "live";
   private static final Duration PUBLISH_TIMEOUT = Duration.ofSeconds(30);
   private static final Duration POLL_INTERVAL = Duration.ofMillis(500);
+  private static final int ADVERT_HOURS_LIVE = 1;
+  private static final int ADVERT_VIEWS = 0;
 
   private final ListingService service = new ListingService();
   private final ProductService productService = new ProductService();
@@ -95,6 +99,14 @@ public class ListingSteps extends ApiSteps<ListingVerification> {
   @Step("Listing {listingId} is live on OLX as advert {advertId}, published {hoursLive} h ago with {views} views")
   public void markLiveOnOlx(String listingId, String advertId, int hoursLive, int views) {
     database.markListingLive(listingId, advertId, hoursLive, views);
+  }
+
+  // The advert checks read the advert page at the listing's URL and judge the listing's own category. A sync would
+  // store both; the stub stack syncs neither, so they are written in the database.
+  @Step("Listing {listingId} is live on OLX in category {category.providerCategoryId} with the advert page {slug}")
+  public void markLiveOnOlxWithPage(String listingId, String slug, MarketplaceCategoryPojo category) {
+    database.markListingLive(listingId, "qa-olx-" + UUID.randomUUID(), ADVERT_HOURS_LIVE, ADVERT_VIEWS);
+    database.setListingAdvertPage(listingId, OlxAdvertPagePojo.advertUrl(slug), category.toJson());
   }
 
   @Step("Create the given product with an OLX listing and keep both ids")

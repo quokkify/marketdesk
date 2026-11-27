@@ -16,6 +16,8 @@ public class VerdictService extends MarketDeskApiService {
   private static final String RECHECK = "/api/products/%s/recheck";
   private static final String HERMES_SETTINGS = "/api/settings/hermes";
   private static final String WORKSPACE = "/api/workspaces/%s";
+  private static final String PRODUCT_EVENTS = "/api/hermes/events?productId=%s";
+  private static final String APPROVE_EVENT = "/api/hermes/events/%s/approve";
   private static final String EMPTY_BODY = "{}";
   private static final String SEO_ENABLED_PATCH = "{\"agents\": {\"listingSeo\": {\"enabled\": true}}}";
 
@@ -45,6 +47,14 @@ public class VerdictService extends MarketDeskApiService {
 
   public ValidatableResponse getVerdictHistory(String token, String productId, String limit) {
     return get(authorized(token), VERDICT_HISTORY.formatted(productId) + "?limit=" + limit);
+  }
+
+  public ValidatableResponse getProductEvents(String token, String productId) {
+    return get(authorized(token), PRODUCT_EVENTS.formatted(productId));
+  }
+
+  public ValidatableResponse approveEvent(String token, String eventId) {
+    return post(authorized(token), APPROVE_EVENT.formatted(eventId), EMPTY_BODY);
   }
 
   public ValidatableResponse recheck(String token, String productId, String listingId) {
