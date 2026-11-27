@@ -1,0 +1,1 @@
+{"id":"b502699e1432364edd0b09501e61db8b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/conversations/__tests__/screening.test.ts#screenBuyerMessage ignoresNonLuhnDigits","name":"ignoresNonLuhnDigits","status":"passed","testResultsByEnv":{"default":"fc8effbfdc2e76bedb14b7da803b8387"}}

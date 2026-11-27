@@ -1,0 +1,1 @@
+{"id":"bee32dea1091fc70c170b9016be3dae4.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/components/product-detail/hermes/myPricesModel.test.ts#addMyPrice rejects a seenAt that is not an ISO date","name":"rejects a seenAt that is not an ISO date","status":"passed","testResultsByEnv":{"default":"bb672094fe4a941844c132646aa4fc30"}}

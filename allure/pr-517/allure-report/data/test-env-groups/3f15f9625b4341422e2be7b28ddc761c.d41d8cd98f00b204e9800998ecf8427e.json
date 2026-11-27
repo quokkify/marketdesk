@@ -1,0 +1,1 @@
+{"id":"3f15f9625b4341422e2be7b28ddc761c.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/classMatch.test.ts#matchesClass drops a ratio candidate whose value is not a number","name":"drops a ratio candidate whose value is not a number","status":"passed","testResultsByEnv":{"default":"49813faf8d75c12f7f22c0e1d2444b32"}}
