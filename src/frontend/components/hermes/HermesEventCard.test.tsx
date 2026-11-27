@@ -420,3 +420,74 @@ describe('HermesEventCard provenance and marketplace sync', () => {
     expect(html).toContain('>Heuristic<');
   });
 });
+
+describe('advert completeness events', () => {
+  const base: HermesEventCardProps['event'] = {
+    id: 'event-attrs',
+    workspaceId: 'workspace-1',
+    productId: 'product-1',
+    type: 'suggested_advert_attributes',
+    severity: 'info',
+    status: 'pending_review',
+    title: 'Suggested brand',
+    proposedChange: {
+      kind: 'attributes',
+      listingId: 'listing-1',
+      values: [{ code: 'brand', value: 'apple', label: 'Brand', valueLabel: 'Apple' }],
+    },
+    createdAt: '2026-11-27T08:00:00.000Z',
+  };
+  const text = (html: string) => html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+  it('shows the suggested attribute values with Approve and Dismiss', () => {
+    const html = renderToStaticMarkup(<HermesEventCard event={base} />);
+
+    expect(text(html)).toContain('Brand: Apple');
+    expect(html).toContain('Approve');
+    expect(html).toContain('Dismiss');
+  });
+
+  it('shows the parcel size and the carrier count of a delivery proposal', () => {
+    const html = renderToStaticMarkup(
+      <HermesEventCard
+        event={{
+          ...base,
+          type: 'suggested_delivery',
+          proposedChange: { kind: 'delivery', listingId: 'listing-1', size: 'M', packageIds: ['a', 'b', 'c', 'd'] },
+        }}
+      />,
+    );
+
+    expect(text(html)).toContain('Parcel size M · 4 carriers');
+    expect(html).toContain('Approve');
+  });
+
+  it('uses the singular for one carrier', () => {
+    const html = renderToStaticMarkup(
+      <ProposedChangeDiff
+        change={{ kind: 'delivery', listingId: 'l', size: 'S', packageIds: ['a'] }}
+        currency="PLN"
+      />,
+    );
+
+    expect(text(html)).toContain('Parcel size S · 1 carrier');
+    expect(text(html)).not.toContain('carriers');
+  });
+
+  it('shows an applied auto-filled event with no Approve button', () => {
+    const html = renderToStaticMarkup(
+      <HermesEventCard
+        event={{ ...base, type: 'filled_advert_attributes', status: 'applied', autonomyDecision: 'auto_apply' }}
+      />,
+    );
+
+    expect(html).toContain('Applied in MarketDesk');
+    expect(html).not.toContain('Approve');
+  });
+
+  it('regression guard: an auto-applied event in flight is not called approved', () => {
+    expect(hermesLifecycleCopy('applying', null, 'auto_apply')).toBe('Applying on OLX…');
+    expect(hermesLifecycleCopy('applying', null, 'pending_review')).toMatch(/^The approved change/);
+    expect(hermesLifecycleCopy('applying')).toMatch(/^The approved change/);
+  });
+});
