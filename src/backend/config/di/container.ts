@@ -578,8 +578,10 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceChangeService
   );
   // Authenticated OLX adapter for actions on an existing advert; creating adverts stays blocked.
+  // While the OLX adapter is not real, the stub transport answers: a sandbox token must never reach OLX.
   const existingAdvertAdapters = {
     resolve: async (marketplace: Marketplace) => {
+      if (env.marketplaces.olx.adapterMode !== 'real') return adapterFactory.create(marketplace.key);
       const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
       return adapterFactory.create(
         marketplace.key,
