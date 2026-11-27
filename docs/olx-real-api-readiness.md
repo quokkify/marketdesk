@@ -101,7 +101,7 @@ mocks OLX, so these are checked by hand on production after each deploy:
 1. AirPods: `brand: Apple` is filled, and a second run makes no second write.
 2. Projector: `brand: AOPEN` is filled.
 3. Nail drill: the category check shows a category proposal.
-4. AirPods delivery: the check is `needs_human` with "check in OLX".
+4. AirPods delivery: the check is `needs_human` with the text "OLX does not offer delivery on this advert although packages are set; check it in OLX".
 5. A price change keeps the attributes.
 6. On a stub stand a manual price change never reaches OLX (the update handler lacks OAuth dependencies), so only a
    prod hand check proves that a price change keeps attributes.
