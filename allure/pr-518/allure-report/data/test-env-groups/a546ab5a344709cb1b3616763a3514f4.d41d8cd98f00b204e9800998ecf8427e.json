@@ -1,0 +1,1 @@
+{"id":"a546ab5a344709cb1b3616763a3514f4.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/runs/__tests__/describeError.test.ts#describeError keeps DomainError code and details","name":"keeps DomainError code and details","status":"passed","testResultsByEnv":{"default":"eb45b7dda4e90c7fef65e8db44f810a4"}}

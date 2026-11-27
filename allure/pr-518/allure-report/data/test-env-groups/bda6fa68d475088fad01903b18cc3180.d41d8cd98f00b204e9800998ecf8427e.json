@@ -1,0 +1,1 @@
+{"id":"bda6fa68d475088fad01903b18cc3180.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/OlxSearchPageClient.test.ts#OlxSearchPageClient rejects after more than three redirects","name":"rejects after more than three redirects","status":"passed","testResultsByEnv":{"default":"eb0e5ca0c339aacec3a4e05bbb05a23b"}}
