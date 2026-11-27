@@ -59,7 +59,7 @@ export type OlxAttribute = { code: string; value: string };
 // Stub transport only: like OLX, a PUT replaces the stored attributes and packages, so
 // a test can tell whether an update kept what the seller set. Module scope for the same
 // reason as the read counts.
-const stubAdverts = new Map<string, { attributes: OlxAttribute[]; deliveryPackageIds: string[]; categoryId: number }>();
+const stubAdverts = new Map<string, { attributes: OlxAttribute[]; deliveryPackageIds: string[] }>();
 const STUB_ADVERT_DEFAULT_ATTRIBUTES: OlxAttribute[] = [
   { code: 'state', value: 'used' },
   { code: 'brand', value: 'sandbox-seller-brand' },
@@ -920,13 +920,11 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     if (config.method === 'PUT') {
       const body = (config.body ?? {}) as {
         attributes?: OlxAttribute[];
-        category_id?: number;
         ad_delivery?: { delivery_package_ids?: string[] };
       };
       stubAdverts.set(externalId, {
         attributes: body.attributes ?? [],
         deliveryPackageIds: body.ad_delivery?.delivery_package_ids ?? [],
-        categoryId: body.category_id ?? 0,
       });
       return { status: 204, data: {} };
     }
@@ -976,7 +974,6 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
         status: 'active',
         attributes: stored?.attributes ?? STUB_ADVERT_DEFAULT_ATTRIBUTES,
         ad_delivery: { delivery_package_ids: stored?.deliveryPackageIds ?? [] },
-        category_id: stored?.categoryId ?? 0,
         metrics: {
           views: reads * STUB_VIEWS_PER_READ,
           favorites: reads * STUB_FAVORITES_PER_READ,
