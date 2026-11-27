@@ -79,7 +79,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@babel/plugin-transform-runtime": "8.0.6",
+    "@babel/plugin-transform-runtime": "8.1.2",
     "@swc/core": "1.16.20",
     "@swc/jest": "0.2.39",
     "@types/bcryptjs": "3.0.0",
