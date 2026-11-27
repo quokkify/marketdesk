@@ -168,9 +168,14 @@ export function packagesForSize(deliveryAttribute: OlxCategoryAttribute, size: P
 }
 
 export function categoryFirstCheck(check: 'attributes' | 'delivery', now: Date): VerdictCheck {
-  return makeCheck(check, 'fix', [{ code: 'category_first', message: 'Fix the OLX category first' }], now, {
+  return makeCheck(check, 'needs_human', [{ code: 'category_first', message: 'Fix the OLX category first' }], now, {
     eventIds: [],
   });
+}
+
+// The reason for a value MarketDesk wrote that OLX did not keep.
+export function attributeDroppedReason(label: string): VerdictReason {
+  return { code: 'attribute_dropped', message: `OLX did not keep ${label}` };
 }
 
 export function attributeIdempotencyKey(listingId: string, values: AdvertAttribute[]): string {
