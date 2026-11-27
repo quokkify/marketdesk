@@ -1,0 +1,1 @@
+{"id":"5636a2793b342de5765c56a2ef66914a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ConversationReplyGraph.test.ts#ConversationReplyGraph propagates AI errors without drafting","name":"propagates AI errors without drafting","status":"passed","testResultsByEnv":{"default":"3afd10ffbb803cfeee398c3f96c953df"}}

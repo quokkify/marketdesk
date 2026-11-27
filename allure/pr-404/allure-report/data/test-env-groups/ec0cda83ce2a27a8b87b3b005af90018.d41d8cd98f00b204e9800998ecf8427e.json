@@ -1,0 +1,1 @@
+{"id":"ec0cda83ce2a27a8b87b3b005af90018.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/config/__tests__/duration.test.ts#parseDurationMs reads 30s as 30000 ms","name":"reads 30s as 30000 ms","status":"passed","testResultsByEnv":{"default":"cc3275e9727ff90ec9d21246a95b7ca6"}}

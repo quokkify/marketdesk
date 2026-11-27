@@ -1,0 +1,1 @@
+{"id":"b52fc5079d2e4c26d62b2f91afe8eea2.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/runRecorder/__tests__/sanitize.test.ts#sanitize redacts a denylisted key whose value is an object","name":"redacts a denylisted key whose value is an object","status":"passed","testResultsByEnv":{"default":"039775ecbadc60fb949a57e42e1c475e"}}
