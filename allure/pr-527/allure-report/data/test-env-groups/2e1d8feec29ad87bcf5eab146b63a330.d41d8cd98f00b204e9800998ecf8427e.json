@@ -1,0 +1,1 @@
+{"id":"2e1d8feec29ad87bcf5eab146b63a330.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/abuseLimits.test.ts#registration switch (regression guard) keeps registration open by default","name":"keeps registration open by default","status":"passed","testResultsByEnv":{"default":"b0065caf82dda1e0869bca124e18a61d"}}

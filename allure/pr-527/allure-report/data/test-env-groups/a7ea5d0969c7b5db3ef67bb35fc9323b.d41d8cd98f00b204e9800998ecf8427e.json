@@ -1,0 +1,1 @@
+{"id":"a7ea5d0969c7b5db3ef67bb35fc9323b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/priceEstimatePrompt.test.ts#buildPriceEstimatePrompt unavailableCountersAreNotZero","name":"unavailableCountersAreNotZero","status":"passed","testResultsByEnv":{"default":"4e71e6b2767402bf84b232ba8b5af0e5"}}

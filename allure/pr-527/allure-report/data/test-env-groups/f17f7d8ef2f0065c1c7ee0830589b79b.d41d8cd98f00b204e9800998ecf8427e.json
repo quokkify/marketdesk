@@ -1,0 +1,1 @@
+{"id":"f17f7d8ef2f0065c1c7ee0830589b79b.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#probeFindings reports crowded_market only above the threshold","name":"reports crowded_market only above the threshold","status":"passed","testResultsByEnv":{"default":"d3f37ddd6fda422eb22c0286c9b75eca"}}

@@ -1,0 +1,1 @@
+{"id":"c94a3c47d168edb4a3d49e68765d327d.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/productStats.test.ts#listingResponseSignal is too early for a listing younger than 48 hours","name":"is too early for a listing younger than 48 hours","status":"passed","testResultsByEnv":{"default":"56afa75dc76ed0a7446bb46ae930b573"}}

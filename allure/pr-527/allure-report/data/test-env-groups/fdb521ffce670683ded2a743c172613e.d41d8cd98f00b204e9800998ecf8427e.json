@@ -1,0 +1,1 @@
+{"id":"fdb521ffce670683ded2a743c172613e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/priceResearchPrompts.test.ts#parseIdentification rejects a missing model and garbage","name":"rejects a missing model and garbage","status":"passed","testResultsByEnv":{"default":"8b2e4377a602bfb26ce3b2584dc2905a"}}
