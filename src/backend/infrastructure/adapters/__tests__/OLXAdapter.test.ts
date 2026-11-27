@@ -1174,3 +1174,133 @@ describe('mergeAdvertAttributes', () => {
     expect(mergeAdvertAttributes([], [{ code: 'state', value: 'used' }])).toEqual([{ code: 'state', value: 'used' }]);
   });
 });
+
+describe('OLX catalogue and advert field update', () => {
+  it('maps category attributes, reading validation.required and allow_multiple_values', async () => {
+    const adapter = new OLXAdapter(
+      mockClient(() => ({
+        status: 200,
+        data: {
+          data: [
+            {
+              code: 'type',
+              label: 'Typ',
+              validation: { required: true, allow_multiple_values: true },
+              values: [{ code: 'LED', label: 'LED' }],
+            },
+            { code: 'bdo', label: 'BDO', validation: {} },
+          ],
+        },
+      })),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.categoryAttributes?.('1984')).toEqual([
+      { code: 'type', label: 'Typ', required: true, multiple: true, values: [{ code: 'LED', label: 'LED' }] },
+      { code: 'bdo', label: 'BDO', required: false, multiple: false, values: [] },
+    ]);
+  });
+
+  it('returns leaf category suggestions as strings in OLX order', async () => {
+    const requests: HttpRequestConfig[] = [];
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        return { status: 200, data: { data: [{ id: 1984 }, { id: 5091 }] } };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.categorySuggestions?.('projektor')).toEqual(['1984', '5091']);
+    expect(requests[0].url).toContain('/categories/suggestion');
+  });
+
+  function updateAdapter(requests: HttpRequestConfig[]) {
+    return new OLXAdapter(
+      mockClient((config) => {
+        requests.push(config);
+        if (config.method === 'GET') {
+          return {
+            status: 200,
+            data: {
+              data: {
+                id: 'olx-1',
+                status: 'active',
+                attributes: [{ code: 'state', value: 'used' }, { code: 'brand', value: 'apple' }],
+                ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+              },
+            },
+          };
+        }
+        return { status: 204, data: {} };
+      }),
+      fastOptions,
+      realConfig,
+    );
+  }
+
+  it('sends the chosen delivery packages and keeps the remote brand', async () => {
+    const requests: HttpRequestConfig[] = [];
+    await updateAdapter(requests).updateAdvertFields?.('olx-1', publishInput, { deliveryPackageIds: ['pkg-m-1'] });
+
+    const put = requests.find((r) => r.method === 'PUT');
+    const body = put?.body as { attributes: Array<{ code: string }>; ad_delivery: unknown };
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-m-1'] });
+    expect(body.attributes).toContainEqual({ code: 'brand', value: 'apple' });
+  });
+
+  it('appends a filled attribute after the remote attributes', async () => {
+    const requests: HttpRequestConfig[] = [];
+    await updateAdapter(requests).updateAdvertFields?.('olx-1', publishInput, {
+      attributes: [{ code: 'type', value: 'LED' }],
+    });
+
+    const body = requests.find((r) => r.method === 'PUT')?.body as {
+      attributes: unknown[];
+      ad_delivery: unknown;
+    };
+    expect(body.attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'brand', value: 'apple' },
+      { code: 'type', value: 'LED' },
+    ]);
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1'] });
+  });
+
+  it('reads the category, attributes and packages of an advert', async () => {
+    const adapter = new OLXAdapter(
+      mockClient(() => ({
+        status: 200,
+        data: {
+          data: {
+            id: 'olx-1',
+            category_id: 1984,
+            attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: null, values: ['LED', 'x'] }],
+            ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+          },
+        },
+      })),
+      fastOptions,
+      realConfig,
+    );
+
+    expect(await adapter.advertFields?.('olx-1')).toEqual({
+      categoryId: '1984',
+      attributes: [{ code: 'brand', value: 'apple' }, { code: 'type', value: 'LED,x' }],
+      deliveryPackageIds: ['pkg-s-1'],
+    });
+  });
+
+  it('serves a catalogue fixture on the stub transport', async () => {
+    const adapter = new OLXAdapter(undefined, fastOptions);
+    expect(await adapter.categorySuggestions?.('Projektor LED')).toEqual(['1984']);
+    expect(await adapter.categorySuggestions?.('Kabel')).toEqual(['5091']);
+    const attributes = (await adapter.categoryAttributes?.('5091')) ?? [];
+    expect(attributes.map((a) => a.code)).toEqual(['state', 'brand', 'type', 'bdo', 'delivery']);
+    expect(attributes.find((a) => a.code === 'delivery')?.values).toHaveLength(6);
+    await adapter.updateAdvertFields?.('stub-1', publishInput, { deliveryPackageIds: ['x'] });
+    expect(await adapter.advertFields?.('stub-1')).toMatchObject({ deliveryPackageIds: ['x'] });
+  });
+});
