@@ -1,0 +1,1 @@
+{"id":"31ea4f3f79efa368da369a29d9620e37.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/frontend/state/slices/authSlice.test.ts#authSlice setToken logout leaves the stored token of another tab alone","name":"logout leaves the stored token of another tab alone","status":"passed","testResultsByEnv":{"default":"2a7074f5a8b3d3ac6fc7710939c78b6a"}}

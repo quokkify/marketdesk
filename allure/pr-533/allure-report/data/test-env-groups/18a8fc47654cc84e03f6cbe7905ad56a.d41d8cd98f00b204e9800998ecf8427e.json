@@ -1,0 +1,1 @@
+{"id":"18a8fc47654cc84e03f6cbe7905ad56a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/ConversationRetentionService.test.ts#ConversationRetentionService purgesAfterThirtyDays","name":"purgesAfterThirtyDays","status":"passed","testResultsByEnv":{"default":"da9a5706e8045d9742f6eadb95e07d37"}}

@@ -1,0 +1,1 @@
+{"id":"c1fd10709a1f1ff26f7f9b10e8bb007f.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/anchorLadder.test.ts#mergeLadder caps the total at 30, dropping found rows first","name":"caps the total at 30, dropping found rows first","status":"passed","testResultsByEnv":{"default":"339d9e9addda56372dba2c46f7dccc57"}}

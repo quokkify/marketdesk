@@ -1,0 +1,1 @@
+{"id":"98fbb3a899a7bd20621b26cb23ca9a5a.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/OlxSearchPageClient.test.ts#OlxSearchPageClient keeps the chain alive after a failed request","name":"keeps the chain alive after a failed request","status":"passed","testResultsByEnv":{"default":"5357f55fdee6ceee961f01c9dfb8d7bc"}}

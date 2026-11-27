@@ -1,0 +1,1 @@
+{"id":"5c4d05f5b68463ec9b361ca2984a5aa9.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/olxSearchPage.test.ts#olxSearchUrl builds the query path and adds ?page= from page 2","name":"builds the query path and adds ?page= from page 2","status":"passed","testResultsByEnv":{"default":"c3b9989a61353eb1cfc0905e8b03eb09"}}

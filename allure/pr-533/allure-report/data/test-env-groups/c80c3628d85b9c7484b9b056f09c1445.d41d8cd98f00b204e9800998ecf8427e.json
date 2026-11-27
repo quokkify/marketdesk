@@ -1,0 +1,1 @@
+{"id":"c80c3628d85b9c7484b9b056f09c1445.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/__tests__/main.boot.test.ts#boot configuration token lifetime refuses an unreadable JWT_EXPIRATION and names it","name":"refuses an unreadable JWT_EXPIRATION and names it","status":"passed","testResultsByEnv":{"default":"a52c7da8a0d3dd5d778443be4b09072f"}}
