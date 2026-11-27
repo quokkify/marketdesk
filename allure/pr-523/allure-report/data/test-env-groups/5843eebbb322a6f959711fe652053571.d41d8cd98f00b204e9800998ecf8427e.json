@@ -1,0 +1,1 @@
+{"id":"5843eebbb322a6f959711fe652053571.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#shouldSurfacePriceEstimate surfaces a change of exactly 5% (10.4 -> 9.88)","name":"surfaces a change of exactly 5% (10.4 -> 9.88)","status":"passed","testResultsByEnv":{"default":"f15f7321f8c07c060172fedbec0dd346"}}

@@ -1,0 +1,1 @@
+{"id":"5483708191be373639c151b831566ebf.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/controllers/__tests__/historyLimit.test.ts#parseHistoryLimit defaults to 20 when the limit is absent","name":"defaults to 20 when the limit is absent","status":"passed","testResultsByEnv":{"default":"0a8fd32c3e43882f537a05ee5ca17e00"}}

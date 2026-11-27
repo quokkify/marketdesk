@@ -1,0 +1,1 @@
+{"id":"35dca5caffa3f10531fe341dde74a499.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/productStats.test.ts#needsActionReasons never flags products that are not active","name":"never flags products that are not active","status":"passed","testResultsByEnv":{"default":"c4ab8ca34a60ad46d96596db8fca91e7"}}
