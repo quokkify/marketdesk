@@ -1,0 +1,1 @@
+{"id":"7b0dabb3dcf84f02410f4ddba34ac24e.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/adapters/__tests__/OLXAdapter.threads.test.ts#OLXAdapter thread reading never calls mark-as-read while reading","name":"never calls mark-as-read while reading","status":"passed","testResultsByEnv":{"default":"4fc13c4f323fc20f8478e2e78c7ea325"}}

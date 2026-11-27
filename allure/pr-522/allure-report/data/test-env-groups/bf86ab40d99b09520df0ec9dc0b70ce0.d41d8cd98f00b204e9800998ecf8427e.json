@@ -1,0 +1,1 @@
+{"id":"bf86ab40d99b09520df0ec9dc0b70ce0.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/infrastructure/external/__tests__/anchorLadderPrompt.test.ts#filterAnchorRows drops rows with wrong currency, type or host","name":"drops rows with wrong currency, type or host","status":"passed","testResultsByEnv":{"default":"c97bb7fbe5825aeecf5f7070940312f9"}}

@@ -1,0 +1,1 @@
+{"id":"415f1ff0ecc7a713062beacd0baf53c8.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/verdict/__tests__/SaleVerdictRuns.test.ts#SaleVerdictRuns returns the active run without enqueueing","name":"returns the active run without enqueueing","status":"passed","testResultsByEnv":{"default":"7881d1781cacc401ab928db36800e2c9"}}

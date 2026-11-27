@@ -1,0 +1,1 @@
+{"id":"c4a65fd2f8901b771d55a9c514519924.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceEstimate.test.ts#validatePriceEstimate rejects a used range whose low exceeds its high","name":"rejects a used range whose low exceeds its high","status":"passed","testResultsByEnv":{"default":"f39ab67c9cf2dc2f54069605cb19fe7c"}}
