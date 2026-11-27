@@ -1,0 +1,1 @@
+{"id":"9f8753407aea8cb7c0cba6e958ad4d20.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/__tests__/researchCallLimiter.test.ts#createResearchCallLimiter frees the slot when a call fails","name":"frees the slot when a call fails","status":"passed","testResultsByEnv":{"default":"dcf8de38b4a9849bb60b72edbbf2b34f"}}

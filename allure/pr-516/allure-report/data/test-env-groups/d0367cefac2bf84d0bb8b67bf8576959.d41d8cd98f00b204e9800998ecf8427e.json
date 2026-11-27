@@ -1,0 +1,1 @@
+{"id":"d0367cefac2bf84d0bb8b67bf8576959.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/priceSanity.test.ts#applyPriceSanity drops a row priced in another currency","name":"drops a row priced in another currency","status":"passed","testResultsByEnv":{"default":"80baaa617e0971654b08b6a9699328c8"}}
