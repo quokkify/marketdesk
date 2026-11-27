@@ -54,7 +54,8 @@ const STUB_VIEWS_PER_READ = 7;
 const STUB_FAVORITES_PER_READ = 1;
 const stubAdvertReads = new Map<string, number>();
 
-export type OlxAttribute = { code: string; value: string };
+// OLX returns both `value` and `values`; a remote attribute is passed through as read.
+export type OlxAttribute = { code: string; value?: string | null; values?: unknown[] | null };
 
 // Stub transport only: like OLX, a PUT replaces the stored attributes and packages, so
 // a test can tell whether an update kept what the seller set. Module scope for the same
@@ -211,7 +212,6 @@ interface OlxResponseEnvelope<T> {
 export class OLXAdapter extends BaseMarketplaceAdapter {
   private readonly baseUrl: string;
   private readonly publicBaseUrl: string | undefined;
-  // Sandbox adverts never carry delivery packages, and every stub read grows their metrics.
 
   constructor(
     http?: MarketplaceHttpClient,
@@ -303,8 +303,7 @@ export class OLXAdapter extends BaseMarketplaceAdapter {
     return {
       attributes: Array.isArray(rawAttributes)
         ? rawAttributes.filter(
-            (a): a is OlxAttribute =>
-              !!a && typeof a === 'object' && typeof (a as OlxAttribute).code === 'string' && typeof (a as OlxAttribute).value === 'string',
+            (a): a is OlxAttribute => !!a && typeof a === 'object' && typeof (a as OlxAttribute).code === 'string',
           )
         : [],
       deliveryPackageIds: Array.isArray(ids)

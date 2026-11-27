@@ -1,4 +1,4 @@
-import { OLXAdapter, type OlxAdapterConfig } from '../OLXAdapter';
+import { OLXAdapter, mergeAdvertAttributes, type OlxAdapterConfig } from '../OLXAdapter';
 import { FetchMarketplaceHttpClient } from '../FetchMarketplaceHttpClient';
 import {
   MarketplaceHttpClient,
@@ -930,6 +930,41 @@ describe('OLXAdapter', () => {
     expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1'] });
   });
 
+  it('passes a multi-value remote attribute through an update unchanged', async () => {
+    // Regression guard: dropping a remote attribute without a string value wiped it on the full-replace PUT.
+    let put: HttpRequestConfig | undefined;
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        if (config.method === 'PUT') {
+          put = config;
+          return { status: 204, data: {} };
+        }
+        return {
+          status: 200,
+          data: {
+            data: {
+              id: 'olx-1',
+              status: 'active',
+              attributes: [
+                { code: 'state', value: 'used', values: null },
+                { code: 'features', value: null, values: ['a', 'b'] },
+              ],
+            },
+          },
+        };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    expect((put?.body as Record<string, unknown>).attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'features', value: null, values: ['a', 'b'] },
+    ]);
+  });
+
   it('sends no OLX delivery packages when the advert has none', async () => {
     let put: HttpRequestConfig | undefined;
     const adapter = new OLXAdapter(
@@ -1115,5 +1150,27 @@ describe('OLXAdapter', () => {
 
     expect(first).toMatchObject({ views: 7, watchers: 1, conversations: 3, messages: 3 });
     expect(second).toMatchObject({ views: 14, watchers: 2, conversations: 3, messages: 3 });
+  });
+});
+
+describe('mergeAdvertAttributes', () => {
+  it('replaces an owned code in place and keeps the remote order', () => {
+    expect(
+      mergeAdvertAttributes(
+        [{ code: 'state', value: 'new' }, { code: 'brand', value: 'apple' }],
+        [{ code: 'state', value: 'used' }],
+      ),
+    ).toEqual([{ code: 'state', value: 'used' }, { code: 'brand', value: 'apple' }]);
+  });
+
+  it('appends an owned code the remote does not have', () => {
+    expect(mergeAdvertAttributes([{ code: 'brand', value: 'apple' }], [{ code: 'state', value: 'used' }])).toEqual([
+      { code: 'brand', value: 'apple' },
+      { code: 'state', value: 'used' },
+    ]);
+  });
+
+  it('returns the owned attributes when the remote has none', () => {
+    expect(mergeAdvertAttributes([], [{ code: 'state', value: 'used' }])).toEqual([{ code: 'state', value: 'used' }]);
   });
 });
