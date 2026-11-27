@@ -890,6 +890,46 @@ describe('OLXAdapter', () => {
     expect(body.attributes).toEqual([{ code: 'state', value: 'used' }]);
   });
 
+  it('keeps attributes the seller set on OLX when updating an advert', async () => {
+    // Regression guard: PUT replaces the whole advert, so an update sending only the condition wiped every attribute the seller set on OLX.
+    let put: HttpRequestConfig | undefined;
+    const adapter = new OLXAdapter(
+      mockClient((config) => {
+        if (config.method === 'PUT') {
+          put = config;
+          return { status: 204, data: {} };
+        }
+        return {
+          status: 200,
+          data: {
+            data: {
+              id: 'olx-1',
+              status: 'active',
+              attributes: [
+                { code: 'state', value: 'new' },
+                { code: 'brand', value: 'apple' },
+                { code: 'type', value: 'dokanalowe' },
+              ],
+              ad_delivery: { delivery_package_ids: ['pkg-s-1'] },
+            },
+          },
+        };
+      }),
+      fastOptions,
+      realConfig,
+    );
+
+    await adapter.updateListing('olx-1', { price: 299 }, publishInput);
+
+    const body = put?.body as Record<string, unknown>;
+    expect(body.attributes).toEqual([
+      { code: 'state', value: 'used' },
+      { code: 'brand', value: 'apple' },
+      { code: 'type', value: 'dokanalowe' },
+    ]);
+    expect(body.ad_delivery).toEqual({ delivery_package_ids: ['pkg-s-1'] });
+  });
+
   it('sends no OLX delivery packages when the advert has none', async () => {
     let put: HttpRequestConfig | undefined;
     const adapter = new OLXAdapter(
