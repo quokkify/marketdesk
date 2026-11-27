@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    image: redis:8-alpine@sha256:5af80107c1eeecb484a2269b80a26d12bfa6521787da4663bd9f19f60a163483
     container_name: marketdesk-redis
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
