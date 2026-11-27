@@ -203,6 +203,19 @@ describe('hermesCardState matrix', () => {
     expect(s.primary).toEqual({ kind: 'none' });
   });
 
+  // Regression guard: the chip counted three checks and sat at 3/3 while the advert checks still ran.
+  it('counts every check in the run scope', () => {
+    const scope: SaleVerdict['scope'] = ['info', 'price', 'photos', 'category', 'attributes', 'delivery'];
+    const checks = { price: check('price', 'ready'), info: check('info', 'ready'), photos: check('photos', 'ready') };
+    const s = state({ verdict: view(null, verdict({ status: 'running', overall: null, scope, checks })) });
+    expect(s.chip.label).toBe('Analyzing 4/6');
+    expect(s.lead).toBe('Category check…');
+    const linked = state({
+      verdict: view(null, verdict({ status: 'running', overall: null, scope, checks: {}, researchRunId: 'run-1' })),
+    });
+    expect(linked.chip.label).toBe('Analyzing 6/11');
+  });
+
   it('a verdict linked to a research run counts out of 8 even before the run is read', () => {
     const s = state({
       verdict: view(null, verdict({ status: 'running', overall: null, checks: {}, researchRunId: 'run-1' })),
