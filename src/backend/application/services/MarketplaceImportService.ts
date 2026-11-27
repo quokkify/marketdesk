@@ -4,6 +4,7 @@ import type {
   MarketplaceKey,
   ProductCondition,
 } from '../../../shared/types';
+import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
 import { Product } from '../../domain/entities/Product';
 import { Listing } from '../../domain/entities/Listing';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
@@ -812,14 +813,16 @@ export class MarketplaceImportService {
       id: marketplaceAccountId,
       revision: marketplaceAccountRevision,
     });
+    const currentDecision = evaluateOlxCategory(product, currentCategory);
+    const proposedDecision = proposedCategory ? evaluateOlxCategory(product, proposedCategory) : null;
+    if (currentDecision.reason !== 'semantic_mismatch') return;
     await this.categoryMismatch.raise({
       workspaceId,
       product,
       listing,
       currentCategory,
-      proposedCategory: proposedCategory ?? null,
-      marketplaceAccountId: account.id,
-      marketplaceAccountRevision: account.revision,
+      proposedCategory: proposedDecision?.allowed ? (proposedCategory ?? null) : null,
+      account: { id: account.id, revision: account.revision },
       repositories: {
         eventRepo: transactionEventRepo,
         correctionOperations: transactionCorrectionOperations,

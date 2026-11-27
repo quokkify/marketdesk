@@ -595,7 +595,12 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     marketplaces: marketplaceRepo,
     adapters: existingAdvertAdapters,
   });
-  const categoryMismatchProposals = new CategoryMismatchProposals(idGenerator);
+  const categoryMismatchProposals = new CategoryMismatchProposals(idGenerator, {
+    eventRepo,
+    correctionOperations: categoryCorrectionOperationRepo,
+    activityLog: activityLogRepo,
+    accounts: marketplaceAccountRepo,
+  });
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,

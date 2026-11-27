@@ -4,12 +4,13 @@
 import type { Product } from '../../domain/entities/Product';
 import type { Listing } from '../../domain/entities/Listing';
 import { HermesEvent } from '../../domain/entities/HermesEvent';
-import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
 import type { IEventRepository } from '../../domain/repositories/interfaces/IEventRepository';
 import type { ICategoryCorrectionOperationRepository } from '../../domain/repositories/interfaces/ICategoryCorrectionOperationRepository';
 import type { IActivityLogRepository } from '../../domain/repositories/interfaces/IActivityLogRepository';
 import type { MarketplaceCategoryMetadata } from '../../../shared/types';
+import { InvalidStateError } from '../../domain/shared/DomainError';
 import type { IdGenerator } from '../ports/IdGenerator';
+import type { MarketplaceAccountRepository } from './MarketplaceOAuthService';
 
 export interface CategoryMismatchRepositories {
   eventRepo: IEventRepository;
@@ -17,28 +18,44 @@ export interface CategoryMismatchRepositories {
   activityLog?: IActivityLogRepository;
 }
 
-export class CategoryMismatchProposals {
-  constructor(private readonly idGenerator: IdGenerator) {}
+export interface CategoryMismatchBaseRepositories extends CategoryMismatchRepositories {
+  accounts: Pick<MarketplaceAccountRepository, 'findByMarketplaceId'>;
+}
 
-  // Returns the new event, or null when the category is not a semantic mismatch or the same
-  // recommendation already exists.
+export class CategoryMismatchProposals {
+  constructor(
+    private readonly idGenerator: IdGenerator,
+    private readonly base?: CategoryMismatchBaseRepositories,
+  ) {}
+
+  // The caller has already decided the category is a mismatch and chose the proposed category; this
+  // always builds and saves, and is idempotent through the recommendation key. Without `account` it
+  // binds the listing marketplace's connected account; without `repositories` it uses the base ones.
+  // Returns the new event, or null when the same recommendation already exists.
   async raise(input: {
     workspaceId: string;
     product: Product;
     listing: Listing;
     currentCategory: MarketplaceCategoryMetadata;
     proposedCategory: MarketplaceCategoryMetadata | null;
-    marketplaceAccountId: string;
-    marketplaceAccountRevision: number;
-    repositories: CategoryMismatchRepositories;
+    account?: { id: string; revision: number };
+    repositories?: CategoryMismatchRepositories;
   }): Promise<HermesEvent | null> {
     const { workspaceId, product, listing, currentCategory, proposedCategory } = input;
-    const { eventRepo, correctionOperations, activityLog } = input.repositories;
-    const currentDecision = evaluateOlxCategory(product, currentCategory);
-    const proposedDecision = proposedCategory ? evaluateOlxCategory(product, proposedCategory) : null;
-    if (currentDecision.reason !== 'semantic_mismatch') return null;
-    const usableProposedCategory: MarketplaceCategoryMetadata | null =
-      proposedDecision?.allowed ? (proposedCategory ?? null) : null;
+    const repositories = input.repositories ?? this.base;
+    if (!repositories) {
+      throw new InvalidStateError('CategoryMismatchProposals has no repositories');
+    }
+    const { eventRepo, correctionOperations, activityLog } = repositories;
+    let account = input.account;
+    if (!account) {
+      const connected = await this.base?.accounts.findByMarketplaceId(listing.marketplaceId);
+      if (!connected || connected.status !== 'connected') {
+        throw new InvalidStateError('The marketplace account is not connected');
+      }
+      account = { id: connected.id, revision: connected.revision };
+    }
+    const usableProposedCategory = proposedCategory;
     const eventId = this.idGenerator();
     const delistIntentId = this.idGenerator();
     const recreateIntentId = this.idGenerator();
@@ -86,8 +103,8 @@ export class CategoryMismatchProposals {
           externalListingId: listing.marketplaceListingId,
           externalUrl: listing.externalUrl,
           requestedListingUpdatedAt: listing.updatedAt.toISOString(),
-          marketplaceAccountId: input.marketplaceAccountId,
-          marketplaceAccountRevision: input.marketplaceAccountRevision,
+          marketplaceAccountId: account.id,
+          marketplaceAccountRevision: account.revision,
         }, requestedAt,
         approvedAt: null, executedAt: null, failedAt: null, updatedAt: requestedAt,
       },
