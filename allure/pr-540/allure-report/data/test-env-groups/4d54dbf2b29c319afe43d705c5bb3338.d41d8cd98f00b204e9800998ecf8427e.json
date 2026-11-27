@@ -1,0 +1,1 @@
+{"id":"4d54dbf2b29c319afe43d705c5bb3338.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/verdict/__tests__/SaleVerdictRuns.test.ts#SaleVerdictRuns.history expires a stuck run before listing it","name":"expires a stuck run before listing it","status":"passed","testResultsByEnv":{"default":"cdd8d11d6ad66cd5efd7df58b01c5137"}}

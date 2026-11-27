@@ -1,0 +1,1 @@
+{"id":"c255d7eefdb71767c24ae6d0a9ccc7e9.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/revivalRules.test.ts#fitsOlxTitle keeps a title of up to 70 characters and drops a longer one","name":"keeps a title of up to 70 characters and drops a longer one","status":"passed","testResultsByEnv":{"default":"c5d63b883f60bf3f48a926c72f723747"}}

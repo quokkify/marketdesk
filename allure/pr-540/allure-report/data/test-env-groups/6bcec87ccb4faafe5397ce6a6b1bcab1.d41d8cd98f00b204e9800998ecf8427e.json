@@ -1,0 +1,1 @@
+{"id":"6bcec87ccb4faafe5397ce6a6b1bcab1.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/application/services/reactivationOutcome.test.ts#reactivationOutcome maps OLX status \"disabled\" to pending_moderation","name":"maps OLX status \"disabled\" to pending_moderation","status":"passed","testResultsByEnv":{"default":"dec5a211e7b0711578938ac0253db810"}}

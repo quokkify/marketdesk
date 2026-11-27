@@ -1,0 +1,1 @@
+{"id":"fdc28524abc0d1e33a68c54b137f5b38.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/listingResponseRules.test.ts#probeFindings returns nothing when no cards were read","name":"returns nothing when no cards were read","status":"passed","testResultsByEnv":{"default":"7ac8524c6bbbf3893c3eb97965774c04"}}
