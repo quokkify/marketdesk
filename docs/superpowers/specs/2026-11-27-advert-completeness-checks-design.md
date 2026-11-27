@@ -151,6 +151,24 @@ writes. Otherwise the three run in parallel like the existing checks.
 - The category offers no `delivery` → `fix`, with the reason pointing at the category check.
 - If the page cannot be read → `needs_human` with `probe_failed`, the same convention as the response graph.
 
+**Fail-closed guards** (final review). No evidence, or evidence MarketDesk cannot read, means no write, no event and
+no proposal:
+
+- The checks judge the advert's own OLX category. When the category stored at the last sync differs from it, all three
+  are `needs_human` with `category_out_of_sync` ("The OLX category changed since the last sync; sync the listing
+  first").
+- No category suggestion from OLX → category `needs_human` with `category_unknown` ("OLX gave no category suggestion
+  for this title"); attributes and delivery are not gated.
+- A mismatch whose latest `olx_category_mismatch` for this listing and category the owner dismissed → category `ready`
+  with `category_kept_by_owner` ("You kept this OLX category"); attributes and delivery are not gated.
+- A delivery mode other than `BuyWithDelivery` and `NotEligible` → `needs_human` with `delivery_mode_unknown` ("OLX
+  reports an unknown delivery state for this advert; check it in OLX").
+- A drifted advert, whose title or price on OLX differs from what MarketDesk would send, is never written: attributes
+  `needs_human` with `advert_drifted` ("The advert changed on OLX since the last sync; sync the listing first"), no
+  delivery proposal, and approving an attributes or delivery proposal fails with that message.
+- The write itself (`putAdvert`) re-reads the advert, never replaces an attribute that holds a value on OLX, and writes
+  nothing after a read without an advert id.
+
 ### UI
 
 The Hermes card already lists verdict checks with their reasons and proposals. The three new checks show there in the

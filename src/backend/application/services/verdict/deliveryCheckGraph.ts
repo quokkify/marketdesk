@@ -1,9 +1,9 @@
 // The delivery check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category out
-// of sync with OLX or a category mismatch the owner has not kept stops the check. page: the delivery mode buyers see on the public advert page (null
-// when the page cannot be read). propose (only when delivery is off in a category that offers it):
-// a pending suggested_delivery proposal is linked as it is; a drifted advert gets no proposal;
-// otherwise Hermes (when configured) picks a parcel size, and every package of that size becomes one
-// pending proposal.
+// of sync with OLX or a category mismatch the owner has not kept stops the check. page: the delivery
+// mode buyers see on the public advert page (null when the page cannot be read). propose (only when
+// delivery is off in a category that offers it): a pending suggested_delivery proposal is linked as it
+// is; a drifted advert gets no proposal; otherwise Hermes (when configured) picks a parcel size, and
+// every package of that size becomes one pending proposal.
 // result: the check. Nothing is written to OLX here.
 // State holds only the delivery mode and event ids, never seller or Hermes text.
 
