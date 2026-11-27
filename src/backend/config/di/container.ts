@@ -165,6 +165,8 @@ import {
 } from '../../application/services/ProductCategorySyncService';
 import { OlxPublicationQuotaService } from '../../application/services/OlxPublicationQuotaService';
 import { ListingReactivationService } from '../../application/services/ListingReactivationService';
+import { AdvertFieldsService } from '../../application/services/AdvertFieldsService';
+import { CategoryMismatchProposals } from '../../application/services/CategoryMismatchProposals';
 import { ListingRevivalService } from '../../application/services/ListingRevivalService';
 import type { Marketplace } from '../../domain/entities/Marketplace';
 import { CategoryCorrectionOperationService } from '../../application/services/CategoryCorrectionOperationService';
@@ -572,6 +574,28 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     undefined,
     priceChangeService
   );
+  // Authenticated OLX adapter for actions on an existing advert; creating adverts stays blocked.
+  const existingAdvertAdapters = {
+    resolve: async (marketplace: Marketplace) => {
+      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
+      return adapterFactory.create(
+        marketplace.key,
+        new FetchMarketplaceHttpClient({
+          logger: overrides.logger,
+          defaultHeaders: buildOlxHeaders(accessToken),
+          timeoutMs: env.marketplaces.olx.requestTimeoutMs,
+          livePublishEnabled: false,
+        })
+      );
+    },
+  };
+  const advertFieldsService = new AdvertFieldsService({
+    products: productRepo,
+    listings: listingRepo,
+    marketplaces: marketplaceRepo,
+    adapters: existingAdvertAdapters,
+  });
+  const categoryMismatchProposals = new CategoryMismatchProposals(idGenerator);
   const approveEventUC = new ApproveHermesEventUseCase(
     eventRepo,
     productRepo,
@@ -585,7 +609,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     priceChangeService,
     marketplaceUpdateEnqueuer,
     marketplaceAccountRepo,
-    olxPublicationQuotaService
+    olxPublicationQuotaService,
+    advertFieldsService
   );
   const dismissEventUC = new DismissHermesEventUseCase(
     eventRepo,
@@ -765,21 +790,6 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
     idGenerator,
     publishAttemptRepo
   );
-  // Authenticated OLX adapter for actions on an existing advert; creating adverts stays blocked.
-  const existingAdvertAdapters = {
-    resolve: async (marketplace: Marketplace) => {
-      const accessToken = await marketplaceOAuthService.getValidAccessToken(marketplace.id);
-      return adapterFactory.create(
-        marketplace.key,
-        new FetchMarketplaceHttpClient({
-          logger: overrides.logger,
-          defaultHeaders: buildOlxHeaders(accessToken),
-          timeoutMs: env.marketplaces.olx.requestTimeoutMs,
-          livePublishEnabled: false,
-        })
-      );
-    },
-  };
   const listingReactivationService = new ListingReactivationService({
     listingRepo,
     marketplaceRepo,
@@ -852,7 +862,8 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
       ),
     eventRepo,
     categoryCorrectionOperationRepo,
-    productCategorySyncService
+    productCategorySyncService,
+    categoryMismatchProposals
   );
 
   // 9. Register job handlers now that their collaborators exist. The publish

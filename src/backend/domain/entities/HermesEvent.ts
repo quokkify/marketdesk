@@ -134,7 +134,10 @@ export class HermesEvent {
         type === 'needs_relisting' ||
         type === 'create_listing' ||
         type === 'product_category_conflict' ||
-        type === 'olx_category_mismatch';
+        type === 'olx_category_mismatch' ||
+        type === 'filled_advert_attributes' ||
+        type === 'suggested_advert_attributes' ||
+        type === 'suggested_delivery';
       if (requiresChange) {
         return Err(
           new ValidationError(`Event type ${type} requires a proposed change`),
@@ -175,6 +178,15 @@ export class HermesEvent {
     }
     if (type === 'olx_category_mismatch' && change.kind !== 'category_recreation') {
       return Err(new ValidationError('olx_category_mismatch requires a category_recreation change'));
+    }
+    if (
+      (type === 'filled_advert_attributes' || type === 'suggested_advert_attributes') &&
+      change.kind !== 'attributes'
+    ) {
+      return Err(new ValidationError(`${type} requires an attributes change`));
+    }
+    if (type === 'suggested_delivery' && change.kind !== 'delivery') {
+      return Err(new ValidationError('suggested_delivery requires a delivery change'));
     }
 
     return Ok(true);

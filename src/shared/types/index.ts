@@ -181,7 +181,10 @@ export type HermesEventType =
   | 'olx_category_mismatch'
   | 'product_category_conflict'
   | 'relist'
-  | 'price_estimate_unavailable';
+  | 'price_estimate_unavailable'
+  | 'filled_advert_attributes'
+  | 'suggested_advert_attributes'
+  | 'suggested_delivery';
 
 export type ChangedBy = 'user' | 'hermes';
 
@@ -395,6 +398,21 @@ export interface CategoryRecreationChangePayload {
   ];
 }
 
+export type ParcelSize = 'S' | 'M' | 'L' | 'XL';
+
+export interface AdvertAttributesChangePayload {
+  kind: 'attributes';
+  listingId: string;
+  values: Array<{ code: string; value: string; label: string; valueLabel: string }>;
+}
+
+export interface DeliveryChangePayload {
+  kind: 'delivery';
+  listingId: string;
+  size: ParcelSize;
+  packageIds: string[];
+}
+
 export type ProposedChange =
   | PriceChangePayload
   | TitleChangePayload
@@ -403,6 +421,8 @@ export type ProposedChange =
   | CreateListingChangePayload
   | ProductCategoryConflictChangePayload
   | CategoryRecreationChangePayload
+  | AdvertAttributesChangePayload
+  | DeliveryChangePayload
   | null;
 
 // ============================================================================

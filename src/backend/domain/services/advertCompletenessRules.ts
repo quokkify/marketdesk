@@ -1,7 +1,7 @@
 // Pure rules of the advert completeness checks: category, attributes and delivery of an OLX advert.
 // Facts come in, a VerdictCheck comes out. No I/O and no AI here.
 import { createHash } from 'crypto';
-import type { VerdictCheck, VerdictCheckName, VerdictCheckStatus, VerdictReason } from '../../../shared/types';
+import type { ParcelSize, VerdictCheck, VerdictCheckName, VerdictCheckStatus, VerdictReason } from '../../../shared/types';
 
 export interface OlxCategoryAttribute {
   code: string;
@@ -14,7 +14,7 @@ export interface AdvertAttribute {
   code: string;
   value: string;
 }
-export type ParcelSize = 'S' | 'M' | 'L' | 'XL';
+export type { ParcelSize };
 export type DeliveryMode = 'BuyWithDelivery' | 'NotEligible' | string;
 
 const DELIVERY_ATTRIBUTE = 'delivery';

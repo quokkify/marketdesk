@@ -69,6 +69,9 @@ const EVENT_ICONS: Record<HermesEvent['type'], React.ElementType> = {
   product_category_conflict: RuleIcon,
   relist: ReplayIcon,
   price_estimate_unavailable: CompareArrowsIcon,
+  filled_advert_attributes: RuleIcon,
+  suggested_advert_attributes: RuleIcon,
+  suggested_delivery: StorefrontIcon,
 };
 
 export const HermesEventTypeIcon: React.FC<Pick<HermesEvent, 'type' | 'severity'>> = ({ type, severity }) => {

@@ -6,8 +6,6 @@ import type {
 } from '../../../shared/types';
 import { Product } from '../../domain/entities/Product';
 import { Listing } from '../../domain/entities/Listing';
-import { HermesEvent } from '../../domain/entities/HermesEvent';
-import { evaluateOlxCategory } from '../../domain/services/OlxCategoryGuard';
 import type { IProductRepository } from '../../domain/repositories/interfaces/IProductRepository';
 import type { IListingRepository } from '../../domain/repositories/interfaces/IListingRepository';
 import type { IEventRepository } from '../../domain/repositories/interfaces/IEventRepository';
@@ -31,6 +29,7 @@ import type {
 } from './MarketplaceOAuthService';
 import type { IdGenerator } from '../ports/IdGenerator';
 import type { ProductCategorySyncService } from './ProductCategorySyncService';
+import { CategoryMismatchProposals } from './CategoryMismatchProposals';
 import { Err, Ok, type Result } from '../../domain/shared/Result';
 import {
   GuardrailViolationError,
@@ -145,6 +144,7 @@ export class MarketplaceImportService {
     private readonly eventRepo?: IEventRepository,
     private readonly correctionOperations?: ICategoryCorrectionOperationRepository,
     private readonly productCategorySync?: ProductCategorySyncService,
+    private readonly categoryMismatch: CategoryMismatchProposals = new CategoryMismatchProposals(idGenerator),
   ) {}
 
   async preview(input: ImportPreviewInput): Promise<Result<ImportPreviewResult>> {
@@ -812,90 +812,20 @@ export class MarketplaceImportService {
       id: marketplaceAccountId,
       revision: marketplaceAccountRevision,
     });
-    const currentDecision = evaluateOlxCategory(product, currentCategory);
-    const proposedDecision = proposedCategory ? evaluateOlxCategory(product, proposedCategory) : null;
-    if (currentDecision.reason !== 'semantic_mismatch') return;
-    const usableMarketplaceAccountId = account.id;
-    const usableMarketplaceAccountRevision = account.revision;
-    const usableProposedCategory: NonNullable<ImportedMarketplaceListing['marketplaceCategory']> | null =
-      proposedDecision?.allowed ? (proposedCategory ?? null) : null;
-    const eventId = this.idGenerator();
-    const delistIntentId = this.idGenerator();
-    const recreateIntentId = this.idGenerator();
-    const created = HermesEvent.create({
-      id: eventId,
+    await this.categoryMismatch.raise({
       workspaceId,
-      productId: product.id,
-      type: 'olx_category_mismatch',
-      severity: 'critical',
-      status: 'pending_review',
-      title: 'OLX advert category mismatch requires recreation',
-      detail: `Current: ${currentCategory.path.join(' → ')}. Proposed: ${usableProposedCategory ? usableProposedCategory.path.join(' → ') : 'select an exact verified OLX leaf category'}. OLX category is not corrected through a normal PUT; delist and recreate remain separate human-reviewed operations.`,
-      proposedChange: {
-        kind: 'category_recreation',
-        listingId: listing.id,
-        currentCategory: currentCategory!,
-        proposedCategory: usableProposedCategory,
-        operations: [
-          {
-            kind: 'delist', intentId: delistIntentId, status: 'pending_review',
-            providerSideEffectAllowed: false, quotaUnitsRestored: 0,
-          },
-          {
-            kind: 'recreate', intentId: recreateIntentId,
-            status: 'blocked_pending_quota_review', providerSideEffectAllowed: false,
-            quotaGuardRequired: true,
-          },
-        ],
+      product,
+      listing,
+      currentCategory,
+      proposedCategory: proposedCategory ?? null,
+      marketplaceAccountId: account.id,
+      marketplaceAccountRevision: account.revision,
+      repositories: {
+        eventRepo: transactionEventRepo,
+        correctionOperations: transactionCorrectionOperations,
+        activityLog,
       },
-      autonomyDecision: 'pending_review',
     });
-    if (created.isErr()) throw created.error;
-    const inserted = await transactionEventRepo.saveRecommendationIfAbsent(
-      created.value,
-      `olx-category-mismatch:${listing.id}:${currentCategory.providerCategoryId}:${usableProposedCategory?.providerCategoryId ?? 'unresolved'}`,
-    );
-    if (!inserted) return;
-    {
-      const requestedAt = new Date();
-      await transactionCorrectionOperations.createPair(
-        {
-          id: delistIntentId, workspaceId, recommendationEventId: eventId,
-          listingId: listing.id, marketplaceId: listing.marketplaceId, kind: 'delist',
-          state: 'requested', targetCategory: null, paidOverrideReason: null,
-          requestedBy: null, approvedBy: null, result: {
-            externalListingId: listing.marketplaceListingId,
-            externalUrl: listing.externalUrl,
-            requestedListingUpdatedAt: listing.updatedAt.toISOString(),
-            marketplaceAccountId: usableMarketplaceAccountId,
-            marketplaceAccountRevision: usableMarketplaceAccountRevision,
-          }, requestedAt,
-          approvedAt: null, executedAt: null, failedAt: null, updatedAt: requestedAt,
-        },
-        {
-          id: recreateIntentId, workspaceId, recommendationEventId: eventId,
-          listingId: listing.id, marketplaceId: listing.marketplaceId, kind: 'recreate',
-          state: 'requested', targetCategory: usableProposedCategory, paidOverrideReason: null,
-          requestedBy: null, approvedBy: null, result: null, requestedAt,
-          approvedAt: null, executedAt: null, failedAt: null, updatedAt: requestedAt,
-        },
-      );
-    }
-    await activityLog?.record(this.activityEntry(
-      workspaceId,
-      listing.id,
-      undefined,
-      'olx.category_recreation_recommended',
-      {
-        eventId,
-        currentCategory,
-        proposedCategory: usableProposedCategory,
-        delistIntentId,
-        recreateIntentId,
-        deletionRestoresQuota: false,
-        recreateRequiresQuotaGuard: true,
-      },
-    ));
   }
 
   private async requireExactAccountBinding(
