@@ -178,6 +178,11 @@ export function attributeDroppedReason(label: string): VerdictReason {
   return { code: 'attribute_dropped', message: `OLX did not keep ${label}` };
 }
 
+export const ATTRIBUTES_WRITE_IN_PROGRESS: VerdictReason = {
+  code: 'attributes_write_in_progress',
+  message: 'A fill of these OLX fields is in progress',
+};
+
 export function attributeIdempotencyKey(listingId: string, values: AdvertAttribute[]): string {
   const pairs = values.map((attribute) => `${attribute.code}=${attribute.value}`).sort();
   return createHash('sha256').update([listingId, ...pairs].join('\n')).digest('hex');

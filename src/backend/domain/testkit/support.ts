@@ -192,6 +192,8 @@ export class InMemoryEventRepository implements IEventRepository {
   readonly items = new Map<string, HermesEvent>();
   readonly savedBatches: HermesEvent[][] = [];
   readonly recommendationKeys = new Set<string>();
+  // Workspace-scoped idempotency key → event id.
+  readonly keyedEventIds = new Map<string, string>();
   readonly agentRecommendations = new Map<string, AgentRecommendationRecord>();
 
   async findById(id: string): Promise<HermesEvent | null> {
@@ -240,8 +242,13 @@ export class InMemoryEventRepository implements IEventRepository {
     const key = `${event.workspaceId}:${idempotencyKey}`;
     if (this.recommendationKeys.has(key)) return false;
     this.recommendationKeys.add(key);
+    this.keyedEventIds.set(key, event.id);
     this.items.set(event.id, event);
     return true;
+  }
+  async findByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<HermesEvent | null> {
+    const id = this.keyedEventIds.get(`${workspaceId}:${idempotencyKey}`);
+    return id ? (this.items.get(id) ?? null) : null;
   }
   async saveAgentRecommendationIfAbsent(
     event: HermesEvent,

@@ -6,6 +6,7 @@
 import type { Listing } from '../../../domain/entities/Listing';
 import type { IMarketplaceAdapter } from '../../../domain/services/MarketplaceAdapter';
 import type { AdvertAttribute, OlxCategoryAttribute } from '../../../domain/services/advertCompletenessRules';
+import { InvalidStateError } from '../../../domain/shared/DomainError';
 import type { CheckContext } from './SaleVerdictGraph';
 
 export interface OlxAdvertSnapshot {
@@ -20,11 +21,11 @@ export interface OlxAdvertSnapshot {
   categoryMismatch: boolean;
 }
 
-export type OlxAdvertAdapter = Required<
+type OlxAdvertAdapter = Required<
   Pick<IMarketplaceAdapter, 'advertFields' | 'categoryAttributes' | 'categorySuggestions'>
 >;
 
-export function offersAdvertFields(adapter: IMarketplaceAdapter): adapter is IMarketplaceAdapter & OlxAdvertAdapter {
+function offersAdvertFields(adapter: IMarketplaceAdapter): adapter is IMarketplaceAdapter & OlxAdvertAdapter {
   return Boolean(adapter.advertFields && adapter.categoryAttributes && adapter.categorySuggestions);
 }
 
@@ -34,15 +35,18 @@ export async function requireOlxSnapshot(ctx: CheckContext): Promise<OlxAdvertSn
   return ctx.olx();
 }
 
-// The loader runs its reads on the first call; every later call gets the same promise.
+// The loader resolves the authenticated adapter and runs its reads on the first call, so a run
+// without an advert check never fetches an OLX token; every later call gets the same promise.
 export function olxAdvertSnapshotLoader(
-  adapter: OlxAdvertAdapter,
+  resolveAdapter: () => Promise<IMarketplaceAdapter>,
   listing: Listing,
   externalListingId: string,
   title: string,
 ): () => Promise<OlxAdvertSnapshot> {
   let snapshot: Promise<OlxAdvertSnapshot> | null = null;
   const load = async (): Promise<OlxAdvertSnapshot> => {
+    const adapter = await resolveAdapter();
+    if (!offersAdvertFields(adapter)) throw new InvalidStateError('This marketplace cannot read advert fields');
     const fields = await adapter.advertFields(externalListingId);
     const listingCategoryId = listing.marketplaceCategory?.providerCategoryId ?? fields.categoryId;
     const [categoryAttributes, suggestionIds] = await Promise.all([

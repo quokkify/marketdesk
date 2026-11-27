@@ -22,6 +22,8 @@ export interface IEventRepository {
     resolvedAt: Date,
   ): Promise<number>;
   save(event: HermesEvent): Promise<void>;
+  /** The event inserted with this idempotency key, or null. */
+  findByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<HermesEvent | null>;
   /** Atomically inserts a semantic recommendation once. */
   saveRecommendationIfAbsent(event: HermesEvent, idempotencyKey: string): Promise<boolean>;
   /** Atomically inserts a review event and its structured agent provenance once. */

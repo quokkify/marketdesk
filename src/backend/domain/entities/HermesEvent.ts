@@ -299,6 +299,16 @@ export class HermesEvent {
     return Ok(undefined);
   }
 
+  // A failed write may be tried again: it goes back to applying.
+  retryFailed(): Result<void> {
+    if (this._status !== 'failed') {
+      return Err(new InvalidStateError(`Cannot retry event in ${this._status} state`));
+    }
+    this._status = 'applying';
+    this._resolvedAt = null;
+    return Ok(undefined);
+  }
+
   beginRevert(): Result<void> {
     if (this._status !== 'applied') {
       return Err(

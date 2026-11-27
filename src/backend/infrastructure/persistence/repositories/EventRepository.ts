@@ -111,6 +111,15 @@ export class EventRepository implements IEventRepository {
     await this.persist(event, this.queryClient as PoolClient);
   }
 
+  async findByIdempotencyKey(workspaceId: string, idempotencyKey: string): Promise<HermesEvent | null> {
+    const { rows } = await query<HermesEventRow>(
+      `${EVENT_SELECT} WHERE workspace_id = $1 AND idempotency_key = $2`,
+      [workspaceId, idempotencyKey],
+      this.queryClient,
+    );
+    return rows[0] ? EventMapper.toDomain(rows[0]) : null;
+  }
+
   async saveRecommendationIfAbsent(event: HermesEvent, idempotencyKey: string): Promise<boolean> {
     const proposedChange = event.proposedChange === null ? null : JSON.stringify(event.proposedChange);
     const { rowCount } = await query(

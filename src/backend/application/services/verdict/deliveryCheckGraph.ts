@@ -1,8 +1,8 @@
 // The delivery check of the sale verdict. load: the run's OLX snapshot. categoryGate: a category
 // mismatch stops the check. page: the delivery mode buyers see on the public advert page (null
-// when the page cannot be read). propose (only when delivery is off in a category that offers it,
-// and a Hermes client is configured): Hermes picks a parcel size, and every package of that size
-// becomes one pending suggested_delivery proposal that supersedes the product's earlier one.
+// when the page cannot be read). propose (only when delivery is off in a category that offers it):
+// a pending suggested_delivery proposal is linked as it is; without one, Hermes (when configured)
+// picks a parcel size, and every package of that size becomes one pending proposal.
 // result: the check. Nothing is written to OLX here.
 // State holds only the delivery mode and event ids, never seller or Hermes text.
 
@@ -77,6 +77,9 @@ export function buildDeliveryCheck(deps: DeliveryCheckDeps): CheckGraph {
     };
 
     const propose = async (): Promise<Partial<DeliveryGraphState>> => {
+      // An open proposal waits for the owner: no new Hermes call and no replacement.
+      const pending = await deps.events.findPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE]);
+      if (pending.length > 0) return { eventIds: pending.map((event) => event.id) };
       const attribute = deliveryAttribute();
       const size = await askSize();
       if (!attribute || !size || !ctx.listing) return {};
@@ -95,7 +98,6 @@ export function buildDeliveryCheck(deps: DeliveryCheckDeps): CheckGraph {
         source: 'hermes',
       });
       if (created.isErr()) throw created.error;
-      await deps.events.dismissPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE], ctx.now());
       await deps.events.save(created.value);
       return { eventIds: [created.value.id] };
     };

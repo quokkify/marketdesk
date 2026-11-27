@@ -31,10 +31,11 @@ import {
   liveOlxScope,
 } from '../../../domain/services/saleVerdictRules';
 import { withAiUsageScope } from '../../ai/aiUsageScope';
-import { offersAdvertFields, olxAdvertSnapshotLoader, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
+import { olxAdvertSnapshotLoader, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
 
 export const SALE_VERDICT_GRAPH_VERSION = 'sale-verdict@1';
 const AI_FEATURE = 'verdict';
+const OLX_MARKETPLACE_KEY = 'olx';
 const CHECK_NAMES: VerdictCheckName[] = ['info', 'price', 'photos', 'category', 'attributes', 'delivery'];
 
 export interface CheckOptions {
@@ -146,29 +147,18 @@ export class SaleVerdictGraph {
       options: { forceResearch: false, infoCodeOnly: false, ...input.options },
       runId: input.runId,
       signal: input.signal,
-      olx: await this.olxSnapshot(product, listing, marketplace),
+      olx: this.olxSnapshot(product, listing, marketplace),
     };
   }
 
-  // A failed adapter lookup still means a live advert: the loader then rejects, and each OLX
+  // A live OLX advert gets a lazy loader: a failed adapter lookup then rejects it, and each OLX
   // check is recorded as check_failed instead of silently leaving the verdict.
-  private async olxSnapshot(
-    product: Product,
-    listing: Listing | null,
-    marketplace: Marketplace | null,
-  ): Promise<CheckContext['olx']> {
+  private olxSnapshot(product: Product, listing: Listing | null, marketplace: Marketplace | null): CheckContext['olx'] {
+    const adapters = this.deps.adapters;
     const externalListingId = listing?.marketplaceListingId;
-    if (!this.deps.adapters || !listing || !marketplace || !listing.isLive() || !externalListingId) return null;
-    let adapter: IMarketplaceAdapter;
-    try {
-      adapter = await this.deps.adapters.resolve(marketplace);
-    } catch (error) {
-      const failed = Promise.reject(error);
-      failed.catch(() => undefined);
-      return () => failed;
-    }
-    if (!offersAdvertFields(adapter)) return null;
-    return olxAdvertSnapshotLoader(adapter, listing, externalListingId, product.name);
+    if (!adapters || !listing || !marketplace || marketplace.key !== OLX_MARKETPLACE_KEY) return null;
+    if (!listing.isLive() || !externalListingId) return null;
+    return olxAdvertSnapshotLoader(() => adapters.resolve(marketplace), listing, externalListingId, product.name);
   }
 
   private build(ctx: CheckContext, scope: VerdictCheckName[], runId: string) {

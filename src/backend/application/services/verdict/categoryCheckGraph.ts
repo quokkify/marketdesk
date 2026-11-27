@@ -7,6 +7,7 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import type { MarketplaceCategoryMetadata, VerdictCheck } from '../../../../shared/types';
 import { categoryCheck } from '../../../domain/services/advertCompletenessRules';
+import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
 import type { CategoryMismatchProposals } from '../CategoryMismatchProposals';
 import { requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot';
 import type { CheckContext, CheckGraph } from './SaleVerdictGraph';
@@ -25,6 +26,7 @@ export interface CategoryTaxonomy {
 
 export interface CategoryCheckDeps {
   proposals: Pick<CategoryMismatchProposals, 'raise'>;
+  events: Pick<IEventRepository, 'findPendingByProduct'>;
   // The verified OLX taxonomy of the listing's marketplace.
   taxonomy: (marketplaceId: string) => Promise<CategoryTaxonomy>;
 }
@@ -47,7 +49,10 @@ export function buildCategoryCheck(deps: CategoryCheckDeps): CheckGraph {
         currentCategory,
         proposedCategory,
       });
-      return { eventIds: event ? [event.id] : [] };
+      if (event) return { eventIds: [event.id] };
+      // The same recommendation is already open: link it.
+      const pending = await deps.events.findPendingByProduct(ctx.workspace.id, ctx.product.id, ['olx_category_mismatch']);
+      return { eventIds: pending.map((open) => open.id) };
     };
 
     const graph = new StateGraph(CategoryState)

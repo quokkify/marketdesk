@@ -2,9 +2,10 @@
 // mismatch stops the check before any write. match: empty single-choice attributes whose one
 // allowed value appears as a whole word in the product's name or description. write (only with such
 // values): one advert update, guarded by an idempotency key on the listing and the values, recorded
-// as an applied auto_apply event. reread: what OLX kept after the write. hermes (only with a client
-// and still-empty attributes): Hermes picks values from OLX's lists, saved as one pending proposal
-// that supersedes the product's earlier one. result: the check.
+// as an applied auto_apply event; a failed or abandoned keyed write is retried on its own event.
+// reread: what OLX kept after the write. hermes (only with a client and still-empty attributes):
+// while a proposal is pending it is linked and Hermes is not asked; otherwise Hermes picks values
+// from OLX's lists, saved as one pending proposal. result: the check.
 // State holds only OLX attribute and value codes and event ids, never seller or Hermes text.
 
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
@@ -12,6 +13,7 @@ import type { AdvertAttributesChangePayload, HermesEventType, VerdictCheck } fro
 import { HermesEvent } from '../../../domain/entities/HermesEvent';
 import type { IEventRepository } from '../../../domain/repositories/interfaces/IEventRepository';
 import {
+  ATTRIBUTES_WRITE_IN_PROGRESS,
   attributeDroppedReason,
   attributeIdempotencyKey,
   attributesCheck,
@@ -32,6 +34,8 @@ import { requireOlxSnapshot, type OlxAdvertSnapshot } from './olxAdvertSnapshot'
 import type { CheckContext, CheckGraph } from './SaleVerdictGraph';
 
 const PROPOSAL_TYPE: HermesEventType = 'suggested_advert_attributes';
+// A keyed write still applying after this long is taken as abandoned (a crashed run) and retried.
+const STALE_WRITE_MS = 10 * 60 * 1000;
 // hermes_events.title is VARCHAR(255).
 const EVENT_TITLE_MAX_LENGTH = 255;
 
@@ -44,6 +48,9 @@ const AttributesState = Annotation.Root({
   kept: Annotation<AdvertAttribute[]>(),
   dropped: Annotation<AdvertAttribute[]>(),
   proposalSaved: Annotation<boolean>(),
+  writeInProgress: Annotation<boolean>(),
+  // The product's pending proposals, once looked up; null until then.
+  pendingIds: Annotation<string[] | null>(),
   eventIds: Annotation<string[]>({ reducer: (current, update) => [...current, ...update], default: () => [] }),
   check: Annotation<VerdictCheck | null>(),
 });
@@ -100,10 +107,23 @@ export function buildAttributesCheck(deps: AttributesCheckDeps): CheckGraph {
         source: null,
       });
       if (created.isErr()) throw created.error;
-      const event = created.value;
-      // The key makes the write once per listing and values, however often the run repeats.
-      if (!(await deps.events.saveRecommendationIfAbsent(event, attributeIdempotencyKey(listingId(), state.verifiable)))) {
-        return {};
+      let event = created.value;
+      // The key makes a successful write once per listing and values, however often the run repeats.
+      const key = attributeIdempotencyKey(listingId(), state.verifiable);
+      if (!(await deps.events.saveRecommendationIfAbsent(event, key))) {
+        const existing = await deps.events.findByIdempotencyKey(workspace.id, key);
+        if (!existing) return {};
+        const stale =
+          existing.status === 'applying' && ctx.now().getTime() - existing.createdAt.getTime() > STALE_WRITE_MS;
+        if (existing.status === 'applying' && !stale) return { writeInProgress: true, eventIds: [existing.id] };
+        if (existing.status === 'failed') {
+          const retried = existing.retryFailed();
+          if (retried.isErr()) throw retried.error;
+          await deps.events.save(existing);
+        } else if (!stale) {
+          return { eventIds: [existing.id] };
+        }
+        event = existing;
       }
       try {
         const { kept, dropped } = await deps.fields.apply(workspace.id, listingId(), { attributes: state.verifiable });
@@ -131,6 +151,9 @@ export function buildAttributesCheck(deps: AttributesCheckDeps): CheckGraph {
     const hermes = async (state: AttributesGraphState): Promise<Partial<AttributesGraphState>> => {
       const client = deps.hermes;
       if (!client || !ctx.listing) return {};
+      // An open proposal waits for the owner: no new Hermes call and no replacement.
+      const pending = await deps.events.findPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE]);
+      if (pending.length > 0) return { pendingIds: pending.map((event) => event.id) };
       const offered = stillEmpty(state);
       let picks: AdvertAttribute[];
       try {
@@ -160,26 +183,26 @@ export function buildAttributesCheck(deps: AttributesCheckDeps): CheckGraph {
         source: 'hermes',
       });
       if (created.isErr()) throw created.error;
-      await deps.events.dismissPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE], ctx.now());
       await deps.events.save(created.value);
-      return { proposalSaved: true, eventIds: [created.value.id] };
+      return { proposalSaved: true, pendingIds: [], eventIds: [created.value.id] };
     };
 
     const result = async (state: AttributesGraphState): Promise<Partial<AttributesGraphState>> => {
-      const pending = state.proposalSaved
-        ? []
-        : await deps.events.findPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE]);
+      const pendingIds =
+        state.pendingIds ??
+        (await deps.events.findPendingByProduct(workspace.id, product.id, [PROPOSAL_TYPE])).map((event) => event.id);
       const check = attributesCheck({
         category: snapshot.categoryAttributes,
         current,
-        proposalOpen: state.proposalSaved || pending.length > 0,
+        proposalOpen: state.proposalSaved || pendingIds.length > 0,
         now: ctx.now(),
-        eventIds: [...state.eventIds, ...pending.map((event) => event.id)],
+        eventIds: [...state.eventIds, ...pendingIds],
       });
-      const droppedReasons = labelled(snapshot.categoryAttributes, state.dropped).map((value) =>
-        attributeDroppedReason(value.label),
-      );
-      return { check: { ...check, reasons: [...check.reasons, ...droppedReasons] } };
+      const extraReasons = [
+        ...labelled(snapshot.categoryAttributes, state.dropped).map((value) => attributeDroppedReason(value.label)),
+        ...(state.writeInProgress ? [{ ...ATTRIBUTES_WRITE_IN_PROGRESS }] : []),
+      ];
+      return { check: { ...check, reasons: [...check.reasons, ...extraReasons] } };
     };
 
     const graph = new StateGraph(AttributesState)
@@ -224,6 +247,8 @@ export function buildAttributesCheck(deps: AttributesCheckDeps): CheckGraph {
       kept: [],
       dropped: [],
       proposalSaved: false,
+      writeInProgress: false,
+      pendingIds: null,
       eventIds: [],
       check: null,
     });

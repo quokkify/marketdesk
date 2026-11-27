@@ -703,7 +703,11 @@ export function buildContainer(overrides: ContainerOverrides = {}): AppContainer
         newId: idGenerator,
       }),
       photos: buildPhotosCheck(),
-      category: buildCategoryCheck({ proposals: categoryMismatchProposals, taxonomy: olxTaxonomyResolver }),
+      category: buildCategoryCheck({
+        proposals: categoryMismatchProposals,
+        events: eventRepo,
+        taxonomy: olxTaxonomyResolver,
+      }),
       attributes: buildAttributesCheck({
         fields: advertFieldsService,
         events: eventRepo,

@@ -75,6 +75,8 @@ class FakeOlxAdapter {
   suggestions = ['1973'];
   // Attribute codes OLX silently drops from an update.
   dropOnUpdate = new Set<string>();
+  // The next update fails before OLX applies it.
+  failNextUpdate = false;
   readonly updates: Array<{ attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] }> = [];
 
   async categorySuggestions(): Promise<string[]> {
@@ -96,6 +98,10 @@ class FakeOlxAdapter {
     fields: { attributes?: AdvertAttribute[]; deliveryPackageIds?: string[] },
   ): Promise<void> {
     this.updates.push(fields);
+    if (this.failNextUpdate) {
+      this.failNextUpdate = false;
+      throw new Error('OLX update failed');
+    }
     for (const attribute of fields.attributes ?? []) {
       if (this.dropOnUpdate.has(attribute.code)) continue;
       this.attributes = [...this.attributes.filter((a) => a.code !== attribute.code), attribute];
@@ -159,7 +165,8 @@ function setup(opts: {
   const workspace = unwrap(Workspace.create({ id: WS, name: 'Shop' }));
   const events = new InMemoryEventRepository();
   const adapter = new FakeOlxAdapter();
-  const adapters = { resolve: async () => adapter as unknown as IMarketplaceAdapter };
+  const resolve = jest.fn(async () => adapter as unknown as IMarketplaceAdapter);
+  const adapters = { resolve };
   const idFactory = sequentialIdFactory('evt');
   const hermes = opts.hermes === undefined ? null : opts.hermes;
   const pageCalls: string[] = [];
@@ -192,6 +199,7 @@ function setup(opts: {
       photos: ready('photos'),
       category: buildCategoryCheck({
         proposals,
+        events,
         taxonomy: async () => ({ verify: async (id: string) => category(id) }),
       }),
       attributes: buildAttributesCheck({
@@ -208,7 +216,7 @@ function setup(opts: {
   const run = (scope: VerdictCheckName[] = ALL) =>
     graph.run({ workspaceId: WS, productId: PID, runId: `run-${++runs}`, scope, signal: new AbortController().signal });
   const eventsOfType = (type: string) => [...events.items.values()].filter((event) => event.type === type);
-  return { run, adapter, events, eventsOfType, pageCalls };
+  return { run, adapter, events, eventsOfType, pageCalls, resolve };
 }
 
 describe('advert completeness checks in the sale verdict', () => {
@@ -318,5 +326,90 @@ describe('advert completeness checks in the sale verdict', () => {
     expect(verdict.overall).toBe('ready');
     expect(adapter.updates).toEqual([]);
     expect(pageCalls).toEqual([]);
+  });
+
+  describe('across runs', () => {
+    const resetAdvert = (adapter: FakeOlxAdapter) => {
+      adapter.attributes = [{ code: 'state', value: 'used' }];
+    };
+
+    it('links the open category recommendation on a repeat mismatch', async () => {
+      const { run, adapter, eventsOfType } = setup();
+      adapter.suggestions = ['2000'];
+
+      await run();
+      const verdict = await run();
+
+      const raised = eventsOfType('olx_category_mismatch');
+      expect(raised).toHaveLength(1);
+      expect(verdict.checks.category?.refs.eventIds).toEqual([raised[0]!.id]);
+    });
+
+    it('retries a failed keyed write on its own event and marks it applied', async () => {
+      const { run, adapter, eventsOfType } = setup();
+      adapter.failNextUpdate = true;
+
+      const first = await run();
+      expect(first.checks.attributes).toMatchObject({ status: 'needs_human', reasons: [{ code: 'check_failed' }] });
+      expect(eventsOfType('filled_advert_attributes')[0]?.status).toBe('failed');
+
+      const second = await run();
+
+      const filled = eventsOfType('filled_advert_attributes');
+      expect(filled).toHaveLength(1);
+      expect(filled[0]!.status).toBe('applied');
+      expect(adapter.updates).toHaveLength(2);
+      expect(adapter.attributes).toContainEqual({ code: 'brand', value: 'apple' });
+      expect(second.checks.attributes?.refs.eventIds).toEqual([filled[0]!.id]);
+    });
+
+    it('does not rewrite values an applied keyed event already wrote, and links it', async () => {
+      const { run, adapter, eventsOfType } = setup();
+
+      await run();
+      resetAdvert(adapter);
+      const verdict = await run();
+
+      const filled = eventsOfType('filled_advert_attributes');
+      expect(adapter.updates).toHaveLength(1);
+      expect(verdict.checks.attributes?.refs.eventIds).toEqual([filled[0]!.id]);
+    });
+
+    it('keeps a pending attributes proposal without asking Hermes again', async () => {
+      const hermes = new FakeHermes({ attributes: '{"values": {"type": "in_ear"}}' });
+      const { run, eventsOfType } = setup({ hermes });
+
+      await run();
+      const verdict = await run();
+
+      const proposed = eventsOfType('suggested_advert_attributes');
+      expect(proposed).toHaveLength(1);
+      expect(proposed[0]!.status).toBe('pending_review');
+      expect(hermes.prompts).toHaveLength(1);
+      expect(verdict.checks.attributes).toMatchObject({ status: 'fix', reasons: [{ code: 'attributes_proposed' }] });
+      expect(verdict.checks.attributes?.refs.eventIds).toEqual([proposed[0]!.id]);
+    });
+
+    it('keeps a pending delivery proposal without asking Hermes again', async () => {
+      const hermes = new FakeHermes({ size: '{"size": "M"}', attributes: '{"values": {"type": null}}' });
+      const { run, eventsOfType } = setup({ mode: 'NotEligible', hermes });
+
+      await run();
+      const verdict = await run();
+
+      const proposed = eventsOfType('suggested_delivery');
+      expect(proposed).toHaveLength(1);
+      expect(proposed[0]!.status).toBe('pending_review');
+      expect(hermes.prompts.filter((prompt) => prompt.includes('parcel size'))).toHaveLength(1);
+      expect(verdict.checks.delivery?.refs.eventIds).toEqual([proposed[0]!.id]);
+    });
+
+    it('never resolves the OLX adapter for a run without an advert check', async () => {
+      const { run, resolve } = setup();
+
+      await run(['price']);
+
+      expect(resolve).not.toHaveBeenCalled();
+    });
   });
 });
