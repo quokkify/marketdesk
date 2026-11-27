@@ -1,0 +1,1 @@
+{"id":"8b8842d82d3fc80abde03e4e4f403d63.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/services/__tests__/saleVerdictRules.test.ts#priceCheckFromEstimate asks to lower a price above the ceiling","name":"asks to lower a price above the ceiling","status":"passed","testResultsByEnv":{"default":"8b37fb04f9ef4e2e019efa3b31e2113c"}}

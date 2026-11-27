@@ -1,0 +1,1 @@
+{"id":"6487fb1e6bb0540579b089ee0fbb3ff1.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/presentation/http/__tests__/ResponseFormatter.test.ts#ResponseFormatter domain error statuses maps too many requests to 429","name":"maps too many requests to 429","status":"passed","testResultsByEnv":{"default":"9960917fc1aa60742347610846956749"}}

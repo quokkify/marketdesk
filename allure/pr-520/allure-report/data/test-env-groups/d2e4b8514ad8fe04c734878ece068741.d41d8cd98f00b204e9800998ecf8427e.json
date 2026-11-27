@@ -1,0 +1,1 @@
+{"id":"d2e4b8514ad8fe04c734878ece068741.d41d8cd98f00b204e9800998ecf8427e","fullName":"hermes-marketdesk:src/backend/domain/conversations/__tests__/draftValidation.test.ts#validateDraft ignoresNumbersWithoutCurrency","name":"ignoresNumbersWithoutCurrency","status":"passed","testResultsByEnv":{"default":"bb8978ebd0045515bf30d0054a06c23d"}}
