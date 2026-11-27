@@ -203,6 +203,20 @@ test counts below do not include them.
   The `probe` node of `ListingResponseGraph` is code: it loads the public OLX search pages itself, so no
   research-profile call is involved.
 
+- **Sale verdict checks added after #504.** `SaleVerdictGraph.ts` runs six check subgraphs in parallel, then `combine`
+  and `save`. Three of them read one lazy per-run OLX snapshot (`olxAdvertSnapshot.ts`):
+
+  | Graph | Nodes | Conditional edges | Model calls |
+  | --- | --- | --- | --- |
+  | `categoryCheckGraph.ts` | `load`, `judge`, `propose`, `result` | after `judge` (propose on a mismatch, else result) | none |
+  | `attributesCheckGraph.ts` | `load`, `categoryGate`, `match`, `write`, `reread`, `hermes`, `result` | after `categoryGate` (end or match), after `match` (write or reread), after `reread` (hermes or result) | `hermes` only when attributes stay empty and the Hermes dependency is wired |
+  | `deliveryCheckGraph.ts` | `load`, `categoryGate`, `page`, `propose`, `result` | after `categoryGate` (end or page), after `page` (propose when delivery is off, else result) | 1 in `propose`, the parcel size (when Hermes is wired) |
+
+  A category mismatch ends the attributes and delivery checks at `categoryGate` with a "category first" result.
+  Jest: `verdict/__tests__/advertChecks.test.ts`, `SaleVerdictGraph.test.ts`. Live q4j tests on the stand:
+  `AdvertCompletenessTest` (`verifiableAttributeIsFilledOnce`, `categoryMismatchBlocksTheOtherChecks`,
+  `deliveryOffGetsSizeProposal`, `unreadablePageIsProbeFailed`) and `AdvertCompletenessUiTest`
+  (`checksTabShowsTheAdvertChecks`). The real-OLX path is checked by hand: `docs/olx-real-api-readiness.md`.
 - **No checkpointer, interrupt, streaming or tool calling** inside the graphs; subgraphs appear only in the sale
   verdict graph on `main`. State is a small
   `Annotation.Root`; buyer and model text stay in a per-run context outside state.
